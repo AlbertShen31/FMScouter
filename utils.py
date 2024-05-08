@@ -1,3 +1,14 @@
+import os
+
+# Calculate the score for each position
+def calculate_score(data, key_attrs, green_attrs, blue_attrs, key_weight, green_weight, blue_weight, divisor):
+    key_score = sum(data[attr] for attr in key_attrs)
+    green_score = sum(data[attr] for attr in green_attrs)
+    blue_score = sum(data[attr] for attr in blue_attrs)
+    
+    total_score = (key_score * key_weight + green_score * green_weight + blue_score * blue_weight) / divisor
+    return round(total_score, 1)
+
 def format_position_name(position):
     # Remove the underscores and use the initial of each word
     single_letter_pos = ["goalkeeper_defend", "winger_support", "winger_attack", "anchor_defend", "poacher_attack"]
