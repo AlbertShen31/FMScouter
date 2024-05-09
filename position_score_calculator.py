@@ -49,7 +49,8 @@ def calculate_positions(rawdata, selected_positions, min_score=0):
 
     # Create and sort DataFrames for each position
     squads = []
-    columns = ['Inf', 'Name', 'Age', 'Club', 'Transfer Value', 'Salary', 'Nat', 'Position', 'Personality', 'Media Handling', 'Left Foot', 'Right Foot', 'Height']
+    columns = ['Inf', 'Name', 'Age', 'Club', 'Transfer Value', 'Salary', 'Nat', 'Position', 
+               'Personality', 'Media Handling', 'Left Foot', 'Right Foot', 'Height']
     for position, attrs in position_dict.items():
         score_col = format_position_name(position)
         squad = squads_filtered[columns + [score_col]].copy(deep=True)
@@ -68,6 +69,7 @@ def calculate_formation(formation):
 
     generate_html_multiple(squad, formation + ["all"], str(os.path.splitext(os.path.basename(squad_file))[0]))
     generate_html_multiple(scouting, formation + ["all"], str(os.path.splitext(os.path.basename(scouting_file))[0]))
+
 
 # calculate_formation(spartans)
 # calculate_formation(france)
