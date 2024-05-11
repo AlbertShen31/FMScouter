@@ -50,7 +50,7 @@ def calculate_positions(rawdata, selected_positions, min_score=0):
     # Create and sort DataFrames for each position
     squads = []
     columns = ['Inf', 'Name', 'Age', 'Club', 'Transfer Value', 'Salary', 'Nat', 'Position', 
-               'Personality', 'Media Handling', 'Left Foot', 'Right Foot', 'Height']
+               'Personality', 'Left Foot', 'Right Foot', 'Height']
     for position, attrs in position_dict.items():
         score_col = format_position_name(position)
         squad = squads_filtered[columns + [score_col]].copy(deep=True)

@@ -140,8 +140,6 @@ def select_best_teams(squad_rawdata, position_requirements, min_score, locked_pl
         # Sort by Score in descending order
         melted_df = melted_df.sort_values(by="Score", ascending=False)
 
-        print(melted_df)
-
         # Iterate over each player-position combination
         for _, row in melted_df.iterrows():
             position = row['Position']
