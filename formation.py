@@ -27,3 +27,20 @@ short_kings = ['sweeper_keeper_defend',
                'central_midfielder_attack', 
                'inside_forward_support', 
                'advanced_forward_attack']
+
+
+invert_left = 'Reasonable'
+invert_right = 'Reasonable'
+wing_left = 'Strong'
+wing_right = 'Strong'
+
+# Position counts for each formation
+spartans_requirements = {
+    "SK(D)": {"count": 1},
+    "IWB(A)": {"count": 2, "foot_strength": [{"min_left_foot": invert_left}, {"min_right_foot": invert_right}]},
+    "BPD(D)": {"count": 2},
+    "DM(S)": {"count": 1},
+    "DW(S)": {"count": 2, "foot_strength": [{"min_left_foot": wing_left}, {"min_right_foot": invert_right}]},
+    "IF(A)": {"count": 2, "foot_strength": [{"min_left_foot": invert_left}, {"min_right_foot": invert_right}]},
+    "AF(A)": {"count": 1}
+}

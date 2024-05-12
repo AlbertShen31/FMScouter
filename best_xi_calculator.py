@@ -1,5 +1,4 @@
 # Ideas for future development:
-# Load in fm tactic and show scores for each position in tactic
 # show which players could be retrained into a new position
 # Show other squads scores in comparison to yours
 # generate potential hidden attributes based on personality and media handling
@@ -7,6 +6,7 @@
 # better highlighting for selected rows
 # create mac app to run script and open html file
 # Custom filtering for each column
+# Tiebreaker for players with the same score, use agreed playing time, salary, transfer value, etc.
 
 # Foot strength mapping
 foot_strength_map = {
@@ -15,31 +15,6 @@ foot_strength_map = {
 }
 
 
-
-invert_left = 'Reasonable'
-invert_right = 'Reasonable'
-wing_left = 'Strong'
-wing_right = 'Strong'
-
-# Updated position counts
-position_requirements = {
-    "SK(D)": {"count": 1},
-    "IWB(A)": {"count": 2, "foot_strength": [{"min_left_foot": invert_left}, {"min_right_foot": invert_right}]},
-    "BPD(D)": {"count": 2},
-    "DM(S)": {"count": 1},
-    "DW(S)": {"count": 2, "foot_strength": [{"min_left_foot": wing_left}, {"min_right_foot": invert_right}]},
-    "IF(A)": {"count": 2, "foot_strength": [{"min_left_foot": invert_left}, {"min_right_foot": invert_right}]},
-    "AF(A)": {"count": 1}
-}
-
-# position_requirements = {
-#     "SK(D)": {"count": 1},
-#     "WB(A)": {"count": 2},
-#     "BPD(D)": {"count": 2},
-#     "BWM(D)": {"count": 1},
-#     "AM(S)": {"count": 2},
-#     "AF(A)": {"count": 3}
-# }
 
 # Locked players (example)
 locked_players = {
@@ -72,6 +47,3 @@ global_exclusions = ["Cheng Hao", "Colin Hanna"]
 # print("Second Eleven Average Score:", second_team_avg_score)
 # print("\nThird Eleven:", third_team)
 # print("Third Eleven Average Score:", third_team_avg_score)
-
-## TODO:
-# Tiebreaker for players with the same score, use agreed playing time, salary, transfer value, etc.

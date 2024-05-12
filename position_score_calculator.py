@@ -14,7 +14,6 @@ directory_path = os.environ.get('FM_24_path')
 # Find the most recent file in the specified folder
 squad_files = glob.glob(os.path.join(directory_path, '**/*Squad*'), recursive=True)
 squad_file = max(squad_files, key=os.path.getctime)
-
 scouting_files = glob.glob(os.path.join(directory_path, '**/*Scouting*'), recursive=True)
 scouting_file = max(scouting_files, key=os.path.getctime)
 
