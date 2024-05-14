@@ -75,3 +75,4 @@ global_exclusions = ["Cheng Hao", "Colin Hanna"]
 
 ## TODO:
 # Tiebreaker for players with the same score, use agreed playing time, salary, transfer value, etc.
+# Add automatic filtering based on best scores
