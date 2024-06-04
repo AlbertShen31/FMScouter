@@ -5,9 +5,11 @@ import glob
 import os
 from typing import List
 import position_config as pc
-from utils import calculate_score, format_position_name, generate_html_multiple, select_best_teams
+from utils import calculate_score, format_position_name, generate_html_multiple
 from formation import spartans, france, notts_county, short_kings
 from dotenv import load_dotenv
+from best_xi_calculator import select_best_teams
+import heapq
 
 load_dotenv()
 
@@ -42,7 +44,23 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
         squad.sort_values(by=[score_col], ascending=False, inplace=True)
         squads.append(squad.head(100))
 
-    squads.append(squads_filtered[columns + score_columns])
+    # squads.append(squads_filtered[columns + score_columns])
+
+    def get_top_n_scores(row, n=3):
+        heap = []
+        for position in score_columns:
+            score = row[position]
+            if len(heap) < n:
+                heapq.heappush(heap, (score, position))
+            else:
+                heapq.heappushpop(heap, (score, position))
+        return sorted(heap, reverse=True)  # Return top scores in descending order
+
+    for i in range(1, 4):
+        squads_filtered[f'best_pos{i}'] = squads_filtered.apply(lambda row: get_top_n_scores(row)[i-1][1], axis=1)
+        squads_filtered[f'best_pos{i}_score'] = squads_filtered.apply(lambda row: get_top_n_scores(row)[i-1][0], axis=1)
+        
+    squads.append(squads_filtered[columns + ['best_pos1', 'best_pos1_score', 'best_pos2', 'best_pos2_score', 'best_pos3', 'best_pos3_score']])
 
     return squads
 
@@ -59,13 +77,6 @@ def calculate_formation(formation, squad_rawdata, scouting_rawdata, squad_file, 
 
 
 def main():
-    if len(sys.argv) > 1:
-        user_input = " ".join(sys.argv[1:])
-    else:
-        user_input = ""
-        while not user_input.strip():
-            user_input = input("Please type in the team name: ")
-
     directory_path = os.getenv('FM_24_path')
 
     # Find the most recent file in the specified folder
@@ -82,19 +93,26 @@ def main():
     squad_rawdata = squad_rawdata_list[0]
     scouting_rawdata = scouting_rawdata_list[0]
 
+    if len(sys.argv) > 1:
+        user_input = sys.argv[1]
+    else:
+        user_input = ""
+        while not user_input.strip():
+            user_input = input("Please type in the team name: ")
+
     if user_input == "spartans":
         calculate_formation(spartans, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-        return
     elif user_input == "france":
         calculate_formation(france, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-        return
     elif user_input == "notts_county":
         calculate_formation(notts_county, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-        return
     elif user_input == "gronigen":
         calculate_formation(short_kings, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-        return
 
+    if len(sys.argv) > 2:
+        min_score = int(sys.argv[2])
+        select_best_teams(squad_rawdata, min_score)
+    
 if __name__ == "__main__":
     main()
 
