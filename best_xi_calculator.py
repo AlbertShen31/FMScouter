@@ -7,6 +7,7 @@
 # better highlighting for selected rows
 # create mac app to run script and open html file
 # Custom filtering for each column
+import pandas as pd # type: ignore
 
 # Foot strength mapping
 foot_strength_map = {
@@ -63,6 +64,7 @@ excluded_positions = {
 
 global_exclusions = ["Cheng Hao", "Colin Hanna"]
 
+
 def select_best_teams(squad_rawdata, min_score=0, locked_players={}, excluded_positions={}, global_exclusions=[]):
     # Use the existing DataFrame
     df = squad_rawdata.copy()
@@ -74,7 +76,7 @@ def select_best_teams(squad_rawdata, min_score=0, locked_players={}, excluded_po
             score = df.loc[df['Name'] == player, position].values[0]
             player_scores.append((position, score))
         player_scores.sort(key=lambda x: x[1], reverse=True)
-        print(player, player_scores[:3])
+        print(player, player_scores[:5])
 
     # Apply exclusions and adjustments based on locked_players, excluded_positions, and global_exclusions
     for player in global_exclusions:
