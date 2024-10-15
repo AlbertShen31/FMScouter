@@ -2,9 +2,19 @@ import os
 
 # Calculate the score for each position
 def calculate_score(data, key_attrs, green_attrs, blue_attrs, key_weight, green_weight, blue_weight, divisor):
-    key_score = sum(data[attr] for attr in key_attrs)
-    green_score = sum(data[attr] for attr in green_attrs)
-    blue_score = sum(data[attr] for attr in blue_attrs)
+    # Sum dataframe in key_attrs, green_attrs, blue_attrs and for ranges and replace them with min value (e.g. 15-20 -> 15)
+    for attr in key_attrs + green_attrs + blue_attrs:
+        if '-' == data[attr]:
+            data[attr] = 0
+        elif isinstance(data[attr], str) and '-' in data[attr]:
+            data[attr] = int(data[attr].split('-')[0])
+        else:
+            data[attr] = int(data[attr])
+    
+    key_score = sum([data[attr] for attr in key_attrs])
+    green_score = sum([data[attr] for attr in green_attrs])
+    blue_score = sum([data[attr] for attr in blue_attrs])
+
     
     total_score = (key_score * key_weight + green_score * green_weight + blue_score * blue_weight) / divisor
     return round(total_score, 1)

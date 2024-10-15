@@ -172,8 +172,8 @@ def main():
     squad_trajectories = {}
     scouting_trajectories = {}
 
-    add_trajectory_data(squad[-1], squad_trajectories, cutoff=0)
-    add_trajectory_data(scouting[-1], scouting_trajectories)
+    # add_trajectory_data(squad[-1], squad_trajectories, cutoff=0)
+    # add_trajectory_data(scouting[-1], scouting_trajectories)
     
     # Print the updated DataFrames for verification
     print(squad[-1])
