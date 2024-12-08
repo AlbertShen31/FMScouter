@@ -72,8 +72,6 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
         squad.sort_values(by=[score_col], ascending=False, inplace=True)
         squads.append(squad.head(100))  # Ensure you are getting the top 100 players
 
-    # squads.append(squads_filtered[columns + score_columns])
-
     def keep_top_5_scores(row, score_columns):
         heap = []
         for score_col in score_columns:
