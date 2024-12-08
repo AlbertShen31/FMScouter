@@ -1,23 +1,41 @@
 import os
+from typing import List, Dict, Union
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Calculate the score for each position
-def calculate_score(data, key_attrs, green_attrs, blue_attrs, key_weight, green_weight, blue_weight, divisor):
-    # Sum dataframe in key_attrs, green_attrs, blue_attrs and for ranges and replace them with min value (e.g. 15-20 -> 15)
-    for attr in key_attrs + green_attrs + blue_attrs:
-        if '-' == data[attr]:
-            data[attr] = 0
-        elif isinstance(data[attr], str) and '-' in data[attr]:
-            data[attr] = int(data[attr].split('-')[0])
-        else:
-            data[attr] = int(data[attr])
-    
-    key_score = sum([data[attr] for attr in key_attrs])
-    green_score = sum([data[attr] for attr in green_attrs])
-    blue_score = sum([data[attr] for attr in blue_attrs])
+def calculate_score(
+    data: Dict[str, Union[str, int]], 
+    key_attrs: List[str], 
+    green_attrs: List[str], 
+    blue_attrs: List[str], 
+    key_weight: float, 
+    green_weight: float, 
+    blue_weight: float, 
+    divisor: float
+) -> float:
+    """Calculate position score based on attributes and weights."""
+    try:
+        processed_data = {}
+        for attr in key_attrs + green_attrs + blue_attrs:
+            value = data.get(attr, 0)
+            if value == '-':
+                processed_data[attr] = 0
+            elif isinstance(value, str) and '-' in value:
+                processed_data[attr] = int(value.split('-')[0])
+            else:
+                processed_data[attr] = int(value)
 
-    
-    total_score = (key_score * key_weight + green_score * green_weight + blue_score * blue_weight) / divisor
-    return round(total_score, 1)
+        key_score = sum(processed_data[attr] for attr in key_attrs)
+        green_score = sum(processed_data[attr] for attr in green_attrs)
+        blue_score = sum(processed_data[attr] for attr in blue_attrs)
+
+        total_score = (key_score * key_weight + green_score * green_weight + blue_score * blue_weight) / divisor
+        return round(total_score, 1)
+    except Exception as e:
+        logger.error(f"Error calculating score: {e}")
+        return 0.0
 
 def format_position_name(position):
     # Remove the underscores and use the initial of each word
@@ -30,6 +48,8 @@ def format_position_name(position):
         return "BBM(S)"
     elif position.lower() == "false_nine_support":
         return "F9(S)"
+    elif position.lower() == "roaming_playmaker_support":
+        return "RPM(S)"
     elif len(position.split('_')) == 2 and (position.lower() not in single_letter_pos):
         initials = position.split('_')
         return ("".join(initials[0][:3]) + "(" + initials[1][0] + ")").upper()

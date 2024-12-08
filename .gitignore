@@ -162,10 +162,7 @@ cython_debug/
 .DS_Store
 *venv*
 
-*Scouting*
-*Squad*
-*Comp*
-*Transfers*
+*position_scores/*
 
 #CSV Files
 *.csv

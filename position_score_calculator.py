@@ -6,12 +6,17 @@ import os
 from typing import List
 import position_config as pc
 from utils import calculate_score, format_position_name, generate_html_multiple
-from formation import spartans, france, notts_county, short_kings
+from formation import *
 from dotenv import load_dotenv
 from best_xi_calculator import select_best_teams
 import heapq
 
 load_dotenv()
+
+OUTPUT_DIR = "position_scores"
+
+# Create output directory if it doesn't exist
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 trajectory_data = {
     'Age': [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45],
@@ -48,17 +53,24 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
             ), axis=1)
         score_columns.append(score_col)
 
+    # Ensure that we are not filtering out too many players
     squads_filtered = rawdata[~(rawdata[score_columns] < min_score).all(axis=1)]
 
     # Create and sort DataFrames for each position
     squads = []
     columns = ['Inf', 'Name', 'Age', 'Club', 'Transfer Value', 'Salary', 'Nat', 'Position', 
                'Personality', 'Left Foot', 'Right Foot', 'Height']
+
+    squads_filtered.rename(columns={'Transfer Value': 'Price', 'Salary': 'Wage', 'Position': 'Pos', 'Personality': 'Pers', 'Left Foot': 'LFoot', 'Right Foot': 'RFoot'}, inplace=True)
+    
+    # Include only columns that appear in the rawdata
+    columns = [col for col in columns if col in squads_filtered.columns]
+
     for position, attrs in position_dict.items():
         score_col = format_position_name(position)
         squad = squads_filtered[columns + [score_col]].copy(deep=True)
         squad.sort_values(by=[score_col], ascending=False, inplace=True)
-        squads.append(squad.head(100))
+        squads.append(squad.head(100))  # Ensure you are getting the top 100 players
 
     # squads.append(squads_filtered[columns + score_columns])
 
@@ -77,113 +89,84 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
         return row
 
     squads_filtered = squads_filtered.apply(lambda row: keep_top_5_scores(row, score_columns), axis=1)
-    squads.append(squads_filtered[columns + score_columns])
+    squads = [squads_filtered[columns + score_columns]] + squads
 
-    # def get_top_n_scores(row, n=3):
-    #     heap = []
-    #     for position in score_columns:
-    #         score = row[position]
-    #         if len(heap) < n:
-    #             heapq.heappush(heap, (score, position))
-    #         else:
-    #             heapq.heappushpop(heap, (score, position))
-    #     return sorted(heap, reverse=True)  # Return top scores in descending order
-
-    # for i in range(1, 4):
-    #     squads_filtered[f'best_pos{i}'] = squads_filtered.apply(lambda row: get_top_n_scores(row)[i-1][1], axis=1)
-    #     squads_filtered[f'best_pos{i}_score'] = squads_filtered.apply(lambda row: get_top_n_scores(row)[i-1][0], axis=1)
-        
-    # squads.append(squads_filtered[columns + ['best_pos1', 'best_pos1_score', 'best_pos2', 'best_pos2_score', 'best_pos3', 'best_pos3_score']])
+    # Add top score column to the last DataFrame
+    squads[0] = squads[0].copy()  # Create a copy to avoid SettingWithCopyWarning
+    squads[0].loc[:, 'Top Score'] = squads[0][score_columns].max(axis=1)  # Calculate the top score for each row
 
     return squads
 
+def calculate_positions_for_file(formation, rawdata, file_path):
+    """Calculate position scores for a given dataset and generate HTML output."""
+    position_lists = [pc.gk_positions, pc.fb_positions, pc.cb_positions, pc.dm_positions, 
+                      pc.cm_positions, pc.am_positions, pc.w_positions, pc.st_positions]
+    
+    results = calculate_positions(rawdata, formation, position_lists, min_score=0)
+    file_name = str(os.path.splitext(os.path.basename(file_path))[0])
+    output_path = os.path.join(OUTPUT_DIR, file_name)
+    generate_html_multiple(results, ['all'] + formation, output_path)
 
+    # Add position group column to each DataFrame in results
+    for group_name, group_df in zip(['all'] + formation, results):
+        if group_name == "all":
+            group_df['Position'] = "All"
+        else:
+            group_df['Position'] = format_position_name(group_name)
+        
+    return results
 
-def calculate_formation(formation, squad_rawdata, scouting_rawdata, squad_file, scouting_file):
-    position_lists = [pc.gk_positions, pc.fb_positions, pc.cb_positions, pc.dm_positions, pc.cm_positions, pc.am_positions, pc.w_positions, pc.st_positions]
-    squad = calculate_positions(squad_rawdata, formation, position_lists, min_score=0)
-    scouting = calculate_positions(scouting_rawdata, formation, position_lists, min_score=0)
-
-    generate_html_multiple(squad, formation + ["all"], str(os.path.splitext(os.path.basename(squad_file))[0]))
-    generate_html_multiple(scouting, formation + ["all"], str(os.path.splitext(os.path.basename(scouting_file))[0]))
-
-    return squad, scouting
-
-def get_position_scores(age, position):
-    idx = age - 15
-    return trajectory_data[position][idx] 
-
-def add_trajectory_data(df, trajectory_dict, cutoff = 100, name_col='Name'):
-        for idx, row in df.iterrows():
-            player_scores = []
-            add_player = False
-
-            for position in notts_county:
-                p = format_position_name(position)
-                age = row['Age']
-                trajectory_score = round(row[p] / get_position_scores(age, p) * 100, 1)
-
-                player_scores.append(str(trajectory_score) + '%')
-
-                if trajectory_score >= cutoff:
-                    add_player = True
-
-            if add_player:
-                trajectory_dict[row[name_col]] = player_scores
-                for i, position in enumerate(notts_county):
-                    df.loc[idx, f'Traj_{format_position_name(position)}'] = player_scores[i]
+def calculate_all_positions(rawdata, file_path):
+    """Calculate position scores for all positions and return a list of DataFrames for each position group."""
+    position_lists = [pc.gk_positions, pc.fb_positions, pc.cb_positions, pc.dm_positions, 
+                      pc.cm_positions, pc.am_positions, pc.w_positions, pc.st_positions]
+    
+    # Calculate scores for all positions
+    results = calculate_positions(rawdata, ['all'], position_lists, min_score=0)
+    
+    # Add position group column to each DataFrame in results
+    for group_name, group_df in zip(['all'] + ['gk', 'fb', 'cb', 'dm', 'cm', 'am', 'w', 'st'], results):
+        group_df['Position'] = format_position_name(group_name)
+    
+    return results
 
 def main():
     directory_path = os.getenv('FM_24_path')
+    formation_input = sys.argv[1] if len(sys.argv) > 1 else input("Please type in the team name: ").strip()
+    run_scouting = True if len(sys.argv) <= 2 else sys.argv[2].lower() in ['y', 'yes', 'true', '1']
 
-    # Find the most recent file in the specified folder
+    if formation_input not in formation_dict and formation_input != 'all':
+        print(f"Formation '{formation_input}' not found. Available formations: {', '.join(formation_dict.keys())}")
+        return
+
+    # Process squad data
     squad_files = glob.glob(os.path.join(directory_path, '**/*Squad*'), recursive=True)
-    squad_file = max(squad_files, key=os.path.getctime)
+    if squad_files:
+        squad_file = max(squad_files, key=os.path.getctime)
+        squad_rawdata = pd.read_html(squad_file, header=0, encoding="utf-8", keep_default_na=False)[0]
+        
+        if formation_input == 'all':
+            squad_results = calculate_all_positions(squad_rawdata, squad_file)
+        else:
+            squad_results = calculate_positions_for_file(formation_dict[formation_input], squad_rawdata, squad_file)
+            print(squad_results[-1])
 
-    scouting_files = glob.glob(os.path.join(directory_path, '**/*Scouting*'), recursive=True)
-    scouting_file = max(scouting_files, key=os.path.getctime)
+    # Process scouting data if enabled
+    if run_scouting:
+        scouting_files = glob.glob(os.path.join(directory_path, '**/*Scouting*'), recursive=True)
+        if scouting_files:
+            scouting_file = max(scouting_files, key=os.path.getctime)
+            scouting_rawdata = pd.read_html(scouting_file, header=0, encoding="utf-8", keep_default_na=False)[0]
+            
+            print('\n\nScouting Results:')
+            if formation_input == 'all':
+                scouting_results = calculate_all_positions(scouting_rawdata, scouting_file)
+            else:
+                scouting_results = calculate_positions_for_file(formation_dict[formation_input], scouting_rawdata, scouting_file)
+                print(scouting_results[-1])
+        else:
+            print("No scouting files found in the specified directory.")
 
-    # Read HTML file exported by FM - in this case, an example of an output from the squad page
-    squad_rawdata_list = pd.read_html(squad_file, header=0, encoding="utf-8", keep_default_na=False)
-    scouting_rawdata_list = pd.read_html(scouting_file, header=0, encoding="utf-8", keep_default_na=False)
-
-    squad_rawdata = squad_rawdata_list[0]
-    scouting_rawdata = scouting_rawdata_list[0]
-
-    if len(sys.argv) > 1:
-        user_input = sys.argv[1]
-    else:
-        user_input = ""
-        while not user_input.strip():
-            user_input = input("Please type in the team name: ")
-
-    squad, scouting = None, None
-
-    if user_input == "spartans":
-        squad, scouting = calculate_formation(spartans, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-    elif user_input == "france":
-        squad, scouting = calculate_formation(france, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-    elif user_input == "notts_county":
-        squad, scouting = calculate_formation(notts_county, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-    elif user_input == "gronigen":
-        squad, scouting = calculate_formation(short_kings, squad_rawdata, scouting_rawdata, squad_file, scouting_file)
-
-    # Calculate the trajectories for each player at each position in squad and scouting data (traj = position score/trajectory_data)
-    squad_trajectories = {}
-    scouting_trajectories = {}
-
-    # add_trajectory_data(squad[-1], squad_trajectories, cutoff=0)
-    # add_trajectory_data(scouting[-1], scouting_trajectories)
-    
-    # Print the updated DataFrames for verification
-    print(squad[-1])
-    print('\n\n')
-    print(scouting[-1])
-
-    # if len(sys.argv) > 2:
-    #     min_score = int(sys.argv[2])
-    #     select_best_teams(squad[-1], min_score)
-    
 if __name__ == "__main__":
     main()
 
