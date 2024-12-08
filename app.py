@@ -1,21 +1,27 @@
 import dash
-from flask import Flask
+import dash_bootstrap_components as dbc
+from dash import html
 
-# Initialize the Flask server
-server = Flask(__name__)
+# Initialize the Dash app with Bootstrap
+app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# Initialize the Dash app with the Flask server
-app = dash.Dash(__name__, server=server, url_base_pathname='/squad/')
+# Define the layout with a Bootstrap Navbar
+app.layout = html.Div([
+    dbc.NavbarSimple(
+        children=[
+            dbc.NavItem(dbc.NavLink("Squad", href="/squad")),
+            dbc.NavItem(dbc.NavLink("Scouting", href="/scouting")),
+        ],
+        brand="FMScouter",
+        brand_href="/",
+        color="primary",
+        dark=True,
+        style={'marginBottom': '20px'}
+    ),
+    
+    # Page content will be rendered here
+    dash.page_container
+])
 
-# Import the layout and callbacks from the squad_page module
-from squad_page import layout, register_callbacks
-
-# Set the layout of the app
-app.layout = layout
-
-# Register callbacks
-register_callbacks(app)
-
-# Run the app
 if __name__ == '__main__':
-    app.run_server(debug=True) 
+    app.run_server(debug=True)
