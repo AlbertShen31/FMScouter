@@ -5,8 +5,10 @@ import os
 import glob
 from position_score_calculator import calculate_positions_for_file
 from formation import formation_dict
+from dotenv import load_dotenv
 
 class AppConfig:
+    load_dotenv()
     directory_path = os.getenv('FM_24_path')
     squad_files = sorted(glob.glob(os.path.join(directory_path, '**/*Squad*'), recursive=True))
 
@@ -38,11 +40,8 @@ layout = html.Div(style={'padding': '20px', 'fontFamily': 'Arial, sans-serif', '
         ),
     ], style={'marginBottom': '20px', 'backgroundColor': '#ffffff', 'padding': '10px', 'borderRadius': '5px', 'boxShadow': '0 2px 5px rgba(0,0,0,0.1)'}),
     
-    # Store component to manage visibility of the position filter
-    dcc.Store(id='store-position-filter-visible', data=False),
-    
     # Dropdown for filtering by position
-    html.Div(id='position-filter-container', style={'display': 'none'}, children=[
+    html.Div(id='position-filter-container', children=[
         html.Label("Filter by Position:", style={'fontWeight': 'bold', 'color': '#007BFF'}),
         dcc.Dropdown(
             id='position-filter',
@@ -80,15 +79,15 @@ def register_callbacks(app):
         [Output('position-filter', 'options'),
          Output('position-filter', 'value'),
          Output('player-table', 'columns'),
-         Output('player-table', 'data'),
-         Output('store-position-filter-visible', 'data')],
-        Input('squad-file-dropdown', 'value'),
-        Input('formation-dropdown', 'value')
+         Output('player-table', 'data')],
+        [Input('squad-file-dropdown', 'value'),
+         Input('formation-dropdown', 'value'),
+         Input('position-filter', 'value')]
     )
-    def update_data(selected_file, selected_formation):
+    def update_data(selected_file, selected_formation, selected_position):
         if selected_file and selected_formation:
             if selected_formation not in formation_dict:
-                return [], None, [], [], False
+                return [], None, [], []
 
             squad_rawdata = pd.read_html(selected_file, header=0, encoding="utf-8", keep_default_na=False)[0]
             positions_list = formation_dict[selected_formation]
@@ -96,17 +95,15 @@ def register_callbacks(app):
 
             position_options = [{'label': group['Position'].iloc[0], 'value': group['Position'].iloc[0]} for group in group_dfs if not group.empty]
             selected_position_group = position_options[0]['value'] if position_options else None
-            df = next((group for group in group_dfs if group['Position'].iloc[0] == selected_position_group), pd.DataFrame())
+            
+            if selected_position:
+                df = next((group for group in group_dfs if group['Position'].iloc[0] == selected_position), pd.DataFrame())
+            else:
+                df = next((group for group in group_dfs if group['Position'].iloc[0] == selected_position_group), pd.DataFrame())
+            
             columns = [{"name": i, "id": i} for i in df.columns if i != 'Position']
             data = df.drop(columns=['Position']).to_dict('records')
 
-            return position_options, selected_position_group, columns, data, True
+            return position_options, selected_position_group, columns, data
         
-        return [], None, [], [], False
-
-    @app.callback(
-        Output('position-filter-container', 'style'),
-        Input('store-position-filter-visible', 'data')
-    )
-    def toggle_position_filter(visible):
-        return {'display': 'block'} if visible else {'display': 'none'}
+        return [], None, [], []
