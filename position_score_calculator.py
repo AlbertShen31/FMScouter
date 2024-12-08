@@ -111,20 +111,6 @@ def calculate_positions_for_file(formation, rawdata, file_path):
             group_df['Position'] = "All"
         else:
             group_df['Position'] = format_position_name(group_name)
-        
-    return results
-
-def calculate_all_positions(rawdata, file_path):
-    """Calculate position scores for all positions and return a list of DataFrames for each position group."""
-    position_lists = [pc.gk_positions, pc.fb_positions, pc.cb_positions, pc.dm_positions, 
-                      pc.cm_positions, pc.am_positions, pc.w_positions, pc.st_positions]
-    
-    # Calculate scores for all positions
-    results = calculate_positions(rawdata, ['all'], position_lists, min_score=0)
-    
-    # Add position group column to each DataFrame in results
-    for group_name, group_df in zip(['all'] + ['gk', 'fb', 'cb', 'dm', 'cm', 'am', 'w', 'st'], results):
-        group_df['Position'] = format_position_name(group_name)
     
     return results
 
