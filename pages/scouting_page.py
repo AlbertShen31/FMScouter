@@ -97,20 +97,20 @@ def update_data(selected_file, selected_formation, selected_position):
         positions_list = formation_dict[selected_formation]
         group_dfs = calculate_positions_for_file(positions_list, scouting_rawdata, selected_file)
 
-        position_options = [{'label': group['Position'].iloc[0], 'value': group['Position'].iloc[0]} for group in group_dfs if not group.empty]
+        position_options = [{'label': group['Selected'].iloc[0], 'value': group['Selected'].iloc[0]} for group in group_dfs if not group.empty]
         selected_position_group = position_options[0]['value'] if position_options else None
         
         if selected_position:
-            df = next((group for group in group_dfs if group['Position'].iloc[0] == selected_position), pd.DataFrame())
+            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position), pd.DataFrame())
         else:
-            df = next((group for group in group_dfs if group['Position'].iloc[0] == selected_position_group), pd.DataFrame())
+            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position_group), pd.DataFrame())
         
-        columns = [{"name": i, "id": i} for i in df.columns if i != 'Position']
-        data = df.drop(columns=['Position']).to_dict('records')
+        columns = [{"name": i, "id": i} for i in df.columns if i != 'Selected']
+        data = df.drop(columns=['Selected']).to_dict('records')
 
         # Determine the last column for sorting
         last_column_id = columns[-1]['id'] if columns else ''
         
-        return position_options, selected_position_group, columns, data, [{'column_id': last_column_id, 'direction': 'asc'}]  # Set default sort by last column
+        return position_options, selected_position_group, columns, data, [{'column_id': last_column_id, 'direction': 'desc'}]  # Set default sort by last column
     
     return [], None, [], [], []  # Return empty sort_by

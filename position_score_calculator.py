@@ -33,10 +33,11 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
 
     # Create and sort DataFrames for each position
     squads = []
-    columns = ['Inf', 'Name', 'Age', 'Club', 'Transfer Value', 'Salary', 'Nat', 'Position', 
-               'Personality', 'Left Foot', 'Right Foot', 'Height']
-
-    squads_filtered.rename(columns={'Transfer Value': 'Price', 'Salary': 'Wage', 'Position': 'Pos', 'Personality': 'Pers', 'Left Foot': 'LFoot', 'Right Foot': 'RFoot'}, inplace=True)
+    
+    squads_filtered.rename(columns={'Transfer Value': 'Price', 'Salary': 'Wage', 'Personality': 'Pers', 'Left Foot': 'LFoot', 'Right Foot': 'RFoot'}, inplace=True)
+    
+    columns = ['Name', 'Age', 'Club', 'Price', 'Nat', 'Position', 
+               'Pers', 'LFoot', 'RFoot', 'Height']
     
     # Include only columns that appear in the rawdata
     columns = [col for col in columns if col in squads_filtered.columns]
@@ -80,9 +81,9 @@ def calculate_positions_for_file(formation, rawdata, file_path):
     # Add position group column to each DataFrame in results
     for group_name, group_df in zip(['all'] + formation, results):
         if group_name == "all":
-            group_df['Position'] = "All"
+            group_df['Selected'] = "All"
         else:
-            group_df['Position'] = format_position_name(group_name)
+            group_df['Selected'] = format_position_name(group_name)
     
     return results
 
