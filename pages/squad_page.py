@@ -61,10 +61,14 @@ layout = html.Div([
         id='squad-player-table',
         columns=[],
         data=[],
-        page_size=10,
+        page_size=20,
+        cell_selectable=False,
         sort_action='native',
         filter_action='native',
-        style_table={'overflowX': 'auto'},
+        style_table={
+            'overflowX': 'auto',
+            'paddingBottom': '50px'
+        },
         style_header={'backgroundColor': '#007BFF', 'fontWeight': 'bold', 'color': 'white'},
         style_cell={'textAlign': 'left', 'padding': '10px', 'backgroundColor': '#f8f9fa', 'color': '#212529'},
         style_data={'whiteSpace': 'normal', 'height': 'auto'},

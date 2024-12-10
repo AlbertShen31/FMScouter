@@ -77,7 +77,7 @@ heaven = ['sweeper_keeper_defend',
           'attacking_midfielder_attack',
           'inside_forward_support',
           'advanced_forward_attack',
-          'complete_forward_attack']
+          'complete_forward_support']
 
 # Rewrite the above code into a dictionary
 formation_dict = {
