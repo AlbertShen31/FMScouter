@@ -9,8 +9,8 @@ app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTS
 app.layout = html.Div([
     dbc.NavbarSimple(
         children=[
-            dbc.NavItem(dbc.NavLink("Squad", href="/squad")),
-            dbc.NavItem(dbc.NavLink("Scouting", href="/scouting")),
+            dbc.NavItem(dbc.NavLink("Squad", href="/squad", style={'fontSize': '18px', 'padding': '10px'})),
+            dbc.NavItem(dbc.NavLink("Scouting", href="/scouting", style={'fontSize': '18px', 'padding': '10px'})),
         ],
         brand="FMScouter",
         brand_href="/",

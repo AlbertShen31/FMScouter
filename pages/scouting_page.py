@@ -3,7 +3,7 @@ import glob
 import pandas as pd
 from dash import dcc, html, dash_table, callback, Input, Output, register_page
 from dotenv import load_dotenv
-from formation import formation_dict
+from config.formation_config import formation_dict
 from position_score_calculator import calculate_positions_for_file
 
 # Register the page with a specific path

@@ -4,9 +4,8 @@ import sys
 import glob
 import os
 from typing import List
-import position_config as pc
+import config.position_config as pc
 from utils import calculate_score, format_position_name
-from formation import *
 import heapq
 
 # Calculate the score for each position

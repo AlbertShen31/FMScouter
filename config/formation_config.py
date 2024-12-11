@@ -1,4 +1,3 @@
-from position_config import *
 
 flanker = ['sweeper_keeper_defend', 
             'inverted_wing_back_attack', 

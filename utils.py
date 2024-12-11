@@ -135,4 +135,26 @@ def generate_html_multiple(dataframes, table_names, folder_name):
     with open(f"{folder_name}/tables.html", "w") as file:
         file.write(html_content)
 
+def translate_position_to_field_area(position: str) -> str:
+    """Translate player position to field area."""
+    position_map = {
+        "GK": "Goalkeeper",
+        "D": "Defense",
+        "WB": "Defense",
+        "DM": "Midfield",
+        "M": "Midfield",
+        "AM": "Forward",
+        "ST": "Forward",
+    }
+    
+    roles = set()
+
+    # Split the position to handle multiple roles
+    for pos in position_map.keys():
+        if pos in position:
+            roles.add(pos)
+
+    return roles
+
+
 
