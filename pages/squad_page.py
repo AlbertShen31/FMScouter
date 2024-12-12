@@ -99,7 +99,7 @@ def update_data(selected_file, selected_formation, selected_position):
 
         squad_rawdata = pd.read_html(selected_file, header=0, encoding="utf-8", keep_default_na=False)[0]
         positions_list = formation_dict[selected_formation]
-        group_dfs = calculate_positions_for_file(positions_list, squad_rawdata, selected_file)
+        group_dfs = calculate_positions_for_file(positions_list, squad_rawdata)
 
         position_options = [{'label': group['Selected'].iloc[0], 'value': group['Selected'].iloc[0]} for group in group_dfs if not group.empty]
         selected_position_group = position_options[0]['value'] if position_options else None

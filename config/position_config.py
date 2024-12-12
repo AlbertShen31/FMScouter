@@ -786,3 +786,5 @@ st_positions = {
         'divisor': 41
     },
 }
+
+all_positions = {**gk_positions, **fb_positions, **cb_positions, **dm_positions, **cm_positions, **am_positions, **w_positions, **st_positions}

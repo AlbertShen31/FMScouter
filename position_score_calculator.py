@@ -5,15 +5,11 @@ import glob
 import os
 from typing import List
 import config.position_config as pc
-from utils import calculate_score, format_position_name
+from utils import calculate_score, format_position_name, parse_positions, translate_position_to_field_area
 import heapq
 
 # Calculate the score for each position
-def calculate_positions(rawdata, selected_positions, position_lists, min_score=0):
-    # Build a dictionary of selected positions
-    position_dict = {pos: attrs for plist in position_lists for pos, attrs in plist.items()
-                     if pos.lower() in selected_positions}
-
+def calculate_positions(rawdata, position_dict, min_score=0):
     # Calculate the score for each position
     score_columns = []
     for position, attrs in position_dict.items():
@@ -47,35 +43,41 @@ def calculate_positions(rawdata, selected_positions, position_lists, min_score=0
         squad.sort_values(by=[score_col], ascending=False, inplace=True)
         squads.append(squad.head(100))  # Ensure you are getting the top 100 players
 
-    def keep_top_5_scores(row, score_columns):
-        heap = []
-        for score_col in score_columns:
-            score = row[score_col]
-            if len(heap) < 5:
-                heapq.heappush(heap, (score, score_col))
-            else:
-                heapq.heappushpop(heap, (score, score_col))
-        top_5_columns = [col for score, col in heap]
-        for col in score_columns:
-            if col not in top_5_columns:
-                row[col] = 0
-        return row
+    # Add top score column to the first DataFrame
+    squads_filtered = squads_filtered.copy()  # Create a copy to avoid SettingWithCopyWarning
+    squads_filtered.loc[:, 'Top Score'] = squads_filtered[score_columns].max(axis=1)  # Calculate the top score for each row
 
-    squads_filtered = squads_filtered.apply(lambda row: keep_top_5_scores(row, score_columns), axis=1)
-    squads = [squads_filtered[columns + score_columns]] + squads
-
-    # Add top score column to the last DataFrame
-    squads[0] = squads[0].copy()  # Create a copy to avoid SettingWithCopyWarning
-    squads[0].loc[:, 'Top Score'] = squads[0][score_columns].max(axis=1)  # Calculate the top score for each row
+    squads = [squads_filtered[columns + score_columns + ['Top Score']]] + squads
 
     return squads
 
-def calculate_positions_for_file(formation, rawdata, file_path):
+def calculate_positions_for_file(formation, rawdata):
     """Calculate position scores for a given dataset and return DataFrames."""
-    position_lists = [pc.gk_positions, pc.fb_positions, pc.cb_positions, pc.dm_positions, 
-                      pc.cm_positions, pc.am_positions, pc.w_positions, pc.st_positions]
+    position_lists = pc.all_positions
     
-    results = calculate_positions(rawdata, formation, position_lists, min_score=0)
+    position_maps = {
+        'Goalkeepers': [pc.gk_positions], 
+        'Wide Defenders': [pc.fb_positions],
+        'Center Defenders': [pc.cb_positions], 
+        'Center Midfielders': [pc.dm_positions, pc.cm_positions], 
+        'Wingers': [pc.am_positions, pc.w_positions],
+        'Attackers': [pc.am_positions, pc.w_positions, pc.st_positions]
+    }
+
+    # Build a dictionary of selected positions
+    position_dict = {}
+    
+    # If position_lists is already a dictionary (which it appears to be), 
+    # directly iterate over its items
+    for pos, attrs in position_lists.items():
+        if pos.lower() in formation:
+            position_dict[pos] = attrs
+    
+
+    print(position_dict.keys())
+    rawdata['Field Area'] = rawdata['Position'].apply(translate_position_to_field_area)
+    
+    results = calculate_positions(rawdata, position_dict, min_score=0)
 
     # Add position group column to each DataFrame in results
     for group_name, group_df in zip(['all'] + formation, results):
