@@ -97,24 +97,21 @@ def update_data(selected_file, selected_formation, selected_position):
         if selected_formation not in formation_dict:
             return [], None, [], [], []  # Return empty sort_by
 
-        scouting_rawdata = pd.read_html(selected_file, header=0, encoding="utf-8", keep_default_na=False)[0]
+        squad_rawdata = pd.read_html(selected_file, header=0, encoding="utf-8", keep_default_na=False)[0]
         positions_list = formation_dict[selected_formation]
-        group_dfs = calculate_positions_for_file(positions_list, scouting_rawdata)
+        group_dfs = calculate_positions_for_file(positions_list, squad_rawdata)
 
-        position_options = [{'label': group['Selected'].iloc[0], 'value': group['Selected'].iloc[0]} for group in group_dfs if not group.empty]
-        selected_position_group = position_options[0]['value'] if position_options else None
+        position_options = [group['Selected'].iloc[0] for group in group_dfs if not group.empty]
+        selected_position_group = selected_position if selected_position else position_options[0]
         
-        if selected_position:
-            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position), pd.DataFrame())
-        else:
-            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position_group), pd.DataFrame())
+        df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position_group), pd.DataFrame())
         
         columns = [{"name": i, "id": i} for i in df.columns if i != 'Selected']
         data = df.drop(columns=['Selected']).to_dict('records')
 
         # Determine the last column for sorting
         last_column_id = columns[-1]['id'] if columns else ''
-        
-        return position_options, selected_position_group, columns, data, [{'column_id': last_column_id, 'direction': 'desc'}]  # Set default sort by last column
+
+        return position_options, selected_position_group, columns, data, [{'column_id': last_column_id, 'direction': 'desc'}]
     
-    return [], None, [], [], []  # Return empty sort_by
+    return [], None, [], [], [] 

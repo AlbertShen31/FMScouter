@@ -101,13 +101,10 @@ def update_data(selected_file, selected_formation, selected_position):
         positions_list = formation_dict[selected_formation]
         group_dfs = calculate_positions_for_file(positions_list, squad_rawdata)
 
-        position_options = [{'label': group['Selected'].iloc[0], 'value': group['Selected'].iloc[0]} for group in group_dfs if not group.empty]
-        selected_position_group = position_options[0]['value'] if position_options else None
+        position_options = [group['Selected'].iloc[0] for group in group_dfs if not group.empty]
+        selected_position_group = selected_position if selected_position else position_options[0]
         
-        if selected_position:
-            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position), pd.DataFrame())
-        else:
-            df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position_group), pd.DataFrame())
+        df = next((group for group in group_dfs if group['Selected'].iloc[0] == selected_position_group), pd.DataFrame())
         
         columns = [{"name": i, "id": i} for i in df.columns if i != 'Selected']
         data = df.drop(columns=['Selected']).to_dict('records')

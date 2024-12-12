@@ -74,7 +74,6 @@ def calculate_positions_for_file(formation, rawdata):
             position_dict[pos] = attrs
     
 
-    print(position_dict.keys())
     rawdata['Field Area'] = rawdata['Position'].apply(translate_position_to_field_area)
     
     results = calculate_positions(rawdata, position_dict, min_score=0)
