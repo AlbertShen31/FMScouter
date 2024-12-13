@@ -1,46 +1,76 @@
+# Imports
 import dash
-from dash import dcc, html, callback, Input, Output, State, register_page, callback_context
-import uuid
-from urllib.parse import parse_qs
-from flask import request  # Import the request object
-from dash import ctx  # Import ctx to determine which component was clicked
+from dash import dcc, html, callback, Input, Output, register_page
 from config.position_config import position_roles
-from utils import format_position_name  # Import the position roles
+from utils import format_position_name
 
-# Register the page with a specific path
-register_page(__name__, path='/player_selection')
+# Constants
+DEFAULT_FORMATION = 'heaven'  # Default formation
+FORMATIONS = [
+    {'label': '4-1-3-2', 'value': 'heaven'},
+    {'label': '4-1-2-2-1', 'value': 'flanker'},
+    {'label': '3-4-3', 'value': 'three_striker'},
+]
 
+FORMATION_DICT = {
+    'heaven': [
+        ['gk'],  # Goalkeeper
+        ['dl', 'dcl', 'dcr', 'dr'],  # Defenders
+        ['dmc'],  # Defensive Midfielders 
+        [],  # Midfielders
+        ['aml', 'amc', 'amr'],  # Attacking Midfielders
+        ['stl', 'str']  # Forwards
+    ],
+    'flanker': [
+        ['gk'],  # Goalkeeper
+        ['dl', 'dcl', 'dcr', 'dr'],  # Defenders
+        ['dmc'],  # Defensive Midfielders 
+        ['mr', 'ml'],  # Midfielders
+        ['aml', 'amr'],  # Attacking Midfielders
+        ['stc']  # Forwards
+    ],
+    'three_striker': [
+        ['gk'],  # Goalkeeper
+        ['dc', 'dcl', 'dcr'],  # Defenders
+        ['wbl', 'dmcl', 'dmcr', 'wbr'],  # Defensive Midfielders 
+        [],  # Midfielders
+        [],  # Attacking Midfielders
+        ['stl', 'str', 'stc']  # Forwards
+    ],
+}
+
+ID_PREFIXES = {
+    'goalkeeper': ['gk'],
+    'defenders': ['dl', 'dcl', 'dc', 'dcr', 'dr'],
+    'defensive_midfielders': ['wbl', 'dmcl', 'dmc', 'dmcr', 'wbr'],
+    'midfielders': ['ml', 'mcl', 'mc', 'mcr', 'mr'],
+    'attacking_midfielders': ['aml', 'amcl', 'amc', 'amcr', 'amr'],
+    'forwards': ['stl', 'stc', 'str'],
+}
+
+POSITION_COLORS = {
+    'Goalkeeper': ('green', 'lightgreen'),
+    'Defenders': ('blue', 'lightblue'),
+    'Defensive Midfielders': ('purple', 'lavender'),
+    'Midfielders': ('orange', 'peachpuff'),
+    'Attacking Midfielders': ('red', 'salmon'),
+    'Forwards': ('yellow', 'lightyellow'),
+}
+
+# Functions
 def generate_players(positions):
     formation = []
     player_num = 0
     for position in positions:
         field_area = {}
         for i in range(len(position)):
-            field_area[position[i]] = {'id': f'player_{player_num}', 'content': f'{player_num+1}'}
+            field_area[position[i]] = {'id': f'player_{player_num}', 'content': f'{player_num + 1}'}
             player_num += 1
         formation.append(field_area)
     return formation
 
-# Define initial player data with 11 players
-PLAYERS = generate_players([
-    ['gk'],  # Goalkeeper
-    ['dcl', 'dcr', 'dr'],  # Defenders
-    ['wbl', 'dmcl'],  # Defensive Midfielders 
-    ['mcl', 'ml'],  # Midfielders
-    ['aml', 'amcl'],  # Attacking Midfielders
-    ['stc']  # Forwards
-])
-
-id_prefixes = {
-        'goalkeeper': ['gk'],
-        'defenders': ['dl', 'dcl', 'dc', 'dcr', 'dr'],
-        'defensive_midfielders': ['wbl', 'dmcl', 'dmc', 'dmcr', 'wbr'],
-        'midfielders': ['ml', 'mcl', 'mc', 'mcr', 'mr'],
-        'attacking_midfielders': ['aml', 'amcl', 'amc', 'amcr', 'amr'],
-        'forwards': ['stl', 'stc', 'str'],
-    }
-
-def create_container_divs(position_name, border_color, background_color, players=[], number_of_players=1):
+def create_container_divs(position_name, players=[], number_of_players=1):
+    border_color, background_color = POSITION_COLORS.get(position_name, ('black', 'white'))
     position_id = position_name.lower().replace(' ', '_')
     return html.Div([
         html.H4(position_name),
@@ -53,114 +83,130 @@ def create_container_divs(position_name, border_color, background_color, players
             },
             children=[
                 html.Div(
-                    id=f'{id_prefixes[position_id][i]}',  # Generate IDs based on position
+                    id=f'{ID_PREFIXES[position_id][i]}',
                     className='droppable row-container',
                     style={
-                        'border': f'2px dashed {border_color}', 
-                        'minHeight': '100px', 
+                        'border': f'2px dashed {border_color}',
+                        'minHeight': '100px',
                         'width': '18%',
                         'display': 'flex',
-                        'justifyContent': 'center',  # Center content horizontally
-                        'alignItems': 'center',  # Center content vertically
+                        'justifyContent': 'center',
+                        'alignItems': 'center',
                         'padding': '10px',
-                        'margin': '0 auto'  # Center the droppable div itself
+                        'margin': '0 auto'
                     },
                     children=[
-                        html.Div(f'Empty Slot {id_prefixes[position_id][i]}', style={'color': 'gray'}) 
-                        if id_prefixes[position_id][i] not in players else create_draggable_player_div(players[id_prefixes[position_id][i]], id_prefixes[position_id][i]) 
-                    ]  # Placeholder for empty slots
-                ) for i in range(number_of_players)  # Adjust range based on the maximum number of players
+                        html.Div(f'Empty Slot {ID_PREFIXES[position_id][i]}', style={'color': 'gray'})
+                        if ID_PREFIXES[position_id][i] not in players else create_draggable_player_div(players[ID_PREFIXES[position_id][i]], ID_PREFIXES[position_id][i])
+                    ]
+                ) for i in range(number_of_players)
             ]
         )
     ])
 
-# Initialize a click counter
-click_count = 0
-
-# Callback to update click count
-@callback(
-    Output('click-counter', 'children'),  # Output to display the click count
-    Input({'type': 'dropdown', 'index': dash.dependencies.ALL}, 'value'),  # Input for all dropdowns in player divs
-    prevent_initial_call=True
-)
-def update_click_count(dropdown_values):
-    global click_count
-    if ctx.triggered:
-        # Increment the counter only if a dropdown is selected
-        if dropdown_values and any(dropdown_values):
-            click_count += 1  # Increment for each dropdown selection
-    return f'Player Click Count: {click_count}'  # Return the updated count
-
-# Function to create a draggable player div with a dropdown
 def create_draggable_player_div(player, position_id):
-    # Get the available roles for the given position ID
     available_roles = position_roles.get(position_id, [])
-
     available_options = [{'label': format_position_name(role), 'value': role.lower()} for role in sorted(available_roles)]
-
-    print(available_options)
 
     return html.Div(
         [
             html.Div(
-                f"{player['content']}",  # Use player content for draggable object
+                f"{player['content']}",
                 style={
-                    'fontSize': '20px',  # Increase font size for better visibility
+                    'fontSize': '20px',
                     'fontWeight': 'bold',
                     'textAlign': 'center',
-                    'marginBottom': '2px',  # Space between text and dropdown
+                    'marginBottom': '2px',
                 }
             ),
             dcc.Dropdown(
-                id={'type': 'dropdown', 'index': player['id']},  # Unique ID for dropdown
-                options=available_options,  # Set options based on position
-                value=available_roles[0] if available_roles else None,  # Default value
-                clearable=False,  # Remove the clearable "x"
+                id={'type': 'dropdown', 'index': player['id']},
+                options=available_options,
+                value=available_options[0]['value'] if available_options else None,
+                clearable=False,
                 style={
-                    'width': '100%',  # Set width to fill the parent div
-                    'fontSize': '12px',  # Adjust font size for dropdown
-                    'color': 'black',  # Set dropdown font color to black for better visibility
-                    'textAlign': 'center',  # Center the text in the dropdown
-                    'border': 'none',  # Remove border for a cleaner look
-                    'backgroundColor': 'transparent',  # Make background transparent
+                    'width': '100%',
+                    'fontSize': '12px',
+                    'color': 'black',
+                    'textAlign': 'center',
+                    'border': 'none',
+                    'backgroundColor': 'transparent',
                 }
             )
         ],
-        id=f"draggable_{player['id']}",  # Unique ID for draggable
-        className='draggable',  # Class for draggable styling
+        id=f"draggable_{player['id']}",
+        className='draggable',
         draggable='true',
         style={
             'cursor': 'move',
-            'color': 'white',  # Change text color for better contrast
-            'backgroundColor': '#007BFF',  # Change background color to a vibrant blue
-            'border': '2px solid black',  # Border for visibility
-            'borderRadius': '50%',  # Make it circular
-            'width': '100px',  # Increase width for better visibility
-            'height': '100px',  # Increase height for better visibility
+            'color': 'white',
+            'backgroundColor': '#007BFF',
+            'border': '2px solid black',
+            'borderRadius': '50%',
+            'width': '100px',
+            'height': '100px',
             'display': 'flex',
-            'flexDirection': 'column',  # Stack content vertically
+            'flexDirection': 'column',
             'justifyContent': 'center',
             'alignItems': 'center',
-            'padding': '5px',  # Add padding
-        }  # Style for draggable
+            'padding': '5px',
+        }
     )
 
-# Update layout to use the defined positions
+def generate_players_from_formation(formation):
+    return generate_players(FORMATION_DICT[formation])
+
+# Register the page with a specific path
+register_page(__name__, path='/player_selection')
+
+# Layout
 layout = html.Div([
-    # Add a script tag for custom JavaScript
+    dcc.Dropdown(
+        id='formation-dropdown',
+        options=FORMATIONS,
+        value=DEFAULT_FORMATION,  # Default value
+        clearable=False,
+        style={'width': '40%', 'margin': '20px auto'}  # Center the dropdown
+    ),
+    
+    dcc.Store(id='players-store', data=generate_players_from_formation(DEFAULT_FORMATION)),  # Initialize with default players
+    
     html.Script(src='/assets/drag_and_drop.js'),
     
     html.H1('Player Selection', style={'textAlign': 'center'}),
  
-    # Formation Layout
-    html.Div([
-        create_container_divs('Forwards', 'red', 'salmon', PLAYERS[5], 3),
-        create_container_divs('Attacking Midfielders', 'purple', 'lavender', PLAYERS[4], 5),
-        create_container_divs('Midfielders', 'purple', 'lavender', PLAYERS[3], 5),
-        create_container_divs('Defensive Midfielders', 'purple', 'lavender', PLAYERS[2], 5),
-        create_container_divs('Defenders', 'blue', 'lightblue', PLAYERS[1], 5),
-        create_container_divs('Goalkeeper', 'green', 'lightgreen', PLAYERS[0], 1),
+    html.Div(id='formation-layout', children=[
+        create_container_divs('Forwards', [], 3),
+        create_container_divs('Attacking Midfielders', [], 5),
+        create_container_divs('Midfielders', [], 5),
+        create_container_divs('Defensive Midfielders', [], 5),
+        create_container_divs('Defenders', [], 5),
+        create_container_divs('Goalkeeper', [], 1),
     ]),
     
     html.Div(id='click-counter', children='Player Click Count: 0', style={'textAlign': 'center', 'marginTop': '20px'}),  # Display for click count
 ])
+
+# Callbacks
+@callback(
+    Output('players-store', 'data'),  # Update the players store
+    Input('formation-dropdown', 'value'),  # Listen for changes in the dropdown
+    prevent_initial_call=True
+)
+def update_players(selected_formation):
+    players = generate_players_from_formation(selected_formation)  # Regenerate players based on the selected formation
+    return players  # Return the updated players and click count
+
+@callback(
+    Output('formation-layout', 'children'),
+    Input('players-store', 'data')
+)
+def update_formation_layout(players):
+    return [
+        create_container_divs('Forwards', players[5], 3),
+        create_container_divs('Attacking Midfielders', players[4], 5),
+        create_container_divs('Midfielders', players[3], 5),
+        create_container_divs('Defensive Midfielders', players[2], 5),
+        create_container_divs('Defenders', players[1], 5),
+        create_container_divs('Goalkeeper', players[0], 1),
+    ]
