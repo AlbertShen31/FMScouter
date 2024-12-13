@@ -8,55 +8,56 @@ from flask import request  # Import the request object
 register_page(__name__, path='/player_selection')
 
 # Define initial player data with 11 players
-PLAYERS = [
-    {'id': f'player_{i}', 'content': f'Player {i}'}
-    for i in range(1, 12)
-]
-
-# Define player positions explicitly
-INITIAL_FORMATION = {
-    'goalkeeper': [{'id': PLAYERS[0]['id'], 'content': PLAYERS[0]['content'], 'div_id': 'gk'}],
+PLAYERS = {
+    'goalkeeper': [
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': 'gk'[i]}
+        for i in range(1)
+    ],
     'defenders': [
-        {'id': PLAYERS[1]['id'], 'content': PLAYERS[1]['content'], 'div_id': 'dl'},
-        {'id': PLAYERS[2]['id'], 'content': PLAYERS[2]['content'], 'div_id': 'dcl'},
-        {'id': PLAYERS[3]['id'], 'content': PLAYERS[3]['content'], 'div_id': 'dc'},
-        {'id': PLAYERS[4]['id'], 'content': PLAYERS[4]['content'], 'div_id': 'dr'}
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': f'{['dl', 'dcl', 'dcr', 'dr'][i-1]}'}
+        for i in range(1, 5)
     ],
-    'defensive_midfielders': [],
+    'defensive_midfielders': [
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': f'{['dmc'][i-5]}'}
+        for i in range(5, 6)
+    ],
     'midfielders': [
-        {'id': PLAYERS[5]['id'], 'content': PLAYERS[5]['content'], 'div_id': 'ml'},
-        {'id': PLAYERS[6]['id'], 'content': PLAYERS[6]['content'], 'div_id': 'mcl'},
-        {'id': PLAYERS[7]['id'], 'content': PLAYERS[7]['content'], 'div_id': 'mc'},
-        {'id': PLAYERS[8]['id'], 'content': PLAYERS[8]['content'], 'div_id': 'mr'}
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': f'{['mcl', 'mcr'][i-6]}'}
+        for i in range(6, 8)
     ],
-    'attacking_midfielders': [],
+    'attacking_midfielders': [
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': f'{['aml', 'amr'][i-8]}'}
+        for i in range(8, 10)
+    ],
     'forwards': [
-        {'id': PLAYERS[9]['id'], 'content': PLAYERS[9]['content'], 'div_id': 'stl'},
-        {'id': PLAYERS[10]['id'], 'content': PLAYERS[10]['content'], 'div_id': 'str'}
+        {'id': f'player_{i}', 'content': f'Player {i+1}', 'position': f'{['stc'][i-10]}'}
+        for i in range(10, 11)
     ]
 }
 
 id_prefixes = {
-        "goalkeeper": ["gk"],
-        "defenders": ['dl', 'dcl', 'dc', 'dcr', 'dr'],
-        "defensive midfielders": ['wbl', 'dmcl', 'dmc', 'dmcr', 'wbr'],
-        "midfielders": ['ml', 'mcl', 'mc', 'mcr', 'mr'],
-        "attacking midfielders": ['aml', 'amcl', 'amc', 'amcr', 'amr'],
-        "forwards": ['stl', 'stc', 'str'],
+        'goalkeeper': ['gk'],
+        'defenders': ['dl', 'dcl', 'dc', 'dcr', 'dr'],
+        'defensive_midfielders': ['wbl', 'dmcl', 'dmc', 'dmcr', 'wbr'],
+        'midfielders': ['ml', 'mcl', 'mc', 'mcr', 'mr'],
+        'attacking_midfielders': ['aml', 'amcl', 'amc', 'amcr', 'amr'],
+        'forwards': ['stl', 'stc', 'str'],
     }
 
-def create_player_divs(position_name, border_color, background_color, number_of_players=1):
+def create_player_divs(position_name, border_color, background_color, players=[], number_of_players=1):
+    position_id = position_name.lower().replace(' ', '_')
     return html.Div([
         html.H4(position_name),
         html.Div(
             style={
                 'display': 'flex',
                 'justifyContent': 'space-between',
-                'width': '100%'
+                'width': '100%',
+                'marginBottom': '20px'
             },
             children=[
                 html.Div(
-                    id=f'{id_prefixes[position_name.lower()][i]}',  # Generate IDs based on position
+                    id=f'{id_prefixes[position_id][i]}',  # Generate IDs based on position
                     className='droppable row-container',
                     style={
                         'border': f'2px dashed {border_color}', 
@@ -67,7 +68,7 @@ def create_player_divs(position_name, border_color, background_color, number_of_
                         'alignItems': 'center',
                         'padding': '10px'
                     },
-                    children=[html.Div(f'Empty Slot {id_prefixes[position_name.lower()][i]}', style={'color': 'gray'})]  # Placeholder for empty slots
+                    children=[html.Div(f'Empty Slot {id_prefixes[position_id][i]}', style={'color': 'gray'})]  # Placeholder for empty slots
                 ) for i in range(number_of_players)  # Adjust range based on the maximum number of players
             ]
         )
@@ -78,67 +79,38 @@ layout = html.Div([
     # Add a script tag for custom JavaScript
     html.Script(src='/assets/drag_and_drop.js'),
     
-    html.H1("Player Selection", style={'textAlign': 'center'}),
+    html.H1('Player Selection', style={'textAlign': 'center'}),
     
     # Formation Layout
     html.Div([
-        create_player_divs("Forwards", 'red', 'salmon', 3),
-        create_player_divs("Attacking Midfielders", 'purple', 'lavender', 5),
-        create_player_divs("Midfielders", 'purple', 'lavender', 5),
-        create_player_divs("Defensive Midfielders", 'purple', 'lavender', 5),
-        create_player_divs("Defenders", 'blue', 'lightblue', 5),
-        create_player_divs("Goalkeeper", 'green', 'lightgreen', 1),
-    ]),
-    
-    # Available Players
-    html.Div([
-        html.H3("Substitutes"),
+        create_player_divs('Forwards', 'red', 'salmon', PLAYERS['forwards'], 3),
+        create_player_divs('Attacking Midfielders', 'purple', 'lavender', PLAYERS['attacking_midfielders'], 5),
+        create_player_divs('Midfielders', 'purple', 'lavender', PLAYERS['midfielders'], 5),
+        create_player_divs('Defensive Midfielders', 'purple', 'lavender', PLAYERS['defensive_midfielders'], 5),
+        create_player_divs('Defenders', 'blue', 'lightblue', PLAYERS['defenders'], 5),
+        create_player_divs('Goalkeeper', 'green', 'lightgreen', PLAYERS['goalkeeper'], 1),
+    ] + [
         html.Div(
-            id='available-players',
-            className='droppable',
+            f"{player['content']}",  # Use player content for draggable object
+            id=f"draggable_{player['id']}",  # Unique ID for draggable
+            className='draggable',  # Class for draggable styling
+            draggable='true',
             style={
+                'cursor': 'move',
+                'color': 'white',  # Change text color for better contrast
+                'border': '2px solid black',  # Border for visibility
+                'borderRadius': '50%',  # Make it circular
+                'width': '75px',  # Adjust width
+                'height': '75px',  # Adjust height
                 'display': 'flex',
-                'flexWrap': 'wrap',
-                'minHeight': '100px',
-                'border': '2px dashed gray',
-                'padding': '10px'
-            },
-            children=[html.Div("No Substitutes Available", style={'color': 'gray'})]  # Placeholder for empty substitutes
-        )
+                'justifyContent': 'center',
+                'alignItems': 'center',
+                'backgroundColor': '#007BFF',  # Change background color to a vibrant blue
+                'fontSize': '14px',  # Adjust font size for better fit
+                'textAlign': 'center',
+                'marginBottom': '20px',
+                'marginTop': '20px'
+            }  # Style for draggable
+        ) for position in PLAYERS.values() for player in position  # Create draggable for each player
     ]),
-    
-    # Store to track dropped players
-    # dcc.Store(id='dropped-players')
 ])
-
-# # Callback to update dropped players
-# @callback(
-#     Output('dropped-players', 'data'),
-#     Input('available-players', 'children'),
-#     Input('gk', 'children'),
-#     [Input(f'{['dl','dcl','dc','dcr','dr'][i-1]}', 'children') for i in range(1, 6)],
-#     [Input(f'{['wbl','dmcl','dmc','dmcr','wbr'][i-1]}', 'children') for i in range(1, 6)],
-#     [Input(f'{['ml','mcl','mc','mcr','mr'][i-1]}', 'children') for i in range(1, 6)],
-#     [Input(f'{['aml','amcl','amc','amcr','amr'][i-1]}', 'children') for i in range(1, 6)],
-#     [Input(f'{['stl','stc','str'][i-1]}', 'children') for i in range(1, 4)],
-#     prevent_initial_call=True
-# )
-# def update_dropped_players(available_players, goalkeeper, *position_players):
-#     # Organize the data into a structured dictionary
-#     data = {
-#         'availablePlayers': available_players,
-#         'goalkeeper': goalkeeper
-#     }
-    
-#     positions = ['defender', 'midfielder', 'forward']
-#     for pos_index, position in enumerate(positions):
-#         pos_data = {}
-#         start = 0 if position != 'forward' else 4
-#         end = 4 if position != 'forward' else 3
-        
-#         for i in range(start, end):
-#             pos_data[f'{position}_{i+1}'] = position_players[pos_index * 4 + i]
-        
-#         data[position] = pos_data
-    
-#     return data
