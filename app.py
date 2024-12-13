@@ -11,9 +11,11 @@ app.layout = html.Div([
         children=[
             dbc.NavItem(dbc.NavLink("Squad", href="/squad", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Scouting", href="/scouting", style={'fontSize': '18px', 'padding': '10px'})),
+            dbc.NavItem(dbc.NavLink("Formation", href="/formation", style={'fontSize': '18px', 'padding': '10px'})),
+            dbc.NavItem(dbc.NavLink("Player Selection", href="/player_selection", style={'fontSize': '18px', 'padding': '10px'})),
         ],
         brand="FMScouter",
-        brand_href="/",
+        brand_href="/player_selection",
         color="primary",
         dark=True,
         style={'marginBottom': '20px'}
