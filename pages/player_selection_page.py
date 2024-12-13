@@ -3,6 +3,7 @@ import dash
 from dash import dcc, html, callback, Input, Output, register_page
 from config.position_config import position_roles
 from utils import format_position_name
+from config.formation_mapping_config import formation_mapping_dict
 
 # Constants
 DEFAULT_FORMATION = 'heaven'  # Default formation
@@ -64,14 +65,15 @@ def generate_players(positions):
     for position in positions:
         field_area = {}
         for i in range(len(position)):
-            field_area[position[i]] = {'id': f'player_{player_num}', 'content': f'{player_num + 1}'}
+            field_area[position[i]] = {'id': player_num, 'content': f'{player_num + 1}'}
             player_num += 1
         formation.append(field_area)
     return formation
 
-def create_container_divs(position_name, players=[], number_of_players=1):
+def create_container_divs(position_name, players=[], formation_mapping=[], number_of_players=1):
     border_color, background_color = POSITION_COLORS.get(position_name, ('black', 'white'))
     position_id = position_name.lower().replace(' ', '_')
+
     return html.Div([
         html.H4(position_name),
         html.Div(
@@ -82,27 +84,33 @@ def create_container_divs(position_name, players=[], number_of_players=1):
                 'marginBottom': '20px',
             },
             children=[
-                html.Div(
-                    id=f'{ID_PREFIXES[position_id][i]}',
-                    className='droppable row-container',
-                    style={
-                        'border': f'2px dashed {border_color}',
-                        'minHeight': '100px',
-                        'width': '18%',
-                        'display': 'flex',
-                        'justifyContent': 'center',
-                        'alignItems': 'center',
-                        'padding': '10px',
-                        'margin': '0 auto'
-                    },
-                    children=[
-                        html.Div(f'Empty Slot {ID_PREFIXES[position_id][i]}', style={'color': 'gray'})
-                        if ID_PREFIXES[position_id][i] not in players else create_draggable_player_div(players[ID_PREFIXES[position_id][i]], ID_PREFIXES[position_id][i])
-                    ]
-                ) for i in range(number_of_players)
+                create_droppable_container(position_id, players, formation_mapping, i, border_color) 
+                for i in range(number_of_players)
             ]
         )
     ])
+
+def create_droppable_container(position_id, players, formation_mapping, index, border_color):
+    """Creates a droppable container for a specific position."""
+    print("Players", players)
+    return html.Div(
+        id=f'{ID_PREFIXES[position_id][index]}',
+        className='droppable row-container',
+        style={
+            'border': f'2px dashed {border_color}',
+            'minHeight': '100px',
+            'width': '18%',
+            'display': 'flex',
+            'justifyContent': 'center',
+            'alignItems': 'center',
+            'padding': '10px',
+            'margin': '0 auto'
+        },
+        children=[
+            html.Div(f'Empty Slot {ID_PREFIXES[position_id][index]}', style={'color': 'gray'})
+            if ID_PREFIXES[position_id][index] not in players else create_draggable_player_div(players[ID_PREFIXES[position_id][index]], ID_PREFIXES[position_id][index])
+        ]
+    )
 
 def create_draggable_player_div(player, position_id):
     available_roles = position_roles.get(position_id, [])
@@ -122,7 +130,7 @@ def create_draggable_player_div(player, position_id):
             dcc.Dropdown(
                 id={'type': 'dropdown', 'index': player['id']},
                 options=available_options,
-                value=available_options[0]['value'] if available_options else None,
+                value=available_options[0]['value'],
                 clearable=False,
                 style={
                     'width': '100%',
@@ -164,49 +172,55 @@ layout = html.Div([
     dcc.Dropdown(
         id='formation-dropdown',
         options=FORMATIONS,
-        value=DEFAULT_FORMATION,  # Default value
+        value=DEFAULT_FORMATION,
         clearable=False,
-        style={'width': '40%', 'margin': '20px auto'}  # Center the dropdown
+        style={'width': '40%', 'margin': '20px auto'}
+    ),
+    dcc.Store(id='players-store', data=generate_players_from_formation(DEFAULT_FORMATION)),
+    dcc.Store(id='formation-store', data=formation_mapping_dict[DEFAULT_FORMATION]),
+    html.Script(src='/assets/drag_and_drop.js'),
+    html.H1('Player Selection', style={'textAlign': 'center'}),
+    
+    # Wrap the formation layout in a div with a width of 60%
+    html.Div(
+        id='formation-layout-container',
+        style={'width': '60%', 'margin': '0 auto', 'display': 'flex', 'flexDirection': 'column'},
+        children=[
+            html.Div(id='formation-layout', children=[
+                create_container_divs('Forwards', [], [], 3),
+                create_container_divs('Attacking Midfielders', [], [], 5),
+                create_container_divs('Midfielders', [], [], 5),
+                create_container_divs('Defensive Midfielders', [], [], 5),
+                create_container_divs('Defenders', [], [], 5),
+                create_container_divs('Goalkeeper', [], [], 1),
+            ]),
+        ]
     ),
     
-    dcc.Store(id='players-store', data=generate_players_from_formation(DEFAULT_FORMATION)),  # Initialize with default players
-    
-    html.Script(src='/assets/drag_and_drop.js'),
-    
-    html.H1('Player Selection', style={'textAlign': 'center'}),
- 
-    html.Div(id='formation-layout', children=[
-        create_container_divs('Forwards', [], 3),
-        create_container_divs('Attacking Midfielders', [], 5),
-        create_container_divs('Midfielders', [], 5),
-        create_container_divs('Defensive Midfielders', [], 5),
-        create_container_divs('Defenders', [], 5),
-        create_container_divs('Goalkeeper', [], 1),
-    ]),
-    
-    html.Div(id='click-counter', children='Player Click Count: 0', style={'textAlign': 'center', 'marginTop': '20px'}),  # Display for click count
 ])
 
 # Callbacks
 @callback(
     Output('players-store', 'data'),  # Update the players store
+    Output('formation-store', 'data'),  # Update the players store
     Input('formation-dropdown', 'value'),  # Listen for changes in the dropdown
-    prevent_initial_call=True
 )
 def update_players(selected_formation):
+    selected_formation_mapping = formation_mapping_dict[selected_formation]
     players = generate_players_from_formation(selected_formation)  # Regenerate players based on the selected formation
-    return players  # Return the updated players and click count
+    return players, selected_formation_mapping  # Return the updated players and click count
 
 @callback(
     Output('formation-layout', 'children'),
-    Input('players-store', 'data')
+    Input('players-store', 'data'),
+    Input('formation-store', 'data')
 )
-def update_formation_layout(players):
+def update_formation_layout(players, formation_mapping):
     return [
-        create_container_divs('Forwards', players[5], 3),
-        create_container_divs('Attacking Midfielders', players[4], 5),
-        create_container_divs('Midfielders', players[3], 5),
-        create_container_divs('Defensive Midfielders', players[2], 5),
-        create_container_divs('Defenders', players[1], 5),
-        create_container_divs('Goalkeeper', players[0], 1),
+        create_container_divs('Forwards', players[5], formation_mapping[5], 3),
+        create_container_divs('Attacking Midfielders', players[4], formation_mapping[4], 5),
+        create_container_divs('Midfielders', players[3], formation_mapping[3], 5),
+        create_container_divs('Defensive Midfielders', players[2], formation_mapping[2], 5),
+        create_container_divs('Defenders', players[1], formation_mapping[1], 5),
+        create_container_divs('Goalkeeper', players[0], formation_mapping[0], 1),
     ]
