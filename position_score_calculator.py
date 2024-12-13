@@ -4,7 +4,7 @@ import sys
 import glob
 import os
 from typing import List
-import config.position_config as pc
+import config.role_weight_config as pc
 from utils import calculate_score, format_position_name, parse_positions, translate_position_to_field_area
 import heapq
 

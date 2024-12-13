@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Union
 import logging
-import config.position_config as pc
+import config.role_weight_config as pc
 
 logger = logging.getLogger(__name__)
 
