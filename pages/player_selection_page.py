@@ -59,13 +59,21 @@ POSITION_COLORS = {
 }
 
 # Functions
+class Player:
+    def __init__(self, player_id, content, container_id=None, available_options=None):
+        self.id = player_id
+        self.content = content
+        self.container_id = container_id  # New attribute for container ID
+        self.available_options = available_options or []  # New attribute for available options
+
 def generate_players(positions):
     formation = []
     player_num = 0
     for position in positions:
         field_area = {}
         for i in range(len(position)):
-            field_area[position[i]] = {'id': player_num, 'content': f'{player_num + 1}'}
+            player = Player(player_num, f'{player_num + 1}')  # Create a Player instance
+            field_area[position[i]] = player.__dict__  # Store player attributes in the field area
             player_num += 1
         formation.append(field_area)
     return formation
@@ -92,9 +100,9 @@ def create_container_divs(position_name, players=[], formation_mapping=[], numbe
 
 def create_droppable_container(position_id, players, formation_mapping, index, border_color):
     """Creates a droppable container for a specific position."""
-    print("Players", players)
+    p_id = ID_PREFIXES[position_id][index]
     return html.Div(
-        id=f'{ID_PREFIXES[position_id][index]}',
+        id=f'{p_id}',
         className='droppable row-container',
         style={
             'border': f'2px dashed {border_color}',
@@ -107,14 +115,16 @@ def create_droppable_container(position_id, players, formation_mapping, index, b
             'margin': '0 auto'
         },
         children=[
-            html.Div(f'Empty Slot {ID_PREFIXES[position_id][index]}', style={'color': 'gray'})
-            if ID_PREFIXES[position_id][index] not in players else create_draggable_player_div(players[ID_PREFIXES[position_id][index]], ID_PREFIXES[position_id][index])
+            html.Div(f'Empty Slot {p_id}', style={'color': 'gray'})
+            if p_id not in players else create_draggable_player_div(players[p_id], p_id, formation_mapping[p_id] if p_id in formation_mapping else None)
         ]
     )
 
-def create_draggable_player_div(player, position_id):
+def create_draggable_player_div(player, position_id, default_role=None):
     available_roles = position_roles.get(position_id, [])
     available_options = [{'label': format_position_name(role), 'value': role.lower()} for role in sorted(available_roles)]
+    if default_role is None:
+        default_role = available_options[0]['value']
 
     return html.Div(
         [
@@ -130,7 +140,7 @@ def create_draggable_player_div(player, position_id):
             dcc.Dropdown(
                 id={'type': 'dropdown', 'index': player['id']},
                 options=available_options,
-                value=available_options[0]['value'],
+                value=default_role,
                 clearable=False,
                 style={
                     'width': '100%',

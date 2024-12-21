@@ -29,10 +29,25 @@ def calculate_positions(rawdata, position_dict, min_score=0):
     # Create and sort DataFrames for each position
     squads = []
     
-    squads_filtered.rename(columns={'Transfer Value': 'Price', 'Salary': 'Wage', 'Personality': 'Pers', 'Left Foot': 'LFoot', 'Right Foot': 'RFoot'}, inplace=True)
+    squads_filtered.rename(columns={'Transfer Value': 'Price', 'Salary': 'Wage', 'Personality': 'Pers', 'Left Foot': 'L', 'Right Foot': 'R'}, inplace=True)
     
-    columns = ['Name', 'Age', 'Club', 'Price', 'Nat', 'Position', 
-               'Pers', 'LFoot', 'RFoot', 'Height']
+    squads_filtered = squads_filtered[squads_filtered['Name'] != '']
+
+    # Map LFoot and RFoot values to numeric values
+    foot_mapping = {
+        'Very Weak': 1,
+        'Weak': 2,
+        'Reasonable': 3,
+        'Fairly Strong': 4,
+        'Strong': 5,
+        'Very Strong': 6
+    }
+    
+    squads_filtered['L'] = squads_filtered['L'].map(foot_mapping)
+    squads_filtered['R'] = squads_filtered['R'].map(foot_mapping)
+
+    columns = ['Inf', 'Name', 'Age', 'Club', 'Price', 'Nat', 'Position', 
+               'Pers', 'L', 'R', 'Height']
     
     # Include only columns that appear in the rawdata
     columns = [col for col in columns if col in squads_filtered.columns]

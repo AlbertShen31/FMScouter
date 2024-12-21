@@ -21,7 +21,7 @@ def calculate_score(
         processed_data = {}
         for attr in key_attrs + green_attrs + blue_attrs:
             value = data.get(attr, 0)
-            if value == '-':
+            if value == '-' or value == '':
                 processed_data[attr] = 0
             elif isinstance(value, str) and '-' in value:
                 processed_data[attr] = int(value.split('-')[0])
