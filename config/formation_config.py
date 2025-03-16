@@ -81,13 +81,13 @@ heaven = ['sweeper_keeper_defend',
 # Rewrite the above code into a dictionary
 formation_dict = {
     'flanker': flanker, 
-    'hulk': hulk, 
+    # 'hulk': hulk, 
     'three_striker': three_striker, 
-    'short_kings': short_kings, 
-    'brexit': brexit, 
-    'wetdog': wetdog, 
-    'four_wingbacks': four_wingbacks, 
-    'miracle': miracle, 
-    'dragon': dragon,
+    # 'short_kings': short_kings, 
+    # 'brexit': brexit, 
+    # 'wetdog': wetdog, 
+    # 'four_wingbacks': four_wingbacks, 
+    # 'miracle': miracle, 
+    # 'dragon': dragon,
     'heaven': heaven
                   }

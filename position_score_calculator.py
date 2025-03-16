@@ -47,7 +47,7 @@ def calculate_positions(rawdata, position_dict, min_score=0):
     squads_filtered['R'] = squads_filtered['R'].map(foot_mapping)
 
     columns = ['Inf', 'Name', 'Age', 'Club', 'Price', 'Nat', 'Position', 
-               'Pers', 'L', 'R', 'Height']
+                'L', 'R', 'Height']
     
     # Include only columns that appear in the rawdata
     columns = [col for col in columns if col in squads_filtered.columns]

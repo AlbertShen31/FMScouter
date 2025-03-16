@@ -1,0 +1,8 @@
+/* assets/styles.css */
+.centered-header {
+    text-align: center !important;  /* Center the header text */
+}
+
+.ag-header-cell-label {
+    justify-content: center !important;  /* Center the header content */
+}

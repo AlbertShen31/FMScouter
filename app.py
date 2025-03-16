@@ -10,7 +10,6 @@ app.layout = html.Div([
     dbc.NavbarSimple(
         children=[
             dbc.NavItem(dbc.NavLink("Squad", href="/squad", style={'fontSize': '18px', 'padding': '10px'})),
-            dbc.NavItem(dbc.NavLink("Scouting", href="/scouting", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Formation", href="/formation", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Player Selection", href="/player_selection", style={'fontSize': '18px', 'padding': '10px'})),
         ],
