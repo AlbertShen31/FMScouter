@@ -1,12 +1,13 @@
 import os
 import glob
 import pandas as pd
-from dash import dcc, html, callback, Input, Output, register_page
+from dash import dcc, html, callback, Input, Output, register_page, State
 from dotenv import load_dotenv
 from config.formation_config import formation_dict
 from position_score_calculator import calculate_positions_for_file
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
+import dash
 
 # Function to create a page for either squad or scouting data
 def create_page(page_type):
@@ -106,6 +107,17 @@ def create_page(page_type):
                         ),
                     ], width=12),
                 ]),
+                
+                # Add column visibility controls
+                dbc.Row([
+                    dbc.Col([
+                        html.Div([
+                            html.H5("Column Visibility", 
+                                   style={'fontWeight': 'bold', 'color': '#495057', 'fontSize': '16px', 'marginTop': '15px'}),
+                            html.Div(id=f'{page_type}-column-toggles', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px'})
+                        ])
+                    ], width=12),
+                ]),
             ]),
         ], className="mb-4", style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'border': 'none'}),
         
@@ -146,6 +158,51 @@ def create_page(page_type):
             ]),
         ], style={'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'border': 'none'}),
     ], style={'padding': '20px', 'backgroundColor': '#f5f5f5', 'minHeight': '100vh'})
+    
+    @callback(
+        Output(f'{page_type}-column-toggles', 'children'),
+        [Input(f'{page_type}-player-grid', 'columnDefs')]
+    )
+    def create_column_toggles(column_defs):
+        if not column_defs:
+            return []
+        
+        # Create a checkbox for each column except 'Data Source'
+        checkboxes = []
+        for col in column_defs:
+            if col['field'] != 'Data Source':
+                checkboxes.append(
+                    dbc.Checkbox(
+                        id={'type': f'{page_type}-column-toggle', 'index': col['field']},
+                        label=col['field'],
+                        value=not col.get('hide', False),
+                        persistence=True,
+                        className='column-toggle-checkbox'
+                    )
+                )
+        
+        return checkboxes
+    
+    @callback(
+        Output(f'{page_type}-player-grid', 'columnDefs', allow_duplicate=True),
+        [Input({'type': f'{page_type}-column-toggle', 'index': dash.ALL}, 'value'),
+         Input({'type': f'{page_type}-column-toggle', 'index': dash.ALL}, 'id')],
+        [State(f'{page_type}-player-grid', 'columnDefs')],
+        prevent_initial_call=True
+    )
+    def update_column_visibility(values, ids, column_defs):
+        if not column_defs or not ids or not values:
+            return dash.no_update
+        
+        # Create a dictionary mapping column field to visibility
+        visibility = {id_obj['index']: value for id_obj, value in zip(ids, values)}
+        
+        # Update the hide property for each column
+        for col in column_defs:
+            if col['field'] in visibility:
+                col['hide'] = not visibility[col['field']]
+        
+        return column_defs
     
     @callback(
         [Output(f'{page_type}-position-filter', 'options'),
@@ -207,7 +264,12 @@ def create_page(page_type):
                     "field": i,
                     "headerClass": "centered-header",
                     "cellStyle": {"textAlign": "center"},
-                    "hide": i == "Data Source"
+                    "hide": i == "Data Source",
+                    # Set specific widths for Name, Position, Club, and Price columns
+                    "minWidth": 200 if i == "Name" else 
+                               150 if i == "Position" or i == "Club" or i == "Price" else 100,
+                    "flex": 2 if i == "Name" else 
+                           1.5 if i == "Position" or i == "Club" or i == "Price" else 1
                 } for i in df.columns if i != 'Selected'
             ]
             rowData = df.drop(columns=['Selected']).to_dict('records')
