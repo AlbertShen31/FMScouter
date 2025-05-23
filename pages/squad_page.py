@@ -196,7 +196,7 @@ def create_page(page_type):
         # Create a checkbox for each column except 'Data Source'
         checkboxes = []
         for col in column_defs:
-            if col['field'] != 'Data Sourcee':
+            if col['field'] != 'Data Source':
                 checkboxes.append(
                     dbc.Checkbox(
                         id={'type': f'{page_type}-column-toggle', 'index': col['field']},
@@ -252,10 +252,6 @@ def create_page(page_type):
         hide_message_style = {'display': 'none'}
         # Style to show the no-data message when no data is loaded
         show_message_style = {'display': 'block', 'height': '200px'}
-        
-        print(f"existing_row_data: {existing_row_data}")
-        print(f"existing_column_defs: {existing_column_defs}")
-        print(f"existing_grid_options: {existing_grid_options}")
 
         # Check if there's already data loaded due to persistence
         if not selected_file and not selected_formation and existing_row_data and existing_column_defs:
@@ -352,11 +348,14 @@ def create_page(page_type):
                     "headerClass": "centered-header",
                     "cellStyle": {"textAlign": "center"},
                     "hide": i == "Data Source",
-                    # Set specific widths for Name, Position, Club, and Price columns
                     "minWidth": 200 if i == "Name" else 
-                               150 if i == "Position" or i == "Club" or i == "Price" else 100,
-                    "flex": 2 if i == "Name" else 
-                           1.5 if i == "Position" or i == "Club" or i == "Price" else 1
+                                150 if i == "Position" or i == "Club" or i == "Price" else
+                                60 if i == 'L' or i == 'R' else 100,
+                    "width": 200 if i == "Name" else 
+                             150 if i == "Position" or i == "Club" or i == "Price" else
+                             60 if i == 'L' or i == 'R' else 100,
+                    "resizable": True,
+                    "pinned": "left" if i in ["Name", "Position", "Age", "Price", "Inf"] else None  # Pin specific columns to the left
                 } for i in df.columns if i != 'Selected'
             ]
             rowData = df.drop(columns=['Selected']).to_dict('records')
