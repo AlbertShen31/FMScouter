@@ -6,3 +6,17 @@
 .ag-header-cell-label {
     justify-content: center !important;  /* Center the header content */
 }
+
+.rs-upload {
+    border: 1px dashed #adb5bd;
+    border-radius: 6px;
+    padding: 28px 16px;
+    text-align: center;
+    background: #f8f9fa;
+    cursor: pointer;
+}
+
+.rs-upload:hover {
+    border-color: #0d6efd;
+    background: #f1f4f8;
+}

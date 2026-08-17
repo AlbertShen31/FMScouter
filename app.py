@@ -9,12 +9,13 @@ app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTS
 app.layout = html.Div([
     dbc.NavbarSimple(
         children=[
+            dbc.NavItem(dbc.NavLink("Role scores", href="/", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Squad", href="/squad", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Formation", href="/formation", style={'fontSize': '18px', 'padding': '10px'})),
             dbc.NavItem(dbc.NavLink("Player Selection", href="/player_selection", style={'fontSize': '18px', 'padding': '10px'})),
         ],
         brand="FMScouter",
-        brand_href="/player_selection",
+        brand_href="/",
         color="primary",
         dark=True,
         style={'marginBottom': '20px'}
