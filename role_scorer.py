@@ -1,12 +1,12 @@
-"""Parse FM player exports and score selected roles."""
+"""Parse FM player exports and score selected FM26 roles."""
 from __future__ import annotations
 
 import csv
 import io
 from typing import Any
 
-import config.role_weight_config as pc
-from utils import calculate_score, format_position_name
+import config.fm26_role_weight_config as pc
+from utils import calculate_score
 
 ATTR_MAP = {
     "Aerial Reach": "Aer",
@@ -66,7 +66,7 @@ ATTR_MAP = {
 ABBRS = set(ATTR_MAP.values()) | set(ATTR_MAP.keys())
 
 IDENTITY = {
-    "Name": ["Name"],
+    "Name": ["Player", "Name"],
     "Age": ["Age"],
     "Club": ["Club"],
     "Division": ["Division", "Div"],
@@ -76,38 +76,55 @@ IDENTITY = {
     "BestPos": ["Best Pos", "Best Position"],
     "Style": ["Style"],
     "Height": ["Height"],
-    "LeftFoot": ["Left Foot", "L"],
-    "RightFoot": ["Right Foot", "R"],
+    "LeftFoot": ["Left Foot", "LFoot", "L"],
+    "RightFoot": ["Right Foot", "RFoot", "R"],
     "Rec": ["Rec.", "Rec"],
     "Inf": ["Inf"],
     "Injury": ["Injury"],
     "Squad": ["Squad"],
 }
 
-DEFAULT_ROLES = [
-    "Sweeper_keeper_Support",
-    "Ball_playing_defender_Defend",
-    "Wing_Back_Support",
-    "Central_midfielder_Support",
-    "Mezzala_Support",
-    "Inside_forward_Attack",
+DEFAULT_ROLE_CODES = ["SKP", "BCB", "WB", "CM", "CHM", "IF"]
+DEFAULT_ROLES = [pc.role_code_to_id[code] for code in DEFAULT_ROLE_CODES]
+
+GROUP_DEFS = [
+    ("gk", "Goalkeepers", pc.gk_positions),
+    ("cb", "Centre-backs", pc.cb_positions),
+    ("fb", "Full-backs", pc.fb_positions),
+    ("wb", "Wing-backs", pc.wb_positions),
+    ("dm", "Defensive midfielders", pc.dm_positions),
+    ("cm", "Central midfielders", pc.cm_positions),
+    ("am", "Attacking midfielders", pc.am_positions),
+    ("w", "Wingers", pc.w_positions),
+    ("wam", "Wide attackers", pc.w_am_positions),
+    ("st", "Strikers", pc.st_positions),
 ]
 
 _ROLE_GROUP = {}
-for _name, _group in [
-    (pc.gk_positions, "gk"),
-    (pc.cb_positions, "cb"),
-    (pc.fb_positions, "fb"),
-    (pc.wb_positions, "wb"),
-    (pc.dm_positions, "dm"),
-    (pc.cm_positions, "cm"),
-    (pc.am_positions, "am"),
-    (pc.w_positions, "w"),
-    (pc.w_am_positions, "wam"),
-    (pc.st_positions, "st"),
-]:
-    for _role in _name:
+for _group, _label, _roles in GROUP_DEFS:
+    for _role in _roles:
         _ROLE_GROUP[_role] = _group
+
+POS_CARDS = [
+    ("all", "All", "", "all"),
+    ("GK", "Goalkeeper", "GK", "gk"),
+    ("DEF", "Defender", "DC / CB", "def"),
+    ("FB", "Full Back", "FB / WB", "fb"),
+    ("MID", "Midfielder", "DM / CM", "mid"),
+    ("W", "Winger", "AML / AMR", "w"),
+    ("ST", "Striker", "ST / CF", "st"),
+]
+
+POS_CARD_GROUPS = {
+    "GK": ("gk",),
+    "DEF": ("cb",),
+    "FB": ("fb", "wb"),
+    "MID": ("dm", "cm", "am"),
+    "W": ("w", "wam"),
+    "ST": ("st",),
+}
+
+PHASE_SUFFIXES = ("_IP", "_OOP", "_GK")
 
 
 def unique_headers(raw: list[str]) -> list[str]:
@@ -191,6 +208,66 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
     return False
 
 
+def player_pos_groups(positions: list[dict[str, str]]) -> list[str]:
+    groups = []
+    for card, role_groups in POS_CARD_GROUPS.items():
+        if any(is_eligible(positions, group) for group in role_groups):
+            groups.append(card)
+    return groups
+
+
+def pretty_role_name(role_id: str) -> str:
+    name = role_id
+    for suffix in PHASE_SUFFIXES:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name.replace("_", " ")
+
+
+def role_meta(role_id: str) -> dict[str, str]:
+    cfg = pc.all_positions.get(role_id, {})
+    return {
+        "id": role_id,
+        "code": cfg.get("role_code", role_id),
+        "name": pretty_role_name(role_id),
+        "phase": cfg.get("phase", ""),
+        "group": _ROLE_GROUP.get(role_id, ""),
+    }
+
+
+def role_label(role_id: str) -> str:
+    return role_meta(role_id)["code"]
+
+
+def role_option_label(role_id: str) -> str:
+    meta = role_meta(role_id)
+    return f"{meta['name']} ({meta['code']}) · {meta['phase']}"
+
+
+def role_options(phase: str | None = None, keep: list[str] | None = None) -> list[dict]:
+    """Flat `{label, value}` options. `phase` is All/IP/OOP/GK."""
+    keep = set(keep or [])
+    phase = (phase or "all").upper()
+    options = []
+    for _group, group_label, roles in GROUP_DEFS:
+        for role_id in roles:
+            cfg_phase = roles[role_id].get("phase", "")
+            if (
+                phase not in ("", "ALL")
+                and cfg_phase != phase
+                and role_id not in keep
+            ):
+                continue
+            options.append(
+                {
+                    "label": f"{group_label} — {role_option_label(role_id)}",
+                    "value": role_id,
+                }
+            )
+    return options
+
+
 def extract_attrs(row: dict[str, str]) -> dict[str, int]:
     attrs: dict[str, int] = {}
     for full, abbr in ATTR_MAP.items():
@@ -232,6 +309,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
         attrs = extract_attrs(row)
         pos = pick(row, IDENTITY["Position"])
         sec = pick(row, IDENTITY["SecPosition"])
+        positions = parse_positions(pos) + parse_positions(sec)
         players.append(
             {
                 "name": name,
@@ -251,7 +329,8 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "squad": pick(row, IDENTITY["Squad"]),
                 "attrs": attrs,
                 "attr_hits": attr_count(row),
-                "positions": parse_positions(pos) + parse_positions(sec),
+                "positions": positions,
+                "pos_groups": player_pos_groups(positions),
             }
         )
     if not players:
@@ -265,11 +344,49 @@ def parse_export(text: str) -> list[dict[str, Any]]:
     return players
 
 
-def role_options() -> list[dict[str, str]]:
-    options = []
-    for role_id in pc.all_positions:
-        options.append({"label": format_position_name(role_id), "value": role_id})
-    return options
+def foot_strength(value: str) -> int:
+    text = str(value or "").strip().lower()
+    rating = {
+        "very strong": 5,
+        "strong": 4,
+        "fairly strong": 3,
+        "reasonable": 2,
+        "weak": 1,
+        "very weak": 0,
+    }
+    if text in rating:
+        return rating[text]
+    try:
+        n = int(float(text.replace(",", ".")))
+    except ValueError:
+        return 0
+    if 1 <= n <= 20:
+        return round(n / 4)
+    return 0
+
+
+def foot_match(row: dict[str, Any], foot_filter: str) -> bool:
+    lf = foot_strength(row.get("Left Foot") or "")
+    rf = foot_strength(row.get("Right Foot") or "")
+    if not lf and not rf:
+        return False
+    if foot_filter == "foot-L":
+        return lf > rf and rf <= 2
+    if foot_filter == "foot-R":
+        return rf > lf and lf <= 2
+    if foot_filter == "foot-B":
+        return lf >= 3 and rf >= 3
+    return True
+
+
+def score_band(score: float) -> str:
+    if score >= 14:
+        return "elite"
+    if score >= 11:
+        return "good"
+    if score >= 8:
+        return "ok"
+    return "poor"
 
 
 def score_players(
@@ -283,7 +400,7 @@ def score_players(
         configs.append(
             (
                 role_id,
-                format_position_name(role_id),
+                cfg["role_code"],
                 cfg,
                 _ROLE_GROUP.get(role_id, ""),
             )
@@ -306,6 +423,7 @@ def score_players(
             "Inf": player["inf"] or "-",
             "Injury": player["injury"] if player["injury"] not in ("", "-") else "-",
             "Squad": player["squad"] or "-",
+            "PosGroups": player.get("pos_groups") or [],
         }
         best_label = ""
         best_score = -1.0

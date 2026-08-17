@@ -3,7 +3,12 @@ import dash_bootstrap_components as dbc
 from dash import html
 
 # Initialize the Dash app with Bootstrap
-app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(
+    __name__,
+    use_pages=True,
+    suppress_callback_exceptions=True,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+)
 
 # Define the layout with a Bootstrap Navbar
 app.layout = html.Div([
