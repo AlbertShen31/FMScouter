@@ -236,10 +236,6 @@ def role_meta(role_id: str) -> dict[str, str]:
     }
 
 
-def role_label(role_id: str) -> str:
-    return role_meta(role_id)["code"]
-
-
 def role_option_label(role_id: str) -> str:
     meta = role_meta(role_id)
     return f"{meta['name']} ({meta['code']}) · {meta['phase']}"
