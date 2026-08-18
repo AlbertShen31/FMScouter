@@ -552,7 +552,7 @@ body:has(.rc-page) .navbar {
 
 .rc-shell {
     display: grid;
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
     gap: 12px;
     align-items: start;
 }
@@ -620,14 +620,14 @@ body:has(.rc-page) .navbar {
     appearance: none;
     width: 100%;
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) auto auto;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--rc-line);
     color: var(--rc-text);
-    padding: 8px 12px;
+    padding: 10px 12px;
     cursor: pointer;
     text-align: left;
 }
@@ -642,28 +642,75 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-list-code {
-    font-size: 11px;
+    flex-shrink: 0;
+    width: 40px;
+    height: 28px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 6px;
+    font-size: 10px;
     font-weight: 800;
-    color: var(--rc-muted);
-    letter-spacing: 0.02em;
+    letter-spacing: -0.03em;
+    text-align: center;
+    border: 1px solid var(--rc-line);
+    background: #0f1720;
+    color: var(--rc-text);
+    line-height: 1;
 }
 
-.rc-list-item.active .rc-list-code {
+.rc-list-code.ip,
+.rc-list-code.ip_gk,
+.rc-list-code.ip_ngk {
     color: var(--rc-key);
+    background: rgba(61, 255, 136, 0.08);
+    border-color: rgba(61, 255, 136, 0.22);
+}
+
+.rc-list-code.oop,
+.rc-list-code.oop_gk {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.08);
+    border-color: rgba(248, 113, 113, 0.22);
+}
+
+.rc-list-code.gk {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.22);
+}
+
+.rc-list-item.active .rc-list-code.ip,
+.rc-list-item.active .rc-list-code.ip_gk,
+.rc-list-item.active .rc-list-code.ip_ngk {
+    box-shadow: 0 0 0 1px rgba(61, 255, 136, 0.35);
+}
+
+.rc-list-item.active .rc-list-code.oop,
+.rc-list-item.active .rc-list-code.oop_gk {
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.35);
+}
+
+.rc-list-item.active .rc-list-code.gk {
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
 }
 
 .rc-list-name {
     font-size: 12px;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    align-self: center;
 }
 
 .rc-dirty {
     color: var(--rc-green);
     font-size: 18px;
     line-height: 1;
+    align-self: center;
 }
 
 .rc-profile-wrap,
@@ -715,6 +762,10 @@ body:has(.rc-page) .navbar {
     border: 1px solid var(--rc-line);
     color: var(--rc-text);
     flex-shrink: 0;
+    box-sizing: border-box;
+    padding: 0 6px;
+    text-align: center;
+    line-height: 1;
 }
 
 .rc-monogram.ip,
