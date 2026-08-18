@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import ui_settings as us
+
 TEMPLATE = r'''import {
   BarChart,
   Button,
@@ -40,16 +42,9 @@ const ROLES: string[] = __ROLES__;
 const PLAYERS: Player[] = __PLAYERS__;
 const SOURCE = __SOURCE__;
 const PAGE = 30;
-
-const BINS = [
-  { label: "<9", lo: 0, hi: 9 },
-  { label: "9–10", lo: 9, hi: 10 },
-  { label: "10–11", lo: 10, hi: 11 },
-  { label: "11–12", lo: 11, hi: 12 },
-  { label: "12–13", lo: 12, hi: 13 },
-  { label: "13–14", lo: 13, hi: 14 },
-  { label: "14+", lo: 14, hi: 99 },
-];
+const BINS = __BINS__;
+const AGE_OPTIONS = __AGE_OPTIONS__;
+const MIN_OPTIONS = __MIN_OPTIONS__;
 
 function dash(value: string | number | undefined | null): string {
   if (value === undefined || value === null || value === "") return "—";
@@ -156,26 +151,12 @@ export default function RoleScores() {
         <Select
           value={maxAge}
           onChange={setMaxAge}
-          options={[
-            { value: "any", label: "Any age" },
-            { value: "21", label: "Max 21" },
-            { value: "23", label: "Max 23" },
-            { value: "25", label: "Max 25" },
-            { value: "27", label: "Max 27" },
-            { value: "30", label: "Max 30" },
-            { value: "35", label: "Max 35" },
-          ]}
+          options={AGE_OPTIONS}
         />
         <Select
           value={minScore}
           onChange={setMinScore}
-          options={[
-            { value: "0", label: "Any score" },
-            { value: "11", label: "11+" },
-            { value: "12", label: "12+" },
-            { value: "12.5", label: "12.5+" },
-            { value: "13", label: "13+" },
-          ]}
+          options={MIN_OPTIONS}
         />
         <Row gap={8} align="center">
           <Toggle checked={eligOnly} onChange={setEligOnly} />
@@ -246,7 +227,9 @@ def build_canvas(
     rows: list[dict[str, Any]],
     role_labels: list[str],
     source: str,
+    settings: dict[str, Any] | None = None,
 ) -> str:
+    settings = us.normalize(settings)
     compact = []
     for row in rows:
         compact.append(
@@ -268,10 +251,35 @@ def build_canvas(
     roles_js = json.dumps(role_labels, ensure_ascii=False)
     players_js = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
     source_js = json.dumps(source, ensure_ascii=False)
+    bins_js = json.dumps(
+        [{"label": label, "lo": lo, "hi": hi} for label, lo, hi in us.hist_bins(settings)],
+        ensure_ascii=False,
+    )
+    age_js = json.dumps(
+        [
+            {"value": "any", "label": "Any age"}
+            if opt["value"] == 99
+            else {"value": str(int(opt["value"])), "label": f"Max {int(opt['value'])}"}
+            for opt in us.age_options(settings)
+        ],
+        ensure_ascii=False,
+    )
+    min_js = json.dumps(
+        [
+            {"value": "0", "label": "Any score"}
+            if opt["value"] == 0
+            else {"value": str(opt["value"]), "label": f"{us.format_cut(opt['value'])}+"}
+            for opt in us.min_score_options(settings)
+        ],
+        ensure_ascii=False,
+    )
     if "`" in players_js or "${" in players_js:
         raise ValueError("Player data contains characters that cannot be embedded in the canvas.")
     return (
         TEMPLATE.replace("__ROLES__", roles_js)
         .replace("__PLAYERS__", players_js)
         .replace("__SOURCE__", source_js)
+        .replace("__BINS__", bins_js)
+        .replace("__AGE_OPTIONS__", age_js)
+        .replace("__MIN_OPTIONS__", min_js)
     )

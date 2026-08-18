@@ -1,0 +1,45 @@
+{
+  "age_tiers": [
+    20
+  ],
+  "min_score_tiers": [
+    11.0,
+    12.0,
+    12.5,
+    13.0
+  ],
+  "bands": {
+    "elite": 14.0,
+    "good": 12.0,
+    "ok": 10.0
+  },
+  "hist_edges": [
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0
+  ],
+  "colors": {
+    "elite": {
+      "bg": "#dcfce7",
+      "fg": "#15803d",
+      "bar": "#22c55e"
+    },
+    "good": {
+      "bg": "#dbeafe",
+      "fg": "#1d4ed8",
+      "bar": "#3b82f6"
+    },
+    "ok": {
+      "bg": "#fef3c7",
+      "fg": "#b45309",
+      "bar": "#f59e0b"
+    },
+    "poor": {
+      "bg": "#fee2e2",
+      "fg": "#b91c1c",
+      "bar": "#ef4444"
+    }
+  }
+}

@@ -2,6 +2,8 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, dcc, html
 
+import ui_settings
+
 app = dash.Dash(
     __name__,
     use_pages=True,
@@ -15,6 +17,8 @@ app = dash.Dash(
 app.layout = html.Div(
     [
         dcc.Store(id="theme", data="dark", storage_type="local"),
+        dcc.Store(id="ui-settings", data=ui_settings.load()),
+        html.Div(id="ui-settings-css"),
         dbc.Navbar(
             dbc.Container(
                 [
@@ -23,6 +27,7 @@ app.layout = html.Div(
                         [
                             dbc.NavItem(dbc.NavLink("Role scores", href="/")),
                             dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
+                            dbc.NavItem(dbc.NavLink("Settings", href="/settings")),
                             dbc.NavItem(
                                 html.Button(
                                     "Light mode",
@@ -57,6 +62,24 @@ app.clientside_callback(
     """,
     Output("theme-toggle", "children"),
     Input("theme", "data"),
+)
+
+app.clientside_callback(
+    """
+    function(settings) {
+        const colors = (settings && settings.colors) || {};
+        const root = document.documentElement;
+        ["elite", "good", "ok", "poor"].forEach(function(band) {
+            const c = colors[band] || {};
+            if (c.bg) root.style.setProperty("--band-" + band + "-bg", c.bg);
+            if (c.fg) root.style.setProperty("--band-" + band + "-fg", c.fg);
+            if (c.bar) root.style.setProperty("--band-" + band + "-bar", c.bar);
+        });
+        return "";
+    }
+    """,
+    Output("ui-settings-css", "className"),
+    Input("ui-settings", "data"),
 )
 
 

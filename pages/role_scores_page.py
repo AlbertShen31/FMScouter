@@ -49,112 +49,28 @@ from role_scorer import (
 )
 from canvas_export import build_canvas
 import role_config as rc
+import ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
 
-BINS = [
-    ("<9", 0, 9),
-    ("9–10", 9, 10),
-    ("10–11", 10, 11),
-    ("11–12", 11, 12),
-    ("12–13", 12, 13),
-    ("13–14", 13, 14),
-    ("14+", 14, 99),
-]
 
-SCORE_COLORS = {
-    "elite": ("#dcfce7", "#15803d"),
-    "good": ("#dbeafe", "#1d4ed8"),
-    "ok": ("#fef3c7", "#b45309"),
-    "poor": ("#fee2e2", "#b91c1c"),
-}
-
-DEFAULT_BANDS = {"elite": 14.0, "good": 12.0, "ok": 10.0}
-
-
-def _band_value(value, default: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number:
-        return default
-    return round(max(0.0, min(20.0, number)) * 2) / 2
-
-
-def _fmt_cut(number: float) -> str:
-    number = _band_value(number, 0.0)
-    return str(int(number)) if number == int(number) else f"{number:.1f}"
-
-
-def _normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
-    raw = raw or {}
-    elite = _band_value(raw.get("elite"), DEFAULT_BANDS["elite"])
-    good = _band_value(raw.get("good"), DEFAULT_BANDS["good"])
-    ok = _band_value(raw.get("ok"), DEFAULT_BANDS["ok"])
-    if edited == "rs-band-elite":
-        if good >= elite:
-            good = max(0.5, elite - 0.5)
-        if ok >= good:
-            ok = max(0.0, good - 0.5)
-    elif edited == "rs-band-ok":
-        if ok >= good:
-            good = min(19.5, ok + 0.5)
-        if good >= elite:
-            elite = min(20.0, good + 0.5)
-    else:
-        if good >= elite:
-            elite = min(20.0, good + 0.5)
-        if ok >= good:
-            ok = max(0.0, good - 0.5)
-    ok = min(ok, 19.0)
-    good = min(max(good, ok + 0.5), 19.5)
-    elite = min(max(elite, good + 0.5), 20.0)
-    return {"elite": elite, "good": good, "ok": max(0.0, ok)}
-
-
-def _legend_input(band: str, value: float) -> dcc.Input:
-    return dcc.Input(
-        id=f"rs-band-{band}",
-        type="number",
-        value=value,
-        min=0,
-        max=20,
-        step=0.5,
-        debounce=True,
-        className="rs-legend-input",
-    )
-
-
-def _band_legend(bands: dict | None = None) -> html.Div:
-    bands = _normalize_bands(bands)
+def _band_legend(settings=None) -> html.Div:
+    settings = us.normalize(settings)
+    bands = settings["bands"]
     chips = []
-    for band, label, prefix, editable in (
-        ("elite", "Elite", "≥", True),
-        ("good", "Good", "≥", True),
-        ("ok", "OK", "≥", True),
-        ("poor", "Poor", "<", False),
+    for band, label, text in (
+        ("elite", "Elite", f"≥ {us.format_cut(bands['elite'])}"),
+        ("good", "Good", f"≥ {us.format_cut(bands['good'])}"),
+        ("ok", "OK", f"≥ {us.format_cut(bands['ok'])}"),
+        ("poor", "Poor", f"< {us.format_cut(bands['ok'])}"),
     ):
-        if editable:
-            cut = [
-                html.Span(prefix, className="rs-legend-op"),
-                _legend_input(band, bands[band]),
-            ]
-        else:
-            cut = [
-                html.Span(
-                    f"{prefix} {_fmt_cut(bands['ok'])}",
-                    id="rs-poor-cut",
-                    className="rs-legend-op",
-                )
-            ]
         chips.append(
-            html.Label(
-                [html.Span(label, className="rs-legend-name"), *cut],
+            html.Span(
+                [
+                    html.Span(label, className="rs-legend-name"),
+                    html.Span(text, className="rs-legend-op"),
+                ],
                 className=f"rs-legend-chip {band}",
-                title="Minimum score for this band"
-                if editable
-                else "Anything below the OK cutoff",
             )
         )
     return html.Div(chips, className="rs-depth-legend")
@@ -247,7 +163,7 @@ def _colored_group_abbr(abbr: str, *, css: str = "rs-pill-groups"):
     return html.Span(parts, className="rs-group-abbr")
 
 
-def _set_piece_panel() -> html.Div:
+def _set_piece_panel(settings=None) -> html.Div:
     lines = []
     for profile in SET_PIECE_PROFILES:
         lines.append(
@@ -269,13 +185,7 @@ def _set_piece_panel() -> html.Div:
                     html.Label("Min score", className="rs-set-piece-min-label"),
                     dcc.Dropdown(
                         id="rs-set-piece-min-score",
-                        options=[
-                            {"label": "Any", "value": 0},
-                            {"label": "11+", "value": 11},
-                            {"label": "12+", "value": 12},
-                            {"label": "12.5+", "value": 12.5},
-                            {"label": "13+", "value": 13},
-                        ],
+                        options=us.min_score_options(settings),
                         value=0,
                         clearable=False,
                         className="rs-set-piece-min-dd",
@@ -293,16 +203,15 @@ def _set_piece_panel() -> html.Div:
                 inline=True,
                 className="rs-set-piece-checks",
             ),
-            html.Button(
-                "Show formulas",
-                id="rs-set-piece-formulas-toggle",
-                n_clicks=0,
-                className="rs-set-piece-formulas-toggle",
-            ),
-            dbc.Collapse(
-                html.Div(lines, className="rs-set-piece-formulas"),
-                id="rs-set-piece-formulas-collapse",
-                is_open=False,
+            html.Details(
+                [
+                    html.Summary(
+                        "Formulas & descriptions",
+                        className="rs-set-piece-formulas-toggle",
+                    ),
+                    html.Div(lines, className="rs-set-piece-formulas"),
+                ],
+                className="rs-set-piece-formulas-details",
             ),
         ],
         className="rs-special-card set-pieces",
@@ -376,7 +285,9 @@ def _depth_id_column(role_key: str) -> str | None:
     return None
 
 
-layout = dbc.Container(
+def layout():
+    settings = us.load()
+    return dbc.Container(
     [
         dcc.Store(id="rs-parsed"),
         dcc.Store(id="rs-rows"),
@@ -384,7 +295,6 @@ layout = dbc.Container(
         dcc.Store(id="rs-group", data="all"),
         dcc.Store(id="rs-pos-filter", data="all"),
         dcc.Store(id="rs-foot-filter", data=""),
-        dcc.Store(id="rs-bands", data=DEFAULT_BANDS),
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
         dcc.Store(id="rs-squad-marked", data=[]),
@@ -567,7 +477,7 @@ layout = dbc.Container(
                 html.Div(
                     [
                         html.Span("Squad depth", className="rs-depth-heading-label"),
-                        _band_legend(),
+                        html.Div(_band_legend(settings), id="rs-band-legend"),
                     ],
                     className="rs-depth-heading",
                 ),
@@ -617,15 +527,7 @@ layout = dbc.Container(
                                         html.Label("Max age"),
                                         dcc.Dropdown(
                                             id="rs-age",
-                                            options=[
-                                                {"label": "Any", "value": 99},
-                                                {"label": "21", "value": 21},
-                                                {"label": "23", "value": 23},
-                                                {"label": "25", "value": 25},
-                                                {"label": "27", "value": 27},
-                                                {"label": "30", "value": 30},
-                                                {"label": "35", "value": 35},
-                                            ],
+                                            options=us.age_options(settings),
                                             value=99,
                                             clearable=False,
                                         ),
@@ -637,13 +539,7 @@ layout = dbc.Container(
                                         html.Label("Min score"),
                                         dcc.Dropdown(
                                             id="rs-min-score",
-                                            options=[
-                                                {"label": "Any", "value": 0},
-                                                {"label": "11+", "value": 11},
-                                                {"label": "12+", "value": 12},
-                                                {"label": "12.5+", "value": 12.5},
-                                                {"label": "13+", "value": 13},
-                                            ],
+                                            options=us.min_score_options(settings),
                                             value=0,
                                             clearable=False,
                                         ),
@@ -687,7 +583,7 @@ layout = dbc.Container(
                             ],
                             className="g-2 mb-2",
                         ),
-                        html.Div(_set_piece_panel(), className="rs-special-scores"),
+                        html.Div(_set_piece_panel(settings), className="rs-special-scores"),
                         dcc.Graph(id="rs-hist", figure=BLANK_FIG, config={"displayModeBar": False}),
                         html.Small(
                             "Horizontal axis is score band; vertical axis is player count. "
@@ -853,8 +749,10 @@ def _clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
 
 
-def _score_styles(role_labels: list[str], bands: dict | None = None, theme: str | None = None) -> list[dict]:
-    bands = _normalize_bands(bands)
+def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
+    settings = us.normalize(settings)
+    bands = settings["bands"]
+    colors = us.score_colors(settings)
     elite, good, ok = bands["elite"], bands["good"], bands["ok"]
     injury = "rgba(251, 191, 36, 0.18)" if _is_dark(theme) else "#fff3cd"
     rules = [
@@ -868,8 +766,8 @@ def _score_styles(role_labels: list[str], bands: dict | None = None, theme: str 
             [
                 {
                     "if": {"filter_query": f"{{{label}}} >= {elite}", "column_id": label},
-                    "backgroundColor": SCORE_COLORS["elite"][0],
-                    "color": SCORE_COLORS["elite"][1],
+                    "backgroundColor": colors["elite"][0],
+                    "color": colors["elite"][1],
                     "fontWeight": "700",
                     "borderRadius": "6px",
                 },
@@ -878,8 +776,8 @@ def _score_styles(role_labels: list[str], bands: dict | None = None, theme: str 
                         "filter_query": f"{{{label}}} >= {good} && {{{label}}} < {elite}",
                         "column_id": label,
                     },
-                    "backgroundColor": SCORE_COLORS["good"][0],
-                    "color": SCORE_COLORS["good"][1],
+                    "backgroundColor": colors["good"][0],
+                    "color": colors["good"][1],
                     "fontWeight": "700",
                 },
                 {
@@ -887,14 +785,14 @@ def _score_styles(role_labels: list[str], bands: dict | None = None, theme: str 
                         "filter_query": f"{{{label}}} >= {ok} && {{{label}}} < {good}",
                         "column_id": label,
                     },
-                    "backgroundColor": SCORE_COLORS["ok"][0],
-                    "color": SCORE_COLORS["ok"][1],
+                    "backgroundColor": colors["ok"][0],
+                    "color": colors["ok"][1],
                     "fontWeight": "700",
                 },
                 {
                     "if": {"filter_query": f"{{{label}}} < {ok}", "column_id": label},
-                    "backgroundColor": SCORE_COLORS["poor"][0],
-                    "color": SCORE_COLORS["poor"][1],
+                    "backgroundColor": colors["poor"][0],
+                    "color": colors["poor"][1],
                     "fontWeight": "700",
                 },
             ]
@@ -1033,7 +931,7 @@ def _depth_panel(
 ) -> list:
     if not rows or not (role_ids or combos):
         return []
-    bands = _normalize_bands(bands)
+    bands = us.normalize(bands)["bands"]
     cards = []
     for item in normalize_combos(combos):
         card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, view_roles, bands)
@@ -1291,33 +1189,6 @@ def set_foot_filter(n_clicks, current):
 
 
 @callback(
-    Output("rs-bands", "data"),
-    Output("rs-band-elite", "value"),
-    Output("rs-band-good", "value"),
-    Output("rs-band-ok", "value"),
-    Output("rs-poor-cut", "children"),
-    Input("rs-band-elite", "value"),
-    Input("rs-band-good", "value"),
-    Input("rs-band-ok", "value"),
-    prevent_initial_call=True,
-)
-def set_bands(elite, good, ok):
-    edited = ctx.triggered_id if ctx.triggered_id in {
-        "rs-band-elite",
-        "rs-band-good",
-        "rs-band-ok",
-    } else None
-    bands = _normalize_bands({"elite": elite, "good": good, "ok": ok}, edited=edited)
-    return (
-        bands,
-        bands["elite"],
-        bands["good"],
-        bands["ok"],
-        f"< {_fmt_cut(bands['ok'])}",
-    )
-
-
-@callback(
     Output("rs-view-role", "value", allow_duplicate=True),
     Input({"type": "rs-depth", "role": ALL}, "n_clicks"),
     prevent_initial_call=True,
@@ -1424,8 +1295,8 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
-    Input("rs-bands", "data"),
     Input("theme", "data"),
+    State("ui-settings", "data"),
 )
 def render_shortlist(
     payload,
@@ -1440,14 +1311,16 @@ def render_shortlist(
     pos_filter,
     foot_filter,
     page_size,
-    bands,
     theme,
+    settings,
 ):
+    settings = us.normalize(settings)
+    bands = settings["bands"]
+    bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
-    empty_style = _score_styles([], theme=theme)
+    empty_style = _score_styles([], settings, theme)
     view_roles = _as_list(view_role)
     page_size = int(page_size or 50)
-    bands = _normalize_bands(bands)
     if not payload or not payload.get("rows") or not view_roles:
         return (
             None,
@@ -1527,12 +1400,12 @@ def render_shortlist(
     for role in view_roles:
         values = [float(row.get(role) or 0) for row in filtered]
         counts = []
-        for _label, lo, hi in BINS:
+        for _label, lo, hi in bins:
             if hi == 99:
                 counts.append(sum(1 for v in values if v >= lo))
             else:
                 counts.append(sum(1 for v in values if lo <= v < hi))
-        fig.add_bar(x=[b[0] for b in BINS], y=counts, name=role)
+        fig.add_bar(x=[b[0] for b in bins], y=counts, name=role)
     fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
 
     ordered_roles = expanded + [role for role in roles if role not in expanded]
@@ -1576,7 +1449,7 @@ def render_shortlist(
         not cards,
         table_rows,
         columns,
-        _score_styles(score_cols, bands, theme),
+        _score_styles(score_cols, settings, theme),
         page_size,
         selected_rows,
         fig,
@@ -1644,18 +1517,6 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
             ),
         ]
     )
-
-
-@callback(
-    Output("rs-set-piece-formulas-collapse", "is_open"),
-    Output("rs-set-piece-formulas-toggle", "children"),
-    Input("rs-set-piece-formulas-toggle", "n_clicks"),
-    State("rs-set-piece-formulas-collapse", "is_open"),
-    prevent_initial_call=True,
-)
-def toggle_set_piece_formulas(n_clicks, is_open):
-    show = not is_open
-    return show, "Hide formulas" if show else "Show formulas"
 
 
 @callback(
@@ -1776,14 +1637,16 @@ def download_csv(n_clicks, payload):
     Output("rs-download-canvas", "data"),
     Input("rs-canvas-btn", "n_clicks"),
     State("rs-rows", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def download_canvas(n_clicks, payload):
+def download_canvas(n_clicks, payload, settings):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
     text = build_canvas(
         payload["rows"],
         payload["roles"],
         payload.get("filename") or "FM export",
+        settings,
     )
     return dict(content=text, filename="fm26-role-scores.canvas.tsx")
