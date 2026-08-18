@@ -3,9 +3,25 @@
   "group_schema": 2,
   "roles": {
     "Goalkeeper_IP_GK": {
-      "key_attrs": [],
-      "preferred_attrs": [],
-      "useful_attrs": [],
+      "key_attrs": [
+        "Agi",
+        "Ref"
+      ],
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "Pos",
+        "Cnt"
+      ],
+      "useful_attrs": [
+        "Kic",
+        "1v1",
+        "Thr",
+        "Dec",
+        "Ant"
+      ],
       "groups": [
         "gk"
       ]

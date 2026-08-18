@@ -915,18 +915,31 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-legend {
+    appearance: none;
     font-size: 11px;
     font-weight: 700;
-    padding: 4px 8px;
+    padding: 5px 10px;
     border-radius: 6px;
     background: #0f1720;
+    border: 1px solid var(--rc-line);
+    cursor: pointer;
 }
 
+.rc-legend.none { color: #9aa8b8; }
 .rc-legend.key { color: var(--rc-key); }
 .rc-legend.preferred,
 .rc-legend.green { color: var(--rc-green); }
 .rc-legend.useful,
 .rc-legend.blue { color: var(--rc-blue); }
+
+.rc-legend.active {
+    border-color: currentColor;
+    box-shadow: 0 0 0 1px currentColor;
+}
+
+.rc-legend:hover {
+    background: #1a2430;
+}
 
 .rc-attrs-note {
     color: var(--rc-muted);
@@ -989,21 +1002,27 @@ body:has(.rc-page) .navbar {
 .rc-attr-name {
     font-size: 13px;
     color: #c5d0dc;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
+.rc-attr-row.is-key .rc-attr-name,
+.rc-attr-val.key { color: var(--rc-key); }
+.rc-attr-row.is-preferred .rc-attr-name,
+.rc-attr-val.preferred { color: var(--rc-green); }
+.rc-attr-row.is-useful .rc-attr-name,
+.rc-attr-val.useful { color: var(--rc-blue); }
 
 .rc-attr-val {
     font-size: 13px;
     font-weight: 800;
-    color: #9aa8b8;
+    color: #6d7b8c;
     min-width: 18px;
     text-align: right;
 }
 
-.rc-attr-val.key { color: var(--rc-key); }
-.rc-attr-val.preferred,
-.rc-attr-val.green { color: var(--rc-green); }
-.rc-attr-val.useful,
-.rc-attr-val.blue { color: var(--rc-blue); }
 .rc-attr-val.none { color: #6d7b8c; font-weight: 600; }
 
 .rc-empty {

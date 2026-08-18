@@ -13,11 +13,17 @@ rc.ensure_loaded()
 
 DEFAULT_ROLE = "Sweeper_Keeper_OOP_GK"
 TIER_HINT = {
-    "none": "Off · click to set Key",
-    "key": "Key ×5 · click to set Preferred",
-    "preferred": "Preferred ×3 · click to set Useful",
-    "useful": "Useful ×1 · click to clear",
+    "none": "Off",
+    "key": "Key ×5",
+    "preferred": "Preferred ×3",
+    "useful": "Useful ×1",
 }
+PAINT_OPTIONS = (
+    ("none", "Off"),
+    ("key", "Key ×5"),
+    ("preferred", "Preferred ×3"),
+    ("useful", "Useful ×1"),
+)
 
 
 def _all_roles() -> list[tuple[str, dict]]:
@@ -263,6 +269,19 @@ def _identity(role_id: str) -> html.Div:
     )
 
 
+def _paint_buttons(active: str) -> list:
+    return [
+        html.Button(
+            label,
+            id={"type": "rc-paint", "tier": tier},
+            n_clicks=0,
+            className="rc-legend " + tier + (" active" if active == tier else ""),
+            title=f"Click attributes to set them to {label}",
+        )
+        for tier, label in PAINT_OPTIONS
+    ]
+
+
 def _attr_row(attr: str, label: str, cfg: dict) -> html.Button:
     tier = rc.attr_tier(cfg, attr)
     weight = rc.TIER_WEIGHT[tier]
@@ -274,8 +293,8 @@ def _attr_row(attr: str, label: str, cfg: dict) -> html.Button:
         ],
         id={"type": "rc-attr", "attr": attr},
         n_clicks=0,
-        className="rc-attr-row",
-        title=TIER_HINT[tier],
+        className="rc-attr-row" + (f" is-{tier}" if tier != "none" else ""),
+        title=f"Set to {TIER_HINT.get(tier, tier)}",
     )
 
 
@@ -289,8 +308,9 @@ def _attr_column(title: str, attrs: list[tuple[str, str]], cfg: dict, extra=None
     return html.Div(children, className="rc-attr-col")
 
 
-def _attributes(role_id: str) -> html.Div:
+def _attributes(role_id: str, paint: str = "key") -> html.Div:
     cfg = rc.role_cfg(role_id)
+    paint = paint if paint in TIER_HINT else "key"
     columns = []
     for title, attrs in rc.attr_groups_for(role_id):
         extra = None
@@ -308,19 +328,12 @@ def _attributes(role_id: str) -> html.Div:
             html.Div(
                 [
                     html.Div("Attributes", className="rc-attrs-title"),
-                    html.Div(
-                        [
-                            html.Span("Key ×5", className="rc-legend key"),
-                            html.Span("Preferred ×3", className="rc-legend preferred"),
-                            html.Span("Useful ×1", className="rc-legend useful"),
-                        ],
-                        className="rc-legend-row",
-                    ),
+                    html.Div(_paint_buttons(paint), className="rc-legend-row"),
                 ],
                 className="rc-attrs-header",
             ),
             html.Div(
-                "Click a value to cycle Key → Preferred → Useful → Off. Reset reloads this role from the selected config. Save writes a named config. Built-in is read-only — use New config to make a file.",
+                f"Assigning {TIER_HINT[paint]}. Click a type once, then click attributes to apply it.",
                 className="rc-attrs-note",
             ),
             html.Div(columns, className="rc-attr-grid"),
@@ -329,11 +342,11 @@ def _attributes(role_id: str) -> html.Div:
     )
 
 
-def _profile(role_id: str | None) -> html.Div:
+def _profile(role_id: str | None, paint: str = "key") -> html.Div:
     if not rc.has_role(role_id):
         return html.Div("Select a role to view its config.", className="rc-empty")
     return html.Div(
-        [_identity(role_id), _attributes(role_id)],
+        [_identity(role_id), _attributes(role_id, paint)],
         className="rc-profile",
     )
 
@@ -356,11 +369,13 @@ def layout():
         dcc.Store(id="rc-phase", data="all"),
         dcc.Store(id="rc-group", data="all"),
         dcc.Store(id="rc-new-mode", data="copy"),
+        dcc.Store(id="rc-paint", data="key"),
         dcc.Store(id="rc-rev", data=0),
         html.Div(
             [
                 html.Button(id={"type": "rc-pick", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-attr", "attr": "_"}, n_clicks=0),
+                html.Button(id={"type": "rc-paint", "tier": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-phase", "phase": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-group", "group": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-rgroup", "group": "_"}, n_clicks=0),
@@ -508,6 +523,20 @@ def set_new_mode(n_clicks):
 
 
 @callback(
+    Output("rc-paint", "data"),
+    Input({"type": "rc-paint", "tier": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_paint(n_clicks):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update
+    tier = ctx.triggered_id["tier"]
+    if tier not in TIER_HINT:
+        return no_update
+    return tier
+
+
+@callback(
     Output("rc-selected", "data"),
     Input({"type": "rc-pick", "role": ALL}, "n_clicks"),
     State("rc-selected", "data"),
@@ -537,6 +566,7 @@ def pick_role(n_clicks, current):
     State("rc-rev", "data"),
     State("rc-new-name", "value"),
     State("rc-new-mode", "data"),
+    State("rc-paint", "data"),
     prevent_initial_call=True,
 )
 def mutate_config(
@@ -550,6 +580,7 @@ def mutate_config(
     rev,
     new_name,
     new_mode,
+    paint,
 ):
     trigger = ctx.triggered_id
     options = rc.pack_options()
@@ -602,7 +633,7 @@ def mutate_config(
         attr = trigger.get("attr")
         if not _clicked(attr_clicks) or not attr or attr == "_" or not role_id:
             return no_update, no_update, no_update, no_update
-        rc.cycle_attr(role_id, attr)
+        rc.set_attr_tier(role_id, attr, paint or "key")
         return int(rev or 0) + 1, "", rc.active_pack_id(), options
     return no_update, no_update, no_update, no_update
 
@@ -630,9 +661,10 @@ def on_pack_change(pack_id, rev):
     Input("rc-group", "data"),
     Input("rc-search", "value"),
     Input("rc-rev", "data"),
+    Input("rc-paint", "data"),
 )
-def render_page(selected, phase, group, query, _rev):
+def render_page(selected, phase, group, query, _rev, paint):
     selected = selected or DEFAULT_ROLE
     phase = phase or "all"
     group = group or "all"
-    return _role_list(selected, phase, group, query), _profile(selected)
+    return _role_list(selected, phase, group, query), _profile(selected, paint or "key")

@@ -558,25 +558,34 @@ def has_user_defaults() -> bool:
     return DEFAULTS_PATH.exists()
 
 
-def cycle_attr(role_id: str, attr: str) -> str:
-    """Promote one attribute through Off → Key → Preferred → Useful."""
+def set_attr_tier(role_id: str, attr: str, tier: str) -> str:
+    """Set one attribute to Off, Key, Preferred, or Useful."""
     ensure_loaded()
     if role_id not in pc.all_positions or attr not in ATTR_LABELS:
         return "none"
+    if tier not in TIER_CYCLE:
+        return attr_tier(pc.all_positions[role_id], attr)
     cfg = pc.all_positions[role_id]
-    nxt = NEXT_TIER[attr_tier(cfg, attr)]
     key_attrs, preferred_attrs, useful_attrs = _attr_lists(cfg)
     key_attrs = [item for item in key_attrs if item != attr]
     preferred_attrs = [item for item in preferred_attrs if item != attr]
     useful_attrs = [item for item in useful_attrs if item != attr]
-    if nxt == "key":
+    if tier == "key":
         key_attrs.append(attr)
-    elif nxt == "preferred":
+    elif tier == "preferred":
         preferred_attrs.append(attr)
-    elif nxt == "useful":
+    elif tier == "useful":
         useful_attrs.append(attr)
     _apply_lists(cfg, key_attrs, preferred_attrs, useful_attrs)
-    return nxt
+    return tier
+
+
+def cycle_attr(role_id: str, attr: str) -> str:
+    """Promote one attribute through Off → Key → Preferred → Useful."""
+    ensure_loaded()
+    if role_id not in pc.all_positions:
+        return "none"
+    return set_attr_tier(role_id, attr, NEXT_TIER[attr_tier(pc.all_positions[role_id], attr)])
 
 
 def clear_role(role_id: str) -> None:
