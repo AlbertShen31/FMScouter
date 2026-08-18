@@ -17,6 +17,135 @@ from utils import calculate_score
 
 role_config.ensure_loaded()
 
+SET_PIECE_PROFILES = (
+    {
+        "id": "corners",
+        "label": "Corners",
+        "detail": "taker",
+        "raw": "Cor",
+        "score": "Corners",
+        "key": ("Cor",),
+        "preferred": ("Cro", "Tec"),
+        "useful": (),
+    },
+    {
+        "id": "dfk",
+        "label": "DFK",
+        "detail": "direct — shooting chance",
+        "raw": "Fre",
+        "score": "DFK",
+        "key": ("Fre",),
+        "preferred": ("Tec", "Lon"),
+        "useful": (),
+    },
+    {
+        "id": "ifk",
+        "label": "IFK",
+        "detail": "indirect — crossing chance",
+        "raw": "Fre",
+        "score": "IFK",
+        "key": ("Fre",),
+        "preferred": ("Cro", "Tec"),
+        "useful": ("Pas",),
+    },
+    {
+        "id": "throws",
+        "label": "Long throws",
+        "detail": "raw attribute only",
+        "raw": "LTh",
+        "score": None,
+        "key": (),
+        "preferred": (),
+        "useful": (),
+    },
+    {
+        "id": "pens",
+        "label": "Penalties",
+        "detail": "spot kicks",
+        "raw": "Pen",
+        "score": "Pens",
+        "key": ("Pen",),
+        "preferred": ("Fin", "Cmp"),
+        "useful": (),
+    },
+)
+
+
+def set_piece_divisor(profile: dict) -> int:
+    return (
+        pc.KEY_WEIGHT * len(profile["key"])
+        + pc.PREFERRED_WEIGHT * len(profile["preferred"])
+        + pc.USEFUL_WEIGHT * len(profile["useful"])
+    )
+
+
+def set_piece_formula(profile: dict) -> str:
+    if not profile.get("score"):
+        return f"{profile['label']} = {profile['raw']} (raw only)"
+    terms = []
+    for attr in profile["key"]:
+        terms.append(f"{pc.KEY_WEIGHT:g}×{attr}")
+    for attr in profile["preferred"]:
+        terms.append(f"{pc.PREFERRED_WEIGHT:g}×{attr}")
+    for attr in profile["useful"]:
+        if pc.USEFUL_WEIGHT == 1:
+            terms.append(attr)
+        else:
+            terms.append(f"{pc.USEFUL_WEIGHT:g}×{attr}")
+    return f"{profile['label']} = ({' + '.join(terms)}) ÷ {set_piece_divisor(profile):g}"
+
+
+def set_piece_hint() -> str:
+    return (
+        "Combined scores use the same "
+        f"{pc.KEY_WEIGHT:g}× key / {pc.PREFERRED_WEIGHT:g}× preferred / "
+        f"{pc.USEFUL_WEIGHT:g}× useful weights as roles. "
+        "DFK is a shot from the dead ball; IFK is a delivery into the box. "
+        "Checking DFK or IFK also adds Fre once."
+    )
+
+
+def set_piece_columns(selected) -> list[str]:
+    chosen = set(selected or [])
+    cols = []
+    seen: set[str] = set()
+    for profile in SET_PIECE_PROFILES:
+        if profile["id"] not in chosen:
+            continue
+        raw = profile.get("raw")
+        score = profile.get("score")
+        if raw and raw not in seen:
+            cols.append(raw)
+            seen.add(raw)
+        if score and score not in seen:
+            cols.append(score)
+            seen.add(score)
+    return cols
+
+
+def apply_set_piece_scores(row: dict[str, Any], attrs: dict[str, int]) -> None:
+    written_raw: set[str] = set()
+    for profile in SET_PIECE_PROFILES:
+        raw = profile.get("raw")
+        if raw and raw not in written_raw:
+            value = attrs.get(raw)
+            row[raw] = value if value not in (None, "") else "-"
+            written_raw.add(raw)
+        score = profile.get("score")
+        if not score:
+            continue
+        row[score] = calculate_score(
+            attrs,
+            list(profile["key"]),
+            list(profile["preferred"]),
+            list(profile["useful"]),
+            pc.KEY_WEIGHT,
+            pc.PREFERRED_WEIGHT,
+            pc.USEFUL_WEIGHT,
+            set_piece_divisor(profile),
+        )
+
+
 ATTR_MAP = {
     "Aerial Reach": "Aer",
     "Command Of Area": "Cmd",
@@ -637,6 +766,7 @@ def score_players(
             "Squad": player["squad"] or "-",
             "PosGroups": player.get("pos_groups") or [],
         }
+        apply_set_piece_scores(row, player.get("attrs") or {})
         best_label = ""
         best_score = -1.0
         for role_id, label, cfg, groups in configs:

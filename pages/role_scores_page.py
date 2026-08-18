@@ -23,6 +23,7 @@ from role_scorer import (
     COMBO_OOP_WEIGHT,
     GROUP_DEFS,
     POS_CARDS,
+    SET_PIECE_PROFILES,
     apply_combos,
     combo_column,
     combo_meta,
@@ -36,6 +37,9 @@ from role_scorer import (
     score_band,
     score_players,
     scored_csv,
+    set_piece_columns,
+    set_piece_formula,
+    set_piece_hint,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -214,6 +218,61 @@ def _phase_buttons(active: str = "all") -> list:
             )
         )
     return buttons
+
+
+def _set_piece_check_label(profile: dict) -> str:
+    if profile["id"] == "dfk":
+        return "DFK (shot)"
+    if profile["id"] == "ifk":
+        return "IFK (cross)"
+    return profile["label"]
+
+
+def _set_piece_panel() -> html.Div:
+    lines = []
+    for profile in SET_PIECE_PROFILES:
+        lines.append(
+            html.Div(
+                [
+                    html.Span(profile["label"], className="rs-set-piece-name"),
+                    html.Span(profile.get("detail") or "", className="rs-set-piece-detail"),
+                    html.Span(set_piece_formula(profile), className="rs-set-piece-formula"),
+                ],
+                className="rs-set-piece-line",
+            )
+        )
+    return html.Div(
+        [
+            html.Div("Set pieces", className="rs-special-title"),
+            html.P(set_piece_hint(), className="rs-special-sub"),
+            dbc.Checklist(
+                id="rs-set-pieces",
+                options=[
+                    {"label": _set_piece_check_label(profile), "value": profile["id"]}
+                    for profile in SET_PIECE_PROFILES
+                ],
+                value=[],
+                inline=True,
+                className="rs-set-piece-checks",
+            ),
+            html.Div(lines, className="rs-set-piece-formulas"),
+        ],
+        className="rs-special-card set-pieces",
+    )
+
+
+def _aerial_placeholder() -> html.Div:
+    return html.Div(
+        [
+            html.Div("Aerial threat", className="rs-special-title"),
+            html.P(
+                "Coming next. Heading, jumping reach, and related aerial scores will sit here.",
+                className="rs-special-sub",
+            ),
+            html.Div(className="rs-special-slot"),
+        ],
+        className="rs-special-card aerial",
+    )
 
 
 def _role_pills(role_ids: list[str]) -> list:
@@ -502,7 +561,7 @@ layout = dbc.Container(
                                             className="text-muted",
                                         ),
                                     ],
-                                    md=4,
+                                    md=3,
                                 ),
                                 dbc.Col(
                                     [
@@ -588,7 +647,11 @@ layout = dbc.Container(
                                     md=1,
                                 ),
                             ],
-                            className="g-2 mb-3",
+                            className="g-2 mb-2",
+                        ),
+                        html.Div(
+                            [_set_piece_panel(), _aerial_placeholder()],
+                            className="rs-special-scores",
                         ),
                         dcc.Graph(id="rs-hist", figure=BLANK_FIG, config={"displayModeBar": False}),
                         html.Small(
@@ -604,7 +667,11 @@ layout = dbc.Container(
                             style_table={"overflowX": "auto"},
                             css=[
                                 {
-                                    "selector": "td:hover, tr:hover td, td.focused, td.cell--selected",
+                                    "selector": (
+                                        "td:hover, tr:hover td, tr:hover th, th:hover, "
+                                        "td.focused, td.cell--selected, th.focused, "
+                                        "th.cell--selected"
+                                    ),
                                     "rule": (
                                         "background-color: var(--table-hover-bg) !important; "
                                         "color: var(--table-hover-fg) !important;"
@@ -1263,6 +1330,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
     Input("rs-eligible", "value"),
+    Input("rs-set-pieces", "value"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
@@ -1276,6 +1344,7 @@ def render_shortlist(
     max_age,
     min_score,
     eligible,
+    set_pieces,
     pos_filter,
     foot_filter,
     page_size,
@@ -1359,9 +1428,18 @@ def render_shortlist(
     fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
 
     ordered_roles = expanded + [role for role in roles if role not in expanded]
-    table_cols = ["Name", "Age", "Position", "Club", "Rec", "Injury"] + ordered_roles
+    piece_cols = set_piece_columns(set_pieces)
+    chosen = set(set_pieces or [])
+    score_cols = [
+        profile["score"]
+        for profile in SET_PIECE_PROFILES
+        if profile["id"] in chosen and profile.get("score")
+    ] + ordered_roles
+    table_cols = ["Name", "Age", "Height", "Position", "Club", "Rec", "Injury"]
+    table_cols.extend(piece_cols)
+    table_cols.extend(ordered_roles)
     columns = [{"name": col, "id": col} for col in table_cols]
-    table_rows = [{key: row.get(key) for key in table_cols} for row in filtered]
+    table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
     role_list = ", ".join(view_roles)
     extras = []
     if pos_filter != "all":
@@ -1382,7 +1460,7 @@ def render_shortlist(
         not cards,
         table_rows,
         columns,
-        _score_styles(ordered_roles, bands, theme),
+        _score_styles(score_cols, bands, theme),
         page_size,
         fig,
         caption,
