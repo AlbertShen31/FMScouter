@@ -65,7 +65,7 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 ## Phases
 
-Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK for filters and attribute sheets. Display badges show **IP** or **OOP**, never the raw keeper-phase token. Duplicate role codes get unique column labels via `display_code()` (`GK-IP`, `GK-OOP`).
+Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK for filters and attribute sheets. Display badges show **IP** or **OOP**, never the raw keeper-phase token. UI monograms show the base role code (`CF`); score columns use `column_label()` when the same code appears in both phases (`CF-IP`, `CF-OOP`).
 
 ## Config packs
 

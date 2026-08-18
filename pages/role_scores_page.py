@@ -405,7 +405,7 @@ def _decode_upload(contents: str) -> str:
 
 
 def _labels(role_ids: list[str]) -> list[str]:
-    return [role_meta(role_id)["code"] for role_id in role_ids]
+    return [role_meta(role_id)["column"] for role_id in role_ids]
 
 
 def _as_list(value) -> list:
@@ -511,26 +511,26 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
     cards = []
     for role_id in role_ids:
         meta = role_meta(role_id)
-        code = meta["code"]
-        eligible = [row for row in rows if row.get(f"{code} eligible")]
+        column = meta["column"]
+        eligible = [row for row in rows if row.get(f"{column} eligible")]
         if not eligible:
             continue
-        scores = [float(row.get(code) or 0) for row in eligible]
+        scores = [float(row.get(column) or 0) for row in eligible]
         avg = sum(scores) / len(scores)
         bands = {"elite": 0, "good": 0, "ok": 0, "poor": 0}
         for score in scores:
             bands[score_band(score)] += 1
         total = len(scores) or 1
-        top = sorted(eligible, key=lambda row: float(row.get(code) or 0), reverse=True)[:3]
+        top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
         names = " · ".join(player.get("Name", "") for player in top)
-        active = " active" if code in view_roles and len(view_roles) == 1 else ""
+        active = " active" if column in view_roles and len(view_roles) == 1 else ""
         cards.append(
             html.Button(
                 [
                     html.Div(
                         [
                             html.Span(meta["name"], className="rs-depth-name"),
-                            html.Span(code, className="rs-depth-code"),
+                            html.Span(meta["code"], className="rs-depth-code"),
                             html.Span(
                                 meta["phase"],
                                 className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
@@ -579,7 +579,7 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                     ),
                     html.Div(names, className="rs-depth-players"),
                 ],
-                id={"type": "rs-depth", "role": code},
+                id={"type": "rs-depth", "role": role_id},
                 n_clicks=0,
                 className="rs-depth-card" + active,
             )

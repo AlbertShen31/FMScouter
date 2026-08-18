@@ -264,6 +264,13 @@ def _code_uses(code: str) -> int:
 
 
 def display_code(role_id: str, cfg: dict | None = None) -> str:
+    """Short badge text for UI (e.g. CF). Phase is shown separately."""
+    cfg = cfg or pc.all_positions.get(role_id, {})
+    return cfg.get("role_code", role_id)
+
+
+def column_label(role_id: str, cfg: dict | None = None) -> str:
+    """Score / CSV column key; disambiguates duplicate codes (e.g. CF-IP)."""
     cfg = cfg or pc.all_positions.get(role_id, {})
     code = cfg.get("role_code", role_id)
     if _code_uses(code) > 1:
@@ -281,6 +288,7 @@ def role_meta(role_id: str) -> dict[str, str]:
     return {
         "id": role_id,
         "code": display_code(role_id, cfg),
+        "column": column_label(role_id, cfg),
         "name": pretty_role_name(role_id),
         "phase": phase_label(phase),
         "tone": phase_tone(phase),
@@ -456,7 +464,7 @@ def score_players(
         configs.append(
             (
                 role_id,
-                display_code(role_id, cfg),
+                column_label(role_id, cfg),
                 cfg,
                 role_groups(role_id),
             )
