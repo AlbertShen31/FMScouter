@@ -59,9 +59,28 @@
       ]
     },
     "Ball_Playing_Goalkeeper_IP_GK": {
-      "key_attrs": [],
-      "preferred_attrs": [],
-      "useful_attrs": [],
+      "key_attrs": [
+        "Agi",
+        "Ref"
+      ],
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "Kic",
+        "Pos",
+        "Cnt"
+      ],
+      "useful_attrs": [
+        "Ecc",
+        "1v1",
+        "Pas",
+        "Thr",
+        "Ant",
+        "Cmp",
+        "Dec"
+      ],
       "groups": [
         "gk"
       ]
@@ -74,7 +93,32 @@
         "cb"
       ]
     },
-    "No_Nonsense_Centre_Back_OOP": {
+    "Centre_Back_OOP": {
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Jum",
+        "Cmp"
+      ],
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Str",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Dec"
+      ],
+      "groups": [
+        "cb"
+      ]
+    },
+    "No_Nonsense_Centre_Back_IP": {
       "key_attrs": [],
       "preferred_attrs": [],
       "useful_attrs": [],
@@ -99,17 +143,62 @@
       ]
     },
     "Ball_Playing_Centre_Back_IP": {
-      "key_attrs": [],
-      "preferred_attrs": [],
-      "useful_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Jum",
+        "Cmp"
+      ],
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Pas",
+        "Tck",
+        "Ant",
+        "Pos",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Tec",
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Dec",
+        "Vis"
+      ],
       "groups": [
         "cb"
       ]
     },
     "Overlapping_Centre_Back_IP": {
-      "key_attrs": [],
-      "preferred_attrs": [],
-      "useful_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Jum",
+        "Cmp"
+      ],
+      "preferred_attrs": [
+        "Str",
+        "Sta",
+        "Ant",
+        "Cro",
+        "Tck",
+        "Mar",
+        "Hea",
+        "Wor"
+      ],
+      "useful_attrs": [
+        "Tec",
+        "Dri",
+        "Agg",
+        "Agi",
+        "Bra",
+        "Dec",
+        "Cnt",
+        "OtB",
+        "Pos"
+      ],
       "groups": [
         "cb"
       ]
@@ -123,6 +212,14 @@
       ]
     },
     "Wide_Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Wide_Centre_Back_OOP": {
       "key_attrs": [],
       "preferred_attrs": [],
       "useful_attrs": [],
