@@ -124,6 +124,24 @@ def role_groups(role_id: str) -> list[str]:
     return [home] if home else []
 
 
+PHASE_SORT_ORDER = {"IP": 0, "OOP": 1, "GK": 2}
+
+
+def role_sort_key(role_id: str) -> tuple[int, str, str]:
+    """Phase first (IP → OOP → GK), then role name A–Z."""
+    cfg = pc.all_positions.get(role_id) or {}
+    phase_rank = PHASE_SORT_ORDER.get(phase_label(cfg.get("phase")), 99)
+    return (phase_rank, pretty_role_name(role_id).casefold(), role_id)
+
+
+def iter_roles(group: str | None = None) -> list[str]:
+    """Role ids, optionally filtered to one position group via `groups`."""
+    roles = sorted(pc.all_positions, key=role_sort_key)
+    if not group or group in ("", "all"):
+        return roles
+    return [role_id for role_id in roles if group in role_groups(role_id)]
+
+
 def group_labels(role_id: str) -> str:
     wanted = set(role_groups(role_id))
     return " / ".join(label for gid, label, _roles in GROUP_DEFS if gid in wanted)
@@ -283,27 +301,26 @@ def role_options(phase: str | None = None, keep: list[str] | None = None) -> lis
     keep = set(keep or [])
     phase = (phase or "all").upper()
     options = []
-    seen = set()
-    for _group, group_label, roles in GROUP_DEFS:
-        for role_id in roles:
-            if role_id in seen:
-                continue
-            seen.add(role_id)
-            cfg_phase = roles[role_id].get("phase", "")
-            groups = role_groups(role_id)
-            if (
-                phase not in ("", "ALL")
-                and not phase_matches(cfg_phase, phase, role_id, "gk" if "gk" in groups else _group)
-                and role_id not in keep
-            ):
-                continue
-            prefix = group_labels(role_id) or group_label
-            options.append(
-                {
-                    "label": f"{prefix} — {role_option_label(role_id)}",
-                    "value": role_id,
-                }
-            )
+    for role_id in iter_roles():
+        cfg_phase = pc.all_positions[role_id].get("phase", "")
+        groups = role_groups(role_id)
+        home = groups[0] if groups else _ROLE_GROUP.get(role_id, "")
+        if (
+            phase not in ("", "ALL")
+            and not phase_matches(cfg_phase, phase, role_id, "gk" if "gk" in groups else home)
+            and role_id not in keep
+        ):
+            continue
+        prefix = group_labels(role_id) or next(
+            (label for gid, label, _roles in GROUP_DEFS if gid == home),
+            home,
+        )
+        options.append(
+            {
+                "label": f"{prefix} — {role_option_label(role_id)}",
+                "value": role_id,
+            }
+        )
     return options
 
 

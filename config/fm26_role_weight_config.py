@@ -26,9 +26,11 @@ the player filter cards on Role scores:
   covering both `wm` and `w`.
 
 A role’s `groups` list is extra buckets on top of the dict it lives in.
-Import-time `_HOME_GROUPS` prepends the home id. Eligibility is OR
-across that list. Saved packs use `group_schema` 2; older files mapped
-`w` → wide mids and `wam` → wingers. See docs/ARCHITECTURE.md.
+Import-time `_HOME_GROUPS` prepends the home id. Roles that span buckets
+(for example Wing Back in wing-backs and full-backs) live in one dict only
+and list the other bucket in `groups` — never duplicate the role id.
+Eligibility is OR across that list. Saved packs use `group_schema` 2; older
+files mapped `w` → wide mids and `wam` → wingers. See docs/ARCHITECTURE.md.
 """
 
 KEY_WEIGHT = 5
@@ -209,20 +211,6 @@ fb_positions = {
         phase='IP',
         role_code='FB',
     ),
-    'Wing_Back_IP': role(
-        ['Acc', 'Cro', 'Pac', 'Sta', 'Wor'],
-        ['Ant', 'Dec', 'Fir', 'Mar', 'OtB', 'Tck'],
-        [],
-        phase='IP',
-        role_code='WB',
-    ),
-    'Inside_Wing_Back_IP': role(
-        ['Cnt', 'Pos', 'Sta', 'Tea'],
-        ['Acc', 'Dec', 'Mar', 'Pac', 'Pas', 'Tck', 'Tec', 'Vis'],
-        [],
-        phase='IP',
-        role_code='IWB',
-    ),
     'Inside_Full_Back_IP': role(
         ['Dec', 'Pas', 'Sta'],
         ['Acc', 'Ant', 'Cnt', 'Mar', 'Pac', 'Pos', 'Tck', 'Tec', 'Vis'],
@@ -230,21 +218,13 @@ fb_positions = {
         phase='IP',
         role_code='IFB',
     ),
-    'Playmaking_Wing_Back_IP': role(
-        ['Dec', 'Pas', 'Sta', 'Tec', 'Vis', 'Wor'],
-        ['Acc', 'Cro', 'Fir', 'OtB', 'Pac'],
-        ['Mar', 'Tck'],
-        phase='IP',
-        role_code='PWB',
-    ),
-    'Full_Back_IP': role(
+    'Full_Back_OOP': role(
         ['Acc', 'Pac', 'Sta'],
         ['Ant', 'Cnt', 'Cro', 'Dec', 'Mar', 'OtB', 'Pos', 'Str', 'Tck'],
         [],
-        phase='IP',
+        phase='OOP',
         role_code='FB',
-    ),
-    'Pressing_Full_Back_OOP': role(
+    ),'Pressing_Full_Back_OOP': role(
         ['Acc', 'Ant', 'Pac', 'Sta', 'Tck', 'Wor'],
         ['Agg', 'Bra', 'Cnt'],
         [],
@@ -269,6 +249,7 @@ wb_positions = {
         [],
         phase='IP',
         role_code='WB',
+        groups=('fb',),
     ),
     'Advanced_Wing_Back_IP': role(
         ['Acc', 'Cro', 'OtB', 'Pac', 'Sta', 'Wor'],
@@ -283,6 +264,7 @@ wb_positions = {
         [],
         phase='IP',
         role_code='IWB',
+        groups=('fb',),
     ),
     'Playmaking_Wing_Back_IP': role(
         ['Dec', 'Pas', 'Sta', 'Tec', 'Vis', 'Wor'],
@@ -290,6 +272,7 @@ wb_positions = {
         ['Mar', 'Tck'],
         phase='IP',
         role_code='PWB',
+        groups=('fb',),
     ),
     'Wing_Back_OOP': role(
         ['Acc', 'Cro', 'Pac', 'Sta', 'Wor'],
@@ -399,20 +382,6 @@ cm_positions = {
         phase='IP',
         role_code='CM',
     ),
-    'Attacking_Midfielder_IP': role(
-        ['Dec', 'Fir', 'Pas', 'Sta', 'Tec'],
-        ['Acc', 'Ant', 'Cmp', 'Dri', 'OtB', 'Pac', 'Vis'],
-        [],
-        phase='IP',
-        role_code='AM',
-    ),
-    'Advanced_Playmaker_IP': role(
-        ['Dec', 'Fir', 'Pas', 'Tec', 'Vis'],
-        ['Acc', 'Ant', 'Cmp', 'Dri', 'Fla', 'OtB', 'Pac'],
-        [],
-        phase='IP',
-        role_code='AP',
-    ),
     'Wide_Central_Midfielder_IP': role(
         ['Dec', 'Pas', 'Sta', 'Vis', 'Wor'],
         ['Acc', 'Fir', 'OtB', 'Pac', 'Tec'],
@@ -426,6 +395,7 @@ cm_positions = {
         [],
         phase='IP',
         role_code='CHM',
+        groups=('am',),
     ),
     'Midfield_Playmaker_IP': role(
         ['Dec', 'Fir', 'Pas', 'Sta', 'Tec', 'Vis'],
@@ -473,6 +443,7 @@ am_positions = {
         [],
         phase='IP',
         role_code='AM',
+        groups=('cm',),
     ),
     'Advanced_Playmaker_IP': role(
         ['Dec', 'Fir', 'Pas', 'Tec', 'Vis'],
@@ -480,6 +451,7 @@ am_positions = {
         [],
         phase='IP',
         role_code='AP',
+        groups=('cm',),
     ),
     'Free_Role_IP': role(
         ['Dec', 'Fir', 'Fla', 'Tec', 'Vis'],
@@ -494,13 +466,6 @@ am_positions = {
         [],
         phase='IP',
         role_code='SS',
-    ),
-    'Channel_Midfielder_IP': role(
-        ['Acc', 'OtB', 'Pac', 'Sta', 'Wor'],
-        ['Ant', 'Dec', 'Dri', 'Fir', 'Pas', 'Vis'],
-        [],
-        phase='IP',
-        role_code='CHM',
     ),
     'Attacking_Midfielder_OOP': role(
         ['Dec', 'Fir', 'Pas', 'Sta', 'Tec'],
@@ -548,6 +513,7 @@ wm_positions = {
         [],
         phase='IP',
         role_code='W',
+        groups=('w',),
     ),
     'Playmaking_Winger_IP': role(
         ['Dec', 'Fir', 'Pas', 'Sta', 'Tec', 'Vis'],
@@ -555,6 +521,7 @@ wm_positions = {
         [],
         phase='IP',
         role_code='PW',
+        groups=('w',),
     ),
     'Inside_Winger_IP': role(
         ['Acc', 'Dri', 'OtB', 'Pac', 'Sta'],
@@ -562,6 +529,7 @@ wm_positions = {
         [],
         phase='IP',
         role_code='IW',
+        groups=('w',),
     ),
     'Wide_Midfielder_OOP': role(
         ['Cro', 'Sta', 'Wor'],
@@ -589,26 +557,13 @@ wm_positions = {
 
 # Wingers (group id: w)
 w_positions = {
-    'Winger_IP': role(
-        ['Acc', 'Cro', 'Pac', 'Sta', 'Wor'],
-        ['Dri', 'Fir', 'OtB', 'Tec'],
-        [],
-        phase='IP',
-        role_code='W',
-    ),
     'Inside_Forward_IP': role(
         ['Acc', 'Dri', 'Fin', 'Pac', 'Sta'],
         ['Agi', 'Ant', 'Fir', 'Fla', 'OtB', 'Tec'],
         [],
         phase='IP',
         role_code='IF',
-    ),
-    'Playmaking_Winger_IP': role(
-        ['Dec', 'Fir', 'Pas', 'Sta', 'Tec', 'Vis'],
-        ['Acc', 'Dri', 'Fla', 'OtB', 'Pac'],
-        [],
-        phase='IP',
-        role_code='PW',
+        groups=('wm',),
     ),
     'Wide_Forward_IP': role(
         ['Acc', 'Fin', 'OtB', 'Pac', 'Sta'],
@@ -616,13 +571,6 @@ w_positions = {
         [],
         phase='IP',
         role_code='WFD',
-    ),
-    'Inside_Winger_IP': role(
-        ['Acc', 'Dri', 'OtB', 'Pac', 'Sta'],
-        ['Agi', 'Ant', 'Fin', 'Fir', 'Fla', 'Tec'],
-        [],
-        phase='IP',
-        role_code='IW',
     ),
     'Winger_OOP': role(
         ['Acc', 'Cro', 'Pac', 'Sta', 'Wor'],
@@ -766,6 +714,13 @@ for _home, _roles in _HOME_GROUPS:
     for _cfg in _roles.values():
         extras = [g for g in (_cfg.get("groups") or []) if g != _home and g in GROUP_IDS]
         _cfg["groups"] = [_home, *extras]
+
+_expected = sum(len(roles) for _home, roles in _HOME_GROUPS)
+if len(all_positions) != _expected:
+    raise RuntimeError(
+        f"duplicate role ids across position dicts: "
+        f"merged {len(all_positions)} roles, expected {_expected}"
+    )
 
 role_code_to_id = {
     cfg['role_code']: role_id

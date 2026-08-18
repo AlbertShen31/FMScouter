@@ -4,7 +4,7 @@ from __future__ import annotations
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 
 import role_config as rc
-from role_scorer import GROUP_DEFS, role_groups, role_meta
+from role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
 from phases import phase_matches, pretty_role_name
 
 register_page(__name__, path="/role-config", name="Role configs")
@@ -27,15 +27,7 @@ PAINT_OPTIONS = (
 
 
 def _all_roles() -> list[tuple[str, dict]]:
-    roles = []
-    seen = set()
-    for _group, _label, group_roles in GROUP_DEFS:
-        for role_id in group_roles:
-            if role_id in seen:
-                continue
-            seen.add(role_id)
-            roles.append((role_id, role_meta(role_id)))
-    return roles
+    return [(role_id, role_meta(role_id)) for role_id in iter_roles()]
 
 
 def _match(role_id: str, meta: dict, phase: str, group: str, query: str) -> bool:

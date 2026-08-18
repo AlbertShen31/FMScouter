@@ -249,22 +249,31 @@ def _pack_path(pack_id: str) -> Path:
     return PACKS_DIR / f"{pack_id}.json"
 
 
-def _role_overlay(cfg: dict) -> dict:
-    return {
+def _role_overlay(cfg: dict, role_id: str | None = None) -> dict:
+    out = {
         "key_attrs": list(cfg.get("key_attrs") or []),
         "preferred_attrs": list(cfg.get("preferred_attrs") or []),
         "useful_attrs": list(cfg.get("useful_attrs") or []),
-        "groups": list(cfg.get("groups") or []),
     }
+    live_groups = list(cfg.get("groups") or [])
+    if role_id and _FACTORY is not None:
+        factory_groups = list((_FACTORY.get(role_id) or {}).get("groups") or [])
+        if live_groups != factory_groups:
+            out["groups"] = live_groups
+    elif live_groups:
+        out["groups"] = live_groups
+    return out
 
 
 def snapshot() -> dict:
     ensure_loaded()
-    return {role_id: _role_overlay(cfg) for role_id, cfg in pc.all_positions.items()}
+    return {role_id: _role_overlay(cfg, role_id) for role_id, cfg in pc.all_positions.items()}
 
 
 def _apply_overlay(cfg: dict, overlay: dict, schema: int | None = None) -> None:
     _apply_lists(cfg, *_overlay_attr_lists(overlay))
+    if "groups" not in overlay:
+        return
     groups = migrate_group_ids(overlay.get("groups") or [], schema)
     if groups:
         cfg["groups"] = groups
@@ -520,7 +529,7 @@ def save_role_as_default(role_id: str) -> None:
     if role_id not in pc.all_positions or _DEFAULTS is None:
         return
     name, roles = _defaults_payload()
-    roles[role_id] = _role_overlay(pc.all_positions[role_id])
+    roles[role_id] = _role_overlay(pc.all_positions[role_id], role_id)
     _write_defaults(name, roles)
     _DEFAULTS[role_id] = copy.deepcopy(pc.all_positions[role_id])
 

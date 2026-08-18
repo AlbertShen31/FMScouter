@@ -42,7 +42,7 @@ Inside Winger is `wm` plus `w`. Inside Forward is `w` plus `wm`. Role `Winger_IP
 
 Each role has a `groups` list. Eligibility is **OR** across that list (`score_players` in `role_scorer.py`).
 
-Home group comes from which dict the role is defined in (`_HOME_GROUPS` at the bottom of the factory config). Extra buckets are passed as `role(..., groups=('w',))`.
+Home group comes from which dict the role is defined in (`_HOME_GROUPS` at the bottom of the factory config). Extra buckets are passed as `role(..., groups=('w',))`. A role must live in **one** dict only; if it belongs to two buckets (Wing Back in `wb` and `fb`, Attacking Midfielder in `am` and `cm`), use `groups` instead of copying the role into both dicts.
 
 Current ids: `gk`, `cb`, `fb`, `wb`, `dm`, `cm`, `am`, `wm`, `w`, `st`.
 
