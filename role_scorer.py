@@ -7,7 +7,7 @@ from typing import Any
 
 import config.fm26_role_weight_config as pc
 import role_config
-from phases import phase_is_gk, phase_matches, phase_tone, pretty_role_name
+from phases import phase_is_gk, phase_label, phase_matches, phase_tone, pretty_role_name
 from utils import calculate_score
 
 role_config.ensure_loaded()
@@ -88,7 +88,7 @@ IDENTITY = {
     "Squad": ["Squad"],
 }
 
-DEFAULT_ROLE_CODES = ["SKP", "BCB", "WB", "CM", "CHM", "IF"]
+DEFAULT_ROLE_CODES = []
 DEFAULT_ROLES = [pc.role_code_to_id[code] for code in DEFAULT_ROLE_CODES]
 
 GROUP_DEFS = [
@@ -108,6 +108,20 @@ _ROLE_GROUP = {}
 for _group, _label, _roles in GROUP_DEFS:
     for _role in _roles:
         _ROLE_GROUP[_role] = _group
+
+
+def role_groups(role_id: str) -> list[str]:
+    cfg = pc.all_positions.get(role_id) or {}
+    groups = [g for g in (cfg.get("groups") or []) if g]
+    if groups:
+        return groups
+    home = _ROLE_GROUP.get(role_id)
+    return [home] if home else []
+
+
+def group_labels(role_id: str) -> str:
+    wanted = set(role_groups(role_id))
+    return " / ".join(label for gid, label, _roles in GROUP_DEFS if gid in wanted)
 
 POS_CARDS = [
     ("all", "All", "", "all"),
@@ -237,15 +251,18 @@ def display_code(role_id: str, cfg: dict | None = None) -> str:
 def role_meta(role_id: str) -> dict[str, str]:
     cfg = pc.all_positions.get(role_id, {})
     phase = cfg.get("phase", "")
-    group = _ROLE_GROUP.get(role_id, "")
+    groups = role_groups(role_id)
+    group = groups[0] if groups else _ROLE_GROUP.get(role_id, "")
     return {
         "id": role_id,
         "code": display_code(role_id, cfg),
         "name": pretty_role_name(role_id),
-        "phase": phase,
+        "phase": phase_label(phase),
         "tone": phase_tone(phase),
-        "is_gk": "yes" if phase_is_gk(phase, role_id, group) else "",
+        "is_gk": "yes" if phase_is_gk(phase, role_id, group) or "gk" in groups else "",
         "group": group,
+        "groups": ",".join(groups),
+        "group_label": group_labels(role_id),
     }
 
 
@@ -259,18 +276,24 @@ def role_options(phase: str | None = None, keep: list[str] | None = None) -> lis
     keep = set(keep or [])
     phase = (phase or "all").upper()
     options = []
+    seen = set()
     for _group, group_label, roles in GROUP_DEFS:
         for role_id in roles:
+            if role_id in seen:
+                continue
+            seen.add(role_id)
             cfg_phase = roles[role_id].get("phase", "")
+            groups = role_groups(role_id)
             if (
                 phase not in ("", "ALL")
-                and not phase_matches(cfg_phase, phase, role_id, _group)
+                and not phase_matches(cfg_phase, phase, role_id, "gk" if "gk" in groups else _group)
                 and role_id not in keep
             ):
                 continue
+            prefix = group_labels(role_id) or group_label
             options.append(
                 {
-                    "label": f"{group_label} — {role_option_label(role_id)}",
+                    "label": f"{prefix} — {role_option_label(role_id)}",
                     "value": role_id,
                 }
             )
@@ -411,7 +434,7 @@ def score_players(
                 role_id,
                 display_code(role_id, cfg),
                 cfg,
-                _ROLE_GROUP.get(role_id, ""),
+                role_groups(role_id),
             )
         )
     scored = []
@@ -436,7 +459,7 @@ def score_players(
         }
         best_label = ""
         best_score = -1.0
-        for role_id, label, cfg, group in configs:
+        for role_id, label, cfg, groups in configs:
             score = calculate_score(
                 player["attrs"],
                 cfg["key_attrs"],
@@ -448,7 +471,9 @@ def score_players(
                 cfg["divisor"],
             )
             row[label] = score
-            row[f"{label} eligible"] = is_eligible(player["positions"], group)
+            row[f"{label} eligible"] = any(
+                is_eligible(player["positions"], group) for group in groups
+            )
             if score > best_score:
                 best_score = score
                 best_label = label

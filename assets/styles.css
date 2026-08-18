@@ -700,9 +700,34 @@ body:has(.rc-page) .navbar {
 .rc-mini-pill.green { background: rgba(198, 227, 91, 0.12); color: var(--rc-green); }
 .rc-mini-pill.blue { background: rgba(92, 173, 255, 0.14); color: var(--rc-blue); }
 
-.rc-pill-empty {
+.rc-group-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.rc-group-toggle {
+    appearance: none;
+    border: 1px solid var(--rc-line);
+    background: #1a2430;
     color: var(--rc-muted);
-    font-size: 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.rc-group-toggle:hover {
+    color: var(--rc-text);
+    background: #223040;
+}
+
+.rc-group-toggle.active {
+    background: rgba(61, 255, 136, 0.14);
+    color: var(--rc-key);
+    border-color: rgba(61, 255, 136, 0.35);
 }
 
 .rc-formula {

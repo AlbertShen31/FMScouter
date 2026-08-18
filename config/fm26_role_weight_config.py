@@ -15,8 +15,13 @@ GREEN_WEIGHT = 3
 BLUE_WEIGHT = 1
 
 
-def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code):
-    """Build a scorer-compatible role dict and derive the divisor."""
+def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code, groups=()):
+    """Build a scorer-compatible role dict and derive the divisor.
+
+    `groups` lists extra position buckets besides the dict this role lives
+    in, e.g. `groups=('wam',)` on a winger role so it is also eligible as
+    a wide attacker.
+    """
     key_attrs = list(key_attrs)
     green_attrs = list(green_attrs)
     blue_attrs = list(blue_attrs)
@@ -34,6 +39,7 @@ def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code):
         ),
         "phase": phase,
         "role_code": role_code,
+        "groups": list(groups),
     }
 
 
@@ -415,7 +421,7 @@ am_positions = {
 }
 
 
-# Wide midfield and wingers
+# Wide midfielders
 w_positions = {
     'Wide_Midfielder_IP': role(
         ['Cro', 'Sta', 'Wor'],
@@ -465,6 +471,7 @@ w_positions = {
         [],
         phase='IP',
         role_code='IW',
+        groups=('wam',),
     ),
     'Inverting_Outlet_Winger_OOP': role(
         ['Acc', 'Ant', 'OtB', 'Pac', 'Sta'],
@@ -497,7 +504,7 @@ w_positions = {
 }
 
 
-# Wide attackers
+# Wingers
 w_am_positions = {
     'Wide_Forward_IP': role(
         ['Acc', 'Fin', 'OtB', 'Pac', 'Sta'],
@@ -512,6 +519,7 @@ w_am_positions = {
         [],
         phase='IP',
         role_code='IF',
+        groups=('w',),
     ),
 }
 
@@ -610,6 +618,25 @@ all_positions = {
     **w_am_positions,
     **st_positions,
 }
+
+GROUP_IDS = ("gk", "cb", "fb", "wb", "dm", "cm", "am", "w", "wam", "st")
+
+_HOME_GROUPS = (
+    ("gk", gk_positions),
+    ("cb", cb_positions),
+    ("fb", fb_positions),
+    ("wb", wb_positions),
+    ("dm", dm_positions),
+    ("cm", cm_positions),
+    ("am", am_positions),
+    ("w", w_positions),
+    ("wam", w_am_positions),
+    ("st", st_positions),
+)
+for _home, _roles in _HOME_GROUPS:
+    for _cfg in _roles.values():
+        extras = [g for g in (_cfg.get("groups") or []) if g != _home and g in GROUP_IDS]
+        _cfg["groups"] = [_home, *extras]
 
 role_code_to_id = {
     cfg['role_code']: role_id

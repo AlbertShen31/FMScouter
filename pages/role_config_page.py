@@ -3,7 +3,7 @@ from __future__ import annotations
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 
 import role_config as rc
-from role_scorer import GROUP_DEFS, role_meta
+from role_scorer import GROUP_DEFS, role_groups, role_meta
 from phases import phase_matches
 
 register_page(__name__, path="/role-config", name="Role configs")
@@ -21,16 +21,21 @@ TIER_HINT = {
 
 def _all_roles() -> list[tuple[str, dict]]:
     roles = []
+    seen = set()
     for _group, _label, group_roles in GROUP_DEFS:
         for role_id in group_roles:
+            if role_id in seen:
+                continue
+            seen.add(role_id)
             roles.append((role_id, role_meta(role_id)))
     return roles
 
 
 def _match(role_id: str, meta: dict, phase: str, group: str, query: str) -> bool:
-    if not phase_matches(meta.get("phase"), phase, role_id, meta.get("group") or ""):
+    groups = role_groups(role_id) or [meta.get("group") or ""]
+    if not phase_matches(meta.get("phase"), phase, role_id, "gk" if "gk" in groups else (groups[0] if groups else "")):
         return False
-    if group not in ("", "all") and meta.get("group") != group:
+    if group not in ("", "all") and group not in groups:
         return False
     if query:
         blob = f"{meta['name']} {meta['code']} {role_id}".lower()
@@ -177,13 +182,28 @@ def _identity(role_id: str) -> html.Div:
                     _info_row("Name", meta["name"]),
                     _info_row("Code", meta["code"]),
                     _info_row("Phase", meta["phase"] or "—"),
-                    _info_row("Group", next((label for g, label, _ in GROUP_DEFS if g == meta["group"]), "—")),
+                    _info_row("Group", meta.get("group_label") or "—"),
                     _info_row("Key attrs", _badge(f"{key_n} × {rc.TIER_WEIGHT['key']}", "key")),
                     _info_row("Green attrs", _badge(f"{green_n} × {rc.TIER_WEIGHT['green']}", "green")),
                     _info_row("Blue attrs", _badge(f"{blue_n} × {rc.TIER_WEIGHT['blue']}", "blue")),
                     _info_row("Divisor", cfg.get("divisor") or 0),
                 ],
                 className="rc-info-list",
+            ),
+            html.Div("Positions", className="rc-section-kicker"),
+            html.Div(
+                [
+                    html.Button(
+                        label,
+                        id={"type": "rc-rgroup", "group": gid},
+                        n_clicks=0,
+                        className="rc-group-toggle"
+                        + (" active" if gid in role_groups(role_id) else ""),
+                        title="Click to add or remove this position group",
+                    )
+                    for gid, label, _roles in GROUP_DEFS
+                ],
+                className="rc-group-toggles",
             ),
             html.Div("Key", className="rc-section-kicker"),
             _attr_pills(cfg, "key"),
@@ -292,6 +312,7 @@ def layout():
                 html.Button(id={"type": "rc-attr", "attr": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-phase", "phase": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-group", "group": "_"}, n_clicks=0),
+                html.Button(id={"type": "rc-rgroup", "group": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -448,13 +469,23 @@ def pick_role(n_clicks, current):
     Input("rc-save-as", "n_clicks"),
     Input("rc-set-defaults", "n_clicks"),
     Input("rc-restore-factory", "n_clicks"),
+    Input({"type": "rc-rgroup", "group": ALL}, "n_clicks"),
     State("rc-save-name", "value"),
     State("rc-selected", "data"),
     State("rc-rev", "data"),
     prevent_initial_call=True,
 )
 def mutate_config(
-    attr_clicks, reset_role, reset_all, save_as, set_defaults, restore_factory, save_name, role_id, rev
+    attr_clicks,
+    reset_role,
+    reset_all,
+    save_as,
+    set_defaults,
+    restore_factory,
+    rgroup_clicks,
+    save_name,
+    role_id,
+    rev,
 ):
     trigger = ctx.triggered_id
     options = rc.pack_options()
@@ -478,6 +509,12 @@ def mutate_config(
             return no_update, no_update, no_update, no_update
         rc.restore_factory_defaults()
         return int(rev or 0) + 1, "Restored factory defaults", rc.active_pack_id(), rc.pack_options()
+    if isinstance(trigger, dict) and trigger.get("type") == "rc-rgroup":
+        group = trigger.get("group")
+        if not _clicked(rgroup_clicks) or not group or group == "_" or not role_id:
+            return no_update, no_update, no_update, no_update
+        rc.toggle_role_group(role_id, group)
+        return int(rev or 0) + 1, "", rc.active_pack_id(), options
     if trigger == "rc-reset-all":
         if not reset_all:
             return no_update, no_update, no_update, no_update

@@ -188,20 +188,28 @@ def snapshot() -> dict:
             "key_attrs": list(cfg.get("key_attrs") or []),
             "green_attrs": list(cfg.get("green_attrs") or []),
             "blue_attrs": list(cfg.get("blue_attrs") or []),
+            "groups": list(cfg.get("groups") or []),
         }
     return roles
+
+
+def _apply_overlay(cfg: dict, overlay: dict) -> None:
+    _apply_lists(
+        cfg,
+        overlay.get("key_attrs") or [],
+        overlay.get("green_attrs") or [],
+        overlay.get("blue_attrs") or [],
+    )
+    groups = [g for g in (overlay.get("groups") or []) if g in pc.GROUP_IDS]
+    if groups:
+        cfg["groups"] = groups
 
 
 def _apply_roles(roles: dict) -> None:
     for role_id, overlay in roles.items():
         if role_id not in pc.all_positions or not isinstance(overlay, dict):
             continue
-        _apply_lists(
-            pc.all_positions[role_id],
-            overlay.get("key_attrs") or [],
-            overlay.get("green_attrs") or [],
-            overlay.get("blue_attrs") or [],
-        )
+        _apply_overlay(pc.all_positions[role_id], overlay)
 
 
 def _write_pack(pack_id: str, name: str, roles: dict) -> None:
@@ -267,12 +275,7 @@ def _reload_user_defaults() -> None:
     for role_id, overlay in roles.items():
         if role_id not in _DEFAULTS or not isinstance(overlay, dict):
             continue
-        _apply_lists(
-            _DEFAULTS[role_id],
-            overlay.get("key_attrs") or [],
-            overlay.get("green_attrs") or [],
-            overlay.get("blue_attrs") or [],
-        )
+        _apply_overlay(_DEFAULTS[role_id], overlay)
 
 
 def ensure_loaded() -> None:
@@ -330,10 +333,13 @@ def is_modified(role_id: str) -> bool:
     if not default or role_id not in pc.all_positions:
         return False
     cfg = pc.all_positions[role_id]
+    default_groups = list(default.get("groups") or [])
+    live_groups = list(cfg.get("groups") or [])
     return (
         set(cfg.get("key_attrs") or []) != set(default.get("key_attrs") or [])
         or set(cfg.get("green_attrs") or []) != set(default.get("green_attrs") or [])
         or set(cfg.get("blue_attrs") or []) != set(default.get("blue_attrs") or [])
+        or live_groups != default_groups
     )
 
 
@@ -461,3 +467,21 @@ def reset_all() -> None:
     _restore_defaults()
     if _ACTIVE != BUILTIN:
         persist_live()
+
+
+def toggle_role_group(role_id: str, group: str) -> list[str]:
+    """Add or remove a position bucket. Keeps at least one group."""
+    ensure_loaded()
+    if role_id not in pc.all_positions or group not in pc.GROUP_IDS:
+        return list((pc.all_positions.get(role_id) or {}).get("groups") or [])
+    cfg = pc.all_positions[role_id]
+    current = [g for g in (cfg.get("groups") or []) if g in pc.GROUP_IDS]
+    if group in current:
+        if len(current) == 1:
+            return current
+        current = [g for g in current if g != group]
+    else:
+        current.append(group)
+    cfg["groups"] = current
+    persist_live()
+    return current

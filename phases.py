@@ -20,6 +20,18 @@ def phase_tone(phase: str | None) -> str:
     return ""
 
 
+def phase_label(phase: str | None) -> str:
+    """Short badge text: IP, OOP, or GK (never IP_GK / OOP_GK)."""
+    tone = phase_tone(phase)
+    if tone == "ip":
+        return "IP"
+    if tone == "oop":
+        return "OOP"
+    if tone == "gk":
+        return "GK"
+    return (phase or "").replace("_", " ") or "—"
+
+
 def phase_is_gk(phase: str | None = "", role_id: str = "", group: str = "") -> bool:
     if (group or "").lower() == "gk":
         return True
