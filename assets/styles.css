@@ -17,6 +17,8 @@
     --app-row-hover: rgba(255, 255, 255, 0.04);
     --app-navbar: #141c26;
     --injury-bg: rgba(251, 191, 36, 0.16);
+    --table-hover-bg: #2a3f55;
+    --table-hover-fg: #f8fafc;
 }
 
 html[data-theme="light"],
@@ -39,6 +41,8 @@ body[data-theme="light"] {
     --app-row-hover: rgba(0, 0, 0, 0.04);
     --app-navbar: #ffffff;
     --injury-bg: #fff3cd;
+    --table-hover-bg: #d9e2ec;
+    --table-hover-fg: #0f172a;
 }
 
 html, body {
@@ -212,6 +216,21 @@ body {
     background-color: var(--app-card);
     color: var(--app-text);
     border-color: var(--app-line) !important;
+}
+
+#rs-table .dash-spreadsheet-inner th {
+    background-color: var(--app-head);
+    color: var(--app-muted);
+}
+
+#rs-table .dash-spreadsheet-inner td.dash-cell:hover,
+#rs-table .dash-spreadsheet-inner tr:hover td,
+#rs-table .dash-spreadsheet-inner td.focused,
+#rs-table .dash-spreadsheet-inner td.cell--selected,
+#rs-table .dash-spreadsheet-inner td.cell--selected:hover,
+#rs-table .dash-spreadsheet-inner td.focused:hover {
+    background-color: var(--table-hover-bg) !important;
+    color: var(--table-hover-fg) !important;
 }
 
 #rs-table .dash-spreadsheet-inner th {

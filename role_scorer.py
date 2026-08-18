@@ -148,12 +148,12 @@ def group_labels(role_id: str) -> str:
 
 
 def group_abbr(role_id: str) -> str:
-    """Short group ids, e.g. wm/w."""
-    return "/".join(role_groups(role_id))
+    """Short group ids, e.g. WM/W."""
+    return "/".join(group.upper() for group in role_groups(role_id))
 
 
 def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
-    """Compact UI name, e.g. 'wm/w Inside Winger IP'."""
+    """Compact UI name, e.g. 'WM/W Inside Winger IP'."""
     abbr = group_abbr(role_id)
     name = pretty_role_name(role_id)
     parts = [part for part in (abbr, name) if part]
@@ -313,7 +313,7 @@ def role_meta(role_id: str) -> dict[str, str]:
         "group": group,
         "groups": ",".join(groups),
         "group_label": group_labels(role_id),
-        "group_abbr": "/".join(groups),
+        "group_abbr": group_abbr(role_id),
         "compact": compact_role_label(role_id),
         "compact_name": compact_role_label(role_id, with_phase=False),
     }

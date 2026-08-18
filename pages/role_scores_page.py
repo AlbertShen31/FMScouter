@@ -495,6 +495,15 @@ layout = dbc.Container(
                             sort_action="native",
                             filter_action="none",
                             style_table={"overflowX": "auto"},
+                            css=[
+                                {
+                                    "selector": "td:hover, tr:hover td, td.focused, td.cell--selected",
+                                    "rule": (
+                                        "background-color: var(--table-hover-bg) !important; "
+                                        "color: var(--table-hover-fg) !important;"
+                                    ),
+                                }
+                            ],
                             style_cell={
                                 "fontFamily": "Inter, Segoe UI, sans-serif",
                                 "fontSize": "13px",
