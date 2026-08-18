@@ -323,6 +323,125 @@ def role_option_label(role_id: str) -> str:
     return compact_role_label(role_id)
 
 
+COMBO_IP_WEIGHT = 2.0
+COMBO_OOP_WEIGHT = 1.0
+
+
+def combo_id(ip: str, oop: str) -> str:
+    return f"combo:{ip}|{oop}"
+
+
+def parse_combo_id(value: str) -> tuple[str, str] | None:
+    text = str(value or "")
+    if not text.startswith("combo:"):
+        return None
+    ip, sep, oop = text[6:].partition("|")
+    if not sep or not ip or not oop:
+        return None
+    return ip, oop
+
+
+def normalize_combos(raw) -> list[dict[str, str]]:
+    out = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        ip = item.get("ip") or ""
+        oop = item.get("oop") or ""
+        if ip not in pc.all_positions or oop not in pc.all_positions:
+            continue
+        if phase_tone(pc.all_positions[ip].get("phase")) != "ip":
+            continue
+        if phase_tone(pc.all_positions[oop].get("phase")) != "oop":
+            continue
+        key = (ip, oop)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"ip": ip, "oop": oop})
+    return out
+
+
+def combo_column(ip: str, oop: str) -> str:
+    return f"{column_label(ip)}+{column_label(oop)}"
+
+
+def combo_meta(ip: str, oop: str) -> dict[str, str]:
+    ip_meta = role_meta(ip)
+    oop_meta = role_meta(oop)
+    groups = []
+    for token in (ip_meta.get("group_abbr") or "").split("/") + (
+        oop_meta.get("group_abbr") or ""
+    ).split("/"):
+        if token and token not in groups:
+            groups.append(token)
+    abbr = "/".join(groups)
+    same_name = ip_meta["name"] == oop_meta["name"]
+    name = ip_meta["name"] if same_name else f"{ip_meta['name']} / {oop_meta['name']}"
+    code = f"{ip_meta['code']}+{oop_meta['code']}"
+    return {
+        "id": combo_id(ip, oop),
+        "ip": ip,
+        "oop": oop,
+        "column": combo_column(ip, oop),
+        "ip_column": ip_meta["column"],
+        "oop_column": oop_meta["column"],
+        "code": code,
+        "name": name,
+        "compact": f"{abbr} {code} {name}".strip(),
+        "compact_name": f"{abbr} {name}".strip(),
+        "group_abbr": abbr,
+        "phase": "IP+OOP",
+        "tone": "combo",
+    }
+
+
+def apply_combos(
+    rows: list[dict[str, Any]],
+    combos: list[dict[str, str]] | None = None,
+    ip_weight: float = COMBO_IP_WEIGHT,
+    oop_weight: float = COMBO_OOP_WEIGHT,
+) -> list[dict[str, Any]]:
+    """Add combined IP+OOP columns. Eligible if either constituent is."""
+    metas = [combo_meta(item["ip"], item["oop"]) for item in normalize_combos(combos)]
+    if not metas:
+        return rows
+    total = ip_weight + oop_weight
+    if total <= 0:
+        total = 1.0
+    for row in rows:
+        for meta in metas:
+            ip_score = float(row.get(meta["ip_column"]) or 0)
+            oop_score = float(row.get(meta["oop_column"]) or 0)
+            row[meta["column"]] = round(
+                (ip_weight * ip_score + oop_weight * oop_score) / total, 1
+            )
+            row[f"{meta['column']} eligible"] = bool(
+                row.get(f"{meta['ip_column']} eligible")
+                or row.get(f"{meta['oop_column']} eligible")
+            )
+    return rows
+
+
+def combo_score_labels(role_ids: list[str], combos: list[dict[str, str]] | None = None) -> list[str]:
+    """Column order: each combo beside its IP and OOP parts, then leftover roles."""
+    labels = []
+    seen: set[str] = set()
+    for item in normalize_combos(combos):
+        meta = combo_meta(item["ip"], item["oop"])
+        for column in (meta["column"], meta["ip_column"], meta["oop_column"]):
+            if column not in seen:
+                labels.append(column)
+                seen.add(column)
+    for role_id in role_ids:
+        column = column_label(role_id)
+        if column not in seen:
+            labels.append(column)
+            seen.add(column)
+    return labels
+
+
 def role_options(
     phase: str | None = None,
     group: str | None = None,
@@ -470,8 +589,8 @@ def foot_match(row: dict[str, Any], foot_filter: str) -> bool:
 def score_band(
     score: float,
     elite: float = 14,
-    good: float = 11,
-    ok: float = 8,
+    good: float = 12,
+    ok: float = 10,
 ) -> str:
     if score >= elite:
         return "elite"

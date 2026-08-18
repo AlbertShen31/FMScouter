@@ -398,6 +398,52 @@ body {
 .rs-phase-tag.oop,
 .rs-phase-tag.oop_gk { background: #fee2e2; color: #b91c1c; }
 .rs-phase-tag.gk { background: #fef3c7; color: #b45309; }
+.rs-phase-tag.combo { background: #ede9fe; color: #6d28d9; }
+
+html[data-theme="dark"] .rs-phase-tag.combo,
+body[data-theme="dark"] .rs-phase-tag.combo {
+    background: rgba(167, 139, 250, 0.2);
+    color: #c4b5fd;
+}
+
+.rs-combo-block {
+    padding-top: 12px;
+    border-top: 1px solid var(--app-line);
+}
+
+.rs-combo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.rs-combo-field {
+    flex: 1;
+    min-width: 200px;
+}
+
+.rs-combo-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--app-muted);
+    margin-bottom: 4px;
+}
+
+.rs-combo-row .rs-chip {
+    margin-bottom: 2px;
+    height: 36px;
+}
+
+.rs-pill-name {
+    font-size: 12px;
+    color: var(--app-muted);
+}
+
+.rs-role-pill.combo {
+    border-color: rgba(109, 40, 217, 0.28);
+}
 
 .rs-pos-bar {
     display: flex;

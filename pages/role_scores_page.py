@@ -19,9 +19,17 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 
 from role_scorer import (
+    COMBO_IP_WEIGHT,
+    COMBO_OOP_WEIGHT,
     GROUP_DEFS,
     POS_CARDS,
+    apply_combos,
+    combo_column,
+    combo_meta,
+    combo_score_labels,
     foot_match,
+    normalize_combos,
+    parse_combo_id,
     parse_export,
     role_meta,
     role_options,
@@ -51,7 +59,7 @@ SCORE_COLORS = {
     "poor": ("#fee2e2", "#b91c1c"),
 }
 
-DEFAULT_BANDS = {"elite": 14.0, "good": 11.0, "ok": 8.0}
+DEFAULT_BANDS = {"elite": 14.0, "good": 12.0, "ok": 10.0}
 
 
 def _band_value(value, default: float) -> float:
@@ -173,11 +181,11 @@ def _blank_fig(theme):
 BLANK_FIG = _blank_fig("dark")
 
 
-def _group_buttons(active: str = "all") -> list:
+def _group_buttons(active: str = "all", *, btn_type: str = "rs-group") -> list:
     buttons = [
         html.Button(
             "All groups",
-            id={"type": "rs-group", "group": "all"},
+            id={"type": btn_type, "group": "all"},
             n_clicks=0,
             className="rs-chip" + (" active" if active == "all" else ""),
         )
@@ -186,7 +194,7 @@ def _group_buttons(active: str = "all") -> list:
         buttons.append(
             html.Button(
                 label,
-                id={"type": "rs-group", "group": group},
+                id={"type": btn_type, "group": group},
                 n_clicks=0,
                 className="rs-chip" + (" active" if active == group else ""),
             )
@@ -232,6 +240,37 @@ def _role_pills(role_ids: list[str]) -> list:
     return pills
 
 
+def _combo_pills(combos: list[dict] | None) -> list:
+    pills = []
+    for item in normalize_combos(combos):
+        meta = combo_meta(item["ip"], item["oop"])
+        pills.append(
+            html.Button(
+                [
+                    html.Span(meta["group_abbr"], className="rs-pill-groups"),
+                    html.Span(meta["code"], className="rs-pill-code"),
+                    html.Span(meta["name"], className="rs-pill-name"),
+                    html.Span(meta["phase"], className="rs-phase-tag combo"),
+                    html.Span("×", className="rs-pill-x"),
+                ],
+                id={"type": "rs-combo-pill", "combo": meta["id"]},
+                n_clicks=0,
+                title=f"{meta['compact']} · {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP",
+                className="rs-role-pill combo",
+            )
+        )
+    return pills
+
+
+def _depth_id_column(role_key: str) -> str | None:
+    parsed = parse_combo_id(role_key)
+    if parsed:
+        return combo_column(*parsed)
+    if role_key and role_key != "_":
+        return role_meta(role_key)["column"]
+    return None
+
+
 layout = dbc.Container(
     [
         dcc.Store(id="rs-parsed"),
@@ -241,6 +280,8 @@ layout = dbc.Container(
         dcc.Store(id="rs-pos-filter", data="all"),
         dcc.Store(id="rs-foot-filter", data=""),
         dcc.Store(id="rs-bands", data=DEFAULT_BANDS),
+        dcc.Store(id="rs-combos", data=[]),
+        dcc.Store(id="rs-combo-group", data="all"),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -248,6 +289,8 @@ layout = dbc.Container(
                 html.Button(id={"type": "rs-depth", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-pill", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-group", "group": "_"}, n_clicks=0),
+                html.Button(id={"type": "rs-combo-pill", "combo": "_"}, n_clicks=0),
+                html.Button(id={"type": "rs-combo-group", "group": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -354,6 +397,68 @@ layout = dbc.Container(
                             "Click a pill to remove it.",
                             className="text-muted",
                         ),
+                        html.Div(
+                            [
+                                html.Span("Combine IP + OOP", className="rs-chip-label"),
+                                html.Div(
+                                    [
+                                        html.Span("Group", className="rs-chip-label"),
+                                        html.Div(
+                                            _group_buttons("all", btn_type="rs-combo-group"),
+                                            id="rs-combo-group-row",
+                                            className="rs-chip-row wrap",
+                                        ),
+                                    ],
+                                    className="rs-role-toolbar mb-2",
+                                ),
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            [
+                                                html.Label("IP role"),
+                                                dcc.Dropdown(
+                                                    id="rs-combo-ip",
+                                                    options=role_options(phase="IP"),
+                                                    placeholder="In possession",
+                                                    clearable=True,
+                                                ),
+                                            ],
+                                            className="rs-combo-field",
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Label("OOP role"),
+                                                dcc.Dropdown(
+                                                    id="rs-combo-oop",
+                                                    options=role_options(phase="OOP"),
+                                                    placeholder="Out of possession",
+                                                    clearable=True,
+                                                ),
+                                            ],
+                                            className="rs-combo-field",
+                                        ),
+                                        html.Button(
+                                            "Add combined",
+                                            id="rs-combo-add",
+                                            n_clicks=0,
+                                            className="rs-chip",
+                                        ),
+                                    ],
+                                    className="rs-combo-row",
+                                ),
+                                html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
+                                html.Small(
+                                    f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
+                                    f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
+                                    "The table still shows both role scores. "
+                                    "A player is eligible for the combined role if they can play either part. "
+                                    "Group filters only these two lists. "
+                                    "Both roles are added to the list above.",
+                                    className="text-muted",
+                                ),
+                            ],
+                            className="rs-combo-block mt-3",
+                        ),
                     ]
                 ),
             ],
@@ -391,7 +496,9 @@ layout = dbc.Container(
                                             placeholder="Select roles to filter",
                                         ),
                                         html.Small(
-                                            "Min score and eligible apply to every selected role.",
+                                            "Min score applies to every selected view role. "
+                                            "Position eligible uses that role’s rule; "
+                                            "combined roles count if the player can play either part.",
                                             className="text-muted",
                                         ),
                                     ],
@@ -688,91 +795,100 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
     )
 
 
+def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict) -> html.Button | None:
+    column = meta["column"]
+    eligible = [row for row in rows if row.get(f"{column} eligible")]
+    if not eligible:
+        return None
+    scores = [float(row.get(column) or 0) for row in eligible]
+    avg = sum(scores) / len(scores)
+    counts = {"elite": 0, "good": 0, "ok": 0, "poor": 0}
+    for score in scores:
+        counts[score_band(score, **bands)] += 1
+    total = len(scores) or 1
+    top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
+    names = " · ".join(player.get("Name", "") for player in top)
+    active = " active" if column in view_roles and len(view_roles) == 1 else ""
+    return html.Button(
+        [
+            html.Div(
+                [
+                    html.Span(meta["group_abbr"], className="rs-depth-code"),
+                    html.Span(meta["name"], className="rs-depth-name"),
+                    html.Span(
+                        meta["phase"],
+                        className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                    ),
+                ],
+                className="rs-depth-title",
+            ),
+            html.Div(
+                [
+                    html.Span("Avg", className="rs-depth-avg-label"),
+                    html.Span(
+                        f"{avg:.1f}",
+                        className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
+                    ),
+                ],
+                className="rs-depth-avg-row",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        className=f"rs-depth-seg {band}",
+                        style={"width": f"{counts[band] / total * 100:.1f}%"},
+                    )
+                    for band in ("elite", "good", "ok", "poor")
+                    if counts[band]
+                ],
+                className="rs-depth-bar",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div(str(counts[band]), className=f"rs-tier-val {band}"),
+                            html.Div(label, className="rs-tier-lbl"),
+                        ],
+                        className="rs-tier",
+                    )
+                    for band, label in (
+                        ("elite", "Elite"),
+                        ("good", "Good"),
+                        ("ok", "OK"),
+                        ("poor", "Poor"),
+                    )
+                ],
+                className="rs-depth-tiers",
+            ),
+            html.Div(names, className="rs-depth-players"),
+        ],
+        id={"type": "rs-depth", "role": meta["id"]},
+        n_clicks=0,
+        className="rs-depth-card" + active,
+        title=meta.get("compact") or meta["name"],
+    )
+
+
 def _depth_panel(
     rows: list[dict],
     role_ids: list[str],
     view_roles: list[str],
     bands: dict | None = None,
+    combos: list[dict] | None = None,
 ) -> list:
-    if not rows or not role_ids:
+    if not rows or not (role_ids or combos):
         return []
     bands = _normalize_bands(bands)
     cards = []
+    for item in normalize_combos(combos):
+        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, view_roles, bands)
+        if card:
+            cards.append(card)
     for role_id in role_ids:
-        meta = role_meta(role_id)
-        column = meta["column"]
-        eligible = [row for row in rows if row.get(f"{column} eligible")]
-        if not eligible:
-            continue
-        scores = [float(row.get(column) or 0) for row in eligible]
-        avg = sum(scores) / len(scores)
-        counts = {"elite": 0, "good": 0, "ok": 0, "poor": 0}
-        for score in scores:
-            counts[score_band(score, **bands)] += 1
-        total = len(scores) or 1
-        top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
-        names = " · ".join(player.get("Name", "") for player in top)
-        active = " active" if column in view_roles and len(view_roles) == 1 else ""
-        cards.append(
-            html.Button(
-                [
-                    html.Div(
-                        [
-                            html.Span(meta["group_abbr"], className="rs-depth-code"),
-                            html.Span(meta["name"], className="rs-depth-name"),
-                            html.Span(
-                                meta["phase"],
-                                className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
-                            ),
-                        ],
-                        className="rs-depth-title",
-                    ),
-                    html.Div(
-                        [
-                            html.Span("Avg", className="rs-depth-avg-label"),
-                            html.Span(
-                                f"{avg:.1f}",
-                                className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
-                            ),
-                        ],
-                        className="rs-depth-avg-row",
-                    ),
-                    html.Div(
-                        [
-                            html.Div(
-                                className=f"rs-depth-seg {band}",
-                                style={"width": f"{counts[band] / total * 100:.1f}%"},
-                            )
-                            for band in ("elite", "good", "ok", "poor")
-                            if counts[band]
-                        ],
-                        className="rs-depth-bar",
-                    ),
-                    html.Div(
-                        [
-                            html.Div(
-                                [
-                                    html.Div(str(counts[band]), className=f"rs-tier-val {band}"),
-                                    html.Div(label, className="rs-tier-lbl"),
-                                ],
-                                className="rs-tier",
-                            )
-                            for band, label in (
-                                ("elite", "Elite"),
-                                ("good", "Good"),
-                                ("ok", "OK"),
-                                ("poor", "Poor"),
-                            )
-                        ],
-                        className="rs-depth-tiers",
-                    ),
-                    html.Div(names, className="rs-depth-players"),
-                ],
-                id={"type": "rs-depth", "role": role_id},
-                n_clicks=0,
-                className="rs-depth-card" + active,
-            )
-        )
+        card = _depth_card(role_meta(role_id), rows, view_roles, bands)
+        if card:
+            cards.append(card)
     return cards
 
 
@@ -818,6 +934,36 @@ def set_phase(n_clicks):
 
 
 @callback(
+    Output("rs-combo-group", "data"),
+    Output("rs-combo-group-row", "children"),
+    Input({"type": "rs-combo-group", "group": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_combo_group(n_clicks):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    group = ctx.triggered_id["group"]
+    if group == "_":
+        return no_update, no_update
+    return group, _group_buttons(group, btn_type="rs-combo-group")
+
+
+@callback(
+    Output("rs-combo-ip", "options"),
+    Output("rs-combo-oop", "options"),
+    Input("rs-combo-group", "data"),
+    Input("rs-combo-ip", "value"),
+    Input("rs-combo-oop", "value"),
+)
+def filter_combo_role_options(group, ip, oop):
+    group = group or "all"
+    return (
+        role_options(phase="IP", group=group, keep=_as_list(ip)) or [],
+        role_options(phase="OOP", group=group, keep=_as_list(oop)) or [],
+    )
+
+
+@callback(
     Output("rs-group", "data"),
     Output("rs-group-row", "children"),
     Input({"type": "rs-group", "group": ALL}, "n_clicks"),
@@ -851,29 +997,114 @@ def render_pills(role_ids):
 
 
 @callback(
+    Output("rs-combo-pills", "children"),
+    Input("rs-combos", "data"),
+)
+def render_combo_pills(combos):
+    return _combo_pills(combos)
+
+
+@callback(
+    Output("rs-combos", "data"),
     Output("rs-roles", "value", allow_duplicate=True),
-    Input({"type": "rs-pill", "role": ALL}, "n_clicks"),
+    Output("rs-combo-ip", "value"),
+    Output("rs-combo-oop", "value"),
+    Input("rs-combo-add", "n_clicks"),
+    State("rs-combo-ip", "value"),
+    State("rs-combo-oop", "value"),
+    State("rs-combos", "data"),
     State("rs-roles", "value"),
     prevent_initial_call=True,
 )
-def remove_role(n_clicks, selected):
+def add_combo(_clicks, ip, oop, combos, selected):
+    if not ip or not oop:
+        return no_update, no_update, no_update, no_update
+    current = normalize_combos(combos)
+    incoming = normalize_combos([{"ip": ip, "oop": oop}])
+    if not incoming:
+        return no_update, no_update, None, None
+    pair = incoming[0]
+    if any(item["ip"] == pair["ip"] and item["oop"] == pair["oop"] for item in current):
+        return current, no_update, None, None
+    current.append(pair)
+    roles = _as_list(selected)
+    for role_id in (pair["ip"], pair["oop"]):
+        if role_id not in roles:
+            roles.append(role_id)
+    return current, roles, None, None
+
+
+@callback(
+    Output("rs-combos", "data", allow_duplicate=True),
+    Input({"type": "rs-combo-pill", "combo": ALL}, "n_clicks"),
+    State("rs-combos", "data"),
+    prevent_initial_call=True,
+)
+def remove_combo(n_clicks, combos):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update
-    role_id = ctx.triggered_id["role"]
-    if role_id == "_":
+    target = ctx.triggered_id.get("combo")
+    if not target or target == "_":
         return no_update
-    return [item for item in _as_list(selected) if item != role_id]
+    parsed = parse_combo_id(target)
+    if not parsed:
+        return no_update
+    ip, oop = parsed
+    return [
+        item
+        for item in normalize_combos(combos)
+        if not (item["ip"] == ip and item["oop"] == oop)
+    ]
 
 
 @callback(
     Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-combos", "data", allow_duplicate=True),
+    Input({"type": "rs-pill", "role": ALL}, "n_clicks"),
+    State("rs-roles", "value"),
+    State("rs-combos", "data"),
+    prevent_initial_call=True,
+)
+def remove_role(n_clicks, selected, combos):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    role_id = ctx.triggered_id["role"]
+    if role_id == "_":
+        return no_update, no_update
+    remaining = [item for item in _as_list(selected) if item != role_id]
+    kept = [
+        item
+        for item in normalize_combos(combos)
+        if item["ip"] in remaining and item["oop"] in remaining
+    ]
+    return remaining, kept
+
+
+@callback(
+    Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-combos", "data", allow_duplicate=True),
     Input("rs-clear-roles", "n_clicks"),
     prevent_initial_call=True,
 )
 def clear_roles(_clear):
     if not ctx.triggered_id:
+        return no_update, no_update
+    return [], []
+
+
+@callback(
+    Output("rs-combos", "data", allow_duplicate=True),
+    Input("rs-roles", "value"),
+    State("rs-combos", "data"),
+    prevent_initial_call=True,
+)
+def prune_combos(selected, combos):
+    roles = set(_as_list(selected))
+    current = normalize_combos(combos)
+    kept = [item for item in current if item["ip"] in roles and item["oop"] in roles]
+    if kept == current:
         return no_update
-    return []
+    return kept
 
 
 @callback(
@@ -943,7 +1174,10 @@ def focus_view_role(n_clicks):
     role = ctx.triggered_id["role"]
     if role == "_":
         return no_update
-    return [role_meta(role)["column"]]
+    column = _depth_id_column(role)
+    if not column:
+        return no_update
+    return [column]
 
 
 @callback(
@@ -960,31 +1194,53 @@ def refresh_config_options(_n):
     Output("rs-view-role", "value"),
     Input("rs-parsed", "data"),
     Input("rs-roles", "value"),
+    Input("rs-combos", "data"),
     Input("rs-config", "value"),
     State("rs-view-role", "value"),
 )
-def rescore(parsed, role_ids, pack_id, current_view):
+def rescore(parsed, role_ids, combos, pack_id, current_view):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
         return None, [], None
-    role_ids = role_ids or []
-    if not role_ids:
+    combos = normalize_combos(combos)
+    role_ids = _as_list(role_ids)
+    needed = list(role_ids)
+    for item in combos:
+        for role_id in (item["ip"], item["oop"]):
+            if role_id not in needed:
+                needed.append(role_id)
+    if not needed:
         return None, [], None
-    rows = score_players(parsed["players"], role_ids)
-    labels = _labels(role_ids)
+    rows = apply_combos(score_players(parsed["players"], needed), combos)
+    labels = combo_score_labels(needed, combos)
     options = []
-    for role_id, label in zip(role_ids, labels):
+    seen = set()
+    for item in combos:
+        meta = combo_meta(item["ip"], item["oop"])
+        if meta["column"] not in seen:
+            options.append({"label": meta["compact"], "value": meta["column"]})
+            seen.add(meta["column"])
+    for role_id in needed:
         meta = role_meta(role_id)
-        options.append({"label": meta["compact"], "value": label})
+        if meta["column"] in seen:
+            continue
+        options.append({"label": meta["compact"], "value": meta["column"]})
+        seen.add(meta["column"])
     kept = [role for role in _as_list(current_view) if role in labels]
     view = kept or labels
+    combo_cols = [combo_meta(item["ip"], item["oop"])["column"] for item in combos]
+    if len(kept) != 1:
+        for column in combo_cols:
+            if column not in view:
+                view.append(column)
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
             "rows": rows,
             "roles": labels,
-            "role_ids": role_ids,
+            "role_ids": needed,
+            "combos": combos,
         },
         options,
         view,
@@ -1046,6 +1302,7 @@ def render_shortlist(
     rows = payload["rows"]
     roles = payload["roles"]
     role_ids = payload.get("role_ids") or []
+    combos = normalize_combos(payload.get("combos"))
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = 0 if min_score is None else float(min_score)
@@ -1075,6 +1332,20 @@ def render_shortlist(
         reverse=True,
     )
 
+    combo_by_col = {
+        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
+        for item in combos
+    }
+    expanded = []
+    for role in view_roles:
+        if role not in expanded:
+            expanded.append(role)
+        meta = combo_by_col.get(role)
+        if meta:
+            for column in (meta["ip_column"], meta["oop_column"]):
+                if column not in expanded:
+                    expanded.append(column)
+
     fig = go.Figure()
     for role in view_roles:
         values = [float(row.get(role) or 0) for row in filtered]
@@ -1087,7 +1358,7 @@ def render_shortlist(
         fig.add_bar(x=[b[0] for b in BINS], y=counts, name=role)
     fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
 
-    ordered_roles = view_roles + [role for role in roles if role not in view_roles]
+    ordered_roles = expanded + [role for role in roles if role not in expanded]
     table_cols = ["Name", "Age", "Position", "Club", "Rec", "Injury"] + ordered_roles
     columns = [{"name": col, "id": col} for col in table_cols]
     table_rows = [{key: row.get(key) for key in table_cols} for row in filtered]
@@ -1101,9 +1372,10 @@ def render_shortlist(
     caption = (
         f"{len(filtered)} of {len(rows)} players meeting min score and eligibility "
         f"on all of: {role_list}.{extra} Sorted by the lowest of those scores. "
+        f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
     )
-    cards = _depth_panel(rows, role_ids, view_roles, bands)
+    cards = _depth_panel(rows, role_ids, view_roles, bands, combos)
     return (
         _pos_bar(rows, pos_filter, foot_filter),
         cards,
