@@ -387,12 +387,6 @@ def layout():
                         html.Div(_phase_buttons("all"), id="rc-phase-row", className="rc-chip-row"),
                         html.Span("Group", className="rc-chip-label"),
                         html.Div(_group_buttons("all"), id="rc-group-row", className="rc-chip-row wrap"),
-                        dcc.Input(
-                            id="rc-search",
-                            type="search",
-                            placeholder="Search roles",
-                            className="rc-search",
-                        ),
                     ],
                 ),
                 _bar(
@@ -441,6 +435,16 @@ def layout():
                 html.Div(
                     [
                         html.Div("Roles", className="rc-sidebar-head"),
+                        html.Div(
+                            dcc.Input(
+                                id="rc-search",
+                                type="search",
+                                placeholder="Search roles",
+                                className="rc-sidebar-search-input",
+                                debounce=False,
+                            ),
+                            className="rc-sidebar-search",
+                        ),
                         html.Div(
                             _role_list(DEFAULT_ROLE, "all", "all", ""),
                             id="rc-sidebar",

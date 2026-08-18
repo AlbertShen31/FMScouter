@@ -1,0 +1,592 @@
+{
+  "name": "Squirrel Weights",
+  "group_schema": 2,
+  "roles": {
+    "Goalkeeper_IP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "Goalkeeper_OOP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "No_Nonsense_Goalkeeper_IP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "Line_Holding_Keeper_OOP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "Sweeper_Keeper_OOP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "Ball_Playing_Goalkeeper_IP_GK": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "gk"
+      ]
+    },
+    "Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "No_Nonsense_Centre_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Covering_Centre_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Stopping_Centre_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Ball_Playing_Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Overlapping_Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Advanced_Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Wide_Centre_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Covering_Wide_Centre_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Stopping_Wide_Centre_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cb"
+      ]
+    },
+    "Full_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "fb"
+      ]
+    },
+    "Holding_Full_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "fb"
+      ]
+    },
+    "Inside_Full_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "fb"
+      ]
+    },
+    "Inverted_Full_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "fb"
+      ]
+    },
+    "Pressing_Full_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "fb"
+      ]
+    },
+    "Wing_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Holding_Wing_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Inside_Wing_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Inverted_Wing_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Pressing_Wing_Back_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Playmaking_Wing_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Advanced_Wing_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wb"
+      ]
+    },
+    "Defensive_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Dropping_Defensive_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Screening_Defensive_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Wide_Covering_Defensive_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Half_Back_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Pressing_Defensive_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Deep_Lying_Playmaker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "dm"
+      ]
+    },
+    "Central_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Screening_Central_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Wide_Covering_Central_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Box_to_Box_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Box_to_Box_Playmaker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Channel_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Midfield_Playmaker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Pressing_Central_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "cm"
+      ]
+    },
+    "Attacking_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Tracking_Attacking_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Advanced_Playmaker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Central_Outlet_Attacking_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Splitting_Outlet_Attacking_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Free_Role_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "am"
+      ]
+    },
+    "Wide_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Tracking_Wide_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Wide_Central_Midfielder_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Wide_Outlet_Wide_Midfielder_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Winger_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Half_Space_Winger_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Inside_Winger_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm",
+        "w"
+      ]
+    },
+    "Inverting_Outlet_Winger_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Tracking_Winger_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Wide_Outlet_Winger_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Wide_Playmaker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "wm"
+      ]
+    },
+    "Wide_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "w"
+      ]
+    },
+    "Inside_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "w",
+        "wm"
+      ]
+    },
+    "Centre_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "False_Nine_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Deep_Lying_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Half_Space_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Channel_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Second_Striker_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Central_Outlet_Centre_Forward_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Splitting_Outlet_Centre_Forward_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Tracking_Centre_Forward_OOP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Target_Forward_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    },
+    "Poacher_IP": {
+      "key_attrs": [],
+      "preferred_attrs": [],
+      "useful_attrs": [],
+      "groups": [
+        "st"
+      ]
+    }
+  }
+}

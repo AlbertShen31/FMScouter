@@ -573,6 +573,43 @@ body:has(.rc-page) .navbar {
     padding: 12px 14px 8px;
 }
 
+.rc-sidebar-search {
+    padding: 0 12px 10px;
+}
+
+.rc-sidebar-search-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: #0f1720 !important;
+    border: 1px solid var(--rc-line) !important;
+    color: var(--rc-text) !important;
+    border-radius: 8px !important;
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    font-family: inherit !important;
+    line-height: 1.3 !important;
+    min-width: 0 !important;
+}
+
+.rc-sidebar-search-input::placeholder {
+    color: var(--rc-muted);
+    opacity: 1;
+}
+
+.rc-sidebar-search-input:focus {
+    outline: none !important;
+    border-color: rgba(61, 255, 136, 0.4) !important;
+    box-shadow: 0 0 0 2px rgba(61, 255, 136, 0.12);
+}
+
+.rc-sidebar-search-input::-webkit-search-decoration,
+.rc-sidebar-search-input::-webkit-search-cancel-button,
+.rc-sidebar-search-input::-webkit-search-results-button,
+.rc-sidebar-search-input::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+}
+
 .rc-sidebar-list {
     max-height: calc(100vh - 220px);
     overflow-y: auto;
