@@ -83,7 +83,10 @@ def _role_pills(role_ids: list[str]) -> list:
             html.Button(
                 [
                     html.Span(meta["code"], className="rs-pill-code"),
-                    html.Span(meta["phase"], className=f"rs-phase-tag {meta['phase'].lower()}"),
+                    html.Span(
+                        meta["phase"],
+                        className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                    ),
                     html.Span("×", className="rs-pill-x"),
                 ],
                 id={"type": "rs-pill", "role": role_id},
@@ -529,7 +532,7 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                             html.Span(code, className="rs-depth-code"),
                             html.Span(
                                 meta["phase"],
-                                className=f"rs-phase-tag {meta['phase'].lower()}",
+                                className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
                             ),
                         ],
                         className="rs-depth-title",

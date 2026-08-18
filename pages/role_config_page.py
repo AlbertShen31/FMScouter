@@ -4,12 +4,13 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 
 import role_config as rc
 from role_scorer import GROUP_DEFS, role_meta
+from phases import phase_matches
 
 register_page(__name__, path="/role-config", name="Role configs")
 
 rc.ensure_loaded()
 
-DEFAULT_ROLE = "Sweeper_Keeper_GK"
+DEFAULT_ROLE = "Sweeper_Keeper_OOP_GK"
 TIER_HINT = {
     "none": "Off · click to set Key",
     "key": "Key ×5 · click to set Green",
@@ -27,7 +28,7 @@ def _all_roles() -> list[tuple[str, dict]]:
 
 
 def _match(role_id: str, meta: dict, phase: str, group: str, query: str) -> bool:
-    if phase not in ("", "all") and meta.get("phase") != phase:
+    if not phase_matches(meta.get("phase"), phase, role_id, meta.get("group") or ""):
         return False
     if group not in ("", "all") and meta.get("group") != group:
         return False
@@ -87,7 +88,7 @@ def _role_list(selected: str, phase: str, group: str, query: str) -> list:
                     html.Span(meta["name"], className="rc-list-name"),
                     html.Span(
                         meta["phase"],
-                        className=f"rc-phase-tag {meta['phase'].lower()}",
+                        className=f"rc-phase-tag {meta.get('tone') or 'gk'}",
                     ),
                     html.Span("•", className="rc-dirty") if dirty else None,
                 ],
@@ -141,7 +142,7 @@ def _identity(role_id: str) -> html.Div:
             html.Div(meta["name"], className="rc-role-name"),
             html.Div(
                 [
-                    html.Div(meta["code"], className=f"rc-monogram {meta['phase'].lower()}"),
+                    html.Div(meta["code"], className=f"rc-monogram {meta.get('tone') or 'gk'}"),
                     html.Div(
                         [
                             html.Div(
@@ -156,7 +157,7 @@ def _identity(role_id: str) -> html.Div:
                                 [
                                     html.Span(
                                         meta["phase"],
-                                        className=f"rc-phase-tag {meta['phase'].lower()}",
+                                        className=f"rc-phase-tag {meta.get('tone') or 'gk'}",
                                     ),
                                     html.Span("Custom", className="rc-custom-tag")
                                     if dirty
@@ -230,7 +231,7 @@ def _attributes(role_id: str) -> html.Div:
     columns = []
     for title, attrs in rc.attr_groups_for(role_id):
         extra = None
-        if title == "Physical" and rc.role_phase(role_id) != "GK":
+        if title == "Physical" and not rc.is_gk_role(role_id):
             extra = [
                 html.Div("Set Pieces", className="rc-col-head nested"),
                 html.Div(
@@ -352,6 +353,20 @@ def layout():
                     n_clicks=0,
                     className="rc-btn ghost danger",
                 ),
+                html.Button(
+                    "Set as defaults",
+                    id="rc-set-defaults",
+                    n_clicks=0,
+                    className="rc-btn ghost",
+                    title="Use the current weights as Reset / Built-in defaults",
+                ),
+                html.Button(
+                    "Restore factory",
+                    id="rc-restore-factory",
+                    n_clicks=0,
+                    className="rc-btn ghost danger",
+                    title="Clear user defaults and reload the original Python weights",
+                ),
             ],
             className="rc-toolbar",
         ),
@@ -431,12 +446,16 @@ def pick_role(n_clicks, current):
     Input("rc-reset-role", "n_clicks"),
     Input("rc-reset-all", "n_clicks"),
     Input("rc-save-as", "n_clicks"),
+    Input("rc-set-defaults", "n_clicks"),
+    Input("rc-restore-factory", "n_clicks"),
     State("rc-save-name", "value"),
     State("rc-selected", "data"),
     State("rc-rev", "data"),
     prevent_initial_call=True,
 )
-def mutate_config(attr_clicks, reset_role, reset_all, save_as, save_name, role_id, rev):
+def mutate_config(
+    attr_clicks, reset_role, reset_all, save_as, set_defaults, restore_factory, save_name, role_id, rev
+):
     trigger = ctx.triggered_id
     options = rc.pack_options()
     if trigger == "rc-save-as":
@@ -449,6 +468,16 @@ def mutate_config(attr_clicks, reset_role, reset_all, save_as, save_name, role_i
             saved["id"],
             rc.pack_options(),
         )
+    if trigger == "rc-set-defaults":
+        if not set_defaults:
+            return no_update, no_update, no_update, no_update
+        rc.save_as_defaults()
+        return int(rev or 0) + 1, "Saved as defaults", rc.active_pack_id(), options
+    if trigger == "rc-restore-factory":
+        if not restore_factory:
+            return no_update, no_update, no_update, no_update
+        rc.restore_factory_defaults()
+        return int(rev or 0) + 1, "Restored factory defaults", rc.active_pack_id(), rc.pack_options()
     if trigger == "rc-reset-all":
         if not reset_all:
             return no_update, no_update, no_update, no_update

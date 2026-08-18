@@ -104,8 +104,11 @@
     color: #6c757d;
 }
 
-.rs-phase-tag.ip { background: #dbeafe; color: #1d4ed8; }
-.rs-phase-tag.oop { background: #fee2e2; color: #b91c1c; }
+.rs-phase-tag.ip,
+.rs-phase-tag.ip_gk,
+.rs-phase-tag.ip_ngk { background: #dcfce7; color: #15803d; }
+.rs-phase-tag.oop,
+.rs-phase-tag.oop_gk { background: #fee2e2; color: #b91c1c; }
 .rs-phase-tag.gk { background: #fef3c7; color: #b45309; }
 
 .rs-pos-bar {
@@ -576,8 +579,10 @@ body:has(.rc-page) .navbar {
     flex-shrink: 0;
 }
 
-.rc-monogram.ip { color: var(--rc-key); background: rgba(61, 255, 136, 0.08); }
-.rc-monogram.oop { color: #f87171; background: rgba(248, 113, 113, 0.08); }
+.rc-monogram.ip,
+.rc-monogram.ip_gk { color: var(--rc-key); background: rgba(61, 255, 136, 0.08); }
+.rc-monogram.oop,
+.rc-monogram.oop_gk { color: #f87171; background: rgba(248, 113, 113, 0.08); }
 .rc-monogram.gk { color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
 
 .rc-badge-row {
@@ -635,8 +640,11 @@ body:has(.rc-page) .navbar {
     padding: 2px 7px;
 }
 
-.rc-page .rc-phase-tag.ip { background: rgba(61, 255, 136, 0.15); color: var(--rc-key); }
-.rc-page .rc-phase-tag.oop { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.rc-page .rc-phase-tag.ip,
+.rc-page .rc-phase-tag.ip_gk,
+.rc-page .rc-phase-tag.ip_ngk { background: rgba(61, 255, 136, 0.15); color: var(--rc-key); }
+.rc-page .rc-phase-tag.oop,
+.rc-page .rc-phase-tag.oop_gk { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 .rc-page .rc-phase-tag.gk { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
 
 .rc-custom-tag,

@@ -7,6 +7,7 @@ from typing import Any
 
 import config.fm26_role_weight_config as pc
 import role_config
+from phases import phase_is_gk, phase_matches, phase_tone, pretty_role_name
 from utils import calculate_score
 
 role_config.ensure_loaded()
@@ -127,7 +128,7 @@ POS_CARD_GROUPS = {
     "ST": ("st",),
 }
 
-PHASE_SUFFIXES = ("_IP", "_OOP", "_GK")
+PHASE_SUFFIXES = ("_IP_GK", "_OOP_GK", "_IP", "_OOP", "_GK")
 
 
 def unique_headers(raw: list[str]) -> list[str]:
@@ -219,23 +220,32 @@ def player_pos_groups(positions: list[dict[str, str]]) -> list[str]:
     return groups
 
 
-def pretty_role_name(role_id: str) -> str:
-    name = role_id
-    for suffix in PHASE_SUFFIXES:
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
-            break
-    return name.replace("_", " ")
+def _code_uses(code: str) -> int:
+    return sum(1 for cfg in pc.all_positions.values() if cfg.get("role_code") == code)
+
+
+def display_code(role_id: str, cfg: dict | None = None) -> str:
+    cfg = cfg or pc.all_positions.get(role_id, {})
+    code = cfg.get("role_code", role_id)
+    if _code_uses(code) > 1:
+        tone = phase_tone(cfg.get("phase", "")).upper()
+        if tone:
+            return f"{code}-{tone}"
+    return code
 
 
 def role_meta(role_id: str) -> dict[str, str]:
     cfg = pc.all_positions.get(role_id, {})
+    phase = cfg.get("phase", "")
+    group = _ROLE_GROUP.get(role_id, "")
     return {
         "id": role_id,
-        "code": cfg.get("role_code", role_id),
+        "code": display_code(role_id, cfg),
         "name": pretty_role_name(role_id),
-        "phase": cfg.get("phase", ""),
-        "group": _ROLE_GROUP.get(role_id, ""),
+        "phase": phase,
+        "tone": phase_tone(phase),
+        "is_gk": "yes" if phase_is_gk(phase, role_id, group) else "",
+        "group": group,
     }
 
 
@@ -254,7 +264,7 @@ def role_options(phase: str | None = None, keep: list[str] | None = None) -> lis
             cfg_phase = roles[role_id].get("phase", "")
             if (
                 phase not in ("", "ALL")
-                and cfg_phase != phase
+                and not phase_matches(cfg_phase, phase, role_id, _group)
                 and role_id not in keep
             ):
                 continue
@@ -399,7 +409,7 @@ def score_players(
         configs.append(
             (
                 role_id,
-                cfg["role_code"],
+                display_code(role_id, cfg),
                 cfg,
                 _ROLE_GROUP.get(role_id, ""),
             )

@@ -5,9 +5,9 @@ weighted average of attributes:
 
     score = (5 * sum(key) + 3 * sum(green) + 1 * sum(blue)) / divisor
 
-FM26 roles have no Attack/Support/Defend duty. `phase` is GK,
-IP (in possession), or OOP (out of possession). `role_code` is the
-short id used by the HTML scorer.
+FM26 roles have no Attack/Support/Defend duty. `phase` is IP, OOP, GK,
+IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK. `role_code`
+is the short id used by the HTML scorer.
 """
 
 KEY_WEIGHT = 5
@@ -39,39 +39,46 @@ def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code):
 
 # Goalkeepers
 gk_positions = {
-    'Goalkeeper_GK': role(
+    'Goalkeeper_IP_GK': role(
         ['1v1', 'Han', 'Ref'],
         ['Ant', 'Cmd', 'Cmp', 'Cnt', 'Dec', 'Jum', 'Pos'],
         ['Kic', 'Thr'],
-        phase='GK',
+        phase='IP_GK',
         role_code='GK',
     ),
-    'No_Nonsense_Goalkeeper_GK': role(
+    'Goalkeeper_OOP_GK': role(
+        ['1v1', 'Han', 'Ref'],
+        ['Ant', 'Cmd', 'Cmp', 'Cnt', 'Dec', 'Jum', 'Pos'],
+        ['Kic', 'Thr'],
+        phase='OOP_GK',
+        role_code='GK',
+    ),
+    'No_Nonsense_Goalkeeper_IP_GK': role(
         ['Cmd', 'Han', 'Jum', 'Ref'],
         ['1v1', 'Ant', 'Cnt', 'Hea', 'Pos'],
         ['Cmp', 'Dec', 'Kic', 'Thr'],
-        phase='GK',
+        phase='IP_GK',
         role_code='NGK',
     ),
-    'Line_Holding_Keeper_GK': role(
+    'Line_Holding_Keeper_OOP_GK': role(
         ['Cnt', 'Han', 'Pos', 'Ref'],
         ['1v1', 'Ant', 'Cmd', 'Dec'],
         ['Kic', 'Thr'],
-        phase='GK',
+        phase='OOP_GK',
         role_code='LHK',
     ),
-    'Sweeper_Keeper_GK': role(
+    'Sweeper_Keeper_OOP_GK': role(
         ['1v1', 'Acc', 'Ant', 'Han', 'Pac', 'Ref'],
         ['Cmd', 'Dec', 'Pos'],
         [],
-        phase='GK',
+        phase='OOP_GK',
         role_code='SKP',
     ),
-    'Ball_Playing_Goalkeeper_GK': role(
+    'Ball_Playing_Goalkeeper_IP_GK': role(
         ['Cmp', 'Han', 'Kic', 'Ref', 'Thr'],
         ['1v1', 'Ant', 'Cmd', 'Dec', 'Pas'],
         ['Cnt', 'Pos'],
-        phase='GK',
+        phase='IP_GK',
         role_code='BGK',
     ),
 }

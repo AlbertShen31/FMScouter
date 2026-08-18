@@ -13,11 +13,13 @@ from datetime import datetime
 from pathlib import Path
 
 import config.fm26_role_weight_config as pc
+from phases import phase_is_gk
 
 ROOT = Path(__file__).resolve().parent
 PACKS_DIR = ROOT / "config" / "packs"
 ACTIVE_PATH = ROOT / "config" / "active_pack.json"
 LEGACY_OVERRIDE_PATH = ROOT / "config" / "role_overrides.json"
+DEFAULTS_PATH = ROOT / "config" / "default_overrides.json"
 
 BUILTIN = "builtin"
 WORKING = "working"
@@ -112,6 +114,7 @@ ATTR_LABELS = {
     for code, label in attrs
 }
 
+_FACTORY: dict | None = None
 _DEFAULTS: dict | None = None
 _LOADED = False
 _ACTIVE = BUILTIN
@@ -253,13 +256,33 @@ def _unique_slug(name: str) -> str:
     return slug
 
 
+def _reload_user_defaults() -> None:
+    global _DEFAULTS
+    assert _FACTORY is not None
+    _DEFAULTS = copy.deepcopy(_FACTORY)
+    payload = _read_json(DEFAULTS_PATH)
+    if not payload:
+        return
+    _name, roles = _roles_from_payload(payload)
+    for role_id, overlay in roles.items():
+        if role_id not in _DEFAULTS or not isinstance(overlay, dict):
+            continue
+        _apply_lists(
+            _DEFAULTS[role_id],
+            overlay.get("key_attrs") or [],
+            overlay.get("green_attrs") or [],
+            overlay.get("blue_attrs") or [],
+        )
+
+
 def ensure_loaded() -> None:
-    """Snapshot Python defaults, then load the last selected pack."""
-    global _DEFAULTS, _LOADED, _ACTIVE
+    """Snapshot Python factory defaults, apply user default overrides, then load the last pack."""
+    global _FACTORY, _LOADED, _ACTIVE
     if _LOADED:
         return
-    _DEFAULTS = copy.deepcopy(pc.all_positions)
+    _FACTORY = copy.deepcopy(pc.all_positions)
     _LOADED = True
+    _reload_user_defaults()
     _migrate_legacy()
     _ACTIVE = _read_active_id()
     load_pack(_ACTIVE, persist=False)
@@ -280,9 +303,15 @@ def role_phase(role_id: str) -> str:
 
 
 def attr_groups_for(role_id: str) -> list[tuple[str, list[tuple[str, str]]]]:
-    if role_phase(role_id) == "GK":
+    cfg = role_cfg(role_id)
+    if phase_is_gk(cfg.get("phase"), role_id):
         return GK_ATTR_GROUPS
     return OUTFIELD_ATTR_GROUPS
+
+
+def is_gk_role(role_id: str) -> bool:
+    cfg = role_cfg(role_id)
+    return phase_is_gk(cfg.get("phase"), role_id)
 
 
 def attr_tier(cfg: dict, attr: str) -> str:
@@ -369,6 +398,31 @@ def save_pack_as(name: str | None) -> dict:
     _write_pack(pack_id, label, snapshot())
     _write_active_id(pack_id)
     return {"id": pack_id, "name": label}
+
+
+def save_as_defaults() -> None:
+    """Make the current live weights the Reset / Built-in baseline."""
+    ensure_loaded()
+    _atomic_write(DEFAULTS_PATH, {"name": "User defaults", "roles": snapshot()})
+    global _DEFAULTS
+    _DEFAULTS = copy.deepcopy(pc.all_positions)
+
+
+def restore_factory_defaults() -> None:
+    """Drop user default overrides and reload the Python factory weights."""
+    ensure_loaded()
+    if DEFAULTS_PATH.exists():
+        DEFAULTS_PATH.unlink()
+    global _DEFAULTS
+    assert _FACTORY is not None
+    _DEFAULTS = copy.deepcopy(_FACTORY)
+    _restore_defaults()
+    _write_active_id(BUILTIN)
+
+
+def has_user_defaults() -> bool:
+    ensure_loaded()
+    return DEFAULTS_PATH.exists()
 
 
 def cycle_attr(role_id: str, attr: str) -> str:
