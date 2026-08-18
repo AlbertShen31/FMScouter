@@ -352,6 +352,41 @@ body:has(.rc-page) .navbar {
     font-size: 13px;
 }
 
+.rc-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.rc-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: var(--rc-card);
+    border: 1px solid var(--rc-line);
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+
+.rc-bar-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--rc-key);
+    margin-right: 6px;
+}
+
+.rc-bar-split {
+    width: 1px;
+    align-self: stretch;
+    min-height: 22px;
+    background: var(--rc-line);
+    margin: 0 4px;
+}
+
 .rc-toolbar {
     display: flex;
     align-items: center;
@@ -405,7 +440,7 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-btn.ghost {
-    margin-left: auto;
+    margin-left: 0;
 }
 
 .rc-btn.danger {
@@ -435,11 +470,77 @@ body:has(.rc-page) .navbar {
     flex: 1 1 220px;
 }
 
+.rc-pack-wrap .dash-dropdown,
+.rc-pack-wrap .rc-pack-dd {
+    color: var(--rc-text);
+}
+
+.rc-pack-wrap .Select-control,
+.rc-pack-wrap .Select__control,
 .rc-pack-wrap .dash-dropdown .Select-control,
-.rc-pack-wrap .Select-control {
-    background: #1a2430;
-    border-color: var(--rc-line);
-    border-radius: 8px;
+.rc-pack-wrap .dash-dropdown .Select__control {
+    background: #1a2430 !important;
+    background-color: #1a2430 !important;
+    border-color: var(--rc-line) !important;
+    border-radius: 8px !important;
+    color: var(--rc-text) !important;
+    box-shadow: none !important;
+    min-height: 36px;
+}
+
+.rc-pack-wrap .Select-control:hover,
+.rc-pack-wrap .Select__control:hover,
+.rc-pack-wrap .Select__control--is-focused,
+.rc-pack-wrap .Select-control.is-focused {
+    border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.rc-pack-wrap .Select-value,
+.rc-pack-wrap .Select-value-label,
+.rc-pack-wrap .Select-placeholder,
+.rc-pack-wrap .Select__single-value,
+.rc-pack-wrap .Select__placeholder,
+.rc-pack-wrap .Select__input-container,
+.rc-pack-wrap .Select-input > input,
+.rc-pack-wrap .Select__input,
+.rc-pack-wrap .Select__input input {
+    color: var(--rc-text) !important;
+}
+
+.rc-pack-wrap .Select-arrow,
+.rc-pack-wrap .Select__indicator,
+.rc-pack-wrap .Select__dropdown-indicator,
+.rc-pack-wrap .Select__clear-indicator {
+    color: var(--rc-text) !important;
+}
+
+.rc-pack-wrap .Select-menu-outer,
+.rc-pack-wrap .Select__menu,
+.rc-pack-wrap .Select__menu-list {
+    background: #1a2430 !important;
+    background-color: #1a2430 !important;
+    border: 1px solid var(--rc-line) !important;
+    color: var(--rc-text) !important;
+}
+
+.rc-pack-wrap .Select-option,
+.rc-pack-wrap .Select__option {
+    background: #1a2430 !important;
+    color: var(--rc-text) !important;
+}
+
+.rc-pack-wrap .Select-option.is-focused,
+.rc-pack-wrap .Select-option:hover,
+.rc-pack-wrap .Select__option--is-focused,
+.rc-pack-wrap .Select__option:hover {
+    background: #223040 !important;
+    color: var(--rc-text) !important;
+}
+
+.rc-pack-wrap .Select-option.is-selected,
+.rc-pack-wrap .Select__option--is-selected {
+    background: #223040 !important;
+    color: var(--rc-key) !important;
 }
 
 .rc-pack-status {
@@ -710,6 +811,13 @@ body:has(.rc-page) .navbar {
 .rc-mini-pill.green { background: rgba(198, 227, 91, 0.12); color: var(--rc-green); }
 .rc-mini-pill.useful,
 .rc-mini-pill.blue { background: rgba(92, 173, 255, 0.14); color: var(--rc-blue); }
+
+.rc-role-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 2px;
+}
 
 .rc-group-toggles {
     display: flex;

@@ -2,7 +2,9 @@
 
 Python defaults in `config/fm26_role_weight_config.py` stay the source of
 truth. Named JSON packs in `config/packs/` overlay those defaults so the
-config editor and role scores page share one live set of weights.
+config editor and role scores page share one live set of weights. Built-in
+is read-only; Save only writes a named pack. New configs are either a copy
+of the selected pack or a blank slate.
 
 Pack `group_schema` is 2. Older files omit the field (treated as 1) and
 used `w` for wide midfielders and `wam` for wingers. Load maps those IDs
@@ -126,6 +128,7 @@ ATTR_LABELS = {
 
 _FACTORY: dict | None = None
 _DEFAULTS: dict | None = None
+_SAVED: dict | None = None
 _LOADED = False
 _ACTIVE = BUILTIN
 
@@ -179,6 +182,11 @@ def _restore_defaults() -> None:
     assert _DEFAULTS is not None
     pc.all_positions.clear()
     pc.all_positions.update(copy.deepcopy(_DEFAULTS))
+
+
+def _remember_saved() -> None:
+    global _SAVED
+    _SAVED = copy.deepcopy(pc.all_positions)
 
 
 def _atomic_write(path: Path, payload: dict) -> None:
@@ -241,17 +249,18 @@ def _pack_path(pack_id: str) -> Path:
     return PACKS_DIR / f"{pack_id}.json"
 
 
+def _role_overlay(cfg: dict) -> dict:
+    return {
+        "key_attrs": list(cfg.get("key_attrs") or []),
+        "preferred_attrs": list(cfg.get("preferred_attrs") or []),
+        "useful_attrs": list(cfg.get("useful_attrs") or []),
+        "groups": list(cfg.get("groups") or []),
+    }
+
+
 def snapshot() -> dict:
     ensure_loaded()
-    roles = {}
-    for role_id, cfg in pc.all_positions.items():
-        roles[role_id] = {
-            "key_attrs": list(cfg.get("key_attrs") or []),
-            "preferred_attrs": list(cfg.get("preferred_attrs") or []),
-            "useful_attrs": list(cfg.get("useful_attrs") or []),
-            "groups": list(cfg.get("groups") or []),
-        }
-    return roles
+    return {role_id: _role_overlay(cfg) for role_id, cfg in pc.all_positions.items()}
 
 
 def _apply_overlay(cfg: dict, overlay: dict, schema: int | None = None) -> None:
@@ -391,7 +400,7 @@ def attr_tier(cfg: dict, attr: str) -> str:
 
 def is_modified(role_id: str) -> bool:
     ensure_loaded()
-    default = (_DEFAULTS or {}).get(role_id)
+    default = (_SAVED or _DEFAULTS or {}).get(role_id)
     if not default or role_id not in pc.all_positions:
         return False
     cfg = pc.all_positions[role_id]
@@ -443,41 +452,77 @@ def load_pack(pack_id: str | None, persist: bool = True) -> str:
     else:
         global _ACTIVE
         _ACTIVE = chosen
+    _remember_saved()
     return chosen
 
 
-def persist_live() -> str:
-    """Write the live weights to the active pack. Copy-on-write from builtin."""
+def persist_live() -> str | None:
+    """Write the live weights to the selected named pack. Built-in is read-only."""
     ensure_loaded()
     pack_id = _ACTIVE or BUILTIN
     if pack_id == BUILTIN:
-        pack_id = WORKING
-        name = "Working copy"
-    else:
-        name = _pack_label(pack_id, pack_id)
+        return None
+    name = _pack_label(pack_id, pack_id)
     _write_pack(pack_id, name, snapshot())
     _write_active_id(pack_id)
+    _remember_saved()
     return pack_id
 
 
-def save_pack_as(name: str | None) -> dict:
+def create_pack(name: str | None, source: str = "copy") -> dict:
+    """Create a named pack from the live config or from a blank slate."""
     ensure_loaded()
     label = (name or "").strip() or f"Config {datetime.now().strftime('%Y-%m-%d %H%M')}"
+    if source == "scratch":
+        for cfg in pc.all_positions.values():
+            _apply_lists(cfg, [], [], [])
     pack_id = _unique_slug(label)
     _write_pack(pack_id, label, snapshot())
     _write_active_id(pack_id)
-    return {"id": pack_id, "name": label}
+    _remember_saved()
+    return {"id": pack_id, "name": label, "source": "scratch" if source == "scratch" else "copy"}
+
+
+def save_pack_as(name: str | None) -> dict:
+    return create_pack(name, "copy")
+
+
+def _defaults_payload() -> tuple[str, dict]:
+    payload = _read_json(DEFAULTS_PATH)
+    if not payload:
+        return "User defaults", {}
+    name, roles = _roles_from_payload(payload)
+    return name or "User defaults", roles if isinstance(roles, dict) else {}
+
+
+def _write_defaults(name: str, roles: dict) -> None:
+    if not roles:
+        if DEFAULTS_PATH.exists():
+            DEFAULTS_PATH.unlink()
+        return
+    _atomic_write(
+        DEFAULTS_PATH,
+        {"name": name, "group_schema": pc.GROUP_SCHEMA, "roles": roles},
+    )
 
 
 def save_as_defaults() -> None:
     """Make the current live weights the Reset / Built-in baseline."""
     ensure_loaded()
-    _atomic_write(
-        DEFAULTS_PATH,
-        {"name": "User defaults", "group_schema": pc.GROUP_SCHEMA, "roles": snapshot()},
-    )
+    _write_defaults("User defaults", snapshot())
     global _DEFAULTS
     _DEFAULTS = copy.deepcopy(pc.all_positions)
+
+
+def save_role_as_default(role_id: str) -> None:
+    """Overwrite one role in user defaults; leave every other role alone."""
+    ensure_loaded()
+    if role_id not in pc.all_positions or _DEFAULTS is None:
+        return
+    name, roles = _defaults_payload()
+    roles[role_id] = _role_overlay(pc.all_positions[role_id])
+    _write_defaults(name, roles)
+    _DEFAULTS[role_id] = copy.deepcopy(pc.all_positions[role_id])
 
 
 def restore_factory_defaults() -> None:
@@ -492,13 +537,29 @@ def restore_factory_defaults() -> None:
     _write_active_id(BUILTIN)
 
 
+def restore_role_factory(role_id: str) -> None:
+    """Restore one role to Python factory weights and drop its user default."""
+    ensure_loaded()
+    if not _FACTORY or role_id not in _FACTORY:
+        return
+    pc.all_positions[role_id] = copy.deepcopy(_FACTORY[role_id])
+    if _DEFAULTS is not None:
+        _DEFAULTS[role_id] = copy.deepcopy(_FACTORY[role_id])
+    name, roles = _defaults_payload()
+    if role_id in roles:
+        roles.pop(role_id)
+        _write_defaults(name, roles)
+    if _ACTIVE != BUILTIN:
+        persist_live()
+
+
 def has_user_defaults() -> bool:
     ensure_loaded()
     return DEFAULTS_PATH.exists()
 
 
 def cycle_attr(role_id: str, attr: str) -> str:
-    """Promote one attribute through Off → Key → Preferred → Useful and persist."""
+    """Promote one attribute through Off → Key → Preferred → Useful."""
     ensure_loaded()
     if role_id not in pc.all_positions or attr not in ATTR_LABELS:
         return "none"
@@ -515,24 +576,33 @@ def cycle_attr(role_id: str, attr: str) -> str:
     elif nxt == "useful":
         useful_attrs.append(attr)
     _apply_lists(cfg, key_attrs, preferred_attrs, useful_attrs)
-    persist_live()
     return nxt
 
 
-def reset_role(role_id: str) -> None:
+def clear_role(role_id: str) -> None:
+    """Turn off every key / preferred / useful attribute. Groups stay."""
     ensure_loaded()
-    if not _DEFAULTS or role_id not in _DEFAULTS:
+    if role_id not in pc.all_positions:
         return
-    pc.all_positions[role_id] = copy.deepcopy(_DEFAULTS[role_id])
-    if _ACTIVE != BUILTIN:
-        persist_live()
+    _apply_lists(pc.all_positions[role_id], [], [], [])
+
+
+def reset_role(role_id: str) -> None:
+    """Reload this role from the selected config’s last saved weights."""
+    ensure_loaded()
+    saved = (_SAVED or _DEFAULTS or {}).get(role_id)
+    if not saved:
+        return
+    pc.all_positions[role_id] = copy.deepcopy(saved)
 
 
 def reset_all() -> None:
     ensure_loaded()
+    if _SAVED is not None:
+        pc.all_positions.clear()
+        pc.all_positions.update(copy.deepcopy(_SAVED))
+        return
     _restore_defaults()
-    if _ACTIVE != BUILTIN:
-        persist_live()
 
 
 def toggle_role_group(role_id: str, group: str) -> list[str]:
@@ -549,5 +619,4 @@ def toggle_role_group(role_id: str, group: str) -> list[str]:
     else:
         current.append(group)
     cfg["groups"] = current
-    persist_live()
     return current

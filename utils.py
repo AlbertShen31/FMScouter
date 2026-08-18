@@ -35,6 +35,8 @@ def calculate_score(
         preferred_score = sum(processed_data[attr] for attr in preferred_attrs)
         useful_score = sum(processed_data[attr] for attr in useful_attrs)
 
+        if not divisor:
+            return 0.0
         total_score = (
             key_score * key_weight
             + preferred_score * preferred_weight

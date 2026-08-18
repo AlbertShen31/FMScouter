@@ -158,7 +158,7 @@ layout = dbc.Container(
                         dcc.Interval(id="rs-config-tick", interval=2500),
                         html.Small(
                             "Scores use this file’s key / preferred / useful weights. "
-                            "Save new files on the Role configs page.",
+                            "Edit and Save a config on the Role configs page.",
                             className="text-muted",
                         ),
                     ]

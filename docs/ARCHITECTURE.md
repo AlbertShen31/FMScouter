@@ -25,7 +25,7 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 | `canvas_export.py` | Cursor canvas export from scored rows. |
 | `config/packs/` | Named JSON weight packs. |
 | `config/active_pack.json` | Which pack is live. |
-| `config/default_overrides.json` | Optional Set as defaults overlay. |
+| `config/default_overrides.json` | Optional overlay applied under Built-in defaults. |
 | `fm26_player_scoring_system_v2_0.html` | Historical HTML scorer the Python weights were ported from. Not used at runtime. |
 
 ## Three different winger names
@@ -69,4 +69,4 @@ Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still cou
 
 ## Config packs
 
-Factory Python weights are the source of truth. Editing Built-in copy-on-writes to `config/packs/working.json`. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Weight config** picks which pack to score with.
+Factory Python weights are the source of truth. The Role configs page loads a pack and edits in memory. **Save** writes a named pack; Built-in cannot be overwritten. **New config** makes a named file that is either a copy of the selected config or a blank slate (attributes off, groups kept). **Reset** reloads the selected role from the last saved pack. **Clear this role** turns off that role’s attributes. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Weight config** picks which pack to score with.

@@ -5,7 +5,7 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 
 import role_config as rc
 from role_scorer import GROUP_DEFS, role_groups, role_meta
-from phases import phase_matches
+from phases import phase_matches, pretty_role_name
 
 register_page(__name__, path="/role-config", name="Role configs")
 
@@ -54,6 +54,22 @@ def _phase_buttons(active: str) -> list:
             className="rc-chip" + (" active" if active == value else ""),
         )
         for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP"), ("GK", "GK"))
+    ]
+
+
+def _new_mode_buttons(active: str) -> list:
+    return [
+        html.Button(
+            label,
+            id={"type": "rc-new-mode", "mode": value},
+            n_clicks=0,
+            className="rc-chip" + (" active" if active == value else ""),
+            title=title,
+        )
+        for value, label, title in (
+            ("copy", "Copy selected", "New config starts as a copy of the selected config"),
+            ("scratch", "From scratch", "New config starts with every role’s attributes blank"),
+        )
     ]
 
 
@@ -165,9 +181,9 @@ def _identity(role_id: str) -> html.Div:
                                         meta["phase"],
                                         className=f"rc-phase-tag {meta.get('tone') or 'gk'}",
                                     ),
-                                    html.Span("Custom", className="rc-custom-tag")
+                                    html.Span("Unsaved", className="rc-custom-tag")
                                     if dirty
-                                    else html.Span("Default", className="rc-default-tag"),
+                                    else html.Span("Saved", className="rc-default-tag"),
                                 ],
                                 className="rc-tag-row",
                             ),
@@ -176,6 +192,26 @@ def _identity(role_id: str) -> html.Div:
                     ),
                 ],
                 className="rc-id-top",
+            ),
+            html.Div("This role", className="rc-section-kicker"),
+            html.Div(
+                [
+                    html.Button(
+                        "Clear this role",
+                        id="rc-clear-role",
+                        n_clicks=0,
+                        className="rc-btn ghost danger",
+                        title="Turn off every key, preferred, and useful attribute on this role",
+                    ),
+                    html.Button(
+                        "Reset",
+                        id="rc-reset-role",
+                        n_clicks=0,
+                        className="rc-btn ghost",
+                        title="Reload this role from the selected config",
+                    ),
+                ],
+                className="rc-role-actions",
             ),
             html.Div("Role info", className="rc-section-kicker"),
             html.Div(
@@ -284,7 +320,7 @@ def _attributes(role_id: str) -> html.Div:
                 className="rc-attrs-header",
             ),
             html.Div(
-                "Click a value to cycle Key → Preferred → Useful → Off. Edits save to the selected config.",
+                "Click a value to cycle Key → Preferred → Useful → Off. Reset reloads this role from the selected config. Save writes a named config. Built-in is read-only — use New config to make a file.",
                 className="rc-attrs-note",
             ),
             html.Div(columns, className="rc-attr-grid"),
@@ -306,12 +342,20 @@ def _clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
 
 
+def _bar(title: str, children: list, extra: str = "") -> html.Div:
+    return html.Div(
+        [html.Span(title, className="rc-bar-title"), *children],
+        className=f"rc-bar {extra}".strip(),
+    )
+
+
 def layout():
     return html.Div(
     [
         dcc.Store(id="rc-selected", data=DEFAULT_ROLE),
         dcc.Store(id="rc-phase", data="all"),
         dcc.Store(id="rc-group", data="all"),
+        dcc.Store(id="rc-new-mode", data="copy"),
         dcc.Store(id="rc-rev", data=0),
         html.Div(
             [
@@ -320,6 +364,7 @@ def layout():
                 html.Button(id={"type": "rc-phase", "phase": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-group", "group": "_"}, n_clicks=0),
                 html.Button(id={"type": "rc-rgroup", "group": "_"}, n_clicks=0),
+                html.Button(id={"type": "rc-new-mode", "mode": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -335,68 +380,61 @@ def layout():
         ),
         html.Div(
             [
-                html.Span("Phase", className="rc-chip-label"),
-                html.Div(_phase_buttons("all"), id="rc-phase-row", className="rc-chip-row"),
-                html.Span("Group", className="rc-chip-label"),
-                html.Div(_group_buttons("all"), id="rc-group-row", className="rc-chip-row wrap"),
-                html.Span("Config", className="rc-chip-label"),
-                html.Div(
-                    dcc.Dropdown(
-                        id="rc-pack",
-                        options=rc.pack_options(),
-                        value=rc.active_pack_id(),
-                        clearable=False,
-                        className="rc-pack-dd",
-                    ),
-                    className="rc-pack-wrap",
+                _bar(
+                    "Filters",
+                    [
+                        html.Span("Phase", className="rc-chip-label"),
+                        html.Div(_phase_buttons("all"), id="rc-phase-row", className="rc-chip-row"),
+                        html.Span("Group", className="rc-chip-label"),
+                        html.Div(_group_buttons("all"), id="rc-group-row", className="rc-chip-row wrap"),
+                        dcc.Input(
+                            id="rc-search",
+                            type="search",
+                            placeholder="Search roles",
+                            className="rc-search",
+                        ),
+                    ],
                 ),
-                dcc.Input(
-                    id="rc-save-name",
-                    type="text",
-                    placeholder="New config name",
-                    className="rc-search",
-                ),
-                html.Button(
-                    "Save as new file",
-                    id="rc-save-as",
-                    n_clicks=0,
-                    className="rc-btn",
-                ),
-                html.Span(id="rc-pack-status", className="rc-pack-status"),
-                dcc.Input(
-                    id="rc-search",
-                    type="search",
-                    placeholder="Search roles",
-                    className="rc-search",
-                ),
-                html.Button(
-                    "Reset this role",
-                    id="rc-reset-role",
-                    n_clicks=0,
-                    className="rc-btn ghost",
-                ),
-                html.Button(
-                    "Reset all roles",
-                    id="rc-reset-all",
-                    n_clicks=0,
-                    className="rc-btn ghost danger",
-                ),
-                html.Button(
-                    "Set as defaults",
-                    id="rc-set-defaults",
-                    n_clicks=0,
-                    className="rc-btn ghost",
-                    title="Use the current weights as Reset / Built-in defaults",
-                ),
-                html.Button(
-                    "Restore factory",
-                    id="rc-restore-factory",
-                    n_clicks=0,
-                    className="rc-btn ghost danger",
-                    title="Clear user defaults and reload the original Python weights",
+                _bar(
+                    "Config",
+                    [
+                        html.Div(
+                            dcc.Dropdown(
+                                id="rc-pack",
+                                options=rc.pack_options(),
+                                value=rc.active_pack_id(),
+                                clearable=False,
+                                className="rc-pack-dd",
+                            ),
+                            className="rc-pack-wrap",
+                        ),
+                        html.Span(id="rc-pack-status", className="rc-pack-status"),
+                        html.Span(className="rc-bar-split"),
+                        dcc.Input(
+                            id="rc-new-name",
+                            type="text",
+                            placeholder="New config name",
+                            className="rc-search",
+                        ),
+                        html.Div(_new_mode_buttons("copy"), id="rc-new-mode-row", className="rc-chip-row"),
+                        html.Button(
+                            "New config",
+                            id="rc-new-pack",
+                            n_clicks=0,
+                            className="rc-btn",
+                            title="Create a named config from a copy of the selected one, or from scratch",
+                        ),
+                        html.Button(
+                            "Save",
+                            id="rc-save",
+                            n_clicks=0,
+                            className="rc-btn",
+                            title="Write the current weights to the selected named config",
+                        ),
+                    ],
                 ),
             ],
-            className="rc-toolbar",
+            className="rc-bars",
         ),
         html.Div(
             [
@@ -451,6 +489,21 @@ def set_group(n_clicks):
 
 
 @callback(
+    Output("rc-new-mode", "data"),
+    Output("rc-new-mode-row", "children"),
+    Input({"type": "rc-new-mode", "mode": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_new_mode(n_clicks):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    mode = ctx.triggered_id["mode"]
+    if mode not in ("copy", "scratch"):
+        return no_update, no_update
+    return mode, _new_mode_buttons(mode)
+
+
+@callback(
     Output("rc-selected", "data"),
     Input({"type": "rc-pick", "role": ALL}, "n_clicks"),
     State("rc-selected", "data"),
@@ -472,66 +525,75 @@ def pick_role(n_clicks, current):
     Output("rc-pack", "options"),
     Input({"type": "rc-attr", "attr": ALL}, "n_clicks"),
     Input("rc-reset-role", "n_clicks"),
-    Input("rc-reset-all", "n_clicks"),
-    Input("rc-save-as", "n_clicks"),
-    Input("rc-set-defaults", "n_clicks"),
-    Input("rc-restore-factory", "n_clicks"),
+    Input("rc-clear-role", "n_clicks"),
+    Input("rc-save", "n_clicks"),
+    Input("rc-new-pack", "n_clicks"),
     Input({"type": "rc-rgroup", "group": ALL}, "n_clicks"),
-    State("rc-save-name", "value"),
     State("rc-selected", "data"),
     State("rc-rev", "data"),
+    State("rc-new-name", "value"),
+    State("rc-new-mode", "data"),
     prevent_initial_call=True,
 )
 def mutate_config(
     attr_clicks,
     reset_role,
-    reset_all,
-    save_as,
-    set_defaults,
-    restore_factory,
+    clear_role,
+    save_clicks,
+    new_pack,
     rgroup_clicks,
-    save_name,
     role_id,
     rev,
+    new_name,
+    new_mode,
 ):
     trigger = ctx.triggered_id
     options = rc.pack_options()
-    if trigger == "rc-save-as":
-        if not save_as:
+    if trigger == "rc-save":
+        if not save_clicks:
             return no_update, no_update, no_update, no_update
-        saved = rc.save_pack_as(save_name)
+        pack_id = rc.persist_live()
+        if not pack_id:
+            return (
+                int(rev or 0) + 1,
+                "Create a new config to save changes",
+                rc.active_pack_id(),
+                options,
+            )
+        label = next((opt["label"] for opt in rc.pack_options() if opt["value"] == pack_id), pack_id)
+        return int(rev or 0) + 1, f"Saved {label}", pack_id, rc.pack_options()
+    if trigger == "rc-new-pack":
+        if not new_pack:
+            return no_update, no_update, no_update, no_update
+        saved = rc.create_pack(new_name, new_mode or "copy")
+        how = "from scratch" if saved["source"] == "scratch" else "from selected"
         return (
             int(rev or 0) + 1,
-            f"Saved “{saved['name']}”",
+            f"Created “{saved['name']}” {how}",
             saved["id"],
             rc.pack_options(),
         )
-    if trigger == "rc-set-defaults":
-        if not set_defaults:
-            return no_update, no_update, no_update, no_update
-        rc.save_as_defaults()
-        return int(rev or 0) + 1, "Saved as defaults", rc.active_pack_id(), options
-    if trigger == "rc-restore-factory":
-        if not restore_factory:
-            return no_update, no_update, no_update, no_update
-        rc.restore_factory_defaults()
-        return int(rev or 0) + 1, "Restored factory defaults", rc.active_pack_id(), rc.pack_options()
     if isinstance(trigger, dict) and trigger.get("type") == "rc-rgroup":
         group = trigger.get("group")
         if not _clicked(rgroup_clicks) or not group or group == "_" or not role_id:
             return no_update, no_update, no_update, no_update
         rc.toggle_role_group(role_id, group)
         return int(rev or 0) + 1, "", rc.active_pack_id(), options
-    if trigger == "rc-reset-all":
-        if not reset_all:
-            return no_update, no_update, no_update, no_update
-        rc.reset_all()
-        return int(rev or 0) + 1, "Reset all roles", rc.active_pack_id(), options
     if trigger == "rc-reset-role":
         if not reset_role or not role_id:
             return no_update, no_update, no_update, no_update
         rc.reset_role(role_id)
-        return int(rev or 0) + 1, "Reset this role", rc.active_pack_id(), options
+        return int(rev or 0) + 1, f"Reset {pretty_role_name(role_id)}", rc.active_pack_id(), options
+    if trigger == "rc-clear-role":
+        if not clear_role or not role_id:
+            return no_update, no_update, no_update, no_update
+        rc.clear_role(role_id)
+        return (
+            int(rev or 0) + 1,
+            f"Cleared {pretty_role_name(role_id)}",
+            rc.active_pack_id(),
+            options,
+        )
     if isinstance(trigger, dict) and trigger.get("type") == "rc-attr":
         attr = trigger.get("attr")
         if not _clicked(attr_clicks) or not attr or attr == "_" or not role_id:
