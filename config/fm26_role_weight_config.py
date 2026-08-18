@@ -1,6 +1,6 @@
-"""FM26 role attribute weights.
+"""FM26 role attribute weights (factory defaults).
 
-Ported from fm26_player_scoring_system_v2_0.html. Each role is a
+Ported from `fm26_player_scoring_system_v2_0.html`. Each role is a
 weighted average of attributes:
 
     score = (5 * sum(key) + 3 * sum(green) + 1 * sum(blue)) / divisor
@@ -8,6 +8,22 @@ weighted average of attributes:
 FM26 roles have no Attack/Support/Defend duty. `phase` is IP, OOP, GK,
 IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK. `role_code`
 is the short id used by the HTML scorer.
+
+Position groups (`GROUP_IDS`) are not the same thing as a role name or
+the player filter cards on Role scores:
+
+- `wm` Wide midfielders — home of Wide Midfielder, Winger (`W`), Inside
+  Winger, etc. Dict: `wm_positions`.
+- `w` Wingers — home of Wide Forward and Inside Forward. Dict:
+  `w_positions`.
+- Role `Winger_IP` (code `W`) lives in `wm`, not in `w`.
+- The Role scores “Winger” card (AML / AMR) is a player-position filter
+  covering both `wm` and `w`.
+
+A role’s `groups` list is extra buckets on top of the dict it lives in.
+Import-time `_HOME_GROUPS` prepends the home id. Eligibility is OR
+across that list. Saved packs use `group_schema` 2; older files mapped
+`w` → wide mids and `wam` → wingers. See docs/ARCHITECTURE.md.
 """
 
 KEY_WEIGHT = 5
@@ -19,8 +35,8 @@ def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code, groups=(
     """Build a scorer-compatible role dict and derive the divisor.
 
     `groups` lists extra position buckets besides the dict this role lives
-    in, e.g. `groups=('wam',)` on a winger role so it is also eligible as
-    a wide attacker.
+    in, e.g. `groups=('w',)` on a wide-midfielder role so it is also
+    eligible as a winger.
     """
     key_attrs = list(key_attrs)
     green_attrs = list(green_attrs)
@@ -421,8 +437,8 @@ am_positions = {
 }
 
 
-# Wide midfielders
-w_positions = {
+# Wide midfielders (group id: wm)
+wm_positions = {
     'Wide_Midfielder_IP': role(
         ['Cro', 'Sta', 'Wor'],
         ['Acc', 'Ant', 'Dec', 'Fir', 'OtB', 'Pac', 'Pas'],
@@ -471,7 +487,7 @@ w_positions = {
         [],
         phase='IP',
         role_code='IW',
-        groups=('wam',),
+        groups=('w',),
     ),
     'Inverting_Outlet_Winger_OOP': role(
         ['Acc', 'Ant', 'OtB', 'Pac', 'Sta'],
@@ -504,8 +520,8 @@ w_positions = {
 }
 
 
-# Wingers
-w_am_positions = {
+# Wingers (group id: w)
+w_positions = {
     'Wide_Forward_IP': role(
         ['Acc', 'Fin', 'OtB', 'Pac', 'Sta'],
         ['Agi', 'Ant', 'Cmp', 'Dri', 'Fir', 'Tec'],
@@ -519,7 +535,7 @@ w_am_positions = {
         [],
         phase='IP',
         role_code='IF',
-        groups=('w',),
+        groups=('wm',),
     ),
 }
 
@@ -614,12 +630,17 @@ all_positions = {
     **dm_positions,
     **cm_positions,
     **am_positions,
+    **wm_positions,
     **w_positions,
-    **w_am_positions,
     **st_positions,
 }
 
-GROUP_IDS = ("gk", "cb", "fb", "wb", "dm", "cm", "am", "w", "wam", "st")
+GROUP_IDS = ("gk", "cb", "fb", "wb", "dm", "cm", "am", "wm", "w", "st")
+
+# Pack group_schema 1 (or missing): w = wide mids, wam = wingers.
+# Schema 2 (current): wm = wide mids, w = wingers.
+GROUP_SCHEMA = 2
+GROUP_ID_LEGACY = {"w": "wm", "wam": "w"}
 
 _HOME_GROUPS = (
     ("gk", gk_positions),
@@ -629,8 +650,8 @@ _HOME_GROUPS = (
     ("dm", dm_positions),
     ("cm", cm_positions),
     ("am", am_positions),
+    ("wm", wm_positions),
     ("w", w_positions),
-    ("wam", w_am_positions),
     ("st", st_positions),
 )
 for _home, _roles in _HOME_GROUPS:

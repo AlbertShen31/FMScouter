@@ -3,6 +3,11 @@
 Python defaults in `config/fm26_role_weight_config.py` stay the source of
 truth. Named JSON packs in `config/packs/` overlay those defaults so the
 config editor and role scores page share one live set of weights.
+
+Pack `group_schema` is 2. Older files omit the field (treated as 1) and
+used `w` for wide midfielders and `wam` for wingers. Load maps those IDs
+before applying overlays so a saved `w` is not read as the new Wingers
+group. See docs/ARCHITECTURE.md.
 """
 from __future__ import annotations
 
@@ -176,6 +181,39 @@ def _roles_from_payload(data: dict) -> tuple[str, dict]:
     }
 
 
+def _payload_schema(data: dict) -> int:
+    try:
+        return int(data.get("group_schema") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def migrate_group_ids(groups: list | None, schema: int | None = None) -> list[str]:
+    """Map saved group ids onto the current `wm` / `w` names.
+
+    Schema 1 (or missing): `w` → `wm`, `wam` → `w`.
+    Schema 2+: keep current ids; leftover `wam` still becomes `w`.
+    """
+    schema = pc.GROUP_SCHEMA if schema is None else schema
+    mapping = pc.GROUP_ID_LEGACY if schema < pc.GROUP_SCHEMA else {"wam": "w"}
+    out = []
+    seen = set()
+    for gid in groups or []:
+        mapped = mapping.get(str(gid), str(gid))
+        if mapped in pc.GROUP_IDS and mapped not in seen:
+            seen.add(mapped)
+            out.append(mapped)
+    return out
+
+
+def _rewrite_overlay_groups(roles: dict, schema: int) -> dict:
+    for overlay in roles.values():
+        if not isinstance(overlay, dict) or "groups" not in overlay:
+            continue
+        overlay["groups"] = migrate_group_ids(overlay.get("groups"), schema)
+    return roles
+
+
 def _pack_path(pack_id: str) -> Path:
     return PACKS_DIR / f"{pack_id}.json"
 
@@ -193,27 +231,30 @@ def snapshot() -> dict:
     return roles
 
 
-def _apply_overlay(cfg: dict, overlay: dict) -> None:
+def _apply_overlay(cfg: dict, overlay: dict, schema: int | None = None) -> None:
     _apply_lists(
         cfg,
         overlay.get("key_attrs") or [],
         overlay.get("green_attrs") or [],
         overlay.get("blue_attrs") or [],
     )
-    groups = [g for g in (overlay.get("groups") or []) if g in pc.GROUP_IDS]
+    groups = migrate_group_ids(overlay.get("groups") or [], schema)
     if groups:
         cfg["groups"] = groups
 
 
-def _apply_roles(roles: dict) -> None:
+def _apply_roles(roles: dict, schema: int | None = None) -> None:
     for role_id, overlay in roles.items():
         if role_id not in pc.all_positions or not isinstance(overlay, dict):
             continue
-        _apply_overlay(pc.all_positions[role_id], overlay)
+        _apply_overlay(pc.all_positions[role_id], overlay, schema)
 
 
 def _write_pack(pack_id: str, name: str, roles: dict) -> None:
-    _atomic_write(_pack_path(pack_id), {"name": name, "roles": roles})
+    _atomic_write(
+        _pack_path(pack_id),
+        {"name": name, "group_schema": pc.GROUP_SCHEMA, "roles": roles},
+    )
 
 
 def _read_active_id() -> str:
@@ -244,9 +285,11 @@ def _migrate_legacy() -> None:
     PACKS_DIR.mkdir(parents=True, exist_ok=True)
     if not LEGACY_OVERRIDE_PATH.exists() or _pack_path(WORKING).exists():
         return
-    name, roles = _roles_from_payload(_read_json(LEGACY_OVERRIDE_PATH))
+    payload = _read_json(LEGACY_OVERRIDE_PATH)
+    name, roles = _roles_from_payload(payload)
     if not roles:
         return
+    _rewrite_overlay_groups(roles, _payload_schema(payload))
     _write_pack(WORKING, name or "Working copy", roles)
     if not ACTIVE_PATH.exists():
         _write_active_id(WORKING)
@@ -271,11 +314,12 @@ def _reload_user_defaults() -> None:
     payload = _read_json(DEFAULTS_PATH)
     if not payload:
         return
+    schema = _payload_schema(payload)
     _name, roles = _roles_from_payload(payload)
     for role_id, overlay in roles.items():
         if role_id not in _DEFAULTS or not isinstance(overlay, dict):
             continue
-        _apply_overlay(_DEFAULTS[role_id], overlay)
+        _apply_overlay(_DEFAULTS[role_id], overlay, schema)
 
 
 def ensure_loaded() -> None:
@@ -371,8 +415,9 @@ def load_pack(pack_id: str | None, persist: bool = True) -> str:
     if chosen != BUILTIN:
         path = _pack_path(chosen)
         if path.exists():
-            _name, roles = _roles_from_payload(_read_json(path))
-            _apply_roles(roles)
+            payload = _read_json(path)
+            _name, roles = _roles_from_payload(payload)
+            _apply_roles(roles, _payload_schema(payload))
         else:
             chosen = BUILTIN
     if persist:
@@ -409,7 +454,10 @@ def save_pack_as(name: str | None) -> dict:
 def save_as_defaults() -> None:
     """Make the current live weights the Reset / Built-in baseline."""
     ensure_loaded()
-    _atomic_write(DEFAULTS_PATH, {"name": "User defaults", "roles": snapshot()})
+    _atomic_write(
+        DEFAULTS_PATH,
+        {"name": "User defaults", "group_schema": pc.GROUP_SCHEMA, "roles": snapshot()},
+    )
     global _DEFAULTS
     _DEFAULTS = copy.deepcopy(pc.all_positions)
 

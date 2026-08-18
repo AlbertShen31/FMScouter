@@ -1,3 +1,4 @@
+"""Role scores page: upload an FM attribute CSV, pick roles, filter, export."""
 from __future__ import annotations
 
 import base64

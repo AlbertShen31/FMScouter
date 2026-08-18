@@ -1,3 +1,8 @@
+"""Shared scoring math used by `role_scorer`.
+
+    score = (key_weight * sum(key) + green_weight * sum(green)
+             + blue_weight * sum(blue)) / divisor
+"""
 from typing import Dict, List, Union
 import logging
 

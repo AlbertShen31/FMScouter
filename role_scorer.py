@@ -1,4 +1,9 @@
-"""Parse FM player exports and score selected FM26 roles."""
+"""Parse FM player exports and score selected FM26 roles.
+
+A role belongs to one or more position groups (`gk`, `cb`, `wm`, `w`, …).
+`wm` is wide midfielders; `w` is wingers (formerly labelled wide attackers).
+Eligibility is OR across a role’s groups. See docs/ARCHITECTURE.md.
+"""
 from __future__ import annotations
 
 import csv
@@ -99,8 +104,8 @@ GROUP_DEFS = [
     ("dm", "Defensive midfielders", pc.dm_positions),
     ("cm", "Central midfielders", pc.cm_positions),
     ("am", "Attacking midfielders", pc.am_positions),
+    ("wm", "Wide midfielders", pc.wm_positions),
     ("w", "Wingers", pc.w_positions),
-    ("wam", "Wide attackers", pc.w_am_positions),
     ("st", "Strikers", pc.st_positions),
 ]
 
@@ -123,6 +128,8 @@ def group_labels(role_id: str) -> str:
     wanted = set(role_groups(role_id))
     return " / ".join(label for gid, label, _roles in GROUP_DEFS if gid in wanted)
 
+# Player-position filter cards on Role scores. The “Winger” card is AML/AMR
+# players, not the `w` role group and not the Winger (`W`) role.
 POS_CARDS = [
     ("all", "All", "", "all"),
     ("GK", "Goalkeeper", "GK", "gk"),
@@ -138,7 +145,7 @@ POS_CARD_GROUPS = {
     "DEF": ("cb",),
     "FB": ("fb", "wb"),
     "MID": ("dm", "cm", "am"),
-    "W": ("w", "wam"),
+    "W": ("wm", "w"),
     "ST": ("st",),
 }
 
@@ -213,9 +220,9 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
             (pos == "AM" and "C" in area) or (pos == "M" and "C" in area)
         ):
             return True
-        if group == "w" and pos in ("M", "AM") and ("L" in area or "R" in area):
+        if group == "wm" and pos in ("M", "AM") and ("L" in area or "R" in area):
             return True
-        if group == "wam" and (
+        if group == "w" and (
             (pos == "AM" and ("L" in area or "R" in area))
             or (pos == "M" and ("L" in area or "R" in area))
             or pos == "ST"

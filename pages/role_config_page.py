@@ -1,3 +1,4 @@
+"""Role config page: edit attribute tiers and position groups for each role."""
 from __future__ import annotations
 
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
@@ -191,6 +192,12 @@ def _identity(role_id: str) -> html.Div:
                 className="rc-info-list",
             ),
             html.Div("Positions", className="rc-section-kicker"),
+            html.Div(
+                "Player-position buckets this role can score in. A role can "
+                "belong to more than one (Inside Winger is Wide midfielders "
+                "and Wingers).",
+                className="rc-hint",
+            ),
             html.Div(
                 [
                     html.Button(
