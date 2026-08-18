@@ -563,7 +563,6 @@ w_positions = {
         [],
         phase='IP',
         role_code='IF',
-        groups=('wm',),
     ),
     'Wide_Forward_IP': role(
         ['Acc', 'Fin', 'OtB', 'Pac', 'Sta'],

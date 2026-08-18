@@ -707,111 +707,142 @@
       "useful_attrs": []
     },
     "Wide_Forward_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Sta",
+        "Wor"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Winger_OOP": {
       "key_attrs": [
         "Acc",
-        "Cro",
         "Pac",
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [
-        "Dri",
-        "Fir",
-        "OtB",
-        "Tec"
-      ],
+      "preferred_attrs": [],
       "useful_attrs": []
     },
     "Tracking_Winger_OOP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Sta",
+        "Wor"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Inside_Outlet_Winger_OOP": {
       "key_attrs": [
         "Acc",
-        "Ant",
-        "OtB",
         "Pac",
-        "Sta"
+        "Sta",
+        "Wor"
       ],
-      "preferred_attrs": [
-        "Dec",
-        "Fir",
-        "Vis"
-      ],
+      "preferred_attrs": [],
       "useful_attrs": []
     },
     "Wide_Outlet_Winger_OOP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Sta",
+        "Pac",
+        "Wor"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Deep_Lying_Forward_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Centre_Forward_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Target_Forward_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Poacher_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Channel_Forward_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "False_Nine_IP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Centre_Forward_OOP": {
       "key_attrs": [
-        "Ant",
-        "Fin",
-        "Hea",
-        "OtB",
-        "Str"
-      ],
-      "preferred_attrs": [
         "Acc",
-        "Cmp",
-        "Dec",
-        "Fir",
-        "Jum",
-        "Pac"
+        "Pac",
+        "Fin"
       ],
+      "preferred_attrs": [],
       "useful_attrs": []
     },
     "Tracking_Centre_Forward_OOP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Central_Outlet_Centre_Forward_OOP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     },
     "Splitting_Outlet_Centre_Forward_OOP": {
-      "key_attrs": [],
+      "key_attrs": [
+        "Acc",
+        "Pac",
+        "Fin"
+      ],
       "preferred_attrs": [],
       "useful_attrs": []
     }

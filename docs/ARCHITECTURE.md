@@ -36,7 +36,7 @@ These collide in everyday FM language. Keep them separate:
 2. **Role group `w` — Wingers.** Home of Wide Forward and Inside Forward. Dict: `w_positions`.
 3. **Player filter card “Winger” (AML / AMR)** on Role scores. That card is about where the *player* can play, not which role group a *role* belongs to. It matches both `wm` and `w`. CSS class `.rs-pos-card.w` is this card.
 
-Inside Winger is `wm` plus `w`. Inside Forward is `w` plus `wm`. Role `Winger_IP` is **only** `wm`.
+Inside Winger is `wm` plus `w`. Inside Forward is **only** `w`. Role `Winger_IP` is **only** `wm` (plus `w` via `groups`).
 
 ## Position groups
 
