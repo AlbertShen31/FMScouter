@@ -6,7 +6,10 @@ import io
 from typing import Any
 
 import config.fm26_role_weight_config as pc
+import role_config
 from utils import calculate_score
+
+role_config.ensure_loaded()
 
 ATTR_MAP = {
     "Aerial Reach": "Aer",

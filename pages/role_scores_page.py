@@ -29,6 +29,7 @@ from role_scorer import (
     scored_csv,
 )
 from canvas_export import build_canvas
+import role_config as rc
 
 register_page(__name__, path="/", name="Role scores")
 
@@ -139,7 +140,31 @@ layout = dbc.Container(
         ),
         dbc.Card(
             [
-                dbc.CardHeader("2. Roles to evaluate"),
+                dbc.CardHeader("2. Weight config"),
+                dbc.CardBody(
+                    [
+                        html.Label("Config file"),
+                        dcc.Dropdown(
+                            id="rs-config",
+                            options=rc.pack_options(),
+                            value=rc.active_pack_id(),
+                            clearable=False,
+                            placeholder="Select a weight config",
+                        ),
+                        dcc.Interval(id="rs-config-tick", interval=2500),
+                        html.Small(
+                            "Scores use this file’s key / green / blue weights. "
+                            "Save new files on the Role configs page.",
+                            className="text-muted",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("3. Roles to evaluate"),
                 dbc.CardBody(
                     [
                         html.Div(
@@ -188,7 +213,7 @@ layout = dbc.Container(
         html.Div(id="rs-summary"),
         dbc.Card(
             [
-                dbc.CardHeader("3. Shortlist"),
+                dbc.CardHeader("4. Shortlist"),
                 dbc.CardBody(
                     [
                         dbc.Row(
@@ -334,7 +359,7 @@ layout = dbc.Container(
         ),
         dbc.Card(
             [
-                dbc.CardHeader("4. Export"),
+                dbc.CardHeader("5. Export"),
                 dbc.CardBody(
                     [
                         dbc.Button(
@@ -697,14 +722,25 @@ def focus_view_role(n_clicks):
 
 
 @callback(
+    Output("rs-config", "options"),
+    Input("rs-config-tick", "n_intervals"),
+)
+def refresh_config_options(_n):
+    return rc.pack_options()
+
+
+@callback(
     Output("rs-rows", "data"),
     Output("rs-view-role", "options"),
     Output("rs-view-role", "value"),
     Input("rs-parsed", "data"),
     Input("rs-roles", "value"),
+    Input("rs-config", "value"),
     State("rs-view-role", "value"),
 )
-def rescore(parsed, role_ids, current_view):
+def rescore(parsed, role_ids, pack_id, current_view):
+    if pack_id:
+        rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
         return None, [], None
     role_ids = role_ids or []
