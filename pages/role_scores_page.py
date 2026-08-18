@@ -38,8 +38,10 @@ from role_scorer import (
     score_players,
     scored_csv,
     set_piece_columns,
+    set_piece_filter_columns,
     set_piece_formula,
     set_piece_hint,
+    set_piece_sort_column,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -243,8 +245,27 @@ def _set_piece_panel() -> html.Div:
         )
     return html.Div(
         [
-            html.Div("Set pieces", className="rs-special-title"),
+            html.Div("Set pieces & aerial", className="rs-special-title"),
             html.P(set_piece_hint(), className="rs-special-sub"),
+            html.Div(
+                [
+                    html.Label("Min score", className="rs-set-piece-min-label"),
+                    dcc.Dropdown(
+                        id="rs-set-piece-min-score",
+                        options=[
+                            {"label": "Any", "value": 0},
+                            {"label": "11+", "value": 11},
+                            {"label": "12+", "value": 12},
+                            {"label": "12.5+", "value": 12.5},
+                            {"label": "13+", "value": 13},
+                        ],
+                        value=0,
+                        clearable=False,
+                        className="rs-set-piece-min-dd",
+                    ),
+                ],
+                className="rs-set-piece-toolbar",
+            ),
             dbc.Checklist(
                 id="rs-set-pieces",
                 options=[
@@ -258,20 +279,6 @@ def _set_piece_panel() -> html.Div:
             html.Div(lines, className="rs-set-piece-formulas"),
         ],
         className="rs-special-card set-pieces",
-    )
-
-
-def _aerial_placeholder() -> html.Div:
-    return html.Div(
-        [
-            html.Div("Aerial threat", className="rs-special-title"),
-            html.P(
-                "Coming next. Heading, jumping reach, and related aerial scores will sit here.",
-                className="rs-special-sub",
-            ),
-            html.Div(className="rs-special-slot"),
-        ],
-        className="rs-special-card aerial",
     )
 
 
@@ -341,6 +348,8 @@ layout = dbc.Container(
         dcc.Store(id="rs-bands", data=DEFAULT_BANDS),
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
+        dcc.Store(id="rs-set-piece-sort", data=None),
+        dcc.Store(id="rs-set-piece-prev", data=[]),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -649,10 +658,7 @@ layout = dbc.Container(
                             ],
                             className="g-2 mb-2",
                         ),
-                        html.Div(
-                            [_set_piece_panel(), _aerial_placeholder()],
-                            className="rs-special-scores",
-                        ),
+                        html.Div(_set_piece_panel(), className="rs-special-scores"),
                         dcc.Graph(id="rs-hist", figure=BLANK_FIG, config={"displayModeBar": False}),
                         html.Small(
                             "Horizontal axis is score band; vertical axis is player count. "
@@ -663,6 +669,7 @@ layout = dbc.Container(
                             id="rs-table",
                             page_size=50,
                             sort_action="native",
+                            sort_by=[],
                             filter_action="none",
                             style_table={"overflowX": "auto"},
                             css=[
@@ -762,6 +769,15 @@ def _as_list(value) -> list:
     if isinstance(value, str):
         return [value]
     return list(value)
+
+
+def _cell_number(value) -> float:
+    if value in (None, "", "-"):
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _clicked(n_clicks) -> bool:
@@ -1322,6 +1338,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
     Output("rs-table", "page_size"),
+    Output("rs-table", "sort_by"),
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
     Input("rs-rows", "data"),
@@ -1331,6 +1348,8 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-min-score", "value"),
     Input("rs-eligible", "value"),
     Input("rs-set-pieces", "value"),
+    Input("rs-set-piece-min-score", "value"),
+    Input("rs-set-piece-sort", "data"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
@@ -1345,6 +1364,8 @@ def render_shortlist(
     min_score,
     eligible,
     set_pieces,
+    set_piece_min,
+    set_piece_sort,
     pos_filter,
     foot_filter,
     page_size,
@@ -1365,6 +1386,7 @@ def render_shortlist(
             empty_cols,
             empty_style,
             page_size,
+            [],
             _blank_fig(theme),
             "Upload a file and pick at least one view role.",
         )
@@ -1375,9 +1397,11 @@ def render_shortlist(
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = 0 if min_score is None else float(min_score)
+    set_piece_min = 0 if set_piece_min is None else float(set_piece_min)
     elig_only = "yes" in (eligible or [])
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
+    chosen_pieces = _as_list(set_pieces)
 
     filtered = []
     for row in rows:
@@ -1391,15 +1415,31 @@ def render_shortlist(
             continue
         if any(float(row.get(role) or 0) < min_score for role in view_roles):
             continue
+        if set_piece_min > 0 and chosen_pieces:
+            piece_cols = [
+                set_piece_filter_columns(piece_id)
+                for piece_id in chosen_pieces
+            ]
+            if any(
+                _cell_number(row.get(col)) < set_piece_min
+                for col in piece_cols
+                if col
+            ):
+                continue
         if query:
             blob = f"{row.get('Name','')} {row.get('Club','')} {row.get('Position','')} {row.get('Division','')}".lower()
             if query not in blob:
                 continue
         filtered.append(row)
-    filtered.sort(
-        key=lambda row: min(float(row.get(role) or 0) for role in view_roles),
-        reverse=True,
-    )
+
+    sort_col = set_piece_sort if set_piece_sort in set_piece_columns(chosen_pieces) else None
+    if sort_col:
+        filtered.sort(key=lambda row: _cell_number(row.get(sort_col)), reverse=True)
+    else:
+        filtered.sort(
+            key=lambda row: min(float(row.get(role) or 0) for role in view_roles),
+            reverse=True,
+        )
 
     combo_by_col = {
         combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
@@ -1429,7 +1469,7 @@ def render_shortlist(
 
     ordered_roles = expanded + [role for role in roles if role not in expanded]
     piece_cols = set_piece_columns(set_pieces)
-    chosen = set(set_pieces or [])
+    chosen = set(chosen_pieces)
     score_cols = [
         profile["score"]
         for profile in SET_PIECE_PROFILES
@@ -1440,6 +1480,11 @@ def render_shortlist(
     table_cols.extend(ordered_roles)
     columns = [{"name": col, "id": col} for col in table_cols]
     table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
+    sort_by = (
+        [{"column_id": sort_col, "direction": "desc"}]
+        if sort_col and sort_col in table_cols
+        else []
+    )
     role_list = ", ".join(view_roles)
     extras = []
     if pos_filter != "all":
@@ -1447,9 +1492,13 @@ def render_shortlist(
     if foot_filter:
         extras.append({"foot-L": "left foot", "foot-R": "right foot", "foot-B": "both feet"}[foot_filter])
     extra = f" Position/foot: {', '.join(extras)}." if extras else ""
+    sort_note = f" Sorted by {sort_col}." if sort_col else " Sorted by the lowest view-role score."
+    piece_note = ""
+    if chosen_pieces and set_piece_min > 0:
+        piece_note = f" Set-piece min {set_piece_min:g}+ on all checked types."
     caption = (
         f"{len(filtered)} of {len(rows)} players meeting min score and eligibility "
-        f"on all of: {role_list}.{extra} Sorted by the lowest of those scores. "
+        f"on all of: {role_list}.{extra}{piece_note}{sort_note} "
         f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
     )
@@ -1462,9 +1511,31 @@ def render_shortlist(
         columns,
         _score_styles(score_cols, bands, theme),
         page_size,
+        sort_by,
         fig,
         caption,
     )
+
+
+@callback(
+    Output("rs-set-piece-sort", "data"),
+    Output("rs-set-piece-prev", "data"),
+    Input("rs-set-pieces", "value"),
+    State("rs-set-piece-prev", "data"),
+)
+def update_set_piece_sort(selected, prev):
+    selected = _as_list(selected)
+    prev = _as_list(prev)
+    if not ctx.triggered_id:
+        return no_update, no_update
+    added = [piece for piece in selected if piece not in prev]
+    if added:
+        return set_piece_sort_column(added[-1]), selected
+    if not selected:
+        return None, selected
+    if len(selected) < len(prev):
+        return set_piece_sort_column(selected[-1]), selected
+    return no_update, selected
 
 
 @callback(

@@ -468,9 +468,6 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 }
 
 .rs-special-scores {
-    display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(220px, 1fr);
-    gap: 12px;
     margin: 4px 0 16px;
 }
 
@@ -479,15 +476,30 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     border-radius: 10px;
     padding: 12px 14px 14px;
     background: var(--app-head);
-    min-height: 168px;
 }
 
 .rs-special-card.set-pieces {
     border-left: 3px solid #a78bfa;
 }
 
-.rs-special-card.aerial {
-    border-left: 3px solid #60a5fa;
+.rs-set-piece-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.rs-set-piece-min-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--app-muted);
+    margin: 0;
+    white-space: nowrap;
+}
+
+.rs-set-piece-min-dd {
+    min-width: 120px;
+    flex: 0 0 120px;
 }
 
 .rs-special-title {
@@ -503,13 +515,6 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     font-size: 12px;
     color: var(--app-muted);
     margin-bottom: 10px;
-}
-
-.rs-special-slot {
-    min-height: 72px;
-    border: 1px dashed var(--app-line);
-    border-radius: 8px;
-    background: var(--app-inset);
 }
 
 .rs-set-piece-formulas {
@@ -541,9 +546,6 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 }
 
 @media (max-width: 900px) {
-    .rs-special-scores {
-        grid-template-columns: 1fr;
-    }
     .rs-set-piece-line {
         grid-template-columns: 1fr;
         gap: 2px;

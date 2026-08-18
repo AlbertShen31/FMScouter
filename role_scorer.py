@@ -68,6 +68,16 @@ SET_PIECE_PROFILES = (
         "preferred": ("Fin", "Cmp"),
         "useful": (),
     },
+    {
+        "id": "aerial",
+        "label": "Aerial threat",
+        "detail": "in the box",
+        "raw": None,
+        "score": "Aerial",
+        "key": ("Jum", "Hea"),
+        "preferred": ("Str",),
+        "useful": (),
+    },
 )
 
 
@@ -103,6 +113,18 @@ def set_piece_hint() -> str:
         "DFK is a shot from the dead ball; IFK is a delivery into the box. "
         "Checking DFK or IFK also adds Fre once."
     )
+
+
+def set_piece_sort_column(piece_id: str) -> str | None:
+    for profile in SET_PIECE_PROFILES:
+        if profile["id"] == piece_id:
+            return profile.get("score") or profile.get("raw")
+    return None
+
+
+def set_piece_filter_columns(piece_id: str) -> str:
+    """Column used for min-score filtering on a checked set-piece type."""
+    return set_piece_sort_column(piece_id) or ""
 
 
 def set_piece_columns(selected) -> list[str]:
