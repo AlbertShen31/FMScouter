@@ -146,6 +146,23 @@ def group_labels(role_id: str) -> str:
     wanted = set(role_groups(role_id))
     return " / ".join(label for gid, label, _roles in GROUP_DEFS if gid in wanted)
 
+
+def group_abbr(role_id: str) -> str:
+    """Short group ids, e.g. wm/w."""
+    return "/".join(role_groups(role_id))
+
+
+def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
+    """Compact UI name, e.g. 'wm/w Inside Winger IP'."""
+    abbr = group_abbr(role_id)
+    name = pretty_role_name(role_id)
+    parts = [part for part in (abbr, name) if part]
+    if with_phase:
+        phase = phase_label((pc.all_positions.get(role_id) or {}).get("phase", ""))
+        if phase and phase != "—":
+            parts.append(phase)
+    return " ".join(parts)
+
 # Player-position filter cards on Role scores. The “Winger” card is AML/AMR
 # players, not the `w` role group and not the Winger (`W`) role.
 POS_CARDS = [
@@ -296,18 +313,27 @@ def role_meta(role_id: str) -> dict[str, str]:
         "group": group,
         "groups": ",".join(groups),
         "group_label": group_labels(role_id),
+        "group_abbr": "/".join(groups),
+        "compact": compact_role_label(role_id),
+        "compact_name": compact_role_label(role_id, with_phase=False),
     }
 
 
 def role_option_label(role_id: str) -> str:
-    meta = role_meta(role_id)
-    return f"{meta['name']} ({meta['code']}) · {meta['phase']}"
+    return compact_role_label(role_id)
 
 
-def role_options(phase: str | None = None, keep: list[str] | None = None) -> list[dict]:
-    """Flat `{label, value}` options. `phase` is All/IP/OOP/GK."""
+def role_options(
+    phase: str | None = None,
+    group: str | None = None,
+    keep: list[str] | None = None,
+) -> list[dict]:
+    """Flat `{label, value}` options. `phase` is All/IP/OOP."""
     keep = set(keep or [])
     phase = (phase or "all").upper()
+    if phase == "GK":
+        phase = "ALL"
+    group = (group or "all").lower()
     options = []
     for role_id in iter_roles():
         cfg_phase = pc.all_positions[role_id].get("phase", "")
@@ -319,13 +345,11 @@ def role_options(phase: str | None = None, keep: list[str] | None = None) -> lis
             and role_id not in keep
         ):
             continue
-        prefix = group_labels(role_id) or next(
-            (label for gid, label, _roles in GROUP_DEFS if gid == home),
-            home,
-        )
+        if group not in ("", "all") and group not in groups and role_id not in keep:
+            continue
         options.append(
             {
-                "label": f"{prefix} — {role_option_label(role_id)}",
+                "label": compact_role_label(role_id),
                 "value": role_id,
             }
         )
@@ -443,12 +467,17 @@ def foot_match(row: dict[str, Any], foot_filter: str) -> bool:
     return True
 
 
-def score_band(score: float) -> str:
-    if score >= 14:
+def score_band(
+    score: float,
+    elite: float = 14,
+    good: float = 11,
+    ok: float = 8,
+) -> str:
+    if score >= elite:
         return "elite"
-    if score >= 11:
+    if score >= good:
         return "good"
-    if score >= 8:
+    if score >= ok:
         return "ok"
     return "poor"
 

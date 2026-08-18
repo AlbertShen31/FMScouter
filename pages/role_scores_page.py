@@ -19,7 +19,7 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 
 from role_scorer import (
-    DEFAULT_ROLES,
+    GROUP_DEFS,
     POS_CARDS,
     foot_match,
     parse_export,
@@ -51,20 +51,152 @@ SCORE_COLORS = {
     "poor": ("#fee2e2", "#b91c1c"),
 }
 
-BLANK_FIG = go.Figure()
-BLANK_FIG.update_layout(
-    height=220,
-    margin=dict(l=40, r=20, t=20, b=40),
-    xaxis_title="Score band",
-    yaxis_title="Player count",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-)
+DEFAULT_BANDS = {"elite": 14.0, "good": 11.0, "ok": 8.0}
+
+
+def _band_value(value, default: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number:
+        return default
+    return round(max(0.0, min(20.0, number)) * 2) / 2
+
+
+def _fmt_cut(number: float) -> str:
+    number = _band_value(number, 0.0)
+    return str(int(number)) if number == int(number) else f"{number:.1f}"
+
+
+def _normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
+    raw = raw or {}
+    elite = _band_value(raw.get("elite"), DEFAULT_BANDS["elite"])
+    good = _band_value(raw.get("good"), DEFAULT_BANDS["good"])
+    ok = _band_value(raw.get("ok"), DEFAULT_BANDS["ok"])
+    if edited == "rs-band-elite":
+        if good >= elite:
+            good = max(0.5, elite - 0.5)
+        if ok >= good:
+            ok = max(0.0, good - 0.5)
+    elif edited == "rs-band-ok":
+        if ok >= good:
+            good = min(19.5, ok + 0.5)
+        if good >= elite:
+            elite = min(20.0, good + 0.5)
+    else:
+        if good >= elite:
+            elite = min(20.0, good + 0.5)
+        if ok >= good:
+            ok = max(0.0, good - 0.5)
+    ok = min(ok, 19.0)
+    good = min(max(good, ok + 0.5), 19.5)
+    elite = min(max(elite, good + 0.5), 20.0)
+    return {"elite": elite, "good": good, "ok": max(0.0, ok)}
+
+
+def _legend_input(band: str, value: float) -> dcc.Input:
+    return dcc.Input(
+        id=f"rs-band-{band}",
+        type="number",
+        value=value,
+        min=0,
+        max=20,
+        step=0.5,
+        debounce=True,
+        className="rs-legend-input",
+    )
+
+
+def _band_legend(bands: dict | None = None) -> html.Div:
+    bands = _normalize_bands(bands)
+    chips = []
+    for band, label, prefix, editable in (
+        ("elite", "Elite", "≥", True),
+        ("good", "Good", "≥", True),
+        ("ok", "OK", "≥", True),
+        ("poor", "Poor", "<", False),
+    ):
+        if editable:
+            cut = [
+                html.Span(prefix, className="rs-legend-op"),
+                _legend_input(band, bands[band]),
+            ]
+        else:
+            cut = [
+                html.Span(
+                    f"{prefix} {_fmt_cut(bands['ok'])}",
+                    id="rs-poor-cut",
+                    className="rs-legend-op",
+                )
+            ]
+        chips.append(
+            html.Label(
+                [html.Span(label, className="rs-legend-name"), *cut],
+                className=f"rs-legend-chip {band}",
+                title="Minimum score for this band"
+                if editable
+                else "Anything below the OK cutoff",
+            )
+        )
+    return html.Div(chips, className="rs-depth-legend")
+
+
+def _is_dark(theme) -> bool:
+    return (theme or "dark") != "light"
+
+
+def _chart_layout(theme, *, height=240, showlegend=False) -> dict:
+    dark = _is_dark(theme)
+    font = "#e8eef6" if dark else "#212529"
+    grid = "rgba(255,255,255,0.08)" if dark else "#dee2e6"
+    return dict(
+        height=height,
+        margin=dict(l=40, r=20, t=20, b=40),
+        font=dict(color=font, family="Inter, Segoe UI, sans-serif"),
+        xaxis=dict(title="Score band", gridcolor=grid, zeroline=False, color=font),
+        yaxis=dict(title="Player count", gridcolor=grid, zeroline=False, color=font),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        barmode="group",
+        legend_title_text="View role",
+        showlegend=showlegend,
+    )
+
+
+def _blank_fig(theme):
+    fig = go.Figure()
+    fig.update_layout(**_chart_layout(theme, height=220))
+    return fig
+
+
+BLANK_FIG = _blank_fig("dark")
+
+
+def _group_buttons(active: str = "all") -> list:
+    buttons = [
+        html.Button(
+            "All groups",
+            id={"type": "rs-group", "group": "all"},
+            n_clicks=0,
+            className="rs-chip" + (" active" if active == "all" else ""),
+        )
+    ]
+    for group, label, _roles in GROUP_DEFS:
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": "rs-group", "group": group},
+                n_clicks=0,
+                className="rs-chip" + (" active" if active == group else ""),
+            )
+        )
+    return buttons
 
 
 def _phase_buttons(active: str = "all") -> list:
     buttons = []
-    for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP"), ("GK", "GK")):
+    for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP")):
         buttons.append(
             html.Button(
                 label,
@@ -83,7 +215,8 @@ def _role_pills(role_ids: list[str]) -> list:
         pills.append(
             html.Button(
                 [
-                    html.Span(meta["code"], className="rs-pill-code"),
+                    html.Span(meta["group_abbr"], className="rs-pill-groups"),
+                    html.Span(meta["name"], className="rs-pill-code"),
                     html.Span(
                         meta["phase"],
                         className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
@@ -92,7 +225,7 @@ def _role_pills(role_ids: list[str]) -> list:
                 ],
                 id={"type": "rs-pill", "role": role_id},
                 n_clicks=0,
-                title=f"{meta['name']} · {meta['phase']}",
+                title=meta["compact"],
                 className="rs-role-pill",
             )
         )
@@ -104,14 +237,17 @@ layout = dbc.Container(
         dcc.Store(id="rs-parsed"),
         dcc.Store(id="rs-rows"),
         dcc.Store(id="rs-phase", data="all"),
+        dcc.Store(id="rs-group", data="all"),
         dcc.Store(id="rs-pos-filter", data="all"),
         dcc.Store(id="rs-foot-filter", data=""),
+        dcc.Store(id="rs-bands", data=DEFAULT_BANDS),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-foot", "foot": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-depth", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-pill", "role": "_"}, n_clicks=0),
+                html.Button(id={"type": "rs-group", "group": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -119,7 +255,7 @@ layout = dbc.Container(
         dcc.Download(id="rs-download-canvas"),
         html.H1("FM26 role scores", className="mt-2 mb-1"),
         html.P(
-            "Upload an FM attribute CSV and score FM26 roles (no duties — IP / OOP / GK). "
+            "Upload an FM attribute CSV and score FM26 roles (no duties — IP / OOP). "
             "Filter by position, foot, and score band, then download a scored sheet or Cursor canvas.",
             className="text-muted",
         ),
@@ -173,26 +309,36 @@ layout = dbc.Container(
                     [
                         html.Div(
                             [
-                                html.Span("Phase", className="rs-chip-label"),
                                 html.Div(
-                                    _phase_buttons("all"),
-                                    id="rs-phase-row",
-                                    className="rs-chip-row",
+                                    [
+                                        html.Span("Phase", className="rs-chip-label"),
+                                        html.Div(
+                                            _phase_buttons("all"),
+                                            id="rs-phase-row",
+                                            className="rs-chip-row",
+                                        ),
+                                        html.Button(
+                                            "Clear",
+                                            id="rs-clear-roles",
+                                            n_clicks=0,
+                                            className="rs-chip ghost",
+                                        ),
+                                    ],
+                                    className="rs-role-toolbar",
                                 ),
-                                html.Button(
-                                    "Reset defaults",
-                                    id="rs-reset-roles",
-                                    n_clicks=0,
-                                    className="rs-chip ghost",
-                                ),
-                                html.Button(
-                                    "Clear",
-                                    id="rs-clear-roles",
-                                    n_clicks=0,
-                                    className="rs-chip ghost",
+                                html.Div(
+                                    [
+                                        html.Span("Group", className="rs-chip-label"),
+                                        html.Div(
+                                            _group_buttons("all"),
+                                            id="rs-group-row",
+                                            className="rs-chip-row wrap",
+                                        ),
+                                    ],
+                                    className="rs-role-toolbar",
                                 ),
                             ],
-                            className="rs-role-toolbar mb-2",
+                            className="mb-2",
                         ),
                         dcc.Dropdown(
                             id="rs-roles",
@@ -204,7 +350,7 @@ layout = dbc.Container(
                         html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
                         html.Small(
                             "No roles are selected until you pick them. "
-                            "Reset defaults loads SKP, BCB, WB, CM, CHM, IF. "
+                            "Phase and group filters narrow the list; already-selected roles stay. "
                             "Click a pill to remove it.",
                             className="text-muted",
                         ),
@@ -214,7 +360,21 @@ layout = dbc.Container(
             className="mb-3",
         ),
         html.Div(id="rs-pos-bar"),
-        html.Div(id="rs-summary"),
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Span("Squad depth", className="rs-depth-heading-label"),
+                        _band_legend(),
+                    ],
+                    className="rs-depth-heading",
+                ),
+                html.Div(id="rs-summary", className="rs-depth-grid"),
+            ],
+            id="rs-depth-wrap",
+            className="rs-depth-panel",
+            hidden=True,
+        ),
         dbc.Card(
             [
                 dbc.CardHeader("4. Shortlist"),
@@ -340,13 +500,17 @@ layout = dbc.Container(
                                 "fontSize": "13px",
                                 "padding": "8px",
                                 "whiteSpace": "nowrap",
+                                "backgroundColor": "transparent",
+                                "color": "inherit",
+                                "border": "1px solid transparent",
                             },
                             style_header={
                                 "fontWeight": "600",
-                                "backgroundColor": "#f8f9fa",
                                 "textTransform": "uppercase",
                                 "fontSize": "11px",
                                 "letterSpacing": "0.04em",
+                                "backgroundColor": "transparent",
+                                "color": "inherit",
                             },
                             style_data_conditional=[
                                 {
@@ -389,6 +553,7 @@ layout = dbc.Container(
             className="mb-4",
         ),
     ],
+    className="rs-page",
     fluid=True,
 )
 
@@ -420,18 +585,21 @@ def _clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
 
 
-def _score_styles(role_labels: list[str]) -> list[dict]:
+def _score_styles(role_labels: list[str], bands: dict | None = None, theme: str | None = None) -> list[dict]:
+    bands = _normalize_bands(bands)
+    elite, good, ok = bands["elite"], bands["good"], bands["ok"]
+    injury = "rgba(251, 191, 36, 0.18)" if _is_dark(theme) else "#fff3cd"
     rules = [
         {
             "if": {"filter_query": '{Injury} != "-"'},
-            "backgroundColor": "#fff3cd",
+            "backgroundColor": injury,
         }
     ]
     for label in role_labels:
         rules.extend(
             [
                 {
-                    "if": {"filter_query": f"{{{label}}} >= 14", "column_id": label},
+                    "if": {"filter_query": f"{{{label}}} >= {elite}", "column_id": label},
                     "backgroundColor": SCORE_COLORS["elite"][0],
                     "color": SCORE_COLORS["elite"][1],
                     "fontWeight": "700",
@@ -439,7 +607,7 @@ def _score_styles(role_labels: list[str]) -> list[dict]:
                 },
                 {
                     "if": {
-                        "filter_query": f"{{{label}}} >= 11 && {{{label}}} < 14",
+                        "filter_query": f"{{{label}}} >= {good} && {{{label}}} < {elite}",
                         "column_id": label,
                     },
                     "backgroundColor": SCORE_COLORS["good"][0],
@@ -448,7 +616,7 @@ def _score_styles(role_labels: list[str]) -> list[dict]:
                 },
                 {
                     "if": {
-                        "filter_query": f"{{{label}}} >= 8 && {{{label}}} < 11",
+                        "filter_query": f"{{{label}}} >= {ok} && {{{label}}} < {good}",
                         "column_id": label,
                     },
                     "backgroundColor": SCORE_COLORS["ok"][0],
@@ -456,7 +624,7 @@ def _score_styles(role_labels: list[str]) -> list[dict]:
                     "fontWeight": "700",
                 },
                 {
-                    "if": {"filter_query": f"{{{label}}} < 8", "column_id": label},
+                    "if": {"filter_query": f"{{{label}}} < {ok}", "column_id": label},
                     "backgroundColor": SCORE_COLORS["poor"][0],
                     "color": SCORE_COLORS["poor"][1],
                     "fontWeight": "700",
@@ -499,15 +667,27 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
     return html.Div(
         [
             html.Div(cards, className="rs-pos-cards"),
-            html.Div(foot_btns, className="rs-pos-utils"),
+            html.Div(
+                [
+                    html.Span("Footedness", className="rs-foot-label"),
+                    html.Div(foot_btns, className="rs-foot-btns"),
+                ],
+                className="rs-pos-utils",
+            ),
         ],
         className="rs-pos-bar",
     )
 
 
-def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -> html.Div | None:
+def _depth_panel(
+    rows: list[dict],
+    role_ids: list[str],
+    view_roles: list[str],
+    bands: dict | None = None,
+) -> list:
     if not rows or not role_ids:
-        return None
+        return []
+    bands = _normalize_bands(bands)
     cards = []
     for role_id in role_ids:
         meta = role_meta(role_id)
@@ -517,9 +697,9 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
             continue
         scores = [float(row.get(column) or 0) for row in eligible]
         avg = sum(scores) / len(scores)
-        bands = {"elite": 0, "good": 0, "ok": 0, "poor": 0}
+        counts = {"elite": 0, "good": 0, "ok": 0, "poor": 0}
         for score in scores:
-            bands[score_band(score)] += 1
+            counts[score_band(score, **bands)] += 1
         total = len(scores) or 1
         top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
         names = " · ".join(player.get("Name", "") for player in top)
@@ -529,8 +709,8 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                 [
                     html.Div(
                         [
+                            html.Span(meta["group_abbr"], className="rs-depth-code"),
                             html.Span(meta["name"], className="rs-depth-name"),
-                            html.Span(meta["code"], className="rs-depth-code"),
                             html.Span(
                                 meta["phase"],
                                 className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
@@ -543,7 +723,7 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                             html.Span("Avg", className="rs-depth-avg-label"),
                             html.Span(
                                 f"{avg:.1f}",
-                                className=f"rs-depth-avg rs-band-{score_band(avg)}",
+                                className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
                             ),
                         ],
                         className="rs-depth-avg-row",
@@ -552,10 +732,10 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                         [
                             html.Div(
                                 className=f"rs-depth-seg {band}",
-                                style={"width": f"{bands[band] / total * 100:.1f}%"},
+                                style={"width": f"{counts[band] / total * 100:.1f}%"},
                             )
                             for band in ("elite", "good", "ok", "poor")
-                            if bands[band]
+                            if counts[band]
                         ],
                         className="rs-depth-bar",
                     ),
@@ -563,7 +743,7 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                         [
                             html.Div(
                                 [
-                                    html.Div(str(bands[band]), className=f"rs-tier-val {band}"),
+                                    html.Div(str(counts[band]), className=f"rs-tier-val {band}"),
                                     html.Div(label, className="rs-tier-lbl"),
                                 ],
                                 className="rs-tier",
@@ -584,33 +764,7 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
                 className="rs-depth-card" + active,
             )
         )
-    if not cards:
-        return None
-    return html.Div(
-        [
-            html.Div(
-                [
-                    html.Span("Squad depth", className="rs-depth-heading-label"),
-                    html.Span(
-                        [
-                            html.Span(className="rs-depth-dot elite"),
-                            "Elite ≥14",
-                            html.Span(className="rs-depth-dot good"),
-                            "Good ≥11",
-                            html.Span(className="rs-depth-dot ok"),
-                            "OK ≥8",
-                            html.Span(className="rs-depth-dot poor"),
-                            "Poor <8",
-                        ],
-                        className="rs-depth-legend",
-                    ),
-                ],
-                className="rs-depth-heading",
-            ),
-            html.Div(cards, className="rs-depth-grid"),
-        ],
-        className="rs-depth-panel",
-    )
+    return cards
 
 
 @callback(
@@ -655,12 +809,28 @@ def set_phase(n_clicks):
 
 
 @callback(
+    Output("rs-group", "data"),
+    Output("rs-group-row", "children"),
+    Input({"type": "rs-group", "group": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_group(n_clicks):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    group = ctx.triggered_id["group"]
+    if group == "_":
+        return no_update, no_update
+    return group, _group_buttons(group)
+
+
+@callback(
     Output("rs-roles", "options"),
     Input("rs-phase", "data"),
+    Input("rs-group", "data"),
     Input("rs-roles", "value"),
 )
-def filter_role_options(phase, selected):
-    return role_options(phase=phase, keep=_as_list(selected)) or []
+def filter_role_options(phase, group, selected):
+    return role_options(phase=phase, group=group, keep=_as_list(selected)) or []
 
 
 @callback(
@@ -688,16 +858,13 @@ def remove_role(n_clicks, selected):
 
 @callback(
     Output("rs-roles", "value", allow_duplicate=True),
-    Input("rs-reset-roles", "n_clicks"),
     Input("rs-clear-roles", "n_clicks"),
     prevent_initial_call=True,
 )
-def reset_or_clear(_reset, _clear):
+def clear_roles(_clear):
     if not ctx.triggered_id:
         return no_update
-    if ctx.triggered_id == "rs-clear-roles":
-        return []
-    return DEFAULT_ROLES
+    return []
 
 
 @callback(
@@ -727,6 +894,33 @@ def set_foot_filter(n_clicks, current):
     if chosen == "_":
         return no_update
     return "" if current == chosen else chosen
+
+
+@callback(
+    Output("rs-bands", "data"),
+    Output("rs-band-elite", "value"),
+    Output("rs-band-good", "value"),
+    Output("rs-band-ok", "value"),
+    Output("rs-poor-cut", "children"),
+    Input("rs-band-elite", "value"),
+    Input("rs-band-good", "value"),
+    Input("rs-band-ok", "value"),
+    prevent_initial_call=True,
+)
+def set_bands(elite, good, ok):
+    edited = ctx.triggered_id if ctx.triggered_id in {
+        "rs-band-elite",
+        "rs-band-good",
+        "rs-band-ok",
+    } else None
+    bands = _normalize_bands({"elite": elite, "good": good, "ok": ok}, edited=edited)
+    return (
+        bands,
+        bands["elite"],
+        bands["good"],
+        bands["ok"],
+        f"< {_fmt_cut(bands['ok'])}",
+    )
 
 
 @callback(
@@ -773,7 +967,7 @@ def rescore(parsed, role_ids, pack_id, current_view):
     options = []
     for role_id, label in zip(role_ids, labels):
         meta = role_meta(role_id)
-        options.append({"label": f"{meta['name']} ({label})", "value": label})
+        options.append({"label": meta["compact"], "value": label})
     kept = [role for role in _as_list(current_view) if role in labels]
     view = kept or labels
     return (
@@ -791,6 +985,7 @@ def rescore(parsed, role_ids, pack_id, current_view):
 @callback(
     Output("rs-pos-bar", "children"),
     Output("rs-summary", "children"),
+    Output("rs-depth-wrap", "hidden"),
     Output("rs-table", "data"),
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
@@ -806,23 +1001,37 @@ def rescore(parsed, role_ids, pack_id, current_view):
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
+    Input("rs-bands", "data"),
+    Input("theme", "data"),
 )
 def render_shortlist(
-    payload, view_role, query, max_age, min_score, eligible, pos_filter, foot_filter, page_size
+    payload,
+    view_role,
+    query,
+    max_age,
+    min_score,
+    eligible,
+    pos_filter,
+    foot_filter,
+    page_size,
+    bands,
+    theme,
 ):
     empty_cols = [{"name": "Name", "id": "Name"}]
-    empty_style = _score_styles([])
+    empty_style = _score_styles([], theme=theme)
     view_roles = _as_list(view_role)
     page_size = int(page_size or 50)
+    bands = _normalize_bands(bands)
     if not payload or not payload.get("rows") or not view_roles:
         return (
             None,
-            None,
+            [],
+            True,
             [],
             empty_cols,
             empty_style,
             page_size,
-            BLANK_FIG,
+            _blank_fig(theme),
             "Upload a file and pick at least one view role.",
         )
     rows = payload["rows"]
@@ -867,17 +1076,7 @@ def render_shortlist(
             else:
                 counts.append(sum(1 for v in values if lo <= v < hi))
         fig.add_bar(x=[b[0] for b in BINS], y=counts, name=role)
-    fig.update_layout(
-        height=240,
-        margin=dict(l=40, r=20, t=20, b=40),
-        xaxis_title="Score band",
-        yaxis_title="Player count",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        barmode="group",
-        legend_title_text="View role",
-        showlegend=len(view_roles) > 1,
-    )
+    fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
 
     ordered_roles = view_roles + [role for role in roles if role not in view_roles]
     table_cols = ["Name", "Age", "Position", "Club", "Rec", "Injury"] + ordered_roles
@@ -895,12 +1094,14 @@ def render_shortlist(
         f"on all of: {role_list}.{extra} Sorted by the lowest of those scores. "
         f"Source: {payload.get('filename')}."
     )
+    cards = _depth_panel(rows, role_ids, view_roles, bands)
     return (
         _pos_bar(rows, pos_filter, foot_filter),
-        _depth_panel(rows, role_ids, view_roles),
+        cards,
+        not cards,
         table_rows,
         columns,
-        _score_styles(ordered_roles),
+        _score_styles(ordered_roles, bands, theme),
         page_size,
         fig,
         caption,

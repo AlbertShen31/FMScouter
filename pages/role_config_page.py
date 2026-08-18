@@ -37,7 +37,7 @@ def _match(role_id: str, meta: dict, phase: str, group: str, query: str) -> bool
     if group not in ("", "all") and group not in groups:
         return False
     if query:
-        blob = f"{meta['name']} {meta['code']} {role_id}".lower()
+        blob = f"{meta['name']} {meta['code']} {meta.get('compact','')} {role_id}".lower()
         if query not in blob:
             return False
     return True
@@ -106,13 +106,13 @@ def _role_list(selected: str, phase: str, group: str, query: str) -> list:
             html.Button(
                 [
                     html.Span(meta["code"], className=f"rc-list-code {tone}"),
-                    html.Span(meta["name"], className="rc-list-name"),
+                    html.Span(meta["compact_name"], className="rc-list-name"),
                     html.Span("•", className="rc-dirty") if dirty else None,
                 ],
                 id={"type": "rc-pick", "role": role_id},
                 n_clicks=0,
                 className="rc-list-item" + active,
-                title=f"{meta['name']} ({meta['code']})",
+                title=meta["compact"],
             )
         )
     if not items:
