@@ -588,7 +588,25 @@ def _depth_panel(rows: list[dict], role_ids: list[str], view_roles: list[str]) -
         return None
     return html.Div(
         [
-            html.Div("Squad depth", className="rs-depth-heading"),
+            html.Div(
+                [
+                    html.Span("Squad depth", className="rs-depth-heading-label"),
+                    html.Span(
+                        [
+                            html.Span(className="rs-depth-dot elite"),
+                            "Elite ≥14",
+                            html.Span(className="rs-depth-dot good"),
+                            "Good ≥11",
+                            html.Span(className="rs-depth-dot ok"),
+                            "OK ≥8",
+                            html.Span(className="rs-depth-dot poor"),
+                            "Poor <8",
+                        ],
+                        className="rs-depth-legend",
+                    ),
+                ],
+                className="rs-depth-heading",
+            ),
             html.Div(cards, className="rs-depth-grid"),
         ],
         className="rs-depth-panel",
@@ -722,7 +740,7 @@ def focus_view_role(n_clicks):
     role = ctx.triggered_id["role"]
     if role == "_":
         return no_update
-    return [role]
+    return [role_meta(role)["column"]]
 
 
 @callback(

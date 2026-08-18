@@ -195,13 +195,44 @@
 }
 
 .rs-depth-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.rs-depth-heading-label {
     font-size: 10px;
     font-weight: 600;
     color: #6c757d;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    margin-bottom: 10px;
 }
+
+.rs-depth-legend {
+    font-size: 11px;
+    color: #6c757d;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+}
+
+.rs-depth-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin: 0 3px 0 10px;
+    vertical-align: middle;
+}
+
+.rs-depth-dot:first-child { margin-left: 0; }
+.rs-depth-dot.elite { background: #22c55e; }
+.rs-depth-dot.good { background: #3b82f6; }
+.rs-depth-dot.ok { background: #f59e0b; }
+.rs-depth-dot.poor { background: #ef4444; }
 
 .rs-depth-grid {
     display: flex;
