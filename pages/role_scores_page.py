@@ -29,9 +29,14 @@ from role_scorer import (
     combo_meta,
     combo_score_labels,
     foot_match,
+    group_abbr_tone,
     normalize_combos,
     parse_combo_id,
     parse_export,
+    planned_squad_csv,
+    planned_squad_export_rows,
+    planned_squad_fieldnames,
+    player_row_key,
     role_meta,
     role_options,
     score_band,
@@ -41,7 +46,6 @@ from role_scorer import (
     set_piece_filter_columns,
     set_piece_formula,
     set_piece_hint,
-    set_piece_sort_column,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -230,6 +234,19 @@ def _set_piece_check_label(profile: dict) -> str:
     return profile["label"]
 
 
+def _colored_group_abbr(abbr: str, *, css: str = "rs-pill-groups"):
+    if not abbr:
+        return []
+    parts = []
+    for index, token in enumerate(abbr.split("/")):
+        if index:
+            parts.append(html.Span("/", className=f"{css}-sep"))
+        tone = group_abbr_tone(token)
+        class_name = f"{css} {tone}".strip() if tone else css
+        parts.append(html.Span(token, className=class_name))
+    return html.Span(parts, className="rs-group-abbr")
+
+
 def _set_piece_panel() -> html.Div:
     lines = []
     for profile in SET_PIECE_PROFILES:
@@ -276,10 +293,33 @@ def _set_piece_panel() -> html.Div:
                 inline=True,
                 className="rs-set-piece-checks",
             ),
-            html.Div(lines, className="rs-set-piece-formulas"),
+            html.Button(
+                "Show formulas",
+                id="rs-set-piece-formulas-toggle",
+                n_clicks=0,
+                className="rs-set-piece-formulas-toggle",
+            ),
+            dbc.Collapse(
+                html.Div(lines, className="rs-set-piece-formulas"),
+                id="rs-set-piece-formulas-collapse",
+                is_open=False,
+            ),
         ],
         className="rs-special-card set-pieces",
     )
+
+
+FOOT_FILTER_HINTS = {
+    "foot-L": (
+        "Left foot stronger than right, with the right foot fairly weak or weaker "
+        "(reasonable, weak, or very weak)."
+    ),
+    "foot-B": "Both feet at least fairly strong.",
+    "foot-R": (
+        "Right foot stronger than left, with the left foot fairly weak or weaker "
+        "(reasonable, weak, or very weak)."
+    ),
+}
 
 
 def _role_pills(role_ids: list[str]) -> list:
@@ -289,7 +329,7 @@ def _role_pills(role_ids: list[str]) -> list:
         pills.append(
             html.Button(
                 [
-                    html.Span(meta["group_abbr"], className="rs-pill-groups"),
+                    _colored_group_abbr(meta["group_abbr"]),
                     html.Span(meta["name"], className="rs-pill-code"),
                     html.Span(
                         meta["phase"],
@@ -313,15 +353,14 @@ def _combo_pills(combos: list[dict] | None) -> list:
         pills.append(
             html.Button(
                 [
-                    html.Span(meta["group_abbr"], className="rs-pill-groups"),
-                    html.Span(meta["code"], className="rs-pill-code"),
-                    html.Span(meta["name"], className="rs-pill-name"),
+                    _colored_group_abbr(meta["group_abbr"]),
+                    html.Span(meta["short_label"], className="rs-pill-code"),
                     html.Span(meta["phase"], className="rs-phase-tag combo"),
                     html.Span("×", className="rs-pill-x"),
                 ],
                 id={"type": "rs-combo-pill", "combo": meta["id"]},
                 n_clicks=0,
-                title=f"{meta['compact']} · {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP",
+                title=f"{meta['name']} · {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP",
                 className="rs-role-pill combo",
             )
         )
@@ -348,8 +387,7 @@ layout = dbc.Container(
         dcc.Store(id="rs-bands", data=DEFAULT_BANDS),
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
-        dcc.Store(id="rs-set-piece-sort", data=None),
-        dcc.Store(id="rs-set-piece-prev", data=[]),
+        dcc.Store(id="rs-squad-marked", data=[]),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -364,6 +402,7 @@ layout = dbc.Container(
         ),
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-canvas"),
+        dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-1"),
         html.P(
             "Upload an FM attribute CSV and score FM26 roles (no duties — IP / OOP). "
@@ -420,36 +459,26 @@ layout = dbc.Container(
                     [
                         html.Div(
                             [
+                                html.Span("Phase", className="rs-chip-label"),
                                 html.Div(
-                                    [
-                                        html.Span("Phase", className="rs-chip-label"),
-                                        html.Div(
-                                            _phase_buttons("all"),
-                                            id="rs-phase-row",
-                                            className="rs-chip-row",
-                                        ),
-                                        html.Button(
-                                            "Clear",
-                                            id="rs-clear-roles",
-                                            n_clicks=0,
-                                            className="rs-chip ghost",
-                                        ),
-                                    ],
-                                    className="rs-role-toolbar",
+                                    _phase_buttons("all"),
+                                    id="rs-phase-row",
+                                    className="rs-chip-row",
                                 ),
+                                html.Span("Group", className="rs-chip-label"),
                                 html.Div(
-                                    [
-                                        html.Span("Group", className="rs-chip-label"),
-                                        html.Div(
-                                            _group_buttons("all"),
-                                            id="rs-group-row",
-                                            className="rs-chip-row wrap",
-                                        ),
-                                    ],
-                                    className="rs-role-toolbar",
+                                    _group_buttons("all"),
+                                    id="rs-group-row",
+                                    className="rs-chip-row wrap",
+                                ),
+                                html.Button(
+                                    "Clear",
+                                    id="rs-clear-roles",
+                                    n_clicks=0,
+                                    className="rs-chip ghost",
                                 ),
                             ],
-                            className="mb-2",
+                            className="rs-role-toolbar mb-2",
                         ),
                         dcc.Dropdown(
                             id="rs-roles",
@@ -669,7 +698,10 @@ layout = dbc.Container(
                             id="rs-table",
                             page_size=50,
                             sort_action="native",
-                            sort_by=[],
+                            sort_mode="single",
+                            sort_as_null=["-", ""],
+                            row_selectable="multi",
+                            selected_rows=[],
                             filter_action="none",
                             style_table={"overflowX": "auto"},
                             css=[
@@ -701,6 +733,7 @@ layout = dbc.Container(
                                 "letterSpacing": "0.04em",
                                 "backgroundColor": "transparent",
                                 "color": "inherit",
+                                "cursor": "pointer",
                             },
                             style_data_conditional=[
                                 {
@@ -709,7 +742,26 @@ layout = dbc.Container(
                                 }
                             ],
                         ),
-                        html.Div(id="rs-table-caption", className="text-muted mt-2"),
+                        html.Div(
+                            [
+                                html.Div(id="rs-table-caption", className="text-muted"),
+                                dbc.Button(
+                                    "Clear marked rows",
+                                    id="rs-squad-clear-btn",
+                                    size="sm",
+                                    color="secondary",
+                                    outline=True,
+                                    disabled=True,
+                                    className="rs-squad-clear-btn",
+                                ),
+                            ],
+                            className="rs-table-caption-row mt-2",
+                        ),
+                        html.Small(
+                            "Click a column header to sort. "
+                            "Select rows in the table to mark players for a planned squad export.",
+                            className="text-muted d-block",
+                        ),
                     ]
                 ),
             ],
@@ -731,11 +783,28 @@ layout = dbc.Container(
                             id="rs-canvas-btn",
                             color="secondary",
                             outline=True,
+                            className="me-2",
+                        ),
+                        html.Hr(className="my-3"),
+                        html.Div("Planned squad", className="rs-export-subhead"),
+                        html.P(
+                            "Mark players in the shortlist table, review the preview below, "
+                            "then download a compact CSV with identity fields, view-role scores "
+                            "(including combo parts), and any set-piece columns you checked.",
+                            className="text-muted",
+                        ),
+                        html.Div(id="rs-squad-preview", className="rs-squad-preview"),
+                        dbc.Button(
+                            "Download planned squad CSV",
+                            id="rs-squad-btn",
+                            color="success",
+                            className="mt-2",
+                            disabled=True,
                         ),
                         html.P(
                             "The canvas file opens beside chat in Cursor. "
                             "Put it in this workspace’s canvases folder, or open the file directly.",
-                            className="text-muted mt-2 mb-0",
+                            className="text-muted mt-3 mb-0",
                         ),
                     ]
                 ),
@@ -860,6 +929,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
                 label,
                 id={"type": "rs-foot", "foot": key},
                 n_clicks=0,
+                title=FOOT_FILTER_HINTS.get(key, ""),
                 className="rs-foot-btn" + (" active" if foot == key else ""),
             )
         )
@@ -892,12 +962,13 @@ def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict
     top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
     names = " · ".join(player.get("Name", "") for player in top)
     active = " active" if column in view_roles and len(view_roles) == 1 else ""
+    label = meta.get("short_label") or meta["name"]
     return html.Button(
         [
             html.Div(
                 [
-                    html.Span(meta["group_abbr"], className="rs-depth-code"),
-                    html.Span(meta["name"], className="rs-depth-name"),
+                    _colored_group_abbr(meta["group_abbr"], css="rs-depth-code"),
+                    html.Span(label, className="rs-depth-name"),
                     html.Span(
                         meta["phase"],
                         className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
@@ -1338,7 +1409,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
     Output("rs-table", "page_size"),
-    Output("rs-table", "sort_by"),
+    Output("rs-table", "selected_rows"),
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
     Input("rs-rows", "data"),
@@ -1349,7 +1420,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-eligible", "value"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
-    Input("rs-set-piece-sort", "data"),
+    Input("rs-squad-marked", "data"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
@@ -1365,7 +1436,7 @@ def render_shortlist(
     eligible,
     set_pieces,
     set_piece_min,
-    set_piece_sort,
+    squad_marked,
     pos_filter,
     foot_filter,
     page_size,
@@ -1402,6 +1473,7 @@ def render_shortlist(
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
     chosen_pieces = _as_list(set_pieces)
+    marked_keys = set(_as_list(squad_marked))
 
     filtered = []
     for row in rows:
@@ -1432,14 +1504,10 @@ def render_shortlist(
                 continue
         filtered.append(row)
 
-    sort_col = set_piece_sort if set_piece_sort in set_piece_columns(chosen_pieces) else None
-    if sort_col:
-        filtered.sort(key=lambda row: _cell_number(row.get(sort_col)), reverse=True)
-    else:
-        filtered.sort(
-            key=lambda row: min(float(row.get(role) or 0) for role in view_roles),
-            reverse=True,
-        )
+    filtered.sort(
+        key=lambda row: min(float(row.get(role) or 0) for role in view_roles),
+        reverse=True,
+    )
 
     combo_by_col = {
         combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
@@ -1480,11 +1548,8 @@ def render_shortlist(
     table_cols.extend(ordered_roles)
     columns = [{"name": col, "id": col} for col in table_cols]
     table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
-    sort_by = (
-        [{"column_id": sort_col, "direction": "desc"}]
-        if sort_col and sort_col in table_cols
-        else []
-    )
+    page_keys = [player_row_key(row) for row in table_rows]
+    selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
     role_list = ", ".join(view_roles)
     extras = []
     if pos_filter != "all":
@@ -1492,13 +1557,15 @@ def render_shortlist(
     if foot_filter:
         extras.append({"foot-L": "left foot", "foot-R": "right foot", "foot-B": "both feet"}[foot_filter])
     extra = f" Position/foot: {', '.join(extras)}." if extras else ""
-    sort_note = f" Sorted by {sort_col}." if sort_col else " Sorted by the lowest view-role score."
     piece_note = ""
     if chosen_pieces and set_piece_min > 0:
         piece_note = f" Set-piece min {set_piece_min:g}+ on all checked types."
+    mark_note = f" {len(marked_keys)} marked for planned squad." if marked_keys else ""
     caption = (
         f"{len(filtered)} of {len(rows)} players meeting min score and eligibility "
-        f"on all of: {role_list}.{extra}{piece_note}{sort_note} "
+        f"on all of: {role_list}.{extra}{piece_note} "
+        "Click a header to sort. Default order is the lowest view-role score. "
+        f"{mark_note} "
         f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
     )
@@ -1511,31 +1578,184 @@ def render_shortlist(
         columns,
         _score_styles(score_cols, bands, theme),
         page_size,
-        sort_by,
+        selected_rows,
         fig,
         caption,
     )
 
 
+SQUAD_PREVIEW_MAX_ROWS = 8
+
+
+def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
+    view_roles = _as_list(view_roles)
+    if not payload or not view_roles:
+        return html.P(
+            "Upload a file and pick at least one view role.",
+            className="text-muted mb-0",
+        )
+    marked = _as_list(marked)
+    if not marked:
+        return html.P(
+            "No players marked yet. Select rows in the shortlist table above.",
+            className="text-muted mb-0",
+        )
+    rows = payload.get("rows") or []
+    combos = normalize_combos(payload.get("combos"))
+    export_rows = planned_squad_export_rows(
+        rows, marked, view_roles, combos, _as_list(set_pieces)
+    )
+    if not export_rows:
+        return html.P(
+            "Marked players are not in the current scored data.",
+            className="text-muted mb-0",
+        )
+    fieldnames = planned_squad_fieldnames(view_roles, combos, _as_list(set_pieces))
+    preview_rows = export_rows[:SQUAD_PREVIEW_MAX_ROWS]
+    extra = len(export_rows) - len(preview_rows)
+    parts = [f"{len(export_rows)} player(s) marked", f"{len(fieldnames)} columns"]
+    if set_pieces:
+        parts.append(f"set pieces: {', '.join(_as_list(set_pieces))}")
+    if extra > 0:
+        parts.append(f"showing first {len(preview_rows)}")
+    return html.Div(
+        [
+            html.Div(" · ".join(parts), className="rs-squad-preview-note"),
+            dash_table.DataTable(
+                columns=[{"name": col, "id": col} for col in fieldnames],
+                data=preview_rows,
+                page_action="none",
+                style_table={"overflowX": "auto"},
+                style_cell={
+                    "fontFamily": "Inter, Segoe UI, sans-serif",
+                    "fontSize": "12px",
+                    "padding": "6px",
+                    "whiteSpace": "nowrap",
+                    "backgroundColor": "transparent",
+                    "color": "inherit",
+                },
+                style_header={
+                    "fontWeight": "600",
+                    "fontSize": "11px",
+                    "textTransform": "uppercase",
+                    "backgroundColor": "transparent",
+                    "color": "inherit",
+                },
+            ),
+        ]
+    )
+
+
 @callback(
-    Output("rs-set-piece-sort", "data"),
-    Output("rs-set-piece-prev", "data"),
-    Input("rs-set-pieces", "value"),
-    State("rs-set-piece-prev", "data"),
+    Output("rs-set-piece-formulas-collapse", "is_open"),
+    Output("rs-set-piece-formulas-toggle", "children"),
+    Input("rs-set-piece-formulas-toggle", "n_clicks"),
+    State("rs-set-piece-formulas-collapse", "is_open"),
+    prevent_initial_call=True,
 )
-def update_set_piece_sort(selected, prev):
-    selected = _as_list(selected)
-    prev = _as_list(prev)
-    if not ctx.triggered_id:
-        return no_update, no_update
-    added = [piece for piece in selected if piece not in prev]
-    if added:
-        return set_piece_sort_column(added[-1]), selected
-    if not selected:
-        return None, selected
-    if len(selected) < len(prev):
-        return set_piece_sort_column(selected[-1]), selected
-    return no_update, selected
+def toggle_set_piece_formulas(n_clicks, is_open):
+    show = not is_open
+    return show, "Hide formulas" if show else "Show formulas"
+
+
+@callback(
+    Output("rs-squad-clear-btn", "disabled"),
+    Input("rs-squad-marked", "data"),
+)
+def toggle_clear_marks_btn(marked):
+    return not _as_list(marked)
+
+
+@callback(
+    Output("rs-squad-marked", "data", allow_duplicate=True),
+    Input("rs-squad-clear-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_squad_marks(n_clicks):
+    if not n_clicks:
+        return no_update
+    return []
+
+
+@callback(
+    Output("rs-squad-marked", "data", allow_duplicate=True),
+    Input("rs-table", "selected_rows"),
+    State("rs-table", "data"),
+    State("rs-squad-marked", "data"),
+    prevent_initial_call=True,
+)
+def sync_squad_marks(selected_rows, table_data, marked):
+    table_data = table_data or []
+    marked_set = set(_as_list(marked))
+    keys_on_page = [player_row_key(row) for row in table_data]
+    expected = {i for i, key in enumerate(keys_on_page) if key in marked_set}
+    actual = set(selected_rows or [])
+    if actual == expected:
+        return no_update
+    marked_set -= set(keys_on_page)
+    for index in selected_rows or []:
+        if 0 <= index < len(keys_on_page):
+            key = keys_on_page[index]
+            if key:
+                marked_set.add(key)
+    return sorted(marked_set)
+
+
+@callback(
+    Output("rs-squad-marked", "data", allow_duplicate=True),
+    Input("rs-parsed", "data"),
+    prevent_initial_call=True,
+)
+def clear_squad_marks_on_upload(_parsed):
+    return []
+
+
+@callback(
+    Output("rs-squad-preview", "children"),
+    Output("rs-squad-btn", "disabled"),
+    Input("rs-squad-marked", "data"),
+    Input("rs-rows", "data"),
+    Input("rs-view-role", "value"),
+    Input("rs-set-pieces", "value"),
+)
+def render_squad_preview(marked, payload, view_roles, set_pieces):
+    export_rows = []
+    if payload and _as_list(view_roles) and _as_list(marked):
+        export_rows = planned_squad_export_rows(
+            payload.get("rows") or [],
+            _as_list(marked),
+            _as_list(view_roles),
+            normalize_combos(payload.get("combos")),
+            _as_list(set_pieces),
+        )
+    return _squad_preview_panel(marked, payload, view_roles, set_pieces), not export_rows
+
+
+@callback(
+    Output("rs-download-squad", "data"),
+    Input("rs-squad-btn", "n_clicks"),
+    State("rs-squad-marked", "data"),
+    State("rs-rows", "data"),
+    State("rs-view-role", "value"),
+    State("rs-set-pieces", "value"),
+    prevent_initial_call=True,
+)
+def download_squad_csv(n_clicks, marked, payload, view_roles, set_pieces):
+    if not n_clicks or not payload or not payload.get("rows"):
+        return no_update
+    view_roles = _as_list(view_roles)
+    marked = _as_list(marked)
+    if not view_roles or not marked:
+        return no_update
+    name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
+    text = planned_squad_csv(
+        payload["rows"],
+        marked,
+        view_roles,
+        normalize_combos(payload.get("combos")),
+        _as_list(set_pieces),
+    )
+    return dict(content=text, filename=f"{name}_planned_squad.csv")
 
 
 @callback(

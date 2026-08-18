@@ -335,6 +335,23 @@ POS_CARD_GROUPS = {
     "ST": ("st",),
 }
 
+GROUP_ABBR_TONE = {
+    "GK": "gk",
+    "CB": "def",
+    "FB": "fb",
+    "WB": "fb",
+    "DM": "mid",
+    "CM": "mid",
+    "AM": "mid",
+    "WM": "w",
+    "W": "w",
+    "ST": "st",
+}
+
+
+def group_abbr_tone(token: str) -> str:
+    return GROUP_ABBR_TONE.get((token or "").upper(), "")
+
 PHASE_SUFFIXES = ("_IP_GK", "_OOP_GK", "_IP", "_OOP", "_GK")
 
 
@@ -528,20 +545,23 @@ def combo_meta(ip: str, oop: str) -> dict[str, str]:
         if token and token not in groups:
             groups.append(token)
     abbr = "/".join(groups)
+    ip_col = ip_meta["column"]
+    oop_col = oop_meta["column"]
+    role_codes = f"{ip_col}+{oop_col}"
     same_name = ip_meta["name"] == oop_meta["name"]
     name = ip_meta["name"] if same_name else f"{ip_meta['name']} / {oop_meta['name']}"
-    code = f"{ip_meta['code']}+{oop_meta['code']}"
     return {
         "id": combo_id(ip, oop),
         "ip": ip,
         "oop": oop,
         "column": combo_column(ip, oop),
-        "ip_column": ip_meta["column"],
-        "oop_column": oop_meta["column"],
-        "code": code,
+        "ip_column": ip_col,
+        "oop_column": oop_col,
+        "code": role_codes,
         "name": name,
-        "compact": f"{abbr} {code} {name}".strip(),
-        "compact_name": f"{abbr} {name}".strip(),
+        "short_label": role_codes,
+        "compact": f"{abbr} {role_codes}".strip(),
+        "compact_name": f"{abbr} {role_codes}".strip(),
         "group_abbr": abbr,
         "phase": "IP+OOP",
         "tone": "combo",
@@ -843,6 +863,112 @@ def scored_csv(rows: list[dict[str, Any]], role_labels: list[str]) -> str:
     )
     writer.writeheader()
     for row in rows:
+        out = {key: row.get(key, "-") for key in fieldnames}
+        for key, value in out.items():
+            if value in (None, ""):
+                out[key] = "-"
+        writer.writerow(out)
+    return buf.getvalue()
+
+
+PLANNED_SQUAD_IDENTITY = [
+    "Name",
+    "Age",
+    "Height",
+    "Position",
+    "Club",
+    "Division",
+    "Nation",
+    "Rec",
+    "Injury",
+    "Left Foot",
+    "Right Foot",
+]
+
+
+def player_row_key(row: dict[str, Any]) -> str:
+    name = str(row.get("Name") or "").strip()
+    club = str(row.get("Club") or "").strip()
+    return f"{name}|{club}" if name else ""
+
+
+def expand_view_role_columns(
+    view_roles: list[str], combos: list[dict[str, str]] | None = None
+) -> list[str]:
+    combo_by_col = {
+        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
+        for item in normalize_combos(combos)
+    }
+    expanded: list[str] = []
+    for role in view_roles:
+        if role not in expanded:
+            expanded.append(role)
+        meta = combo_by_col.get(role)
+        if meta:
+            for column in (meta["ip_column"], meta["oop_column"]):
+                if column not in expanded:
+                    expanded.append(column)
+    return expanded
+
+
+def planned_squad_fieldnames(
+    view_roles: list[str],
+    combos: list[dict[str, str]] | None = None,
+    set_pieces_selected: list[str] | None = None,
+) -> list[str]:
+    cols = list(PLANNED_SQUAD_IDENTITY)
+    cols.append("View roles")
+    for col in expand_view_role_columns(view_roles, combos):
+        cols.append(col)
+    for col in set_piece_columns(set_pieces_selected):
+        if col not in cols:
+            cols.append(col)
+    return cols
+
+
+def planned_squad_export_rows(
+    rows: list[dict[str, Any]],
+    marked_keys: list[str],
+    view_roles: list[str],
+    combos: list[dict[str, str]] | None = None,
+    set_pieces_selected: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    marked = set(marked_keys or [])
+    if not marked or not view_roles:
+        return []
+    fieldnames = planned_squad_fieldnames(view_roles, combos, set_pieces_selected)
+    view_label = ", ".join(view_roles)
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if player_row_key(row) not in marked:
+            continue
+        item: dict[str, Any] = {"View roles": view_label}
+        for key in fieldnames:
+            if key == "View roles":
+                continue
+            val = row.get(key)
+            item[key] = val if val not in (None, "") else "-"
+        out.append(item)
+    return out
+
+
+def planned_squad_csv(
+    rows: list[dict[str, Any]],
+    marked_keys: list[str],
+    view_roles: list[str],
+    combos: list[dict[str, str]] | None = None,
+    set_pieces_selected: list[str] | None = None,
+) -> str:
+    fieldnames = planned_squad_fieldnames(view_roles, combos, set_pieces_selected)
+    export_rows = planned_squad_export_rows(
+        rows, marked_keys, view_roles, combos, set_pieces_selected
+    )
+    buf = io.StringIO()
+    writer = csv.DictWriter(
+        buf, fieldnames=fieldnames, delimiter=";", extrasaction="ignore", lineterminator="\n"
+    )
+    writer.writeheader()
+    for row in export_rows:
         out = {key: row.get(key, "-") for key in fieldnames}
         for key, value in out.items():
             if value in (None, ""):

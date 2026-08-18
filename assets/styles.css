@@ -243,6 +243,13 @@ body {
 #rs-table .dash-spreadsheet-inner th {
     background-color: var(--app-head);
     color: var(--app-muted);
+    cursor: pointer;
+}
+
+#rs-table .dash-spreadsheet-inner th .column-header--sort,
+#rs-table .dash-spreadsheet-inner .sort {
+    color: var(--app-accent) !important;
+    opacity: 1 !important;
 }
 
 #rs-table .previous-next-container,
@@ -378,6 +385,32 @@ body {
     color: var(--app-muted);
     letter-spacing: 0.02em;
 }
+
+.rs-pill-groups-sep,
+.rs-depth-code-sep {
+    font-size: inherit;
+    font-weight: 700;
+    color: var(--app-faint);
+}
+
+.rs-group-abbr {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.rs-pill-groups.gk,
+.rs-depth-code.gk { color: #d97706; }
+.rs-pill-groups.def,
+.rs-depth-code.def { color: #ef4444; }
+.rs-pill-groups.fb,
+.rs-depth-code.fb { color: #ea580c; }
+.rs-pill-groups.mid,
+.rs-depth-code.mid { color: #2563eb; }
+.rs-pill-groups.w,
+.rs-depth-code.w { color: #16a34a; }
+.rs-pill-groups.st,
+.rs-depth-code.st { color: #c026d3; }
 
 .rs-pill-code {
     font-weight: 700;
@@ -520,6 +553,35 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-set-piece-formulas {
     display: grid;
     gap: 4px;
+    margin-top: 8px;
+}
+
+.rs-set-piece-formulas-toggle {
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--app-muted);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.rs-set-piece-formulas-toggle:hover {
+    color: var(--app-text);
+}
+
+.rs-table-caption-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.rs-squad-clear-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .rs-set-piece-line {
@@ -543,6 +605,29 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-set-piece-formula {
     color: var(--app-text);
     font-variant-numeric: tabular-nums;
+}
+
+.rs-export-subhead {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-text);
+    margin-bottom: 6px;
+}
+
+.rs-squad-preview {
+    border: 1px solid var(--app-line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--app-inset);
+    margin-bottom: 4px;
+}
+
+.rs-squad-preview-note {
+    font-size: 12px;
+    color: var(--app-muted);
+    margin-bottom: 8px;
 }
 
 @media (max-width: 900px) {
