@@ -3,10 +3,12 @@
 Dash app that scores Football Manager 26 players from an attribute CSV using role weight configs.
 
 ```
-score = (5 * sum(key) + 3 * sum(green) + 1 * sum(blue)) / divisor
+score = (5 * sum(key) + 3 * sum(preferred) + 1 * sum(useful)) / divisor
 ```
 
-`divisor` is `5 * n_key + 3 * n_green + 1 * n_blue` so a player with 20 in every listed attribute scores 20.
+`divisor` is `5 * n_key + 3 * n_preferred + 1 * n_useful` so a player with 20 in every listed attribute scores 20.
+
+Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **Useful** ×1 (blue). Colors are display-only. Packs store `key_attrs` / `preferred_attrs` / `useful_attrs`; older files used `green_attrs` / `blue_attrs` and are remapped on load.
 
 ## File map
 
@@ -14,7 +16,7 @@ score = (5 * sum(key) + 3 * sum(green) + 1 * sum(blue)) / divisor
 | --- | --- |
 | `app.py` | Dash shell and nav (Role scores, Role configs). |
 | `pages/role_scores_page.py` | Upload CSV, pick roles, filter, export. |
-| `pages/role_config_page.py` | Edit key/green/blue attributes and position groups. |
+| `pages/role_config_page.py` | Edit key/preferred/useful attributes and position groups. |
 | `config/fm26_role_weight_config.py` | Factory roles, group ids, home-group resolution. |
 | `role_scorer.py` | Parse CSV, eligibility, scoring, player POS cards. |
 | `role_config.py` | Packs, live overlays, saved-group migration. |
@@ -67,4 +69,4 @@ Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still cou
 
 ## Config packs
 
-Factory Python weights are the source of truth. Editing Built-in copy-on-writes to `config/packs/working.json`. Named packs overlay `key_attrs` / `green_attrs` / `blue_attrs` / `groups`. Role scores step **2. Weight config** picks which pack to score with.
+Factory Python weights are the source of truth. Editing Built-in copy-on-writes to `config/packs/working.json`. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Weight config** picks which pack to score with.

@@ -608,11 +608,13 @@ body:has(.rc-page) .navbar {
     color: #fff;
 }
 
+.rc-badge.preferred,
 .rc-badge.green {
     background: #eab308;
     color: #111;
 }
 
+.rc-badge.useful,
 .rc-badge.blue {
     background: #2563eb;
     color: #fff;
@@ -704,7 +706,9 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-mini-pill.key { background: rgba(61, 255, 136, 0.12); color: var(--rc-key); }
+.rc-mini-pill.preferred,
 .rc-mini-pill.green { background: rgba(198, 227, 91, 0.12); color: var(--rc-green); }
+.rc-mini-pill.useful,
 .rc-mini-pill.blue { background: rgba(92, 173, 255, 0.14); color: var(--rc-blue); }
 
 .rc-group-toggles {
@@ -774,7 +778,9 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-legend.key { color: var(--rc-key); }
+.rc-legend.preferred,
 .rc-legend.green { color: var(--rc-green); }
+.rc-legend.useful,
 .rc-legend.blue { color: var(--rc-blue); }
 
 .rc-attrs-note {
@@ -849,7 +855,9 @@ body:has(.rc-page) .navbar {
 }
 
 .rc-attr-val.key { color: var(--rc-key); }
+.rc-attr-val.preferred,
 .rc-attr-val.green { color: var(--rc-green); }
+.rc-attr-val.useful,
 .rc-attr-val.blue { color: var(--rc-blue); }
 .rc-attr-val.none { color: #6d7b8c; font-weight: 600; }
 

@@ -3,7 +3,12 @@
 Ported from `fm26_player_scoring_system_v2_0.html`. Each role is a
 weighted average of attributes:
 
-    score = (5 * sum(key) + 3 * sum(green) + 1 * sum(blue)) / divisor
+    score = (5 * sum(key) + 3 * sum(preferred) + 1 * sum(useful)) / divisor
+
+Tiers are Key (×5, neon green), Preferred (×3, yellow-green), and
+Useful (×1, blue). Colors are display-only; saved packs use
+`key_attrs` / `preferred_attrs` / `useful_attrs`. Older packs still
+use `green_attrs` / `blue_attrs` and are remapped on load.
 
 FM26 roles have no Attack/Support/Defend duty. `phase` is IP, OOP, GK,
 IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK. `role_code`
@@ -27,11 +32,11 @@ across that list. Saved packs use `group_schema` 2; older files mapped
 """
 
 KEY_WEIGHT = 5
-GREEN_WEIGHT = 3
-BLUE_WEIGHT = 1
+PREFERRED_WEIGHT = 3
+USEFUL_WEIGHT = 1
 
 
-def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code, groups=()):
+def role(key_attrs, preferred_attrs=(), useful_attrs=(), *, phase, role_code, groups=()):
     """Build a scorer-compatible role dict and derive the divisor.
 
     `groups` lists extra position buckets besides the dict this role lives
@@ -39,19 +44,19 @@ def role(key_attrs, green_attrs=(), blue_attrs=(), *, phase, role_code, groups=(
     eligible as a winger.
     """
     key_attrs = list(key_attrs)
-    green_attrs = list(green_attrs)
-    blue_attrs = list(blue_attrs)
+    preferred_attrs = list(preferred_attrs)
+    useful_attrs = list(useful_attrs)
     return {
         "key_attrs": key_attrs,
-        "green_attrs": green_attrs,
-        "blue_attrs": blue_attrs,
+        "preferred_attrs": preferred_attrs,
+        "useful_attrs": useful_attrs,
         "key_weight": KEY_WEIGHT,
-        "green_weight": GREEN_WEIGHT,
-        "blue_weight": BLUE_WEIGHT,
+        "preferred_weight": PREFERRED_WEIGHT,
+        "useful_weight": USEFUL_WEIGHT,
         "divisor": (
             KEY_WEIGHT * len(key_attrs)
-            + GREEN_WEIGHT * len(green_attrs)
-            + BLUE_WEIGHT * len(blue_attrs)
+            + PREFERRED_WEIGHT * len(preferred_attrs)
+            + USEFUL_WEIGHT * len(useful_attrs)
         ),
         "phase": phase,
         "role_code": role_code,

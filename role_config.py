@@ -29,9 +29,14 @@ DEFAULTS_PATH = ROOT / "config" / "default_overrides.json"
 BUILTIN = "builtin"
 WORKING = "working"
 
-TIER_CYCLE = ("none", "key", "green", "blue")
-NEXT_TIER = {"none": "key", "key": "green", "green": "blue", "blue": "none"}
-TIER_WEIGHT = {"none": 0, "key": pc.KEY_WEIGHT, "green": pc.GREEN_WEIGHT, "blue": pc.BLUE_WEIGHT}
+TIER_CYCLE = ("none", "key", "preferred", "useful")
+NEXT_TIER = {"none": "key", "key": "preferred", "preferred": "useful", "useful": "none"}
+TIER_WEIGHT = {
+    "none": 0,
+    "key": pc.KEY_WEIGHT,
+    "preferred": pc.PREFERRED_WEIGHT,
+    "useful": pc.USEFUL_WEIGHT,
+}
 
 MENTAL_ATTRS = [
     ("Agg", "Aggression"),
@@ -128,27 +133,45 @@ _ACTIVE = BUILTIN
 def _attr_lists(cfg: dict) -> tuple[list[str], list[str], list[str]]:
     return (
         list(cfg.get("key_attrs") or []),
-        list(cfg.get("green_attrs") or []),
-        list(cfg.get("blue_attrs") or []),
+        list(cfg.get("preferred_attrs") or cfg.get("green_attrs") or []),
+        list(cfg.get("useful_attrs") or cfg.get("blue_attrs") or []),
+    )
+
+
+def _overlay_attr_lists(overlay: dict) -> tuple[list[str], list[str], list[str]]:
+    preferred = (
+        overlay["preferred_attrs"]
+        if "preferred_attrs" in overlay
+        else overlay.get("green_attrs")
+    )
+    useful = overlay["useful_attrs"] if "useful_attrs" in overlay else overlay.get("blue_attrs")
+    return (
+        list(overlay.get("key_attrs") or []),
+        list(preferred or []),
+        list(useful or []),
     )
 
 
 def recompute_divisor(cfg: dict) -> int:
-    key_attrs, green_attrs, blue_attrs = _attr_lists(cfg)
+    key_attrs, preferred_attrs, useful_attrs = _attr_lists(cfg)
     return (
         pc.KEY_WEIGHT * len(key_attrs)
-        + pc.GREEN_WEIGHT * len(green_attrs)
-        + pc.BLUE_WEIGHT * len(blue_attrs)
+        + pc.PREFERRED_WEIGHT * len(preferred_attrs)
+        + pc.USEFUL_WEIGHT * len(useful_attrs)
     )
 
 
-def _apply_lists(cfg: dict, key_attrs: list[str], green_attrs: list[str], blue_attrs: list[str]) -> None:
+def _apply_lists(
+    cfg: dict, key_attrs: list[str], preferred_attrs: list[str], useful_attrs: list[str]
+) -> None:
     cfg["key_attrs"] = list(key_attrs)
-    cfg["green_attrs"] = list(green_attrs)
-    cfg["blue_attrs"] = list(blue_attrs)
+    cfg["preferred_attrs"] = list(preferred_attrs)
+    cfg["useful_attrs"] = list(useful_attrs)
     cfg["key_weight"] = pc.KEY_WEIGHT
-    cfg["green_weight"] = pc.GREEN_WEIGHT
-    cfg["blue_weight"] = pc.BLUE_WEIGHT
+    cfg["preferred_weight"] = pc.PREFERRED_WEIGHT
+    cfg["useful_weight"] = pc.USEFUL_WEIGHT
+    for old in ("green_attrs", "blue_attrs", "green_weight", "blue_weight"):
+        cfg.pop(old, None)
     cfg["divisor"] = recompute_divisor(cfg)
 
 
@@ -224,20 +247,15 @@ def snapshot() -> dict:
     for role_id, cfg in pc.all_positions.items():
         roles[role_id] = {
             "key_attrs": list(cfg.get("key_attrs") or []),
-            "green_attrs": list(cfg.get("green_attrs") or []),
-            "blue_attrs": list(cfg.get("blue_attrs") or []),
+            "preferred_attrs": list(cfg.get("preferred_attrs") or []),
+            "useful_attrs": list(cfg.get("useful_attrs") or []),
             "groups": list(cfg.get("groups") or []),
         }
     return roles
 
 
 def _apply_overlay(cfg: dict, overlay: dict, schema: int | None = None) -> None:
-    _apply_lists(
-        cfg,
-        overlay.get("key_attrs") or [],
-        overlay.get("green_attrs") or [],
-        overlay.get("blue_attrs") or [],
-    )
+    _apply_lists(cfg, *_overlay_attr_lists(overlay))
     groups = migrate_group_ids(overlay.get("groups") or [], schema)
     if groups:
         cfg["groups"] = groups
@@ -364,10 +382,10 @@ def is_gk_role(role_id: str) -> bool:
 def attr_tier(cfg: dict, attr: str) -> str:
     if attr in (cfg.get("key_attrs") or []):
         return "key"
-    if attr in (cfg.get("green_attrs") or []):
-        return "green"
-    if attr in (cfg.get("blue_attrs") or []):
-        return "blue"
+    if attr in (cfg.get("preferred_attrs") or cfg.get("green_attrs") or []):
+        return "preferred"
+    if attr in (cfg.get("useful_attrs") or cfg.get("blue_attrs") or []):
+        return "useful"
     return "none"
 
 
@@ -381,8 +399,8 @@ def is_modified(role_id: str) -> bool:
     live_groups = list(cfg.get("groups") or [])
     return (
         set(cfg.get("key_attrs") or []) != set(default.get("key_attrs") or [])
-        or set(cfg.get("green_attrs") or []) != set(default.get("green_attrs") or [])
-        or set(cfg.get("blue_attrs") or []) != set(default.get("blue_attrs") or [])
+        or set(_attr_lists(cfg)[1]) != set(_attr_lists(default)[1])
+        or set(_attr_lists(cfg)[2]) != set(_attr_lists(default)[2])
         or live_groups != default_groups
     )
 
@@ -480,23 +498,23 @@ def has_user_defaults() -> bool:
 
 
 def cycle_attr(role_id: str, attr: str) -> str:
-    """Promote one attribute through Off → Key → Green → Blue and persist."""
+    """Promote one attribute through Off → Key → Preferred → Useful and persist."""
     ensure_loaded()
     if role_id not in pc.all_positions or attr not in ATTR_LABELS:
         return "none"
     cfg = pc.all_positions[role_id]
     nxt = NEXT_TIER[attr_tier(cfg, attr)]
-    key_attrs, green_attrs, blue_attrs = _attr_lists(cfg)
+    key_attrs, preferred_attrs, useful_attrs = _attr_lists(cfg)
     key_attrs = [item for item in key_attrs if item != attr]
-    green_attrs = [item for item in green_attrs if item != attr]
-    blue_attrs = [item for item in blue_attrs if item != attr]
+    preferred_attrs = [item for item in preferred_attrs if item != attr]
+    useful_attrs = [item for item in useful_attrs if item != attr]
     if nxt == "key":
         key_attrs.append(attr)
-    elif nxt == "green":
-        green_attrs.append(attr)
-    elif nxt == "blue":
-        blue_attrs.append(attr)
-    _apply_lists(cfg, key_attrs, green_attrs, blue_attrs)
+    elif nxt == "preferred":
+        preferred_attrs.append(attr)
+    elif nxt == "useful":
+        useful_attrs.append(attr)
+    _apply_lists(cfg, key_attrs, preferred_attrs, useful_attrs)
     persist_live()
     return nxt
 

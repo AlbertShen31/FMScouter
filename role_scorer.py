@@ -470,11 +470,11 @@ def score_players(
             score = calculate_score(
                 player["attrs"],
                 cfg["key_attrs"],
-                cfg["green_attrs"],
-                cfg["blue_attrs"],
+                cfg["preferred_attrs"],
+                cfg["useful_attrs"],
                 cfg["key_weight"],
-                cfg["green_weight"],
-                cfg["blue_weight"],
+                cfg["preferred_weight"],
+                cfg["useful_weight"],
                 cfg["divisor"],
             )
             row[label] = score

@@ -103,8 +103,8 @@ export default function RoleScores() {
       <Stack gap={6}>
         <H1>FM26 role scores</H1>
         <Text tone="secondary">
-          {PLAYERS.length} players · {SOURCE}. Scores use key×5 + green×3 +
-          blue×1 divided by the role divisor.
+          {PLAYERS.length} players · {SOURCE}. Scores use key×5 + preferred×3 +
+          useful×1 divided by the role divisor.
         </Text>
       </Stack>
       <Callout tone="info" title="Filters">

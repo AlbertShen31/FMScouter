@@ -14,9 +14,9 @@ rc.ensure_loaded()
 DEFAULT_ROLE = "Sweeper_Keeper_OOP_GK"
 TIER_HINT = {
     "none": "Off · click to set Key",
-    "key": "Key ×5 · click to set Green",
-    "green": "Green ×3 · click to set Blue",
-    "blue": "Blue ×1 · click to clear",
+    "key": "Key ×5 · click to set Preferred",
+    "preferred": "Preferred ×3 · click to set Useful",
+    "useful": "Useful ×1 · click to clear",
 }
 
 
@@ -140,8 +140,8 @@ def _identity(role_id: str) -> html.Div:
     meta = role_meta(role_id)
     cfg = rc.role_cfg(role_id)
     key_n = len(cfg.get("key_attrs") or [])
-    green_n = len(cfg.get("green_attrs") or [])
-    blue_n = len(cfg.get("blue_attrs") or [])
+    preferred_n = len(cfg.get("preferred_attrs") or [])
+    useful_n = len(cfg.get("useful_attrs") or [])
     dirty = rc.is_modified(role_id)
     return html.Div(
         [
@@ -154,8 +154,8 @@ def _identity(role_id: str) -> html.Div:
                             html.Div(
                                 [
                                     _badge(key_n, "key"),
-                                    _badge(green_n, "green"),
-                                    _badge(blue_n, "blue"),
+                                    _badge(preferred_n, "preferred"),
+                                    _badge(useful_n, "useful"),
                                 ],
                                 className="rc-badge-row",
                             ),
@@ -185,8 +185,8 @@ def _identity(role_id: str) -> html.Div:
                     _info_row("Phase", meta["phase"] or "—"),
                     _info_row("Group", meta.get("group_label") or "—"),
                     _info_row("Key attrs", _badge(f"{key_n} × {rc.TIER_WEIGHT['key']}", "key")),
-                    _info_row("Green attrs", _badge(f"{green_n} × {rc.TIER_WEIGHT['green']}", "green")),
-                    _info_row("Blue attrs", _badge(f"{blue_n} × {rc.TIER_WEIGHT['blue']}", "blue")),
+                    _info_row("Preferred attrs", _badge(f"{preferred_n} × {rc.TIER_WEIGHT['preferred']}", "preferred")),
+                    _info_row("Useful attrs", _badge(f"{useful_n} × {rc.TIER_WEIGHT['useful']}", "useful")),
                     _info_row("Divisor", cfg.get("divisor") or 0),
                 ],
                 className="rc-info-list",
@@ -214,12 +214,12 @@ def _identity(role_id: str) -> html.Div:
             ),
             html.Div("Key", className="rc-section-kicker"),
             _attr_pills(cfg, "key"),
-            html.Div("Green", className="rc-section-kicker"),
-            _attr_pills(cfg, "green"),
-            html.Div("Blue", className="rc-section-kicker"),
-            _attr_pills(cfg, "blue"),
+            html.Div("Preferred", className="rc-section-kicker"),
+            _attr_pills(cfg, "preferred"),
+            html.Div("Useful", className="rc-section-kicker"),
+            _attr_pills(cfg, "useful"),
             html.Div(
-                "score = (5×key + 3×green + 1×blue) / divisor",
+                "score = (5×key + 3×preferred + 1×useful) / divisor",
                 className="rc-formula",
             ),
         ],
@@ -275,8 +275,8 @@ def _attributes(role_id: str) -> html.Div:
                     html.Div(
                         [
                             html.Span("Key ×5", className="rc-legend key"),
-                            html.Span("Green ×3", className="rc-legend green"),
-                            html.Span("Blue ×1", className="rc-legend blue"),
+                            html.Span("Preferred ×3", className="rc-legend preferred"),
+                            html.Span("Useful ×1", className="rc-legend useful"),
                         ],
                         className="rc-legend-row",
                     ),
@@ -284,7 +284,7 @@ def _attributes(role_id: str) -> html.Div:
                 className="rc-attrs-header",
             ),
             html.Div(
-                "Click a value to cycle Key → Green → Blue → Off. Edits save to the selected config.",
+                "Click a value to cycle Key → Preferred → Useful → Off. Edits save to the selected config.",
                 className="rc-attrs-note",
             ),
             html.Div(columns, className="rc-attr-grid"),
@@ -327,7 +327,7 @@ def layout():
             [
                 html.H1("Role configs", className="rc-page-title"),
                 html.P(
-                    "View and edit the key, green, and blue attributes used to score each FM26 role.",
+                    "View and edit the key, preferred, and useful attributes used to score each FM26 role.",
                     className="rc-page-sub",
                 ),
             ],

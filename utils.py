@@ -1,7 +1,7 @@
 """Shared scoring math used by `role_scorer`.
 
-    score = (key_weight * sum(key) + green_weight * sum(green)
-             + blue_weight * sum(blue)) / divisor
+    score = (key_weight * sum(key) + preferred_weight * sum(preferred)
+             + useful_weight * sum(useful)) / divisor
 """
 from typing import Dict, List, Union
 import logging
@@ -12,17 +12,17 @@ logger = logging.getLogger(__name__)
 def calculate_score(
     data: Dict[str, Union[str, int]],
     key_attrs: List[str],
-    green_attrs: List[str],
-    blue_attrs: List[str],
+    preferred_attrs: List[str],
+    useful_attrs: List[str],
     key_weight: float,
-    green_weight: float,
-    blue_weight: float,
+    preferred_weight: float,
+    useful_weight: float,
     divisor: float,
 ) -> float:
     """Calculate position score based on attributes and weights."""
     try:
         processed_data = {}
-        for attr in key_attrs + green_attrs + blue_attrs:
+        for attr in key_attrs + preferred_attrs + useful_attrs:
             value = data.get(attr, 0)
             if value == "-" or value == "":
                 processed_data[attr] = 0
@@ -32,11 +32,13 @@ def calculate_score(
                 processed_data[attr] = int(value)
 
         key_score = sum(processed_data[attr] for attr in key_attrs)
-        green_score = sum(processed_data[attr] for attr in green_attrs)
-        blue_score = sum(processed_data[attr] for attr in blue_attrs)
+        preferred_score = sum(processed_data[attr] for attr in preferred_attrs)
+        useful_score = sum(processed_data[attr] for attr in useful_attrs)
 
         total_score = (
-            key_score * key_weight + green_score * green_weight + blue_score * blue_weight
+            key_score * key_weight
+            + preferred_score * preferred_weight
+            + useful_score * useful_weight
         ) / divisor
         return round(total_score, 1)
     except Exception as e:
