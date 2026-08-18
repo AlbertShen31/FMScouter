@@ -51,7 +51,7 @@ def _phase_buttons(active: str) -> list:
             n_clicks=0,
             className="rc-chip" + (" active" if active == value else ""),
         )
-        for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP"), ("GK", "GK"))
+        for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP"))
     ]
 
 
@@ -101,15 +101,12 @@ def _role_list(selected: str, phase: str, group: str, query: str) -> list:
             continue
         dirty = rc.is_modified(role_id)
         active = " active" if role_id == selected else ""
+        tone = meta.get("tone") or "gk"
         items.append(
             html.Button(
                 [
-                    html.Span(meta["code"], className="rc-list-code"),
+                    html.Span(meta["code"], className=f"rc-list-code {tone}"),
                     html.Span(meta["name"], className="rc-list-name"),
-                    html.Span(
-                        meta["phase"],
-                        className=f"rc-phase-tag {meta.get('tone') or 'gk'}",
-                    ),
                     html.Span("•", className="rc-dirty") if dirty else None,
                 ],
                 id={"type": "rc-pick", "role": role_id},
@@ -175,10 +172,6 @@ def _identity(role_id: str) -> html.Div:
                             ),
                             html.Div(
                                 [
-                                    html.Span(
-                                        meta["phase"],
-                                        className=f"rc-phase-tag {meta.get('tone') or 'gk'}",
-                                    ),
                                     html.Span("Unsaved", className="rc-custom-tag")
                                     if dirty
                                     else html.Span("Saved", className="rc-default-tag"),
