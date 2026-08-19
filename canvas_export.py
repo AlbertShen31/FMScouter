@@ -44,7 +44,6 @@ const SOURCE = __SOURCE__;
 const PAGE = 30;
 const BINS = __BINS__;
 const AGE_OPTIONS = __AGE_OPTIONS__;
-const MIN_OPTIONS = __MIN_OPTIONS__;
 
 function dash(value: string | number | undefined | null): string {
   if (value === undefined || value === null || value === "") return "—";
@@ -66,7 +65,7 @@ export default function RoleScores() {
   const [query, setQuery] = useCanvasState("q", "");
   const [eligOnly, setEligOnly] = useCanvasState("elig", true);
   const [maxAge, setMaxAge] = useCanvasState("age", "any");
-  const [minScore, setMinScore] = useCanvasState("min", "0");
+  const [minScore, setMinScore] = useCanvasState("min", "");
   const [limit, setLimit] = useCanvasState("limit", PAGE);
 
   const active = ROLES.includes(role) ? role : ROLES[0];
@@ -78,7 +77,7 @@ export default function RoleScores() {
     if (!active) return false;
     if (eligOnly && !p.e[active]) return false;
     if (p.a > ageCap) return false;
-    if ((p.s[active] ?? 0) < floor) return false;
+    if (Number.isFinite(floor) && floor > 0 && (p.s[active] ?? 0) < floor) return false;
     if (q && !`${p.n} ${p.c} ${p.p} ${p.dv}`.toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => (b.s[active] ?? 0) - (a.s[active] ?? 0));
@@ -153,10 +152,11 @@ export default function RoleScores() {
           onChange={setMaxAge}
           options={AGE_OPTIONS}
         />
-        <Select
+        <TextInput
           value={minScore}
           onChange={setMinScore}
-          options={MIN_OPTIONS}
+          placeholder="Min score (blank = any)"
+          style={{ minWidth: 160 }}
         />
         <Row gap={8} align="center">
           <Toggle checked={eligOnly} onChange={setEligOnly} />
@@ -264,15 +264,6 @@ def build_canvas(
         ],
         ensure_ascii=False,
     )
-    min_js = json.dumps(
-        [
-            {"value": "0", "label": "Any score"}
-            if opt["value"] == 0
-            else {"value": str(opt["value"]), "label": f"{us.format_cut(opt['value'])}+"}
-            for opt in us.min_score_options(settings)
-        ],
-        ensure_ascii=False,
-    )
     if "`" in players_js or "${" in players_js:
         raise ValueError("Player data contains characters that cannot be embedded in the canvas.")
     return (
@@ -281,5 +272,4 @@ def build_canvas(
         .replace("__SOURCE__", source_js)
         .replace("__BINS__", bins_js)
         .replace("__AGE_OPTIONS__", age_js)
-        .replace("__MIN_OPTIONS__", min_js)
     )

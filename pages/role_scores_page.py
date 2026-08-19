@@ -183,11 +183,14 @@ def _set_piece_panel(settings=None) -> html.Div:
             html.Div(
                 [
                     html.Label("Min score", className="rs-set-piece-min-label"),
-                    dcc.Dropdown(
+                    dbc.Input(
                         id="rs-set-piece-min-score",
-                        options=us.min_score_options(settings),
-                        value=0,
-                        clearable=False,
+                        type="number",
+                        min=0,
+                        max=20,
+                        step=0.1,
+                        placeholder="Any",
+                        debounce=True,
                         className="rs-set-piece-min-dd",
                     ),
                 ],
@@ -537,11 +540,14 @@ def layout():
                                 dbc.Col(
                                     [
                                         html.Label("Min score"),
-                                        dcc.Dropdown(
+                                        dbc.Input(
                                             id="rs-min-score",
-                                            options=us.min_score_options(settings),
-                                            value=0,
-                                            clearable=False,
+                                            type="number",
+                                            min=0,
+                                            max=20,
+                                            step=0.1,
+                                            placeholder="Any",
+                                            debounce=True,
                                         ),
                                         dcc.Dropdown(
                                             id="rs-min-score-mode",
@@ -1241,6 +1247,19 @@ def set_foot_filter(n_clicks, current):
 
 
 @callback(
+    Output("rs-age", "options"),
+    Output("rs-age", "value"),
+    Output("rs-band-legend", "children"),
+    Input("ui-settings", "data"),
+    State("rs-age", "value"),
+)
+def apply_ui_settings(settings, age):
+    settings = us.normalize(settings)
+    ages = us.age_options(settings)
+    return ages, us.clamp_choice(age, ages, 99), _band_legend(settings)
+
+
+@callback(
     Output("rs-view-role", "value", allow_duplicate=True),
     Input({"type": "rs-depth", "role": ALL}, "n_clicks"),
     prevent_initial_call=True,
@@ -1394,9 +1413,9 @@ def render_shortlist(
     combos = normalize_combos(payload.get("combos"))
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
-    min_score = 0 if min_score is None else float(min_score)
+    min_score = us.parse_score_floor(min_score)
     min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
-    set_piece_min = 0 if set_piece_min is None else float(set_piece_min)
+    set_piece_min = us.parse_score_floor(set_piece_min)
     elig_only = "yes" in (eligible or [])
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""

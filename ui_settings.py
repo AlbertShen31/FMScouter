@@ -1,20 +1,30 @@
-"""Persisted UI thresholds and colors for Role scores."""
+"""Persisted UI thresholds and colors for Role scores.
+
+Named JSON packs live in `config/settings/packs/`. Built-in Default is
+read-only; Save writes the selected named pack. New creates a named copy.
+"""
 from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
-SETTINGS_PATH = ROOT / "config" / "ui_settings.json"
+SETTINGS_DIR = ROOT / "config" / "settings"
+PACKS_DIR = SETTINGS_DIR / "packs"
+ACTIVE_PATH = SETTINGS_DIR / "active.json"
+
+BUILTIN = "default"
 
 BAND_KEYS = ("elite", "good", "ok", "poor")
 COLOR_PARTS = ("bg", "fg", "bar")
 
 DEFAULTS: dict[str, Any] = {
-    "age_tiers": [21, 23, 25, 27, 30, 35],
-    "min_score_tiers": [11.0, 12.0, 12.5, 13.0],
+    "id": BUILTIN,
+    "name": "Default",
+    "age_tiers": [21, 25, 30],
     "bands": {"elite": 14.0, "good": 12.0, "ok": 10.0},
     "hist_edges": [10.0, 11.0, 12.0, 13.0, 14.0],
     "colors": {
@@ -45,7 +55,13 @@ def format_cut(number: float) -> str:
     return str(int(number)) if number == int(number) else f"{number:.1f}"
 
 
-def format_list(values: list) -> str:
+def format_age(number) -> str:
+    return str(int(number))
+
+
+def format_list(values: list, *, kind: str = "score") -> str:
+    if kind == "age":
+        return ", ".join(format_age(value) for value in values)
     return ", ".join(format_cut(value) for value in values)
 
 
@@ -73,6 +89,18 @@ def parse_number_list(text, *, integer: bool = False) -> list[float]:
         values.append(float(number))
     values.sort()
     return values
+
+
+def parse_score_floor(value) -> float:
+    if value in (None, "", "any", "Any"):
+        return 0.0
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number or number <= 0:
+        return 0.0
+    return number
 
 
 def _hex_color(value, default: str) -> str:
@@ -114,17 +142,12 @@ def normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
     return {"elite": elite, "good": good, "ok": max(0.0, ok)}
 
 
-def normalize(raw=None) -> dict[str, Any]:
+def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) -> dict[str, Any]:
     raw = raw or {}
     ages = parse_number_list(raw.get("age_tiers", DEFAULTS["age_tiers"]), integer=True)
     ages = [int(age) for age in ages if 1 <= age <= 99]
     if not ages:
         ages = list(DEFAULTS["age_tiers"])
-
-    mins = parse_number_list(raw.get("min_score_tiers", DEFAULTS["min_score_tiers"]))
-    mins = [value for value in mins if 0 < value <= 20]
-    if not mins:
-        mins = list(DEFAULTS["min_score_tiers"])
 
     edges = parse_number_list(raw.get("hist_edges", DEFAULTS["hist_edges"]))
     edges = [value for value in edges if 0 < value <= 20]
@@ -140,33 +163,126 @@ def normalize(raw=None) -> dict[str, Any]:
             part: _hex_color(src.get(part), fallback[part]) for part in COLOR_PARTS
         }
 
+    pack_id = pack_id or raw.get("id") or BUILTIN
+    label = name if name is not None else raw.get("name") or (
+        "Default" if pack_id == BUILTIN else pack_id
+    )
     return {
+        "id": pack_id,
+        "name": label,
         "age_tiers": ages,
-        "min_score_tiers": mins,
         "bands": normalize_bands(raw.get("bands") or raw),
         "hist_edges": edges,
         "colors": colors,
     }
 
 
-def load() -> dict[str, Any]:
-    if not SETTINGS_PATH.exists():
-        return copy.deepcopy(DEFAULTS)
+def _slug(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    return slug or "settings"
+
+
+def _unique_id(name: str) -> str:
+    base = _slug(name)
+    candidate = base
+    index = 2
+    while candidate == BUILTIN or _pack_path(candidate).exists():
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
+
+
+def _pack_path(pack_id: str) -> Path:
+    return PACKS_DIR / f"{pack_id}.json"
+
+
+def _read_json(path: Path) -> dict:
     try:
-        payload = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _active_id() -> str:
+    pack_id = str(_read_json(ACTIVE_PATH).get("id") or BUILTIN)
+    if pack_id != BUILTIN and not _pack_path(pack_id).exists():
+        return BUILTIN
+    return pack_id
+
+
+def _set_active(pack_id: str) -> None:
+    _write_json(ACTIVE_PATH, {"id": pack_id})
+
+
+def _pack_from_file(pack_id: str) -> dict[str, Any]:
+    if pack_id == BUILTIN:
         return copy.deepcopy(DEFAULTS)
-    return normalize(payload)
+    path = _pack_path(pack_id)
+    if not path.exists():
+        return copy.deepcopy(DEFAULTS)
+    payload = _read_json(path)
+    return normalize(payload, pack_id=pack_id, name=payload.get("name") or pack_id)
 
 
-def save(raw) -> dict[str, Any]:
-    settings = normalize(raw)
-    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_PATH.write_text(
-        json.dumps(settings, indent=2) + "\n",
-        encoding="utf-8",
-    )
+def read_pack(pack_id: str | None = None) -> dict[str, Any]:
+    return _pack_from_file(pack_id or _active_id())
+
+
+def pack_options() -> list[dict]:
+    options = [{"label": "Default (built-in)", "value": BUILTIN}]
+    if not PACKS_DIR.exists():
+        return options
+    for path in sorted(PACKS_DIR.glob("*.json")):
+        payload = _read_json(path)
+        label = payload.get("name") or path.stem
+        options.append({"label": label, "value": path.stem})
+    return options
+
+
+def active_id() -> str:
+    return _active_id()
+
+
+def load(pack_id: str | None = None) -> dict[str, Any]:
+    chosen = pack_id or _active_id()
+    settings = _pack_from_file(chosen)
+    if pack_id:
+        _set_active(settings["id"] if chosen != BUILTIN else BUILTIN)
     return settings
+
+
+def save(raw, pack_id: str | None = None) -> dict[str, Any]:
+    current = pack_id or raw.get("id") or _active_id()
+    if current == BUILTIN:
+        settings = normalize(raw, pack_id=BUILTIN, name="Default")
+        settings["id"] = BUILTIN
+        settings["name"] = "Default"
+        return settings
+    settings = normalize(raw, pack_id=current, name=raw.get("name"))
+    settings["id"] = current
+    _write_json(_pack_path(current), settings)
+    _set_active(current)
+    return settings
+
+
+def create_pack(name: str, raw) -> dict[str, Any]:
+    label = str(name or "").strip() or "Settings"
+    pack_id = _unique_id(label)
+    settings = normalize(raw, pack_id=pack_id, name=label)
+    settings["id"] = pack_id
+    settings["name"] = label
+    _write_json(_pack_path(pack_id), settings)
+    _set_active(pack_id)
+    return settings
+
+
+def is_builtin(pack_id: str | None) -> bool:
+    return (pack_id or BUILTIN) == BUILTIN
 
 
 def age_options(settings=None) -> list[dict]:
@@ -175,14 +291,6 @@ def age_options(settings=None) -> list[dict]:
     for age in settings["age_tiers"]:
         if age != 99:
             options.append({"label": str(age), "value": int(age)})
-    return options
-
-
-def min_score_options(settings=None) -> list[dict]:
-    settings = normalize(settings)
-    options = [{"label": "Any", "value": 0}]
-    for value in settings["min_score_tiers"]:
-        options.append({"label": f"{format_cut(value)}+", "value": value})
     return options
 
 
