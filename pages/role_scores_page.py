@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from dash import (
     ALL,
     Input,
@@ -301,7 +302,6 @@ def layout():
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
         dcc.Store(id="rs-squad-marked", data=[]),
-        dcc.Store(id="rs-sort-prev", data=[]),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -615,8 +615,9 @@ def layout():
                         dash_table.DataTable(
                             id="rs-table",
                             page_size=50,
-                            sort_action="native",
+                            sort_action="custom",
                             sort_mode="single",
+                            sort_by=[],
                             sort_as_null=["-", ""],
                             row_selectable="multi",
                             selected_rows=[],
@@ -678,7 +679,7 @@ def layout():
                             className="rs-table-caption-row mt-2",
                         ),
                         html.Small(
-                            "Click a column header to sort. Score columns start high to low. "
+                            "Click a column header to sort. "
                             "Select rows in the table to mark players for a planned squad export.",
                             className="text-muted d-block",
                         ),
@@ -769,8 +770,48 @@ def _cell_number(value) -> float:
         return 0.0
 
 
-TABLE_IDENTITY_COLS = {"Name", "Age", "Height", "Position", "Club", "Rec", "Injury"}
 TABLE_TEXT_COLS = {"Name", "Position", "Club", "Rec", "Injury"}
+_REC_SUFFIX = {"+": 0, "": 1, "-": 2}
+_REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
+
+
+def rec_sort_key(value) -> tuple:
+    """A+ before A before A- before B+, with blanks last."""
+    text = str(value or "").strip()
+    if not text or text in ("-", "—"):
+        return (2, 99, 99, text)
+    match = _REC_PATTERN.match(text)
+    if not match:
+        return (1, 99, 99, text.casefold())
+    letter = match.group(1).upper()
+    suffix = match.group(2) or ""
+    return (0, ord(letter) - ord("A"), _REC_SUFFIX[suffix], text)
+
+
+def _column_sort_key(column_id: str, value):
+    if column_id == "Rec":
+        return rec_sort_key(value)
+    blank = value in (None, "", "-")
+    if column_id not in TABLE_TEXT_COLS:
+        return (1, float("inf")) if blank else (0, _cell_number(value))
+    return (1, "\uffff") if blank else (0, str(value).casefold())
+
+
+def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score_mode: str) -> None:
+    if sort_by:
+        item = sort_by[0]
+        column = item.get("column_id")
+        reverse = item.get("direction") == "desc"
+        rows.sort(key=lambda row: _column_sort_key(column, row.get(column)), reverse=reverse)
+        return
+    rows.sort(
+        key=lambda row: (
+            max(float(row.get(role) or 0) for role in view_roles)
+            if min_score_mode == "any"
+            else min(float(row.get(role) or 0) for role in view_roles)
+        ),
+        reverse=True,
+    )
 
 
 def _table_columns(col_ids: list[str]) -> list[dict]:
@@ -1367,6 +1408,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
+    Input("rs-table", "sort_by"),
     Input("theme", "data"),
     State("ui-settings", "data"),
 )
@@ -1384,6 +1426,7 @@ def render_shortlist(
     pos_filter,
     foot_filter,
     page_size,
+    sort_by,
     theme,
     settings,
 ):
@@ -1455,14 +1498,7 @@ def render_shortlist(
                 continue
         filtered.append(row)
 
-    filtered.sort(
-        key=lambda row: (
-            max(float(row.get(role) or 0) for role in view_roles)
-            if min_score_mode == "any"
-            else min(float(row.get(role) or 0) for role in view_roles)
-        ),
-        reverse=True,
-    )
+    _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
 
     expanded = []
     for role in view_roles:
@@ -1520,7 +1556,7 @@ def render_shortlist(
     caption = (
         f"{len(filtered)} of {len(rows)} players meeting eligibility "
         f"on all of: {role_list}.{min_note}{extra}{piece_note} "
-        "Click a header to sort. Score columns start high to low. "
+        "Click a header to sort. Rec uses A+ above A above A-, then B+. "
         f"{mark_note} "
         f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
@@ -1608,53 +1644,6 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
 )
 def toggle_clear_marks_btn(marked):
     return not _as_list(marked)
-
-
-@callback(
-    Output("rs-table", "sort_by"),
-    Output("rs-sort-prev", "data"),
-    Input("rs-table", "sort_by"),
-    State("rs-sort-prev", "data"),
-    State("rs-table", "columns"),
-    prevent_initial_call=True,
-)
-def prefer_score_desc(sort_by, prev, columns):
-    """Score columns: first click high-to-low, then low-to-high, then unsorted."""
-    prev = prev or []
-    score_ids = {
-        col["id"] for col in (columns or []) if col.get("id") not in TABLE_IDENTITY_COLS
-    }
-    prev_item = prev[0] if prev else None
-    curr_item = sort_by[0] if sort_by else None
-
-    if not curr_item:
-        if (
-            prev_item
-            and prev_item.get("column_id") in score_ids
-            and prev_item.get("direction") == "desc"
-        ):
-            nxt = [{"column_id": prev_item["column_id"], "direction": "asc"}]
-            return nxt, nxt
-        return no_update, []
-
-    col = curr_item.get("column_id")
-    direction = curr_item.get("direction")
-    if col not in score_ids:
-        return no_update, sort_by
-
-    if (not prev_item or prev_item.get("column_id") != col) and direction == "asc":
-        nxt = [{"column_id": col, "direction": "desc"}]
-        return nxt, nxt
-
-    if (
-        prev_item
-        and prev_item.get("column_id") == col
-        and prev_item.get("direction") == "asc"
-        and direction == "desc"
-    ):
-        return [], []
-
-    return no_update, sort_by
 
 
 @callback(
