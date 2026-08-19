@@ -503,7 +503,6 @@ def layout():
                                             placeholder="Select roles to filter",
                                         ),
                                         html.Small(
-                                            "Min score applies to every selected view role. "
                                             "Position eligible uses that role’s rule; "
                                             "combined roles count if the player can play either part.",
                                             className="text-muted",
@@ -542,6 +541,22 @@ def layout():
                                             options=us.min_score_options(settings),
                                             value=0,
                                             clearable=False,
+                                        ),
+                                        dcc.Dropdown(
+                                            id="rs-min-score-mode",
+                                            options=[
+                                                {
+                                                    "label": "Every selected role",
+                                                    "value": "all",
+                                                },
+                                                {
+                                                    "label": "At least one selected role",
+                                                    "value": "any",
+                                                },
+                                            ],
+                                            value="all",
+                                            clearable=False,
+                                            className="rs-min-score-mode mt-1",
                                         ),
                                     ],
                                     md=2,
@@ -749,6 +764,21 @@ def _clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
 
 
+MIN_SCORE_MODES = {
+    "all": "every selected role",
+    "any": "at least one selected role",
+}
+
+
+def _passes_min_score(row: dict, roles: list[str], min_score: float, mode: str) -> bool:
+    if min_score <= 0 or not roles:
+        return True
+    scores = [float(row.get(role) or 0) for role in roles]
+    if mode == "any":
+        return any(score >= min_score for score in scores)
+    return all(score >= min_score for score in scores)
+
+
 def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
     settings = us.normalize(settings)
     bands = settings["bands"]
@@ -865,12 +895,17 @@ def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict
         [
             html.Div(
                 [
-                    _colored_group_abbr(meta["group_abbr"], css="rs-depth-code"),
-                    html.Span(label, className="rs-depth-name"),
-                    html.Span(
-                        meta["phase"],
-                        className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                    html.Div(
+                        [
+                            _colored_group_abbr(meta["group_abbr"], css="rs-depth-code"),
+                            html.Span(
+                                meta["phase"],
+                                className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                            ),
+                        ],
+                        className="rs-depth-meta",
                     ),
+                    html.Span(label, className="rs-depth-name"),
                 ],
                 className="rs-depth-title",
             ),
@@ -1288,6 +1323,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-search", "value"),
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
+    Input("rs-min-score-mode", "value"),
     Input("rs-eligible", "value"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
@@ -1304,6 +1340,7 @@ def render_shortlist(
     query,
     max_age,
     min_score,
+    min_score_mode,
     eligible,
     set_pieces,
     set_piece_min,
@@ -1341,12 +1378,17 @@ def render_shortlist(
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = 0 if min_score is None else float(min_score)
+    min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
     set_piece_min = 0 if set_piece_min is None else float(set_piece_min)
     elig_only = "yes" in (eligible or [])
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
+    combo_by_col = {
+        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
+        for item in combos
+    }
 
     filtered = []
     for row in rows:
@@ -1358,7 +1400,7 @@ def render_shortlist(
             continue
         if int(row.get("Age") or 0) > max_age:
             continue
-        if any(float(row.get(role) or 0) < min_score for role in view_roles):
+        if not _passes_min_score(row, view_roles, min_score, min_score_mode):
             continue
         if set_piece_min > 0 and chosen_pieces:
             piece_cols = [
@@ -1378,14 +1420,14 @@ def render_shortlist(
         filtered.append(row)
 
     filtered.sort(
-        key=lambda row: min(float(row.get(role) or 0) for role in view_roles),
+        key=lambda row: (
+            max(float(row.get(role) or 0) for role in view_roles)
+            if min_score_mode == "any"
+            else min(float(row.get(role) or 0) for role in view_roles)
+        ),
         reverse=True,
     )
 
-    combo_by_col = {
-        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
-        for item in combos
-    }
     expanded = []
     for role in view_roles:
         if role not in expanded:
@@ -1434,10 +1476,15 @@ def render_shortlist(
     if chosen_pieces and set_piece_min > 0:
         piece_note = f" Set-piece min {set_piece_min:g}+ on all checked types."
     mark_note = f" {len(marked_keys)} marked for planned squad." if marked_keys else ""
+    min_note = ""
+    if min_score > 0:
+        min_note = (
+            f" Min score {min_score:g}+ on {MIN_SCORE_MODES[min_score_mode]}: {role_list}."
+        )
     caption = (
-        f"{len(filtered)} of {len(rows)} players meeting min score and eligibility "
-        f"on all of: {role_list}.{extra}{piece_note} "
-        "Click a header to sort. Default order is the lowest view-role score. "
+        f"{len(filtered)} of {len(rows)} players meeting eligibility "
+        f"on all of: {role_list}.{min_note}{extra}{piece_note} "
+        "Click a header to sort. "
         f"{mark_note} "
         f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
