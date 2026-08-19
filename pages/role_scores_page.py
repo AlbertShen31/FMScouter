@@ -298,6 +298,7 @@ def layout():
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
         dcc.Store(id="rs-squad-marked", data=[]),
+        dcc.Store(id="rs-sort-prev", data=[]),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -645,6 +646,8 @@ def layout():
                                 "backgroundColor": "transparent",
                                 "color": "inherit",
                                 "cursor": "pointer",
+                                "padding": "12px 28px 12px 10px",
+                                "height": "46px",
                             },
                             style_data_conditional=[
                                 {
@@ -669,7 +672,7 @@ def layout():
                             className="rs-table-caption-row mt-2",
                         ),
                         html.Small(
-                            "Click a column header to sort. "
+                            "Click a column header to sort. Score columns start high to low. "
                             "Select rows in the table to mark players for a planned squad export.",
                             className="text-muted d-block",
                         ),
@@ -758,6 +761,20 @@ def _cell_number(value) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+TABLE_IDENTITY_COLS = {"Name", "Age", "Height", "Position", "Club", "Rec", "Injury"}
+TABLE_TEXT_COLS = {"Name", "Position", "Club", "Rec", "Injury"}
+
+
+def _table_columns(col_ids: list[str]) -> list[dict]:
+    columns = []
+    for col in col_ids:
+        spec = {"name": col, "id": col}
+        if col not in TABLE_TEXT_COLS:
+            spec["type"] = "numeric"
+        columns.append(spec)
+    return columns
 
 
 def _clicked(n_clicks) -> bool:
@@ -1461,7 +1478,7 @@ def render_shortlist(
     table_cols = ["Name", "Age", "Height", "Position", "Club", "Rec", "Injury"]
     table_cols.extend(piece_cols)
     table_cols.extend(ordered_roles)
-    columns = [{"name": col, "id": col} for col in table_cols]
+    columns = _table_columns(table_cols)
     table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
     page_keys = [player_row_key(row) for row in table_rows]
     selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
@@ -1484,7 +1501,7 @@ def render_shortlist(
     caption = (
         f"{len(filtered)} of {len(rows)} players meeting eligibility "
         f"on all of: {role_list}.{min_note}{extra}{piece_note} "
-        "Click a header to sort. "
+        "Click a header to sort. Score columns start high to low. "
         f"{mark_note} "
         f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
@@ -1572,6 +1589,53 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
 )
 def toggle_clear_marks_btn(marked):
     return not _as_list(marked)
+
+
+@callback(
+    Output("rs-table", "sort_by"),
+    Output("rs-sort-prev", "data"),
+    Input("rs-table", "sort_by"),
+    State("rs-sort-prev", "data"),
+    State("rs-table", "columns"),
+    prevent_initial_call=True,
+)
+def prefer_score_desc(sort_by, prev, columns):
+    """Score columns: first click high-to-low, then low-to-high, then unsorted."""
+    prev = prev or []
+    score_ids = {
+        col["id"] for col in (columns or []) if col.get("id") not in TABLE_IDENTITY_COLS
+    }
+    prev_item = prev[0] if prev else None
+    curr_item = sort_by[0] if sort_by else None
+
+    if not curr_item:
+        if (
+            prev_item
+            and prev_item.get("column_id") in score_ids
+            and prev_item.get("direction") == "desc"
+        ):
+            nxt = [{"column_id": prev_item["column_id"], "direction": "asc"}]
+            return nxt, nxt
+        return no_update, []
+
+    col = curr_item.get("column_id")
+    direction = curr_item.get("direction")
+    if col not in score_ids:
+        return no_update, sort_by
+
+    if (not prev_item or prev_item.get("column_id") != col) and direction == "asc":
+        nxt = [{"column_id": col, "direction": "desc"}]
+        return nxt, nxt
+
+    if (
+        prev_item
+        and prev_item.get("column_id") == col
+        and prev_item.get("direction") == "asc"
+        and direction == "desc"
+    ):
+        return [], []
+
+    return no_update, sort_by
 
 
 @callback(
