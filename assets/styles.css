@@ -1426,12 +1426,55 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     color: var(--app-text);
 }
 
-.rs-table-caption-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
+.rs-table-area {
+    position: relative;
+    min-width: 0;
+}
+
+.rs-table-empty {
+    border: 1px dashed var(--app-line);
+    border-radius: 12px;
+    background: var(--app-head);
+    padding: 28px 24px;
+    text-align: center;
+}
+
+.rs-table-empty-inner {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.rs-empty-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--app-text);
+    margin-bottom: 6px;
+}
+
+.rs-empty-copy {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--app-muted);
+}
+
+.rs-empty-tips {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+    text-align: left;
+}
+
+.rs-empty-tips li {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--app-text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--app-inset);
+    border: 1px solid var(--app-line);
 }
 
 .rs-table-page-size {

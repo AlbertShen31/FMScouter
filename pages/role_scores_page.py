@@ -505,6 +505,53 @@ def _resolved_view_roles(payload: dict | None, focus_roles) -> list[str]:
     return focused or labels
 
 
+def _no_match_placeholder(
+    *,
+    elig_only: bool,
+    pos_filter: str,
+    foot_filter: str,
+    min_score: float,
+    set_piece_min: float,
+    query: str,
+    max_age: int,
+) -> html.Div:
+    tips: list[str] = []
+    if elig_only:
+        tips.append(
+            "Turn off “Only show players eligible for the selected role(s)” "
+            "(the position requirement filter)."
+        )
+    if pos_filter != "all":
+        tips.append("Select All in the position bar above.")
+    if foot_filter:
+        tips.append("Clear the Footedness filter.")
+    if min_score > 0:
+        tips.append("Lower or clear Min score.")
+    if set_piece_min > 0:
+        tips.append("Lower or clear the set-piece min score.")
+    if max_age < 99:
+        tips.append("Raise Max age to Any.")
+    if query:
+        tips.append("Clear the search box.")
+    if not tips:
+        tips.append("Loosen any active shortlist filters and try again.")
+    return html.Div(
+        [
+            html.Div("No players match these filters", className="rs-empty-title"),
+            html.P(
+                "Roles are selected, but nobody meets every criterion. "
+                "Try loosening the filters.",
+                className="rs-empty-copy",
+            ),
+            html.Ul(
+                [html.Li(tip) for tip in tips],
+                className="rs-empty-tips",
+            ),
+        ],
+        className="rs-table-empty-inner",
+    )
+
+
 def _hybrid_only_roles(view_roles: list[str], combos, hybrids_only: bool) -> list[str]:
     if not hybrids_only:
         return view_roles
@@ -922,7 +969,14 @@ def layout():
                         ),
                         html.Div(_set_piece_panel(settings), className="rs-special-scores"),
                         html.Div(
-                            dash_table.DataTable(
+                            [
+                                html.Div(
+                                    id="rs-table-empty",
+                                    className="rs-table-empty",
+                                    hidden=True,
+                                ),
+                                html.Div(
+                                    dash_table.DataTable(
                             id="rs-table",
                             page_size=50,
                             sort_action="custom",
@@ -999,7 +1053,11 @@ def layout():
                                 }
                             ],
                         ),
-                            className="rs-table-shell",
+                                    id="rs-table-shell",
+                                    className="rs-table-shell",
+                                ),
+                            ],
+                            className="rs-table-area",
                         ),
                         html.Div(id="rs-table-layout-nudge", hidden=True),
                         html.Div(
@@ -1967,6 +2025,9 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Output("rs-table-cols-sig", "data"),
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
+    Output("rs-table-empty", "children"),
+    Output("rs-table-empty", "hidden"),
+    Output("rs-table-shell", "hidden"),
     Input("rs-rows", "data"),
     Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
@@ -2036,6 +2097,9 @@ def render_shortlist(
             empty_sig,
             _blank_fig(theme) if hist_open else no_update,
             "Upload a file and pick at least one role in section 2.",
+            None,
+            True,
+            False,
         )
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
@@ -2063,6 +2127,9 @@ def render_shortlist(
             empty_sig,
             no_update if not hist_open else _blank_fig(theme),
             "Pick at least one role in section 2.",
+            None,
+            True,
+            False,
         )
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
@@ -2154,6 +2221,20 @@ def render_shortlist(
         hybrids_only=hybrids_only,
     )
     page_current, new_sig = _table_page_state(columns, cols_sig)
+    no_matches = not table_rows
+    empty_panel = (
+        _no_match_placeholder(
+            elig_only=elig_only,
+            pos_filter=pos_filter,
+            foot_filter=foot_filter,
+            min_score=min_score,
+            set_piece_min=set_piece_min,
+            query=query,
+            max_age=max_age,
+        )
+        if no_matches
+        else None
+    )
     return (
         _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
         cards,
@@ -2168,6 +2249,9 @@ def render_shortlist(
         new_sig,
         fig,
         caption,
+        empty_panel,
+        not no_matches,
+        no_matches,
     )
 
 
