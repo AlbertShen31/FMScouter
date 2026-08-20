@@ -373,6 +373,11 @@ FOOT_FILTER_HINTS = {
     ),
 }
 
+FOOT_SECTION_HELP = (
+    "Left / Right: that foot is stronger, and the other is reasonable, weak, or very weak. "
+    "Both feet: each foot is at least fairly strong. Click the active filter again to clear it."
+)
+
 
 def _role_pills(role_ids: list[str]) -> list:
     pills = []
@@ -480,6 +485,13 @@ def _depth_id_column(role_key: str) -> str | None:
     if role_key and role_key != "_":
         return role_meta(role_key)["column"]
     return None
+
+
+def _first_combo_column(combos: list[dict] | None) -> str | None:
+    items = normalize_combos(combos)
+    if not items:
+        return None
+    return combo_column(items[0]["ip"], items[0]["oop"])
 
 
 def _resolved_view_roles(payload: dict | None, focus_role: str | None) -> list[str]:
@@ -612,6 +624,20 @@ def layout():
                     [
                         html.Div(
                             [
+                        html.Div(
+                            dmc.SegmentedControl(
+                                id="rs-role-mode",
+                                value="formations",
+                                data=ROLE_MODE_DATA,
+                                fullWidth=True,
+                                size="md",
+                                radius="md",
+                                className="rs-role-mode-control",
+                            ),
+                            className="rs-role-mode-wrap",
+                        ),
+                        html.Div(
+                            [
                                 html.Div(
                                     [
                                         html.Div(
@@ -653,14 +679,6 @@ def layout():
                             className="rs-filter-toolbar",
                             hidden=True,
                         ),
-                        dmc.SegmentedControl(
-                            id="rs-role-mode",
-                            value="formations",
-                            data=ROLE_MODE_DATA,
-                            fullWidth=True,
-                            className="rs-role-mode-control",
-                            mb="sm",
-                        ),
                         html.Div(
                             [
                                 html.Div(
@@ -693,20 +711,34 @@ def layout():
                                 _hybrid_roles_panel(),
                                 html.Div(
                                     [
-                                        html.Span("Formation", className="rs-chip-label"),
-                                        dmc.Select(
-                                            id="rs-formation",
-                                            data=fm.pack_options(),
-                                            placeholder="Load a saved formation",
-                                            clearable=True,
-                                            searchable=True,
-                                            className="rs-formation-dd",
+                                        _field_label(
+                                            "Formation",
+                                            primary=True,
+                                            tip=(
+                                                "Loads the hybrid in/out-of-possession pairs from a "
+                                                "saved lineup. Squad depth shows those hybrid roles only."
+                                            ),
+                                            help_id="rs-help-formation",
                                         ),
-                                        dcc.Link(
-                                            "Edit",
-                                            href="/formations",
-                                            className="rs-weights-edit",
-                                            title="Open the Formations page to create or edit lineups.",
+                                        html.Div(
+                                            [
+                                                dmc.Select(
+                                                    id="rs-formation",
+                                                    data=fm.pack_options(),
+                                                    placeholder="Load a saved formation",
+                                                    clearable=True,
+                                                    searchable=True,
+                                                    size="md",
+                                                    className="rs-formation-dd",
+                                                ),
+                                                dcc.Link(
+                                                    "Edit",
+                                                    href="/formations",
+                                                    className="rs-weights-edit",
+                                                    title="Open the Formations page to create or edit lineups.",
+                                                ),
+                                            ],
+                                            className="rs-formation-row",
                                         ),
                                         dcc.Interval(id="rs-formation-tick", interval=2500),
                                     ],
@@ -715,6 +747,10 @@ def layout():
                                 ),
                             ],
                             className="rs-role-mode-panels",
+                        ),
+                            ],
+                            id="rs-roles-body",
+                            className="rs-roles-body rs-roles-body-formations",
                         ),
                     ]
                 ),
@@ -874,11 +910,12 @@ def layout():
                             row_selectable="multi",
                             selected_rows=[],
                             filter_action="none",
+                            fill_width=True,
                             style_table={
                                 "overflowX": "auto",
                                 "borderRadius": "12px",
+                                "width": "100%",
                                 "minWidth": "100%",
-                                "tableLayout": "fixed",
                             },
                             css=[
                                 {
@@ -1159,15 +1196,12 @@ def _column_signature(columns: list[dict]) -> str:
     return "|".join(str(col.get("id") or "") for col in columns)
 
 
-def _table_style_table(row_count: int, page_size: int) -> dict:
-    """Height hint nudges Dash Table to relayout after row/column changes."""
-    visible_rows = min(max(row_count, 1), max(page_size, 1))
+def _table_style_table(_row_count: int = 0, _page_size: int = 50) -> dict:
     return {
         "overflowX": "auto",
         "borderRadius": "12px",
+        "width": "100%",
         "minWidth": "100%",
-        "tableLayout": "fixed",
-        "minHeight": f"{visible_rows * 42 + 52}px",
     }
 
 
@@ -1327,7 +1361,13 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
             html.Div(cards, className="rs-pos-cards"),
             html.Div(
                 [
-                    html.Span("Footedness", className="rs-foot-label"),
+                    html.Div(
+                        [
+                            html.Span("Footedness"),
+                            *_help_icon(FOOT_SECTION_HELP, "rs-help-footedness"),
+                        ],
+                        className="rs-foot-label",
+                    ),
                     html.Div(foot_btns, className="rs-foot-btns"),
                 ],
                 className="rs-pos-utils",
@@ -1547,16 +1587,21 @@ def set_phase(n_clicks):
     Output("rs-formation-panel", "hidden"),
     Output("rs-filter-toolbar", "hidden"),
     Output("rs-phase-filter-wrap", "hidden"),
+    Output("rs-roles-body", "className"),
     Input("rs-role-mode", "value"),
 )
 def sync_role_mode(mode):
     mode = mode or "formations"
+    body = "rs-roles-body"
+    if mode == "formations":
+        body += " rs-roles-body-formations"
     return (
         mode != "single",
         mode != "hybrid",
         mode != "formations",
         mode == "formations",
         mode != "single",
+        body,
     )
 
 
@@ -1804,6 +1849,7 @@ def refresh_formation_options(_n, current):
     Output("rs-roles", "value", allow_duplicate=True),
     Output("rs-roles", "data", allow_duplicate=True),
     Output("rs-role-mode", "value"),
+    Output("rs-focus-role", "data", allow_duplicate=True),
     Input("rs-formation", "value"),
     State("rs-phase", "data"),
     State("rs-group", "data"),
@@ -1811,14 +1857,14 @@ def refresh_formation_options(_n, current):
 )
 def load_formation(formation_id, phase, group):
     if not formation_id or not fm.exists(formation_id):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     formation = fm.load(formation_id, persist=False)
     combos = fm.combos_from_formation(formation)
     keep = []
     for item in combos:
         keep.extend((item["ip"], item["oop"]))
     options = role_options(phase=phase, group=group, keep=keep) or []
-    return combos, [], options, "formations"
+    return combos, [], options, "formations", _first_combo_column(combos)
 
 
 @callback(
@@ -1834,7 +1880,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
-        return None, None
+        return None, no_update
     combos = normalize_combos(combos)
     role_ids = _as_list(role_ids)
     needed = list(role_ids)
@@ -1843,10 +1889,16 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
             if role_id not in needed:
                 needed.append(role_id)
     if not needed:
-        return None, None
+        return None, no_update
     rows = apply_combos(score_players(parsed["players"], needed), combos)
     labels = combo_score_labels(needed, combos)
-    focus = current_focus if current_focus in labels else None
+    if current_focus in labels:
+        focus = no_update
+    elif ctx.triggered_id == "rs-combos":
+        first = _first_combo_column(combos)
+        focus = first if first in labels else None
+    else:
+        focus = None
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
