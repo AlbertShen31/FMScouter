@@ -52,17 +52,19 @@ def _color_row(band: str, label: str, colors: dict) -> html.Div:
 
 def _form(settings: dict) -> list:
     bands = settings["bands"]
-    builtin = us.is_builtin(settings.get("id"))
+    default_note = (
+        "Default uses built-in values until you save changes; those are stored locally "
+        "and can be restored with Reset defaults."
+        if us.is_builtin(settings.get("id"))
+        else "Named packs save to their own files."
+    )
     return [
         dbc.Card(
             [
                 dbc.CardHeader("Saved settings"),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Default is built-in and read-only. Create a named copy to save changes.",
-                            className="text-muted",
-                        ),
+                        html.P(default_note, className="text-muted"),
                         dbc.Row(
                             [
                                 dbc.Col(
@@ -95,7 +97,6 @@ def _form(settings: dict) -> list:
                                             id="st-save",
                                             color="primary",
                                             className="me-2",
-                                            disabled=builtin,
                                         ),
                                         dbc.Button(
                                             "Reset defaults",
@@ -295,7 +296,7 @@ def _form_values(settings: dict, specs) -> tuple:
         settings,
         us.pack_options(),
         settings["id"],
-        us.is_builtin(settings["id"]),
+        False,
         us.format_list(settings["age_tiers"], kind="age"),
         settings["bands"]["elite"],
         settings["bands"]["good"],
@@ -378,12 +379,16 @@ def handle_settings(
         settings = us.load(pack_id)
         status = f"Loaded {settings['name']}."
     elif triggered == "st-reset":
-        settings = us.normalize(us.DEFAULTS, pack_id=pack_id, name=None)
-        if pack_id and pack_id != us.BUILTIN:
+        if pack_id == us.BUILTIN:
+            us.clear_default_overrides()
+            settings = us.load(us.BUILTIN)
+            status = "Default restored to built-in values."
+        else:
+            settings = us.normalize(us.DEFAULTS, pack_id=pack_id, name=None)
             current = us.read_pack(pack_id)
             settings["id"] = current["id"]
             settings["name"] = current["name"]
-        status = "Form reset to built-in defaults. Save to keep them on this pack."
+            status = "Form reset to built-in defaults. Save to keep them on this pack."
         update_pack = False
     elif triggered == "st-new":
         label = str(new_name or "").strip()
@@ -394,15 +399,15 @@ def handle_settings(
         clear_name = ""
     elif triggered == "st-save":
         if us.is_builtin(pack_id):
-            return (no_update,) * 10 + (
-                "Default is read-only. Create a named copy to save.",
-                no_update,
-            )
-        current = us.read_pack(pack_id)
-        draft["name"] = current["name"]
-        settings = us.save(draft, pack_id)
-        status = f"Saved {settings['name']}."
-        update_pack = False
+            settings = us.save(draft, pack_id)
+            status = f"Saved {settings['name']} overrides."
+            update_pack = True
+        else:
+            current = us.read_pack(pack_id)
+            draft["name"] = current["name"]
+            settings = us.save(draft, pack_id)
+            status = f"Saved {settings['name']}."
+            update_pack = False
     else:
         return (no_update,) * 12
     values = list(_form_values(settings, specs))

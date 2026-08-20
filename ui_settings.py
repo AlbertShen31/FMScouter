@@ -1,7 +1,8 @@
 """Persisted UI thresholds and colors for Role scores.
 
-Named JSON packs live in `config/settings/packs/`. Built-in Default is
-read-only; Save writes the selected named pack. New creates a named copy.
+Named JSON packs live in `config/settings/packs/`. Default uses built-in
+values; edits are saved to `default-overrides.json`. Named packs save to
+their own files. New creates a named copy.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parent
 SETTINGS_DIR = ROOT / "config" / "settings"
 PACKS_DIR = SETTINGS_DIR / "packs"
 ACTIVE_PATH = SETTINGS_DIR / "active.json"
+DEFAULT_OVERRIDES_PATH = SETTINGS_DIR / "default-overrides.json"
 
 BUILTIN = "default"
 
@@ -219,9 +221,34 @@ def _set_active(pack_id: str) -> None:
     _write_json(ACTIVE_PATH, {"id": pack_id})
 
 
+def _default_settings() -> dict[str, Any]:
+    base = copy.deepcopy(DEFAULTS)
+    overrides = _read_json(DEFAULT_OVERRIDES_PATH)
+    if not overrides:
+        return base
+    merged = {**base, **overrides}
+    if overrides.get("bands"):
+        merged["bands"] = {**base["bands"], **overrides["bands"]}
+    if overrides.get("colors"):
+        merged["colors"] = {
+            band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
+            for band in BAND_KEYS
+        }
+    return normalize(merged, pack_id=BUILTIN, name="Default")
+
+
+def has_default_overrides() -> bool:
+    return DEFAULT_OVERRIDES_PATH.exists()
+
+
+def clear_default_overrides() -> None:
+    if DEFAULT_OVERRIDES_PATH.exists():
+        DEFAULT_OVERRIDES_PATH.unlink()
+
+
 def _pack_from_file(pack_id: str) -> dict[str, Any]:
     if pack_id == BUILTIN:
-        return copy.deepcopy(DEFAULTS)
+        return _default_settings()
     path = _pack_path(pack_id)
     if not path.exists():
         return copy.deepcopy(DEFAULTS)
@@ -234,7 +261,8 @@ def read_pack(pack_id: str | None = None) -> dict[str, Any]:
 
 
 def pack_options() -> list[dict]:
-    options = [{"label": "Default (built-in)", "value": BUILTIN}]
+    default_label = "Default (customized)" if has_default_overrides() else "Default"
+    options = [{"label": default_label, "value": BUILTIN}]
     if not PACKS_DIR.exists():
         return options
     for path in sorted(PACKS_DIR.glob("*.json")):
@@ -262,6 +290,14 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
         settings = normalize(raw, pack_id=BUILTIN, name="Default")
         settings["id"] = BUILTIN
         settings["name"] = "Default"
+        payload = {
+            "age_tiers": settings["age_tiers"],
+            "bands": settings["bands"],
+            "hist_edges": settings["hist_edges"],
+            "colors": settings["colors"],
+        }
+        _write_json(DEFAULT_OVERRIDES_PATH, payload)
+        _set_active(BUILTIN)
         return settings
     settings = normalize(raw, pack_id=current, name=raw.get("name"))
     settings["id"] = current

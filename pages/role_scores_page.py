@@ -180,7 +180,7 @@ def _upload_error(message: str) -> html.Div:
 def _group_buttons(active: str = "all") -> list:
     buttons = [
         html.Button(
-            "All groups",
+            "All",
             id={"type": "rs-group", "group": "all"},
             n_clicks=0,
             className="rs-chip" + (" active" if active == "all" else ""),
@@ -572,7 +572,7 @@ def layout():
                                                     className="rs-chip-row",
                                                 ),
                                             ],
-                                            className="rs-filter-cluster",
+                                            className="rs-filter-row",
                                         ),
                                         html.Div(
                                             [
@@ -583,7 +583,7 @@ def layout():
                                                     className="rs-chip-row wrap",
                                                 ),
                                             ],
-                                            className="rs-filter-cluster",
+                                            className="rs-filter-row",
                                         ),
                                         html.Button(
                                             "Clear",
@@ -731,7 +731,7 @@ def layout():
                                             ],
                                             value="all",
                                             clearable=False,
-                                            className="rs-min-score-mode mt-1",
+                                            className="rs-min-score-mode",
                                         ),
                                     ],
                                     className="rs-filter-score",

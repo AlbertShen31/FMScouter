@@ -74,7 +74,7 @@ def _new_mode_buttons(active: str) -> list:
 def _group_buttons(active: str) -> list:
     buttons = [
         html.Button(
-            "All groups",
+            "All",
             id={"type": "rc-group", "group": "all"},
             n_clicks=0,
             className="rc-chip" + (" active" if active == "all" else ""),
@@ -383,11 +383,30 @@ def layout():
                 _bar(
                     "Filters",
                     [
-                        html.Span("Phase", className="rc-chip-label"),
-                        html.Div(_phase_buttons("all"), id="rc-phase-row", className="rc-chip-row"),
-                        html.Span("Group", className="rc-chip-label"),
-                        html.Div(_group_buttons("all"), id="rc-group-row", className="rc-chip-row wrap"),
+                        html.Div(
+                            [
+                                html.Span("Phase", className="rc-chip-label"),
+                                html.Div(
+                                    _phase_buttons("all"),
+                                    id="rc-phase-row",
+                                    className="rc-chip-row",
+                                ),
+                            ],
+                            className="rc-filter-row",
+                        ),
+                        html.Div(
+                            [
+                                html.Span("Group", className="rc-chip-label"),
+                                html.Div(
+                                    _group_buttons("all"),
+                                    id="rc-group-row",
+                                    className="rc-chip-row wrap",
+                                ),
+                            ],
+                            className="rc-filter-row",
+                        ),
                     ],
+                    extra="rc-filters-bar",
                 ),
                 _bar(
                     "Config",
