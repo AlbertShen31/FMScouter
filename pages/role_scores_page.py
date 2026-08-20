@@ -9,6 +9,7 @@ from dash import (
     Output,
     State,
     callback,
+    clientside_callback,
     ctx,
     dash_table,
     dcc,
@@ -261,7 +262,19 @@ def _set_piece_panel(settings=None) -> html.Details:
         [
             html.Summary(
                 [
-                    html.Span("Additional player metrics", className="rs-metrics-summary-text"),
+                    html.Div(
+                        [
+                            html.Span(
+                                "Additional player metrics",
+                                className="rs-metrics-summary-text",
+                            ),
+                            html.Span(
+                                "Set-piece columns & optional filters",
+                                className="rs-metrics-summary-hint",
+                            ),
+                        ],
+                        className="rs-metrics-summary-copy",
+                    ),
                     *_help_icon(
                         "Check a type to add columns to the table. "
                         "Min score filters out anyone below that on every checked type.",
@@ -272,35 +285,61 @@ def _set_piece_panel(settings=None) -> html.Details:
             ),
             html.Div(
                 [
-                    html.Div("Add columns", className="rs-chip-label"),
-                    dmc.CheckboxGroup(
-                        id="rs-set-pieces",
-                        value=[],
-                        children=[
-                            dmc.Checkbox(
-                                label=_set_piece_check_label(profile),
-                                value=profile["id"],
-                            )
-                            for profile in SET_PIECE_PROFILES
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Div("Add columns", className="rs-metrics-section-label"),
+                                    html.P(
+                                        "Show raw attributes and computed scores in the shortlist.",
+                                        className="rs-metrics-section-hint",
+                                    ),
+                                ],
+                                className="rs-metrics-section-head",
+                            ),
+                            dmc.CheckboxGroup(
+                                id="rs-set-pieces",
+                                value=[],
+                                children=[
+                                    dmc.Checkbox(
+                                        label=_set_piece_check_label(profile),
+                                        value=profile["id"],
+                                    )
+                                    for profile in SET_PIECE_PROFILES
+                                ],
+                                className="rs-set-piece-checks",
+                            ),
                         ],
-                        className="rs-set-piece-checks",
+                        className="rs-metrics-section rs-metrics-columns",
                     ),
                     html.Div(
                         [
-                            html.Span("Set-piece filters", className="rs-chip-label"),
-                            dmc.NumberInput(
-                                id="rs-set-piece-min-score",
-                                label="Min score",
-                                placeholder="Any",
-                                min=0,
-                                max=20,
-                                step=0.1,
-                                decimalScale=1,
-                                value=None,
-                                className="rs-set-piece-min-dd",
+                            html.Div(
+                                [
+                                    html.Div("Min score filter", className="rs-metrics-section-label"),
+                                    html.P(
+                                        "Leave blank for any. Applies to every checked type.",
+                                        className="rs-metrics-section-hint",
+                                    ),
+                                ],
+                                className="rs-metrics-section-head",
+                            ),
+                            html.Div(
+                                dmc.NumberInput(
+                                    id="rs-set-piece-min-score",
+                                    label="Minimum score",
+                                    placeholder="Any",
+                                    min=0,
+                                    max=20,
+                                    step=0.1,
+                                    decimalScale=1,
+                                    value=None,
+                                    className="rs-set-piece-min-dd",
+                                ),
+                                className="rs-metrics-filter-field",
                             ),
                         ],
-                        className="rs-set-piece-toolbar",
+                        className="rs-metrics-section rs-metrics-filter",
                     ),
                     html.Details(
                         [
@@ -469,6 +508,7 @@ def layout():
         dcc.Store(id="rs-squad-marked", data=[]),
         dcc.Store(id="rs-hist-open", data=False),
         dcc.Store(id="rs-focus-role", data=None),
+        dcc.Store(id="rs-table-cols-sig", data=""),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -808,11 +848,11 @@ def layout():
                             row_selectable="multi",
                             selected_rows=[],
                             filter_action="none",
-                            fixed_columns={"headers": True, "data": 1},
                             style_table={
                                 "overflowX": "auto",
                                 "borderRadius": "12px",
                                 "minWidth": "100%",
+                                "tableLayout": "fixed",
                             },
                             css=[
                                 {
@@ -876,6 +916,7 @@ def layout():
                         ),
                             className="rs-table-shell",
                         ),
+                        html.Div(id="rs-table-layout-nudge", hidden=True),
                         html.Div(
                             [
                                 html.Div(id="rs-table-caption", className="text-muted"),
@@ -1086,6 +1127,29 @@ def _table_columns(col_ids: list[str]) -> list[dict]:
             spec["type"] = "numeric"
         columns.append(spec)
     return columns
+
+
+def _column_signature(columns: list[dict]) -> str:
+    return "|".join(str(col.get("id") or "") for col in columns)
+
+
+def _table_style_table(row_count: int, page_size: int) -> dict:
+    """Height hint nudges Dash Table to relayout after row/column changes."""
+    visible_rows = min(max(row_count, 1), max(page_size, 1))
+    return {
+        "overflowX": "auto",
+        "borderRadius": "12px",
+        "minWidth": "100%",
+        "tableLayout": "fixed",
+        "minHeight": f"{visible_rows * 42 + 52}px",
+    }
+
+
+def _table_page_state(columns: list[dict], prev_sig: str | None) -> tuple[int | object, str]:
+    sig = _column_signature(columns)
+    if sig != (prev_sig or ""):
+        return 0, sig
+    return no_update, sig
 
 
 def _clicked(n_clicks) -> bool:
@@ -1729,8 +1793,11 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Output("rs-table", "data"),
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
+    Output("rs-table", "style_table"),
     Output("rs-table", "page_size"),
+    Output("rs-table", "page_current"),
     Output("rs-table", "selected_rows"),
+    Output("rs-table-cols-sig", "data"),
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
     Input("rs-rows", "data"),
@@ -1750,6 +1817,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Input("theme", "data"),
     Input("rs-hist-open", "data"),
     State("ui-settings", "data"),
+    State("rs-table-cols-sig", "data"),
 )
 def render_shortlist(
     payload,
@@ -1769,6 +1837,7 @@ def render_shortlist(
     theme,
     hist_open,
     settings,
+    cols_sig,
 ):
     settings = us.normalize(settings)
     bands = settings["bands"]
@@ -1777,6 +1846,8 @@ def render_shortlist(
     empty_style = _score_styles([], settings, theme)
     view_roles = _resolved_view_roles(payload, focus_role)
     page_size = int(page_size or 50)
+    empty_table_style = _table_style_table(0, page_size)
+    empty_page, empty_sig = _table_page_state(empty_cols, cols_sig)
     hist_open = bool(hist_open)
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
@@ -1788,8 +1859,11 @@ def render_shortlist(
             [],
             empty_cols,
             empty_style,
+            empty_table_style,
             page_size,
+            empty_page,
             [],
+            empty_sig,
             _blank_fig(theme) if hist_open else no_update,
             "Upload a file and pick at least one role in section 2.",
         )
@@ -1805,8 +1879,11 @@ def render_shortlist(
             [],
             empty_cols,
             empty_style,
+            empty_table_style,
             page_size,
+            empty_page,
             [],
+            empty_sig,
             no_update if not hist_open else _blank_fig(theme),
             "Pick at least one role in section 2.",
         )
@@ -1890,6 +1967,7 @@ def render_shortlist(
         f" · {payload.get('filename')}."
     )
     cards = _depth_panel(rows, role_ids, focus_role, bands, combos)
+    page_current, new_sig = _table_page_state(columns, cols_sig)
     return (
         _pos_bar(rows, pos_filter, foot_filter),
         cards,
@@ -1897,11 +1975,31 @@ def render_shortlist(
         table_rows,
         columns,
         _score_styles(score_cols, settings, theme),
+        _table_style_table(len(table_rows), page_size),
         page_size,
+        page_current,
         selected_rows,
+        new_sig,
         fig,
         caption,
     )
+
+
+clientside_callback(
+    """
+    function(_data, _columns, _sig) {
+        requestAnimationFrame(function() {
+            window.dispatchEvent(new Event("resize"));
+        });
+        return "";
+    }
+    """,
+    Output("rs-table-layout-nudge", "children"),
+    Input("rs-table", "data"),
+    Input("rs-table", "columns"),
+    Input("rs-table-cols-sig", "data"),
+    prevent_initial_call=True,
+)
 
 
 SQUAD_PREVIEW_MAX_ROWS = 8
