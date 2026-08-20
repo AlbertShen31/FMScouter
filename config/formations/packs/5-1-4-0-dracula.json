@@ -1,0 +1,86 @@
+{
+  "id": "5-1-4-0-dracula",
+  "name": "5-1-4-0 Dracula",
+  "schema": 2,
+  "shape": "5-1-4-0",
+  "notes": "Strikerless tactic for my FC Romania save",
+  "slots": [
+    {
+      "label": "GK",
+      "ip_pos": "gk",
+      "oop_pos": "",
+      "ip": "Ball_Playing_Goalkeeper_IP_GK",
+      "oop": "Goalkeeper_OOP_GK"
+    },
+    {
+      "label": "RWB",
+      "ip_pos": "rwb",
+      "oop_pos": "rb",
+      "ip": "Advanced_Wing_Back_IP",
+      "oop": "Full_Back_OOP"
+    },
+    {
+      "label": "CB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Overlapping_Centre_Back_IP",
+      "oop": "Centre_Back_OOP"
+    },
+    {
+      "label": "CB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Ball_Playing_Centre_Back_IP",
+      "oop": "Centre_Back_OOP"
+    },
+    {
+      "label": "CB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Overlapping_Centre_Back_IP",
+      "oop": "Centre_Back_OOP"
+    },
+    {
+      "label": "LWB",
+      "ip_pos": "lwb",
+      "oop_pos": "lb",
+      "ip": "Advanced_Wing_Back_IP",
+      "oop": "Full_Back_OOP"
+    },
+    {
+      "label": "CM",
+      "ip_pos": "cm",
+      "oop_pos": "dm",
+      "ip": "Attacking_Midfielder_IP",
+      "oop": "Defensive_Midfielder_OOP"
+    },
+    {
+      "label": "RW",
+      "ip_pos": "rw",
+      "oop_pos": "",
+      "ip": "Inside_Forward_IP",
+      "oop": "Winger_OOP"
+    },
+    {
+      "label": "AM",
+      "ip_pos": "am",
+      "oop_pos": "cm",
+      "ip": "Channel_Midfielder_IP",
+      "oop": "Wide_Covering_Central_Midfielder_OOP"
+    },
+    {
+      "label": "AM",
+      "ip_pos": "am",
+      "oop_pos": "cm",
+      "ip": "Channel_Midfielder_IP",
+      "oop": "Wide_Covering_Central_Midfielder_OOP"
+    },
+    {
+      "label": "LW",
+      "ip_pos": "lw",
+      "oop_pos": "",
+      "ip": "Inside_Forward_IP",
+      "oop": "Winger_OOP"
+    }
+  ]
+}

@@ -53,6 +53,7 @@ from role_scorer import (
     expand_view_role_columns,
 )
 from canvas_export import build_canvas
+import formations as fm
 import role_config as rc
 import ui_settings as us
 
@@ -649,6 +650,27 @@ def layout():
                                 ),
                             ],
                             className="rs-filter-toolbar",
+                        ),
+                        html.Div(
+                            [
+                                html.Span("Formation", className="rs-chip-label"),
+                                dmc.Select(
+                                    id="rs-formation",
+                                    data=fm.pack_options(),
+                                    placeholder="Load a saved formation",
+                                    clearable=True,
+                                    searchable=True,
+                                    className="rs-formation-dd",
+                                ),
+                                dcc.Link(
+                                    "Edit",
+                                    href="/formations",
+                                    className="rs-weights-edit",
+                                    title="Open the Formations page to create or edit lineups.",
+                                ),
+                                dcc.Interval(id="rs-formation-tick", interval=2500),
+                            ],
+                            className="rs-formation-bar",
                         ),
                         dmc.SegmentedControl(
                             id="rs-role-mode",
@@ -1746,6 +1768,43 @@ def focus_view_role(n_clicks, current_focus):
 )
 def refresh_config_options(_n):
     return rc.pack_options()
+
+
+@callback(
+    Output("rs-formation", "data"),
+    Output("rs-formation", "value"),
+    Input("rs-formation-tick", "n_intervals"),
+    State("rs-formation", "value"),
+)
+def refresh_formation_options(_n, current):
+    options = fm.pack_options()
+    allowed = {opt["value"] for opt in options}
+    if current and current not in allowed:
+        return options, None
+    return options, no_update
+
+
+@callback(
+    Output("rs-combos", "data", allow_duplicate=True),
+    Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-roles", "data", allow_duplicate=True),
+    Output("rs-role-mode", "value"),
+    Input("rs-formation", "value"),
+    State("rs-phase", "data"),
+    State("rs-group", "data"),
+    prevent_initial_call=True,
+)
+def load_formation(formation_id, phase, group):
+    if not formation_id or not fm.exists(formation_id):
+        return no_update, no_update, no_update, no_update
+    formation = fm.load(formation_id, persist=False)
+    combos = fm.combos_from_formation(formation)
+    roles = fm.roles_from_formation(formation)
+    keep = list(roles)
+    for item in combos:
+        keep.extend((item["ip"], item["oop"]))
+    options = role_options(phase=phase, group=group, keep=keep) or []
+    return combos, roles, options, "hybrid"
 
 
 @callback(

@@ -16,7 +16,10 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 | --- | --- |
 | `app.py` | Dash shell and nav (Role scores, Role configs). |
 | `pages/role_scores_page.py` | Upload CSV, pick roles, filter, export. |
-| `pages/role_config_page.py` | Edit key/preferred/useful attributes and position groups. |
+| `pages/formations_page.py` | Save named lineups of up to 11 hybrid roles. |
+| `formations.py` | Formation packs, validation, combo export. |
+| `config/formations/packs/` | Named JSON formation files. |
+| `config/formations/active.json` | Last selected formation. |
 | `config/fm26_role_weight_config.py` | Factory roles, group ids, home-group resolution. |
 | `role_scorer.py` | Parse CSV, eligibility, scoring, player POS cards. |
 | `role_config.py` | Packs, live overlays, saved-group migration. |
@@ -80,3 +83,9 @@ Position groups and IP/OOP tags remain part of the data model. They are not a fo
 ## Config packs
 
 Factory Python weights are the source of truth. The Role configs page loads a pack and edits in memory. **Save** writes a named pack; Built-in cannot be overwritten. **New config** makes a named file that is either a copy of the selected config or a blank slate (attributes off, groups kept). **Reset** reloads the selected role from the last saved pack. **Clear this role** turns off that role’s attributes. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Scored roles** picks which pack to score with.
+
+## Formations
+
+A formation is a named list of up to 11 **hybrid-only** slots. Each slot has an IP position (required) and an optional OOP position that filter the role pickers. If OOP position is blank, both role lists use the IP position. A filled scoring slot still needs both an IP role and an OOP role. `formations.combos_from_formation()` turns filled slots into the same combo objects Role scores already scores.
+
+The Formations page opens on a new unsaved lineup. **Save** writes a new file when none is selected, or updates the selected one. Role scores **Load a saved formation** replaces the current hybrid list, adds the constituent roles to scored roles, and switches to Hybrid mode.
