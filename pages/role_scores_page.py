@@ -49,6 +49,8 @@ from role_scorer import (
     set_piece_formula,
     set_piece_hint,
     expand_view_role_columns,
+    view_combo_option_label,
+    view_role_option_label,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -675,101 +677,104 @@ def layout():
                                             id="rs-view-role",
                                             multi=True,
                                             placeholder="Select roles for table columns",
+                                            className="rs-view-role-dd",
                                         ),
                                     ],
                                     className="rs-filter-roles",
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Search", className="rs-field-label"),
-                                        dbc.Input(
-                                            id="rs-search",
-                                            type="search",
-                                            placeholder="Name, club, position",
-                                        ),
-                                    ],
-                                    className="rs-filter-search",
-                                ),
-                                html.Div(
-                                    [
-                                        html.Label("Max age", className="rs-field-label"),
-                                        dcc.Dropdown(
-                                            id="rs-age",
-                                            options=us.age_options(settings),
-                                            value=99,
-                                            clearable=False,
-                                        ),
-                                    ],
-                                    className="rs-filter-age",
-                                ),
-                                html.Div(
-                                    [
-                                        _field_label(
-                                            "Min score",
-                                            tip="Uses the roles selected above. Leave blank for any.",
-                                            help_id="rs-help-min-score",
-                                        ),
-                                        dbc.Input(
-                                            id="rs-min-score",
-                                            type="number",
-                                            min=0,
-                                            max=20,
-                                            step=0.1,
-                                            placeholder="Any",
-                                        ),
-                                        dcc.Dropdown(
-                                            id="rs-min-score-mode",
-                                            options=[
-                                                {
-                                                    "label": "Every selected role",
-                                                    "value": "all",
-                                                },
-                                                {
-                                                    "label": "At least one selected role",
-                                                    "value": "any",
-                                                },
+                                        html.Div(
+                                            [
+                                                html.Label("Search", className="rs-field-label"),
+                                                dbc.Input(
+                                                    id="rs-search",
+                                                    type="search",
+                                                    placeholder="Name, club, position",
+                                                ),
                                             ],
-                                            value="all",
-                                            clearable=False,
-                                            className="rs-min-score-mode",
+                                            className="rs-filter-search",
                                         ),
-                                    ],
-                                    className="rs-filter-score",
-                                ),
-                                html.Div(
-                                    [
-                                        dbc.Checklist(
-                                            id="rs-eligible",
-                                            options=[
-                                                {
-                                                    "label": (
-                                                        "Only show players eligible for the "
-                                                        "selected role(s)"
+                                        html.Div(
+                                            [
+                                                html.Label("Max age", className="rs-field-label"),
+                                                dcc.Dropdown(
+                                                    id="rs-age",
+                                                    options=us.age_options(settings),
+                                                    value=99,
+                                                    clearable=False,
+                                                ),
+                                            ],
+                                            className="rs-filter-age",
+                                        ),
+                                        html.Div(
+                                            [
+                                                _field_label(
+                                                    "Min score",
+                                                    tip=(
+                                                        "Uses the roles selected above. "
+                                                        "Leave blank for any."
                                                     ),
-                                                    "value": "yes",
-                                                }
+                                                    help_id="rs-help-min-score",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        dbc.Input(
+                                                            id="rs-min-score",
+                                                            type="number",
+                                                            min=0,
+                                                            max=20,
+                                                            step=0.1,
+                                                            placeholder="Any",
+                                                        ),
+                                                        html.Div(
+                                                            dcc.Dropdown(
+                                                                id="rs-min-score-mode",
+                                                                options=[
+                                                                    {
+                                                                        "label": "Every selected role",
+                                                                        "value": "all",
+                                                                    },
+                                                                    {
+                                                                        "label": (
+                                                                            "At least one selected role"
+                                                                        ),
+                                                                        "value": "any",
+                                                                    },
+                                                                ],
+                                                                value="all",
+                                                                clearable=False,
+                                                                className="rs-min-score-mode",
+                                                            ),
+                                                            className="rs-min-score-mode-wrap",
+                                                        ),
+                                                    ],
+                                                    className="rs-min-score-fields",
+                                                ),
                                             ],
-                                            value=["yes"],
-                                            switch=True,
+                                            className="rs-filter-score",
+                                        ),
+                                        html.Div(
+                                            [
+                                                dbc.Checklist(
+                                                    id="rs-eligible",
+                                                    options=[
+                                                        {
+                                                            "label": (
+                                                                "Only show players eligible for "
+                                                                "the selected role(s)"
+                                                            ),
+                                                            "value": "yes",
+                                                        }
+                                                    ],
+                                                    value=["yes"],
+                                                    switch=True,
+                                                ),
+                                            ],
+                                            className="rs-filter-elig",
                                         ),
                                     ],
-                                    className="rs-filter-elig",
-                                ),
-                                html.Div(
-                                    [
-                                        html.Label("Rows per page", className="rs-field-label"),
-                                        dcc.Dropdown(
-                                            id="rs-page-size",
-                                            options=[
-                                                {"label": "25", "value": 25},
-                                                {"label": "50", "value": 50},
-                                                {"label": "100", "value": 100},
-                                            ],
-                                            value=25,
-                                            clearable=False,
-                                        ),
-                                    ],
-                                    className="rs-filter-rows",
+                                    className="rs-shortlist-filters-row",
                                 ),
                             ],
                             className="rs-shortlist-filters mb-2",
@@ -857,6 +862,22 @@ def layout():
                         html.Div(
                             [
                                 html.Div(id="rs-table-caption", className="text-muted"),
+                                html.Div(
+                                    [
+                                        html.Label("Rows per page", className="rs-field-label"),
+                                        dcc.Dropdown(
+                                            id="rs-page-size",
+                                            options=[
+                                                {"label": "25", "value": 25},
+                                                {"label": "50", "value": 50},
+                                                {"label": "100", "value": 100},
+                                            ],
+                                            value=25,
+                                            clearable=False,
+                                        ),
+                                    ],
+                                    className="rs-table-page-size",
+                                ),
                                 dbc.Button(
                                     "Clear marked rows",
                                     id="rs-squad-clear-btn",
@@ -1658,13 +1679,15 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     for item in combos:
         meta = combo_meta(item["ip"], item["oop"])
         if meta["column"] not in seen:
-            options.append({"label": meta["compact"], "value": meta["column"]})
+            options.append(
+                {"label": view_combo_option_label(item["ip"], item["oop"]), "value": meta["column"]}
+            )
             seen.add(meta["column"])
     for role_id in needed:
         meta = role_meta(role_id)
         if meta["column"] in seen:
             continue
-        options.append({"label": meta["compact"], "value": meta["column"]})
+        options.append({"label": view_role_option_label(role_id), "value": meta["column"]})
         seen.add(meta["column"])
     kept = [role for role in _as_list(current_view) if role in labels]
     view = kept or labels
