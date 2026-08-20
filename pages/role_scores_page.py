@@ -136,7 +136,7 @@ HYBRID_HELP = (
 ROLE_MODE_DATA = [
     {"label": "Single roles", "value": "single"},
     {"label": "Hybrid roles", "value": "hybrid"},
-    {"label": "Community", "value": "community", "disabled": True},
+    {"label": "Formations", "value": "formations"},
 ]
 
 
@@ -649,32 +649,13 @@ def layout():
                                     className="rs-role-toolbar",
                                 ),
                             ],
+                            id="rs-filter-toolbar",
                             className="rs-filter-toolbar",
-                        ),
-                        html.Div(
-                            [
-                                html.Span("Formation", className="rs-chip-label"),
-                                dmc.Select(
-                                    id="rs-formation",
-                                    data=fm.pack_options(),
-                                    placeholder="Load a saved formation",
-                                    clearable=True,
-                                    searchable=True,
-                                    className="rs-formation-dd",
-                                ),
-                                dcc.Link(
-                                    "Edit",
-                                    href="/formations",
-                                    className="rs-weights-edit",
-                                    title="Open the Formations page to create or edit lineups.",
-                                ),
-                                dcc.Interval(id="rs-formation-tick", interval=2500),
-                            ],
-                            className="rs-formation-bar",
+                            hidden=True,
                         ),
                         dmc.SegmentedControl(
                             id="rs-role-mode",
-                            value="single",
+                            value="formations",
                             data=ROLE_MODE_DATA,
                             fullWidth=True,
                             className="rs-role-mode-control",
@@ -707,8 +688,31 @@ def layout():
                                     ],
                                     id="rs-single-panel",
                                     className="rs-role-mode-panel",
+                                    hidden=True,
                                 ),
                                 _hybrid_roles_panel(),
+                                html.Div(
+                                    [
+                                        html.Span("Formation", className="rs-chip-label"),
+                                        dmc.Select(
+                                            id="rs-formation",
+                                            data=fm.pack_options(),
+                                            placeholder="Load a saved formation",
+                                            clearable=True,
+                                            searchable=True,
+                                            className="rs-formation-dd",
+                                        ),
+                                        dcc.Link(
+                                            "Edit",
+                                            href="/formations",
+                                            className="rs-weights-edit",
+                                            title="Open the Formations page to create or edit lineups.",
+                                        ),
+                                        dcc.Interval(id="rs-formation-tick", interval=2500),
+                                    ],
+                                    id="rs-formation-panel",
+                                    className="rs-role-mode-panel rs-formation-bar",
+                                ),
                             ],
                             className="rs-role-mode-panels",
                         ),
@@ -1434,11 +1438,16 @@ def _depth_panel(
         return []
     bands = us.normalize(bands)["bands"]
     cards = []
+    combo_parts = set()
     for item in normalize_combos(combos):
+        combo_parts.add(item["ip"])
+        combo_parts.add(item["oop"])
         card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_role, bands)
         if card:
             cards.append(card)
     for role_id in role_ids:
+        if role_id in combo_parts:
+            continue
         card = _depth_card(role_meta(role_id), rows, focus_role, bands)
         if card:
             cards.append(card)
@@ -1535,14 +1544,20 @@ def set_phase(n_clicks):
 @callback(
     Output("rs-single-panel", "hidden"),
     Output("rs-hybrid-panel", "hidden"),
+    Output("rs-formation-panel", "hidden"),
+    Output("rs-filter-toolbar", "hidden"),
     Output("rs-phase-filter-wrap", "hidden"),
     Input("rs-role-mode", "value"),
 )
 def sync_role_mode(mode):
-    mode = mode or "single"
-    if mode == "community":
-        mode = "single"
-    return mode != "single", mode != "hybrid", mode == "hybrid"
+    mode = mode or "formations"
+    return (
+        mode != "single",
+        mode != "hybrid",
+        mode != "formations",
+        mode == "formations",
+        mode != "single",
+    )
 
 
 @callback(
@@ -1799,12 +1814,11 @@ def load_formation(formation_id, phase, group):
         return no_update, no_update, no_update, no_update
     formation = fm.load(formation_id, persist=False)
     combos = fm.combos_from_formation(formation)
-    roles = fm.roles_from_formation(formation)
-    keep = list(roles)
+    keep = []
     for item in combos:
         keep.extend((item["ip"], item["oop"]))
     options = role_options(phase=phase, group=group, keep=keep) or []
-    return combos, roles, options, "hybrid"
+    return combos, [], options, "formations"
 
 
 @callback(

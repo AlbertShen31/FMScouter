@@ -233,11 +233,10 @@ def pack_options() -> list[dict]:
         formation = _from_file(pack_id)
         if not formation:
             continue
-        count = filled_count(formation)
         shape = f" · {formation['shape']}" if formation.get("shape") else ""
         options.append(
             {
-                "label": f"{formation['name']}{shape} ({count}/{MAX_SLOTS})",
+                "label": f"{formation['name']}{shape}",
                 "value": pack_id,
             }
         )

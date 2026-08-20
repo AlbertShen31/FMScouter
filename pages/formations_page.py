@@ -403,17 +403,15 @@ def handle_formations(
             )
         source_name = str(name or "").strip() or "Formation"
         formation = fm.duplicate(pack_id, f"{source_name} copy")
-        count = fm.filled_count(formation)
         return finish(
             formation,
-            f"Duplicated as {formation['name']} ({count}/{fm.MAX_SLOTS} slots).",
+            f"Duplicated as {formation['name']}.",
         )
     if triggered == "fm-save":
         existed = bool(pack_id) and fm.exists(pack_id)
         formation = fm.save(draft, pack_id if existed else None)
-        count = fm.filled_count(formation)
         verb = "Saved" if existed else "Created"
-        return finish(formation, f"{verb} {formation['name']} ({count}/{fm.MAX_SLOTS} slots).")
+        return finish(formation, f"{verb} {formation['name']}.")
     if triggered == "fm-delete":
         if not pack_id:
             return (no_update,) * 9 + (
