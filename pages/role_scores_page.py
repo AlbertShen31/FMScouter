@@ -43,6 +43,7 @@ from role_scorer import (
     score_band,
     score_players,
     scored_csv,
+    to_int,
     set_piece_columns,
     set_piece_filter_columns,
     set_piece_formula,
@@ -774,7 +775,8 @@ def layout():
                             className="rs-shortlist-filters mb-2",
                         ),
                         html.Div(_set_piece_panel(settings), className="rs-special-scores"),
-                        dash_table.DataTable(
+                        html.Div(
+                            dash_table.DataTable(
                             id="rs-table",
                             page_size=50,
                             sort_action="custom",
@@ -784,7 +786,12 @@ def layout():
                             row_selectable="multi",
                             selected_rows=[],
                             filter_action="none",
-                            style_table={"overflowX": "auto"},
+                            fixed_columns={"headers": True, "data": 1},
+                            style_table={
+                                "overflowX": "auto",
+                                "borderRadius": "12px",
+                                "minWidth": "100%",
+                            },
                             css=[
                                 {
                                     "selector": (
@@ -801,12 +808,31 @@ def layout():
                             style_cell={
                                 "fontFamily": "Inter, Segoe UI, sans-serif",
                                 "fontSize": "13px",
-                                "padding": "8px",
+                                "padding": "10px 12px",
                                 "whiteSpace": "nowrap",
                                 "backgroundColor": "transparent",
                                 "color": "inherit",
                                 "border": "1px solid transparent",
+                                "textAlign": "right",
                             },
+                            style_cell_conditional=[
+                                {
+                                    "if": {"column_id": "Name"},
+                                    "textAlign": "left",
+                                },
+                                {
+                                    "if": {"column_id": "Position"},
+                                    "textAlign": "left",
+                                },
+                                {
+                                    "if": {"column_id": "Club"},
+                                    "textAlign": "left",
+                                },
+                                {
+                                    "if": {"column_id": "Injury"},
+                                    "textAlign": "left",
+                                },
+                            ],
                             style_header={
                                 "fontWeight": "600",
                                 "textTransform": "uppercase",
@@ -817,6 +843,7 @@ def layout():
                                 "cursor": "pointer",
                                 "padding": "12px 28px 12px 10px",
                                 "height": "46px",
+                                "borderBottom": "2px solid var(--app-line)",
                             },
                             style_data_conditional=[
                                 {
@@ -824,6 +851,8 @@ def layout():
                                     "backgroundColor": "#fff3cd",
                                 }
                             ],
+                        ),
+                            className="rs-table-shell",
                         ),
                         html.Div(
                             [
@@ -964,7 +993,7 @@ def _cell_number(value) -> float:
         return 0.0
 
 
-TABLE_TEXT_COLS = {"Name", "Position", "Club", "Rec", "Injury"}
+TABLE_TEXT_COLS = {"Name", "Age", "Height", "Position", "Club", "Rec", "Injury"}
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
 _REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
 
@@ -1037,18 +1066,57 @@ def _passes_min_score(row: dict, roles: list[str], min_score: float, mode: str) 
     return all(score >= min_score for score in scores)
 
 
+def _table_base_styles(theme: str | None = None) -> list[dict]:
+    dark = _is_dark(theme)
+    zebra = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.025)"
+    selected_bg = "rgba(61, 255, 136, 0.14)" if dark else "rgba(34, 139, 87, 0.12)"
+    return [
+        {"if": {"row_index": "odd"}, "backgroundColor": zebra},
+        {
+            "if": {"state": "selected"},
+            "backgroundColor": selected_bg,
+            "border": "1px solid var(--app-accent)",
+        },
+        {
+            "if": {"column_id": "Name"},
+            "fontWeight": "600",
+            "textAlign": "left",
+            "minWidth": "168px",
+            "maxWidth": "240px",
+            "borderRight": "1px solid var(--app-line)",
+        },
+        {
+            "if": {"column_id": "Club"},
+            "color": "var(--app-muted)",
+            "maxWidth": "200px",
+        },
+        {
+            "if": {"column_id": "Rec"},
+            "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+            "fontSize": "12px",
+            "letterSpacing": "0.03em",
+        },
+        {
+            "if": {"column_id": "Injury", "filter_query": '{Injury} != "-"'},
+            "color": "#b45309" if not dark else "#fbbf24",
+            "fontWeight": "600",
+        },
+    ]
+
+
 def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
     settings = us.normalize(settings)
     bands = settings["bands"]
     colors = us.score_colors(settings)
     elite, good, ok = bands["elite"], bands["good"], bands["ok"]
     injury = "rgba(251, 191, 36, 0.18)" if _is_dark(theme) else "#fff3cd"
-    rules = [
+    rules = _table_base_styles(theme)
+    rules.append(
         {
             "if": {"filter_query": '{Injury} != "-"'},
             "backgroundColor": injury,
         }
-    ]
+    )
     for label in role_labels:
         rules.extend(
             [
@@ -1058,6 +1126,7 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
                     "color": colors["elite"][1],
                     "fontWeight": "700",
                     "borderRadius": "6px",
+                    "fontVariantNumeric": "tabular-nums",
                 },
                 {
                     "if": {
@@ -1067,6 +1136,7 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
                     "backgroundColor": colors["good"][0],
                     "color": colors["good"][1],
                     "fontWeight": "700",
+                    "fontVariantNumeric": "tabular-nums",
                 },
                 {
                     "if": {
@@ -1076,12 +1146,14 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
                     "backgroundColor": colors["ok"][0],
                     "color": colors["ok"][1],
                     "fontWeight": "700",
+                    "fontVariantNumeric": "tabular-nums",
                 },
                 {
                     "if": {"filter_query": f"{{{label}}} < {ok}", "column_id": label},
                     "backgroundColor": colors["poor"][0],
                     "color": colors["poor"][1],
                     "fontWeight": "700",
+                    "fontVariantNumeric": "tabular-nums",
                 },
             ]
         )
@@ -1714,7 +1786,7 @@ def render_shortlist(
             continue
         if elig_only and not all(row.get(f"{role} eligible") for role in view_roles):
             continue
-        if int(row.get("Age") or 0) > max_age:
+        if to_int(row.get("Age")) > max_age:
             continue
         if not _passes_min_score(row, view_roles, min_score, min_score_mode):
             continue

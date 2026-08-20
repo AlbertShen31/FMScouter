@@ -1105,6 +1105,32 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     z-index: 1;
 }
 
+.rs-table-shell {
+    border: 1px solid var(--app-line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--app-card);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+    margin-top: 4px;
+}
+
+.rs-table-shell .dash-spreadsheet-container {
+    border: none !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Name"] {
+    background-color: var(--app-card) !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner tr:nth-child(even) td[data-dash-column="Name"] {
+    background-color: var(--app-inset) !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner tr:hover td[data-dash-column="Name"] {
+    background-color: var(--table-hover-bg) !important;
+}
+
 .rs-squad-clear-btn {
     flex-shrink: 0;
     white-space: nowrap;

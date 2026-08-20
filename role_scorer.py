@@ -648,12 +648,29 @@ def role_options(
 
 def extract_attrs(row: dict[str, str]) -> dict[str, int]:
     attrs: dict[str, int] = {}
-    for full, abbr in ATTR_MAP.items():
-        if full in row:
-            attrs[abbr] = to_int(row[full])
-        elif abbr in row:
-            attrs[abbr] = to_int(row[abbr])
+    for key, value in row.items():
+        base = key.split(".")[0]
+        abbr = ATTR_MAP.get(base)
+        if abbr:
+            attrs[abbr] = to_int(value)
+        elif base in ATTR_MAP.values():
+            attrs[base] = to_int(value)
     return attrs
+
+
+def _header_bases(header: list[str]) -> set[str]:
+    return {h.split(".")[0] for h in header}
+
+
+def _has_name_column(header: list[str]) -> bool:
+    keys = set(header)
+    bases = _header_bases(header)
+    return any(alias in keys or alias in bases for alias in IDENTITY["Name"])
+
+
+def _has_attribute_columns(header: list[str]) -> bool:
+    bases = _header_bases(header)
+    return any(full in bases or abbr in bases for full, abbr in ATTR_MAP.items())
 
 
 def attr_count(row: dict[str, str]) -> int:
@@ -676,10 +693,21 @@ def parse_export(text: str) -> list[dict[str, Any]]:
     except StopIteration as exc:
         raise ValueError("The file has no header row.") from exc
     header = unique_headers(raw_header)
+    if not _has_name_column(header):
+        raise ValueError("CSV must include a Name or Player column.")
+    if not _has_attribute_columns(header):
+        raise ValueError(
+            "CSV must include at least one player attribute column "
+            "(e.g. Acceleration, Passing, Tackling)."
+        )
     players = []
     for raw in reader:
         if not raw or all(not cell.strip() for cell in raw):
             continue
+        if len(raw) < len(header):
+            raw = list(raw) + [""] * (len(header) - len(raw))
+        elif len(raw) > len(header):
+            raw = raw[: len(header)]
         row = dict(zip(header, raw))
         name = pick(row, IDENTITY["Name"])
         if not name:
@@ -691,7 +719,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
         players.append(
             {
                 "name": name,
-                "age": to_int(pick(row, IDENTITY["Age"])),
+                "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
                 "nation": pick(row, IDENTITY["Nation"]),
@@ -713,12 +741,6 @@ def parse_export(text: str) -> list[dict[str, Any]]:
         )
     if not players:
         raise ValueError("No player rows found. Check that the file is an FM CSV export.")
-    avg_hits = sum(p["attr_hits"] for p in players) / len(players)
-    if avg_hits < 8:
-        raise ValueError(
-            "This file does not include player attributes (Acceleration, Passing, "
-            "Tackling, and so on). Export the attribute view from FM, not a stats-only view."
-        )
     return players
 
 
@@ -792,7 +814,7 @@ def score_players(
     for player in players:
         row = {
             "Name": player["name"],
-            "Age": player["age"],
+            "Age": to_int(player["age"]) if player.get("age") else "-",
             "Club": player["club"] or "-",
             "Division": player["division"] or "-",
             "Nation": player["nation"] or "-",
