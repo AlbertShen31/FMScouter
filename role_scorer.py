@@ -1002,7 +1002,10 @@ def player_row_key(row: dict[str, Any]) -> str:
 
 
 def expand_view_role_columns(
-    view_roles: list[str], combos: list[dict[str, str]] | None = None
+    view_roles: list[str],
+    combos: list[dict[str, str]] | None = None,
+    *,
+    include_parts: bool = True,
 ) -> list[str]:
     combo_by_col = {
         combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
@@ -1012,6 +1015,8 @@ def expand_view_role_columns(
     for role in view_roles:
         if role not in expanded:
             expanded.append(role)
+        if not include_parts:
+            continue
         meta = combo_by_col.get(role)
         if meta:
             for column in (meta["ip_column"], meta["oop_column"]):
@@ -1020,14 +1025,23 @@ def expand_view_role_columns(
     return expanded
 
 
+def combo_column_labels(combos: list[dict[str, str]] | None = None) -> list[str]:
+    return [
+        combo_meta(item["ip"], item["oop"])["column"]
+        for item in normalize_combos(combos)
+    ]
+
+
 def planned_squad_fieldnames(
     view_roles: list[str],
     combos: list[dict[str, str]] | None = None,
     set_pieces_selected: list[str] | None = None,
+    *,
+    include_parts: bool = True,
 ) -> list[str]:
     cols = list(PLANNED_SQUAD_IDENTITY)
     cols.append("View roles")
-    for col in expand_view_role_columns(view_roles, combos):
+    for col in expand_view_role_columns(view_roles, combos, include_parts=include_parts):
         cols.append(col)
     for col in set_piece_columns(set_pieces_selected):
         if col not in cols:
@@ -1041,11 +1055,15 @@ def planned_squad_export_rows(
     view_roles: list[str],
     combos: list[dict[str, str]] | None = None,
     set_pieces_selected: list[str] | None = None,
+    *,
+    include_parts: bool = True,
 ) -> list[dict[str, Any]]:
     marked = set(marked_keys or [])
     if not marked or not view_roles:
         return []
-    fieldnames = planned_squad_fieldnames(view_roles, combos, set_pieces_selected)
+    fieldnames = planned_squad_fieldnames(
+        view_roles, combos, set_pieces_selected, include_parts=include_parts
+    )
     view_label = ", ".join(view_roles)
     out: list[dict[str, Any]] = []
     for row in rows:
@@ -1067,10 +1085,19 @@ def planned_squad_csv(
     view_roles: list[str],
     combos: list[dict[str, str]] | None = None,
     set_pieces_selected: list[str] | None = None,
+    *,
+    include_parts: bool = True,
 ) -> str:
-    fieldnames = planned_squad_fieldnames(view_roles, combos, set_pieces_selected)
+    fieldnames = planned_squad_fieldnames(
+        view_roles, combos, set_pieces_selected, include_parts=include_parts
+    )
     export_rows = planned_squad_export_rows(
-        rows, marked_keys, view_roles, combos, set_pieces_selected
+        rows,
+        marked_keys,
+        view_roles,
+        combos,
+        set_pieces_selected,
+        include_parts=include_parts,
     )
     buf = io.StringIO()
     writer = csv.DictWriter(

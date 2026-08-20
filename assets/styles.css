@@ -757,7 +757,8 @@ body {
 .rs-filter-search,
 .rs-filter-age,
 .rs-filter-score,
-.rs-filter-elig {
+.rs-filter-elig,
+.rs-filter-toggles {
     min-width: 0;
 }
 
@@ -788,13 +789,20 @@ body {
     min-width: 0;
 }
 
-.rs-filter-elig {
+.rs-filter-toggles {
     grid-column: 1 / -1;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
     padding-top: 12px;
     margin-top: 2px;
     border-top: 1px solid var(--app-line);
+}
+
+.rs-filter-toggles .mantine-Switch-root,
+.rs-filter-elig .mantine-Switch-root {
+    margin-top: 0;
 }
 
 .rs-filter-elig .form-check-label {

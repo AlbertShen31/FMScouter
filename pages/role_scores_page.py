@@ -29,8 +29,10 @@ from role_scorer import (
     SET_PIECE_PROFILES,
     apply_combos,
     combo_column,
+    combo_column_labels,
     combo_meta,
     combo_score_labels,
+    expand_view_role_columns,
     foot_filter_help,
     foot_filter_hints,
     foot_match,
@@ -52,7 +54,6 @@ from role_scorer import (
     set_piece_filter_columns,
     set_piece_formula,
     set_piece_hint,
-    expand_view_role_columns,
 )
 from canvas_export import build_canvas
 import formations as fm
@@ -478,17 +479,49 @@ def _first_combo_column(combos: list[dict] | None) -> str | None:
     return combo_column(items[0]["ip"], items[0]["oop"])
 
 
-def _resolved_view_roles(payload: dict | None, focus_role: str | None) -> list[str]:
-    """Table/export columns: one focused depth role, or every role scored in section 2."""
+def _focus_roles(value) -> list[str]:
+    """Normalize squad-depth focus store to a list of score column labels."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    out: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
+def _resolved_view_roles(payload: dict | None, focus_roles) -> list[str]:
+    """Table/export columns: focused depth roles, or every role scored in section 2."""
     if not payload:
         return []
     labels = list(payload.get("roles") or [])
     if not labels:
         return []
-    focus = str(focus_role or "").strip()
-    if focus and focus in labels:
-        return [focus]
-    return labels
+    focused = [role for role in _focus_roles(focus_roles) if role in labels]
+    return focused or labels
+
+
+def _hybrid_only_roles(view_roles: list[str], combos, hybrids_only: bool) -> list[str]:
+    if not hybrids_only:
+        return view_roles
+    combo_cols = combo_column_labels(combos)
+    if not combo_cols:
+        return view_roles
+    allowed = set(combo_cols)
+    kept = [role for role in view_roles if role in allowed]
+    return kept or combo_cols
+
+
+def _table_role_columns(view_roles: list[str], combos, hybrids_only: bool) -> list[str]:
+    return expand_view_role_columns(
+        view_roles,
+        combos,
+        include_parts=not hybrids_only,
+    )
 
 
 def layout():
@@ -504,7 +537,7 @@ def layout():
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-squad-marked", data=[]),
         dcc.Store(id="rs-hist-open", data=False),
-        dcc.Store(id="rs-focus-role", data=None),
+        dcc.Store(id="rs-focus-role", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
         html.Div(
             [
@@ -768,8 +801,8 @@ def layout():
                             [
                                 html.Span("Squad depth", className="rs-depth-heading-label"),
                                 html.Span(
-                                    "Click a card to focus the table on one role. "
-                                    "Click again to show all.",
+                                    "Click cards to focus the table on one or more roles. "
+                                    "Click again to remove a role; clear all to show every role.",
                                     className="rs-depth-heading-hint",
                                 ),
                             ],
@@ -823,7 +856,7 @@ def layout():
                                                     "Min score",
                                                     tip=(
                                                         "Uses scored roles from section 2, or the "
-                                                        "role focused in squad depth. Leave blank for any."
+                                                        "roles focused in squad depth. Leave blank for any."
                                                     ),
                                                     help_id="rs-help-min-score",
                                                 ),
@@ -873,8 +906,13 @@ def layout():
                                                     ),
                                                     checked=True,
                                                 ),
+                                                dmc.Switch(
+                                                    id="rs-hybrids-only",
+                                                    label="Show only hybrid roles",
+                                                    checked=False,
+                                                ),
                                             ],
-                                            className="rs-filter-elig",
+                                            className="rs-filter-toggles",
                                         ),
                                     ],
                                     className="rs-shortlist-filters-row",
@@ -1365,7 +1403,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> h
 def _depth_card(
     meta: dict,
     rows: list[dict],
-    focus_role: str | None,
+    focus_roles,
     bands: dict,
 ) -> html.Button | None:
     column = meta["column"]
@@ -1380,7 +1418,7 @@ def _depth_card(
     total = len(scores) or 1
     top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
     names = " · ".join(player.get("Name", "") for player in top)
-    active = " active" if focus_role and column == focus_role else ""
+    active = " active" if column in _focus_roles(focus_roles) else ""
     label = meta.get("short_label") or meta["name"]
     children = [
         html.Div(
@@ -1454,11 +1492,13 @@ def _depth_card(
 def _depth_panel(
     rows: list[dict],
     role_ids: list[str],
-    focus_role: str | None,
+    focus_roles,
     bands: dict | None = None,
     combos: list[dict] | None = None,
+    *,
+    hybrids_only: bool = False,
 ) -> list:
-    """Cards for every role scored in section 2; focus_role drives table + active highlight."""
+    """Cards for every role scored in section 2; focus_roles drives table + active highlight."""
     if not rows or not (role_ids or combos):
         return []
     bands = us.normalize(bands)["bands"]
@@ -1467,13 +1507,15 @@ def _depth_panel(
     for item in normalize_combos(combos):
         combo_parts.add(item["ip"])
         combo_parts.add(item["oop"])
-        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_role, bands)
+        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_roles, bands)
         if card:
             cards.append(card)
+    if hybrids_only:
+        return cards
     for role_id in role_ids:
         if role_id in combo_parts:
             continue
-        card = _depth_card(role_meta(role_id), rows, focus_role, bands)
+        card = _depth_card(role_meta(role_id), rows, focus_roles, bands)
         if card:
             cards.append(card)
     return cards
@@ -1802,20 +1844,21 @@ def focus_view_role(n_clicks, current_focus):
     column = _depth_id_column(role)
     if not column:
         return no_update
-    if current_focus == column:
-        return None
-    return column
+    selected = _focus_roles(current_focus)
+    if column in selected:
+        return [item for item in selected if item != column]
+    return selected + [column]
 
 
 @callback(
     Output("rs-table", "sort_by"),
     Input("rs-focus-role", "data"),
 )
-def sort_from_depth_role(focus_role):
-    column = str(focus_role or "").strip()
-    if not column:
+def sort_from_depth_role(focus_roles):
+    selected = _focus_roles(focus_roles)
+    if not selected:
         return []
-    return [{"column_id": column, "direction": "desc"}]
+    return [{"column_id": selected[-1], "direction": "desc"}]
 
 
 @callback(
@@ -1860,7 +1903,8 @@ def load_formation(formation_id, phase, group):
     for item in combos:
         keep.extend((item["ip"], item["oop"]))
     options = role_options(phase=phase, group=group, keep=keep) or []
-    return combos, [], options, "formations", _first_combo_column(combos)
+    first = _first_combo_column(combos)
+    return combos, [], options, "formations", [first] if first else []
 
 
 @callback(
@@ -1888,13 +1932,15 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
         return None, no_update
     rows = apply_combos(score_players(parsed["players"], needed), combos)
     labels = combo_score_labels(needed, combos)
-    if current_focus in labels:
+    selected = _focus_roles(current_focus)
+    kept = [role for role in selected if role in labels]
+    if kept and kept == selected:
         focus = no_update
     elif ctx.triggered_id == "rs-combos":
         first = _first_combo_column(combos)
-        focus = first if first in labels else None
+        focus = [first] if first in labels else []
     else:
-        focus = None
+        focus = kept
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
@@ -1928,6 +1974,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Input("rs-min-score", "value"),
     Input("rs-min-score-mode", "value"),
     Input("rs-eligible", "checked"),
+    Input("rs-hybrids-only", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
     Input("rs-squad-marked", "data"),
@@ -1948,6 +1995,7 @@ def render_shortlist(
     min_score,
     min_score_mode,
     eligible,
+    hybrids_only,
     set_pieces,
     set_piece_min,
     squad_marked,
@@ -1966,7 +2014,7 @@ def render_shortlist(
     bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
-    view_roles = _resolved_view_roles(payload, focus_role)
+    hybrids_only = bool(hybrids_only)
     page_size = int(page_size or 50)
     empty_table_style = _table_style_table(0, page_size)
     empty_page, empty_sig = _table_page_state(empty_cols, cols_sig)
@@ -1992,8 +2040,15 @@ def render_shortlist(
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
     combos = normalize_combos(payload.get("combos"))
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role),
+        combos,
+        hybrids_only,
+    )
     if not view_roles:
-        cards = _depth_panel(rows, role_ids, [], bands, combos)
+        cards = _depth_panel(
+            rows, role_ids, [], bands, combos, hybrids_only=hybrids_only
+        )
         return (
             _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
             cards,
@@ -2049,7 +2104,7 @@ def render_shortlist(
 
     _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
 
-    table_role_cols = expand_view_role_columns(view_roles, combos)
+    table_role_cols = _table_role_columns(view_roles, combos, hybrids_only)
     fig = _hist_figure(filtered, view_roles, bins, theme) if hist_open else no_update
 
     piece_cols = set_piece_columns(set_pieces)
@@ -2082,13 +2137,22 @@ def render_shortlist(
         min_note = (
             f" Min score {min_score:g}+ on {MIN_SCORE_MODES[min_score_mode]}: {role_list}."
         )
-    focus_note = f" Focused: {focus_role}." if focus_role else ""
+    focused = [role for role in _focus_roles(focus_role) if role in view_roles]
+    focus_note = f" Focused: {', '.join(focused)}." if focused else ""
+    hybrid_note = " Hybrids only." if hybrids_only and combo_column_labels(combos) else ""
     caption = (
         f"{len(filtered)} of {len(rows)} players"
-        f"{focus_note}{min_note}{extra}{piece_note}{mark_note}"
+        f"{focus_note}{hybrid_note}{min_note}{extra}{piece_note}{mark_note}"
         f" · {payload.get('filename')}."
     )
-    cards = _depth_panel(rows, role_ids, focus_role, bands, combos)
+    cards = _depth_panel(
+        rows,
+        role_ids,
+        _focus_roles(focus_role),
+        bands,
+        combos,
+        hybrids_only=hybrids_only,
+    )
     page_current, new_sig = _table_page_state(columns, cols_sig)
     return (
         _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
@@ -2127,7 +2191,9 @@ clientside_callback(
 SQUAD_PREVIEW_MAX_ROWS = 8
 
 
-def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
+def _squad_preview_panel(
+    marked, payload, view_roles, set_pieces, *, hybrids_only: bool = False
+) -> html.Div:
     view_roles = _as_list(view_roles)
     if not payload or not view_roles:
         return html.P("Score roles in section 2 first.", className="text-muted mb-0")
@@ -2136,12 +2202,20 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
         return html.P("No players marked yet.", className="text-muted mb-0")
     rows = payload.get("rows") or []
     combos = normalize_combos(payload.get("combos"))
+    include_parts = not hybrids_only
     export_rows = planned_squad_export_rows(
-        rows, marked, view_roles, combos, _as_list(set_pieces)
+        rows,
+        marked,
+        view_roles,
+        combos,
+        _as_list(set_pieces),
+        include_parts=include_parts,
     )
     if not export_rows:
         return html.P("Marked players are not in the current data.", className="text-muted mb-0")
-    fieldnames = planned_squad_fieldnames(view_roles, combos, _as_list(set_pieces))
+    fieldnames = planned_squad_fieldnames(
+        view_roles, combos, _as_list(set_pieces), include_parts=include_parts
+    )
     preview_rows = export_rows[:SQUAD_PREVIEW_MAX_ROWS]
     extra = len(export_rows) - len(preview_rows)
     parts = [f"{len(export_rows)} player(s) marked", f"{len(fieldnames)} columns"]
@@ -2236,19 +2310,30 @@ def clear_squad_marks_on_upload(_parsed):
     Input("rs-rows", "data"),
     Input("rs-focus-role", "data"),
     Input("rs-set-pieces", "value"),
+    Input("rs-hybrids-only", "checked"),
 )
-def render_squad_preview(marked, payload, focus_role, set_pieces):
-    view_roles = _resolved_view_roles(payload, focus_role)
+def render_squad_preview(marked, payload, focus_role, set_pieces, hybrids_only):
+    combos = normalize_combos((payload or {}).get("combos"))
+    hybrids_only = bool(hybrids_only)
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role), combos, hybrids_only
+    )
     export_rows = []
     if payload and view_roles and _as_list(marked):
         export_rows = planned_squad_export_rows(
             payload.get("rows") or [],
             _as_list(marked),
             view_roles,
-            normalize_combos(payload.get("combos")),
+            combos,
             _as_list(set_pieces),
+            include_parts=not hybrids_only,
         )
-    return _squad_preview_panel(marked, payload, view_roles, set_pieces), not export_rows
+    return (
+        _squad_preview_panel(
+            marked, payload, view_roles, set_pieces, hybrids_only=hybrids_only
+        ),
+        not export_rows,
+    )
 
 
 @callback(
@@ -2258,12 +2343,17 @@ def render_squad_preview(marked, payload, focus_role, set_pieces):
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
     State("rs-set-pieces", "value"),
+    State("rs-hybrids-only", "checked"),
     prevent_initial_call=True,
 )
-def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces):
+def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces, hybrids_only):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _resolved_view_roles(payload, focus_role)
+    hybrids_only = bool(hybrids_only)
+    combos = normalize_combos(payload.get("combos"))
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role), combos, hybrids_only
+    )
     marked = _as_list(marked)
     if not view_roles or not marked:
         return no_update
@@ -2272,8 +2362,9 @@ def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces):
         payload["rows"],
         marked,
         view_roles,
-        normalize_combos(payload.get("combos")),
+        combos,
         _as_list(set_pieces),
+        include_parts=not hybrids_only,
     )
     return dict(content=text, filename=f"{name}_planned_squad.csv")
 
@@ -2283,17 +2374,20 @@ def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces):
     Input("rs-csv-btn", "n_clicks"),
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
+    State("rs-hybrids-only", "checked"),
     prevent_initial_call=True,
 )
-def download_csv(n_clicks, payload, focus_role):
+def download_csv(n_clicks, payload, focus_role, hybrids_only):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _resolved_view_roles(payload, focus_role)
+    hybrids_only = bool(hybrids_only)
+    combos = normalize_combos(payload.get("combos"))
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role), combos, hybrids_only
+    )
     if not view_roles:
         return no_update
-    role_labels = expand_view_role_columns(
-        view_roles, normalize_combos(payload.get("combos"))
-    )
+    role_labels = _table_role_columns(view_roles, combos, hybrids_only)
     name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
     text = scored_csv(payload["rows"], role_labels)
     return dict(content=text, filename=f"{name}_role_scores.csv")
@@ -2305,17 +2399,20 @@ def download_csv(n_clicks, payload, focus_role):
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
     State("ui-settings", "data"),
+    State("rs-hybrids-only", "checked"),
     prevent_initial_call=True,
 )
-def download_canvas(n_clicks, payload, focus_role, settings):
+def download_canvas(n_clicks, payload, focus_role, settings, hybrids_only):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _resolved_view_roles(payload, focus_role)
+    hybrids_only = bool(hybrids_only)
+    combos = normalize_combos(payload.get("combos"))
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role), combos, hybrids_only
+    )
     if not view_roles:
         return no_update
-    role_labels = expand_view_role_columns(
-        view_roles, normalize_combos(payload.get("combos"))
-    )
+    role_labels = _table_role_columns(view_roles, combos, hybrids_only)
     text = build_canvas(
         payload["rows"],
         role_labels,

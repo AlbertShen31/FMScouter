@@ -99,7 +99,7 @@ The Role scores page uses three labels so “role” is not overloaded:
 
 1. **Scored roles** — the FM26 roles you calculate. Phase and group chips under **Find roles** only narrow that picker; they are not extra role types.
 2. **Hybrid roles** — optional IP/OOP weighted columns, created from **+ Create hybrid role**. Scoring still needs both constituent roles; adding a hybrid adds them to scored roles.
-3. **Displayed roles** — which scored (and hybrid) columns the shortlist table, chart, min-score filter, and exports currently use.
+3. **Displayed roles** — which scored (and hybrid) columns the shortlist table, chart, min-score filter, and exports currently use. Squad depth cards toggle this set: click to add or remove focused roles; with none focused, every scored role is shown. **Show only hybrid roles** limits depth cards and table/export columns to hybrid IP+OOP scores (hides standalone roles and the expanded IP/OOP part columns).
 
 Position groups and IP/OOP tags remain part of the data model. They are not a fourth picker called “role.”
 
