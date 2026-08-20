@@ -551,9 +551,8 @@ body {
     min-width: 0;
 }
 
-.rs-chip-row.wrap {
-    flex-wrap: wrap;
-    max-width: 100%;
+.rs-chip-row.wrap .rs-chip {
+    white-space: nowrap;
 }
 
 .rs-chip {

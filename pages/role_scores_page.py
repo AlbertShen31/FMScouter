@@ -147,7 +147,11 @@ def _group_buttons(active: str = "all") -> list:
 
 def _phase_buttons(active: str = "all") -> list:
     buttons = []
-    for value, label in (("all", "All"), ("IP", "IP"), ("OOP", "OOP")):
+    for value, label in (
+        ("all", "All"),
+        ("IP", "In possession (IP)"),
+        ("OOP", "Out of possession (OOP)"),
+    ):
         buttons.append(
             html.Button(
                 label,
@@ -308,11 +312,11 @@ def _hybrid_panel() -> html.Details:
                         [
                             html.Div(
                                 [
-                                    html.Label("IP role"),
+                                    html.Label("In possession (IP) role"),
                                     dcc.Dropdown(
                                         id="rs-combo-ip",
                                         options=role_options(phase="IP"),
-                                        placeholder="In possession",
+                                        placeholder="Choose an in possession role",
                                         clearable=True,
                                     ),
                                 ],
@@ -320,11 +324,11 @@ def _hybrid_panel() -> html.Details:
                             ),
                             html.Div(
                                 [
-                                    html.Label("OOP role"),
+                                    html.Label("Out of possession (OOP) role"),
                                     dcc.Dropdown(
                                         id="rs-combo-oop",
                                         options=role_options(phase="OOP"),
-                                        placeholder="Out of possession",
+                                        placeholder="Choose an out of possession role",
                                         clearable=True,
                                     ),
                                 ],
@@ -417,8 +421,8 @@ def layout():
         html.H1("FM26 role scores", className="mt-2 mb-1"),
         html.P(
             "Upload an FM attribute CSV, pick scored roles, then choose displayed columns "
-            "in the shortlist and export. Hybrid IP/OOP combinations are optional. "
-            "Roles are FM26 IP / OOP (no duties).",
+            "in the shortlist and export. Hybrid in possession (IP) / out of possession (OOP) "
+            "combinations are optional. Roles are FM26 IP / OOP (no duties).",
             className="text-muted",
         ),
         dbc.Card(
@@ -530,7 +534,8 @@ def layout():
                                 ),
                                 html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
                                 html.Small(
-                                    "Phase only narrows this list. Group also filters hybrid IP/OOP roles. "
+                                    "Phase only narrows this list. Group also filters hybrid "
+                                    "in possession (IP) / out of possession (OOP) roles. "
                                     "Selected pills stay. Click a pill to remove it.",
                                     className="text-muted d-block mb-2",
                                 ),
@@ -590,16 +595,16 @@ def layout():
                             [
                                 html.Div(
                                     [
-                                        html.Label("Displayed roles"),
+                                        html.Label("Role scores to show"),
                                         dcc.Dropdown(
                                             id="rs-view-role",
                                             multi=True,
-                                            placeholder="Select scored columns to show",
+                                            placeholder="Select roles for table columns",
                                         ),
                                         html.Small(
-                                            "Controls which scored columns appear in the table. "
-                                            "Position eligible uses that role’s rule; "
-                                            "hybrid roles count if the player can play either part.",
+                                            "These roles appear as score columns in the table. "
+                                            "Min score and eligibility filters apply to this selection. "
+                                            "Hybrid roles count if the player can play either part.",
                                             className="text-muted",
                                         ),
                                     ],
@@ -643,11 +648,11 @@ def layout():
                                             id="rs-min-score-mode",
                                             options=[
                                                 {
-                                                    "label": "Every displayed role",
+                                                    "label": "Every selected role",
                                                     "value": "all",
                                                 },
                                                 {
-                                                    "label": "At least one displayed role",
+                                                    "label": "Any role selected",
                                                     "value": "any",
                                                 },
                                             ],
@@ -655,17 +660,23 @@ def layout():
                                             clearable=False,
                                             className="rs-min-score-mode mt-1",
                                         ),
+                                        html.Small(
+                                            "Uses the roles selected above. Leave min score blank for any.",
+                                            className="text-muted d-block mt-1",
+                                        ),
                                     ],
                                     className="rs-filter-score",
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Eligible"),
                                         dbc.Checklist(
                                             id="rs-eligible",
                                             options=[
                                                 {
-                                                    "label": "Position eligible only",
+                                                    "label": (
+                                                        "Only show players eligible for the "
+                                                        "selected role(s)"
+                                                    ),
                                                     "value": "yes",
                                                 }
                                             ],
@@ -677,7 +688,7 @@ def layout():
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Rows"),
+                                        html.Label("Rows per page"),
                                         dcc.Dropdown(
                                             id="rs-page-size",
                                             options=[
@@ -946,8 +957,8 @@ def _clicked(n_clicks) -> bool:
 
 
 MIN_SCORE_MODES = {
-    "all": "every selected role",
-    "any": "at least one selected role",
+    "all": "every role shown",
+    "any": "at least one role shown",
 }
 
 
@@ -1594,7 +1605,7 @@ def render_shortlist(
             page_size,
             [],
             _blank_fig(theme) if hist_open else no_update,
-            "Upload a file and pick at least one scored role.",
+            "Upload a file and pick at least one role score to show.",
         )
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
@@ -1716,7 +1727,7 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
     view_roles = _as_list(view_roles)
     if not payload or not view_roles:
         return html.P(
-            "Upload a file and pick at least one displayed role.",
+            "Select at least one role score to show in the table.",
             className="text-muted mb-0",
         )
     marked = _as_list(marked)
