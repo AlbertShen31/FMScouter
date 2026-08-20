@@ -64,6 +64,8 @@ app.layout = dmc.MantineProvider(
     children=[
         dcc.Store(id="theme", data="dark", storage_type="local"),
         dcc.Store(id="ui-settings", data=ui_settings.load()),
+        dcc.Store(id="rs-parsed", storage_type="session"),
+        dcc.Store(id="rs-persist", data={}, storage_type="session"),
         html.Div(id="ui-settings-css"),
         dbc.Navbar(
             dbc.Container(

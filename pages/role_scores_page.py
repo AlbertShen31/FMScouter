@@ -57,11 +57,23 @@ from role_scorer import (
     set_piece_sort_column,
 )
 from canvas_export import build_canvas
+from attr_columns import attr_grid, attr_group_columns, attr_row
 import formations as fm
 import role_config as rc
 import ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
+
+PERSIST_DEFAULTS = {
+    "roles": [],
+    "combos": [],
+    "formation": None,
+    "role_mode": "formations",
+    "set_pieces": [],
+    "hybrids_only": False,
+    "eligible": True,
+    "focus_role": [],
+}
 
 
 def _band_legend(settings=None) -> html.Div:
@@ -188,6 +200,103 @@ def _upload_status_bar(count: int, filename: str) -> list:
 
 def _upload_error(message: str) -> html.Div:
     return html.Div(message, className="rs-upload-error")
+
+
+PLAYER_IDENTITY_FIELDS = [
+    ("Age", "age"),
+    ("Club", "club"),
+    ("Division", "division"),
+    ("Nation", "nation"),
+    ("Position", "position"),
+    ("Best pos", "best_pos"),
+    ("Style", "style"),
+    ("Height", "height"),
+    ("Left foot", "left_foot"),
+    ("Right foot", "right_foot"),
+    ("Rec", "rec"),
+    ("Inf", "inf"),
+    ("Injury", "injury"),
+    ("Squad", "squad"),
+]
+
+
+def _find_parsed_player(parsed, name: str, club: str) -> dict | None:
+    if not parsed or not parsed.get("players"):
+        return None
+    name = (name or "").strip()
+    club = (club or "").strip()
+    club_key = "" if club in ("", "-") else club
+    for player in parsed["players"]:
+        if (player.get("name") or "").strip() != name:
+            continue
+        player_club = (player.get("club") or "").strip()
+        if player_club == club_key or (not player_club and not club_key):
+            return player
+    return None
+
+
+def _player_is_gk(player: dict) -> bool:
+    """True when the player is a keeper (pos card is GK, not lowercase role group)."""
+    groups = {str(g) for g in (player.get("pos_groups") or [])}
+    if groups & {"GK", "gk"}:
+        return True
+    for field in ("best_pos", "position"):
+        text = str(player.get(field) or "").upper()
+        if re.search(r"\bGK\b", text) or "GOALKEEPER" in text:
+            return True
+    return False
+
+
+def _player_attr_row(code: str, label: str, attrs: dict, bands: dict):
+    value = attrs.get(code)
+    if value is None:
+        return attr_row(label, "—", value_class="none", title=code)
+    band = score_band(float(value), **bands)
+    return attr_row(
+        label,
+        str(value),
+        value_class=f"score rs-band-{band}",
+        title=code,
+    )
+
+
+def _player_attributes(player: dict, bands: dict) -> html.Div:
+    """Same attribute columns component as Role configs."""
+    attrs = player.get("attrs") or {}
+    columns = attr_group_columns(
+        is_gk=_player_is_gk(player),
+        make_row=lambda code, label: _player_attr_row(code, label, attrs, bands),
+    )
+    return html.Div(
+        [
+            html.Div("Attributes", className="rs-player-attrs-title"),
+            attr_grid(columns),
+        ],
+        className="rs-player-attrs",
+    )
+
+
+def _player_detail_card(player: dict, settings=None) -> html.Div:
+    settings = us.normalize(settings)
+    bands = settings["bands"]
+    identity = [
+        html.Div(
+            [
+                html.Span(label, className="rs-player-id-label"),
+                html.Span(str(player.get(key) or "—"), className="rs-player-id-value"),
+            ],
+            className="rs-player-id-item",
+        )
+        for label, key in PLAYER_IDENTITY_FIELDS
+        if player.get(key) not in (None, "")
+    ]
+    return html.Div(
+        [
+            html.Div(identity, className="rs-player-identity"),
+            _player_attributes(player, bands),
+        ],
+        className="rs-player-detail",
+    )
 
 
 def _group_buttons(active: str = "all") -> list:
@@ -576,7 +685,6 @@ def layout():
     settings = us.load()
     return dbc.Container(
     [
-        dcc.Store(id="rs-parsed"),
         dcc.Store(id="rs-rows"),
         dcc.Store(id="rs-phase", data="all"),
         dcc.Store(id="rs-group", data="all"),
@@ -588,6 +696,35 @@ def layout():
         dcc.Store(id="rs-focus-role", data=[]),
         dcc.Store(id="rs-set-pieces-prev", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
+        dcc.Store(id="rs-hydrated", data=False),
+        dcc.Store(id="rs-persist-boot"),
+        dcc.Interval(id="rs-hydrate-tick", interval=50, max_intervals=1),
+        dbc.Modal(
+            [
+                dbc.ModalHeader(
+                    dbc.ModalTitle(id="rs-player-modal-title"),
+                    close_button=True,
+                ),
+                dbc.ModalBody(id="rs-player-modal-body", className="rs-player-modal-body"),
+                dbc.ModalFooter(
+                    dbc.Button(
+                        "Close",
+                        id="rs-player-modal-close",
+                        n_clicks=0,
+                        className="rs-player-modal-close",
+                    )
+                ),
+            ],
+            id="rs-player-modal",
+            is_open=False,
+            size="xl",
+            centered=True,
+            scrollable=False,
+            backdrop=True,
+            keyboard=True,
+            className="rs-player-modal",
+            content_class_name="rs-player-modal-content",
+        ),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -851,7 +988,8 @@ def layout():
                                 html.Span("Squad depth", className="rs-depth-heading-label"),
                                 html.Span(
                                     "Click cards to focus the table on one or more roles. "
-                                    "Click again to remove a role; clear all to show every role.",
+                                    "Click again to remove a role; clear all to show every role. "
+                                    "Click a player name in the shortlist for full details.",
                                     className="rs-depth-heading-hint",
                                 ),
                             ],
@@ -1022,6 +1160,11 @@ def layout():
                                 {
                                     "if": {"column_id": "Name"},
                                     "textAlign": "left",
+                                    "cursor": "pointer",
+                                    "color": "var(--app-accent)",
+                                    "fontWeight": "600",
+                                    "textDecoration": "underline",
+                                    "textUnderlineOffset": "3px",
                                 },
                                 {
                                     "if": {"column_id": "Position"},
@@ -1616,6 +1759,168 @@ def parse_uploaded(upload_contents, replace_contents, upload_name, replace_name)
     )
 
 
+@callback(
+    Output("rs-upload-status", "children", allow_duplicate=True),
+    Output("rs-upload-wrap", "hidden", allow_duplicate=True),
+    Output("rs-upload-replace-wrap", "hidden", allow_duplicate=True),
+    Input("rs-parsed", "data"),
+    prevent_initial_call="initial_duplicate",
+)
+def restore_upload_ui(parsed):
+    """Re-show upload status when session-stored CSV survives page navigation."""
+    if not parsed or not parsed.get("players"):
+        return no_update, no_update, no_update
+    filename = parsed.get("filename") or "export.csv"
+    return (
+        _upload_status_bar(len(parsed["players"]), filename),
+        True,
+        False,
+    )
+
+
+@callback(
+    Output("rs-persist", "data"),
+    Input("rs-roles", "value"),
+    Input("rs-combos", "data"),
+    Input("rs-formation", "value"),
+    Input("rs-role-mode", "value"),
+    Input("rs-set-pieces", "value"),
+    Input("rs-eligible", "checked"),
+    Input("rs-hybrids-only", "checked"),
+    Input("rs-focus-role", "data"),
+    State("rs-hydrated", "data"),
+    prevent_initial_call=True,
+)
+def save_page_persist(
+    roles,
+    combos,
+    formation,
+    role_mode,
+    set_pieces,
+    eligible,
+    hybrids_only,
+    focus_role,
+    hydrated,
+):
+    if not hydrated:
+        return no_update
+    return {
+        "roles": _as_list(roles),
+        "combos": normalize_combos(combos),
+        "formation": formation or None,
+        "role_mode": role_mode or "formations",
+        "set_pieces": _as_list(set_pieces),
+        "hybrids_only": bool(hybrids_only),
+        "eligible": True if eligible is None else bool(eligible),
+        "focus_role": _as_list(focus_role),
+    }
+
+
+# Copy session-stored UI state without Input/State on rs-persist (avoids a Dash dependency cycle).
+clientside_callback(
+    """
+    function(n) {
+        if (!n) {
+            return window.dash_clientside.no_update;
+        }
+        try {
+            const raw = window.sessionStorage.getItem("rs-persist");
+            if (raw == null || raw === "") {
+                return {};
+            }
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+    """,
+    Output("rs-persist-boot", "data"),
+    Input("rs-hydrate-tick", "n_intervals"),
+)
+
+
+@callback(
+    Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-roles", "data", allow_duplicate=True),
+    Output("rs-combos", "data", allow_duplicate=True),
+    Output("rs-role-mode", "value", allow_duplicate=True),
+    Output("rs-formation", "value", allow_duplicate=True),
+    Output("rs-set-pieces", "value"),
+    Output("rs-eligible", "checked"),
+    Output("rs-hybrids-only", "checked"),
+    Output("rs-focus-role", "data", allow_duplicate=True),
+    Output("rs-hydrated", "data"),
+    Input("rs-persist-boot", "data"),
+    State("rs-hydrated", "data"),
+    State("rs-phase", "data"),
+    State("rs-group", "data"),
+    prevent_initial_call=True,
+)
+def hydrate_page_persist(persist, hydrated, phase, group):
+    if hydrated or persist is None:
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+    persist = {**PERSIST_DEFAULTS, **(persist or {})}
+    roles = _as_list(persist.get("roles"))
+    combos = normalize_combos(persist.get("combos"))
+    mode = persist.get("role_mode") or "formations"
+    formation = persist.get("formation") or None
+    set_pieces = _as_list(persist.get("set_pieces"))
+    eligible = bool(persist.get("eligible", True))
+    hybrids_only = bool(persist.get("hybrids_only", False))
+    focus = _as_list(persist.get("focus_role"))
+    keep = list(roles)
+    for item in combos:
+        keep.extend((item["ip"], item["oop"]))
+    options = role_options(phase=phase, group=group, keep=keep) or []
+    has_state = bool(
+        roles
+        or combos
+        or formation
+        or set_pieces
+        or focus
+        or hybrids_only
+        or not eligible
+        or mode != "formations"
+    )
+    if not has_state:
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            True,
+        )
+    return (
+        roles,
+        options,
+        combos,
+        mode,
+        formation,
+        set_pieces,
+        eligible,
+        hybrids_only,
+        focus,
+        True,
+    )
+
+
 def _workflow_visibility(parsed, payload):
     has_csv = bool(parsed and parsed.get("players"))
     has_scores = isinstance(payload, dict) and "rows" in payload
@@ -1636,6 +1941,56 @@ def _workflow_visibility(parsed, payload):
 )
 def reveal_workflow(parsed, payload):
     return _workflow_visibility(parsed, payload)
+
+
+@callback(
+    Output("rs-player-modal", "is_open"),
+    Output("rs-player-modal-title", "children"),
+    Output("rs-player-modal-body", "children"),
+    Output("rs-table", "active_cell"),
+    Input("rs-table", "active_cell"),
+    Input("rs-player-modal-close", "n_clicks"),
+    Input("rs-player-modal", "is_open"),
+    State("rs-table", "derived_viewport_data"),
+    State("rs-parsed", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def open_player_modal(active_cell, _close_clicks, is_open, viewport, parsed, settings):
+    if ctx.triggered_id == "rs-player-modal":
+        # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
+        if not is_open:
+            return False, no_update, no_update, None
+        return no_update, no_update, no_update, no_update
+    if ctx.triggered_id == "rs-player-modal-close":
+        return False, no_update, no_update, None
+    if not active_cell or active_cell.get("column_id") != "Name":
+        return no_update, no_update, no_update, no_update
+    row_idx = active_cell.get("row")
+    if not isinstance(viewport, list) or row_idx is None:
+        return no_update, no_update, no_update, no_update
+    try:
+        row_idx = int(row_idx)
+    except (TypeError, ValueError):
+        return no_update, no_update, no_update, no_update
+    if row_idx < 0 or row_idx >= len(viewport):
+        return no_update, no_update, no_update, no_update
+    row = viewport[row_idx] or {}
+    name = str(row.get("Name") or "").strip()
+    club = str(row.get("Club") or "").strip()
+    player = _find_parsed_player(parsed, name, club)
+    if not player:
+        return (
+            True,
+            name or "Player",
+            html.Div(
+                "Could not load full player details from the uploaded CSV.",
+                className="rs-player-missing",
+            ),
+            None,
+        )
+    title = player.get("name") or name or "Player"
+    return True, title, _player_detail_card(player, settings), None
 
 
 @callback(
@@ -1964,9 +2319,10 @@ def refresh_formation_options(_n, current):
     Input("rs-formation", "value"),
     State("rs-phase", "data"),
     State("rs-group", "data"),
+    State("rs-combos", "data"),
     prevent_initial_call=True,
 )
-def load_formation(formation_id, phase, group):
+def load_formation(formation_id, phase, group, current_combos):
     if not formation_id or not fm.exists(formation_id):
         return no_update, no_update, no_update, no_update, no_update
     formation = fm.load(formation_id, persist=False)
@@ -1975,6 +2331,9 @@ def load_formation(formation_id, phase, group):
     for item in combos:
         keep.extend((item["ip"], item["oop"]))
     options = role_options(phase=phase, group=group, keep=keep) or []
+    # Hydrate restores formation + combos together; skip resetting focus.
+    if normalize_combos(current_combos) == normalize_combos(combos):
+        return no_update, no_update, options, "formations", no_update
     first = _first_combo_column(combos)
     return combos, [], options, "formations", [first] if first else []
 

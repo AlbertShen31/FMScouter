@@ -3128,3 +3128,198 @@ body[data-theme="light"] .rc-page {
         grid-column: 2;
     }
 }
+
+/* Player detail modal */
+.rs-player-modal .modal-content,
+.rs-player-modal-content {
+    background: var(--app-card) !important;
+    color: var(--app-text);
+    border: 1px solid var(--app-line);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.rs-player-modal .modal-header {
+    background: var(--app-card);
+    border-bottom: 1px solid var(--app-line);
+    color: var(--app-text);
+    padding: 0.65rem 1rem;
+}
+
+.rs-player-modal .modal-title {
+    color: var(--app-text);
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.rs-player-modal .modal-footer {
+    background: var(--app-card);
+    border-top: 1px solid var(--app-line);
+    padding: 0.55rem 1rem;
+}
+
+.rs-player-modal .btn-close {
+    filter: invert(1) grayscale(1) brightness(1.6);
+    opacity: 0.85;
+}
+
+html[data-theme="light"] .rs-player-modal .btn-close,
+body[data-theme="light"] .rs-player-modal .btn-close {
+    filter: none;
+    opacity: 0.7;
+}
+
+.rs-player-modal .modal-dialog {
+    margin: 0.75rem auto;
+    max-width: min(1100px, calc(100vw - 1.5rem));
+}
+
+.rs-player-modal .modal-content {
+    overflow: hidden;
+}
+
+.rs-player-modal .modal-body {
+    overflow: visible;
+    max-height: none;
+    padding: 0.65rem 1rem 0.35rem;
+}
+
+.rs-player-modal-close {
+    background: var(--app-accent);
+    border: none;
+    color: #0b1118;
+    font-weight: 600;
+    padding: 0.35rem 0.9rem;
+    font-size: 13px;
+}
+
+.rs-player-modal-body {
+    padding: 0;
+}
+
+.modal-backdrop.show {
+    opacity: 0.65;
+}
+
+.rs-player-missing {
+    color: var(--app-muted);
+}
+
+.rs-player-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    /* Match Role configs attribute column tokens */
+    --rc-head: var(--app-head);
+    --rc-line: var(--app-line);
+    --rc-text: var(--app-text);
+    --rc-muted: var(--app-muted);
+    --rc-inset: var(--app-inset);
+    --rc-hover: var(--app-hover);
+    color: var(--app-text);
+}
+
+.rs-player-identity {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.4rem 0.85rem;
+}
+
+.rs-player-id-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.rs-player-id-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+}
+
+.rs-player-id-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--app-text);
+    overflow-wrap: anywhere;
+}
+
+.rs-player-attrs-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--app-text);
+    margin-bottom: 0.45rem;
+}
+
+.rs-player-attrs .rc-attr-grid {
+    margin-top: 0;
+    gap: 8px;
+}
+
+.rs-player-attrs .rc-attr-name {
+    color: var(--app-text);
+    font-size: 12px;
+}
+
+.rs-player-attrs .rc-attr-row.is-static {
+    cursor: default;
+    padding: 5px 8px;
+}
+
+.rs-player-attrs .rc-attr-row.is-static:hover {
+    background: transparent;
+}
+
+.rs-player-attrs .rc-col-head {
+    padding: 6px 8px;
+    font-size: 11px;
+}
+
+.rs-player-attrs .rc-col-head.nested {
+    margin-top: 2px;
+}
+
+/* Beat .rc-attr-val color so band fg/bg stay readable on the score chips */
+.rs-player-attrs .rc-attr-val.score {
+    min-width: 1.6rem;
+    text-align: center;
+    border-radius: 5px;
+    padding: 0.05rem 0.35rem;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+}
+
+.rs-player-attrs .rc-attr-val.score.rs-band-elite {
+    background: var(--band-elite-bg);
+    color: var(--band-elite-fg);
+}
+
+.rs-player-attrs .rc-attr-val.score.rs-band-good {
+    background: var(--band-good-bg);
+    color: var(--band-good-fg);
+}
+
+.rs-player-attrs .rc-attr-val.score.rs-band-ok {
+    background: var(--band-ok-bg);
+    color: var(--band-ok-fg);
+}
+
+.rs-player-attrs .rc-attr-val.score.rs-band-poor {
+    background: var(--band-poor-bg);
+    color: var(--band-poor-fg);
+}
+
+.rs-player-attrs .rc-attr-val.none {
+    color: var(--app-muted);
+    font-size: 12px;
+}
+
+@media (max-width: 720px) {
+    .rs-player-attrs .rc-attr-grid {
+        grid-template-columns: 1fr;
+    }
+}

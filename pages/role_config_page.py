@@ -5,6 +5,7 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 import dash_mantine_components as dmc
 
 import role_config as rc
+from attr_columns import attr_grid, attr_group_columns, attr_row
 from role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
 from phases import phase_matches, pretty_role_name
 
@@ -272,43 +273,23 @@ def _attr_row(attr: str, label: str, cfg: dict) -> html.Button:
     tier = rc.attr_tier(cfg, attr)
     weight = rc.TIER_WEIGHT[tier]
     display = "—" if tier == "none" else str(weight)
-    return html.Button(
-        [
-            html.Span(label, className="rc-attr-name"),
-            html.Span(display, className=f"rc-attr-val {tier}"),
-        ],
-        id={"type": "rc-attr", "attr": attr},
-        n_clicks=0,
-        className="rc-attr-row" + (f" is-{tier}" if tier != "none" else ""),
+    return attr_row(
+        label,
+        display,
+        value_class=tier,
+        row_class=f"is-{tier}" if tier != "none" else "",
         title=f"Set to {TIER_HINT.get(tier, tier)}",
+        attr_id=attr,
     )
-
-
-def _attr_column(title: str, attrs: list[tuple[str, str]], cfg: dict, extra=None) -> html.Div:
-    children = [
-        html.Div(title, className="rc-col-head"),
-        html.Div([_attr_row(code, label, cfg) for code, label in attrs], className="rc-col-body"),
-    ]
-    if extra:
-        children.extend(extra)
-    return html.Div(children, className="rc-attr-col")
 
 
 def _attributes(role_id: str, paint: str = "key") -> html.Div:
     cfg = rc.role_cfg(role_id)
     paint = paint if paint in TIER_HINT else "key"
-    columns = []
-    for title, attrs in rc.attr_groups_for(role_id):
-        extra = None
-        if title == "Physical" and not rc.is_gk_role(role_id):
-            extra = [
-                html.Div("Set Pieces", className="rc-col-head nested"),
-                html.Div(
-                    [_attr_row(code, label, cfg) for code, label in rc.SET_PIECE_ATTRS],
-                    className="rc-col-body",
-                ),
-            ]
-        columns.append(_attr_column(title, attrs, cfg, extra=extra))
+    columns = attr_group_columns(
+        is_gk=rc.is_gk_role(role_id),
+        make_row=lambda code, label: _attr_row(code, label, cfg),
+    )
     return html.Div(
         [
             html.Div(
@@ -322,7 +303,7 @@ def _attributes(role_id: str, paint: str = "key") -> html.Div:
                 f"Assigning {TIER_HINT[paint]}. Click a type once, then click attributes to apply it.",
                 className="rc-attrs-note",
             ),
-            html.Div(columns, className="rc-attr-grid"),
+            attr_grid(columns),
         ],
         className="rc-card rc-attributes",
     )
