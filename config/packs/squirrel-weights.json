@@ -52,32 +52,80 @@
         "Agi",
         "Ref"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "Cnt",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Ant",
+        "Dec",
+        "1v1"
+      ]
     },
     "Goalkeeper_OOP_GK": {
       "key_attrs": [
         "Agi",
         "Ref"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "Cnt",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "1v1",
+        "TRO",
+        "Dec",
+        "Ant"
+      ]
     },
     "Sweeper_Keeper_OOP_GK": {
       "key_attrs": [
         "Agi",
         "Ref"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "1v1",
+        "TRO",
+        "Dec",
+        "Ant"
+      ],
+      "useful_attrs": [
+        "Acc",
+        "Ecc",
+        "Pos",
+        "Cnt"
+      ]
     },
     "Line_Holding_Keeper_OOP_GK": {
       "key_attrs": [
         "Agi",
         "Ref"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Aer",
+        "Cmd",
+        "Com",
+        "Han",
+        "Cnt",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "1v1",
+        "Ant",
+        "Dec"
+      ]
     },
     "Centre_Back_IP": {
       "key_attrs": [
@@ -86,8 +134,20 @@
         "Acc",
         "Cmp"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Pos",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Dec"
+      ]
     },
     "Advanced_Centre_Back_IP": {
       "key_attrs": [
@@ -96,8 +156,27 @@
         "Acc",
         "Cmp"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Pas",
+        "Tck",
+        "Tec",
+        "Pos",
+        "Tea",
+        "Dec",
+        "Ant",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Fir",
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Vis",
+        "Sta"
+      ]
     },
     "Ball_Playing_Centre_Back_IP": {
       "key_attrs": [
@@ -132,8 +211,19 @@
         "Pac",
         "Cmp"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Str",
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Bra",
+        "Cnt"
+      ]
     },
     "Wide_Centre_Back_IP": {
       "key_attrs": [
@@ -142,8 +232,24 @@
         "Pac",
         "Cmp"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Str",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Dec",
+        "Wor",
+        "Agi",
+        "Sta"
+      ]
     },
     "Overlapping_Centre_Back_IP": {
       "key_attrs": [
@@ -203,8 +309,20 @@
         "Jum",
         "Pac"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Agg",
+        "Ant",
+        "Bra",
+        "Str",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Cnt",
+        "Dec"
+      ]
     },
     "Covering_Centre_Back_OOP": {
       "key_attrs": [
@@ -213,8 +331,19 @@
         "Jum",
         "Pac"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "Pos",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Bra"
+      ]
     },
     "Wide_Centre_Back_OOP": {
       "key_attrs": [
@@ -223,8 +352,21 @@
         "Jum",
         "Pac"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Pos",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Agg",
+        "Bra",
+        "Cnt",
+        "Dec"
+      ]
     },
     "Stopping_Wide_Centre_Back_OOP": {
       "key_attrs": [
@@ -233,8 +375,21 @@
         "Jum",
         "Pac"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Str",
+        "Hea",
+        "Mar",
+        "Tck",
+        "Pos",
+        "Bra",
+        "Ant",
+        "Agg"
+      ],
+      "useful_attrs": [
+        "Cnt",
+        "Dec",
+        "Agi"
+      ]
     },
     "Covering_Wide_Centre_Back_OOP": {
       "key_attrs": [
@@ -243,8 +398,20 @@
         "Jum",
         "Pac"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Str",
+        "Cnt",
+        "Dec",
+        "Pos",
+        "Tck",
+        "Mar",
+        "Hea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Bra"
+      ]
     },
     "Full_Back_IP": {
       "key_attrs": [
@@ -253,8 +420,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Pos",
+        "Tea",
+        "Mar",
+        "Tck"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Dri",
+        "Pas",
+        "Tec",
+        "Dec",
+        "Agi"
+      ]
     },
     "Inside_Full_Back_IP": {
       "key_attrs": [
@@ -263,8 +444,24 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Hea",
+        "Mar",
+        "Tck",
+        "Str",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Agg",
+        "Bra",
+        "Cmp",
+        "Cnt",
+        "Dec",
+        "Jum",
+        "Agi"
+      ]
     },
     "Full_Back_OOP": {
       "key_attrs": [
@@ -273,8 +470,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Ant",
+        "Tea",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Dec",
+        "Cnt",
+        "Agg",
+        "Agi"
+      ]
     },
     "Pressing_Full_Back_OOP": {
       "key_attrs": [
@@ -283,8 +491,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Agg",
+        "Ant",
+        "Pos",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Bra",
+        "Cnt",
+        "Dec"
+      ]
     },
     "Holding_Full_Back_OOP": {
       "key_attrs": [
@@ -293,8 +513,18 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Tea"
+      ]
     },
     "Wing_Back_IP": {
       "key_attrs": [
@@ -303,8 +533,25 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Cro",
+        "Mar",
+        "Tck",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Bal",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Pos",
+        "Tec",
+        "Pas",
+        "Fir",
+        "Dri"
+      ]
     },
     "Advanced_Wing_Back_IP": {
       "key_attrs": [
@@ -313,8 +560,25 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Cro",
+        "Dri",
+        "Tec",
+        "OtB",
+        "Tea",
+        "Agi"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Mar",
+        "Pas",
+        "Tck",
+        "Ant",
+        "Dec",
+        "Fla",
+        "Pos",
+        "Bal"
+      ]
     },
     "Inside_Wing_Back_IP": {
       "key_attrs": [
@@ -323,8 +587,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cmp",
+        "Dec",
+        "Pos",
+        "Tea",
+        "Pas",
+        "Tck"
+      ],
+      "useful_attrs": [
+        "Tec",
+        "Mar",
+        "Fir",
+        "Cnt",
+        "Agi"
+      ]
     },
     "Playmaking_Wing_Back_IP": {
       "key_attrs": [
@@ -333,8 +611,26 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Pas",
+        "Tck",
+        "Tec",
+        "Cmp",
+        "Dec",
+        "Tea",
+        "Vis"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Dri",
+        "Mar",
+        "Ant",
+        "Agi",
+        "Cnt",
+        "OtB",
+        "Pos"
+      ]
     },
     "Wing_Back_OOP": {
       "key_attrs": [
@@ -343,8 +639,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Ant",
+        "Pos",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Agg",
+        "Cnt",
+        "Dec"
+      ]
     },
     "Pressing_Wing_Back_OOP": {
       "key_attrs": [
@@ -353,8 +660,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Agg",
+        "Ant",
+        "Mar",
+        "Tck",
+        "Pos",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Bra",
+        "Cnt",
+        "Dec",
+        "Agi"
+      ]
     },
     "Holding_Wing_Back_OOP": {
       "key_attrs": [
@@ -363,8 +682,18 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Tea"
+      ]
     },
     "Defensive_Midfielder_IP": {
       "key_attrs": [
@@ -373,8 +702,22 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Pos",
+        "Tea",
+        "Tck"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Pas",
+        "Mar",
+        "Dec",
+        "Cmp",
+        "Agg",
+        "Str"
+      ]
     },
     "Deep_Lying_Playmaker_IP": {
       "key_attrs": [
@@ -383,8 +726,24 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Pas",
+        "Tec",
+        "Cmp",
+        "Dec",
+        "Tea",
+        "Vis"
+      ],
+      "useful_attrs": [
+        "Bal",
+        "Ant",
+        "Mar",
+        "Tck",
+        "OtB",
+        "Pos",
+        "Cnt"
+      ]
     },
     "Box_to_Box_Midfielder_IP": {
       "key_attrs": [
@@ -393,8 +752,26 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Pas",
+        "Tck",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Str",
+        "Bal",
+        "Agg",
+        "Ant",
+        "Dri",
+        "Fin",
+        "Fir",
+        "Lon",
+        "Cmp",
+        "Dec",
+        "Tec",
+        "Pos"
+      ]
     },
     "Half_Back_IP": {
       "key_attrs": [
@@ -403,8 +780,25 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Mar",
+        "Tck",
+        "Ant",
+        "Cnt",
+        "Pos",
+        "Tea",
+        "Str",
+        "Jum"
+      ],
+      "useful_attrs": [
+        "Bra",
+        "Cmp",
+        "Agg",
+        "Dec",
+        "Pas",
+        "Fir"
+      ]
     },
     "Box_to_Box_Playmaker_IP": {
       "key_attrs": [
@@ -413,8 +807,26 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Pas",
+        "Tec",
+        "Dec",
+        "Cmp",
+        "OtB",
+        "Tea",
+        "Vis"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Ant",
+        "Agi",
+        "Bal",
+        "Pos",
+        "Lon",
+        "Mar",
+        "Tck"
+      ]
     },
     "Defensive_Midfielder_OOP": {
       "key_attrs": [
@@ -423,8 +835,19 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Tck",
+        "Tea",
+        "Pos",
+        "Dec",
+        "Ant"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "Agg",
+        "Cnt",
+        "Str"
+      ]
     },
     "Dropping_Defensive_Midfielder_OOP": {
       "key_attrs": [
@@ -433,8 +856,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "Pos",
+        "Tea",
+        "Jum",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Agg"
+      ]
     },
     "Pressing_Defensive_Midfielder_OOP": {
       "key_attrs": [
@@ -443,8 +878,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Tck",
+        "Agg",
+        "Ant",
+        "Dec",
+        "Pos",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Str",
+        "Cnt",
+        "Mar"
+      ]
     },
     "Screening_Defensive_Midfielder_OOP": {
       "key_attrs": [
@@ -453,8 +899,18 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "Pos",
+        "Mar",
+        "Tck"
+      ],
+      "useful_attrs": [
+        "Str",
+        "Tea"
+      ]
     },
     "Wide_Covering_Defensive_Midfielder_OOP": {
       "key_attrs": [
@@ -463,8 +919,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Agi",
+        "Ant",
+        "Dec",
+        "Pos",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Cnt",
+        "Str"
+      ]
     },
     "Central_Midfielder_IP": {
       "key_attrs": [
@@ -473,8 +941,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Pas",
+        "Tck",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Ant",
+        "Cmp",
+        "Cnt",
+        "OtB",
+        "Pos",
+        "Vis",
+        "Tec"
+      ]
     },
     "Wide_Central_Midfielder_IP": {
       "key_attrs": [
@@ -483,8 +965,25 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Tck",
+        "Pas",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Ant",
+        "Cro",
+        "Dri",
+        "Tec",
+        "Cmp",
+        "Cnt",
+        "OtB",
+        "Pos",
+        "Vis"
+      ]
     },
     "Channel_Midfielder_IP": {
       "key_attrs": [
@@ -493,8 +992,23 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Cro",
+        "Fir",
+        "Pas",
+        "Tec",
+        "OtB",
+        "Cmp"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Lon",
+        "Fla",
+        "Ant",
+        "Agi",
+        "Dec",
+        "Vis"
+      ]
     },
     "Midfield_Playmaker_IP": {
       "key_attrs": [
@@ -503,8 +1017,24 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Vis",
+        "Tea",
+        "OtB",
+        "Dec",
+        "Cmp",
+        "Fir",
+        "Pas",
+        "Tec"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Ant",
+        "Agi",
+        "Tck",
+        "Fla",
+        "Pos"
+      ]
     },
     "Central_Midfielder_OOP": {
       "key_attrs": [
@@ -513,8 +1043,18 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dec",
+        "Tck",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Ant",
+        "Cnt",
+        "Pos",
+        "Mar"
+      ]
     },
     "Pressing_Central_Midfielder_OOP": {
       "key_attrs": [
@@ -523,8 +1063,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Agg",
+        "Ant",
+        "Dec",
+        "Tea",
+        "Tck"
+      ],
+      "useful_attrs": [
+        "Str",
+        "Cnt",
+        "Mar",
+        "Pos"
+      ]
     },
     "Screening_Central_Midfielder_OOP": {
       "key_attrs": [
@@ -533,8 +1084,17 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Cnt",
+        "Dec",
+        "Pos"
+      ],
+      "useful_attrs": [
+        "Ant",
+        "Tea"
+      ]
     },
     "Wide_Covering_Central_Midfielder_OOP": {
       "key_attrs": [
@@ -543,8 +1103,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Mar",
+        "Tck",
+        "Tea",
+        "Dec",
+        "Agi"
+      ],
+      "useful_attrs": [
+        "Agg",
+        "Ant",
+        "Cnt",
+        "Pos"
+      ]
     },
     "Attacking_Midfielder_IP": {
       "key_attrs": [
@@ -553,8 +1124,24 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Lon",
+        "Pas",
+        "Tec",
+        "Cmp",
+        "Fla",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Ant",
+        "Cro",
+        "Dri",
+        "Fin",
+        "Vis",
+        "Dec"
+      ]
     },
     "Advanced_Playmaker_IP": {
       "key_attrs": [
@@ -563,8 +1150,23 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Pas",
+        "Tec",
+        "OtB",
+        "Tea",
+        "Vis",
+        "Dec",
+        "Cmp"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Dri",
+        "Ant",
+        "Agi",
+        "Fla"
+      ]
     },
     "Free_Role_IP": {
       "key_attrs": [
@@ -573,8 +1175,24 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Lon",
+        "Pas",
+        "Tec",
+        "Cmp",
+        "Fla",
+        "OtB",
+        "Vis"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Fin",
+        "Ant",
+        "Dec",
+        "Agi"
+      ]
     },
     "Second_Striker_IP": {
       "key_attrs": [
@@ -583,8 +1201,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fin",
+        "Fir",
+        "Ant",
+        "Cmp",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Lon",
+        "Pas",
+        "Tec",
+        "Cnt",
+        "Dec",
+        "Agi"
+      ]
     },
     "Attacking_Midfielder_OOP": {
       "key_attrs": [
@@ -593,8 +1225,16 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Dec"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "Agg",
+        "OtB",
+        "Tea"
+      ]
     },
     "Tracking_Attacking_Midfielder_OOP": {
       "key_attrs": [
@@ -603,8 +1243,17 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Agg",
+        "Ant",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "OtB",
+        "Pos"
+      ]
     },
     "Central_Outlet_Attacking_Midfielder_OOP": {
       "key_attrs": [
@@ -613,8 +1262,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Bal",
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Mar",
+        "Cmp",
+        "Str"
+      ]
     },
     "Splitting_Outlet_Attacking_Midfielder_OOP": {
       "key_attrs": [
@@ -623,8 +1284,18 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Cmp",
+        "Fir",
+        "Mar"
+      ]
     },
     "Wide_Midfielder_IP": {
       "key_attrs": [
@@ -633,8 +1304,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Cro",
+        "Pas",
+        "Tec",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Ant",
+        "Cmp",
+        "OtB",
+        "Vis",
+        "Fir",
+        "Dri"
+      ]
     },
     "Winger_IP": {
       "key_attrs": [
@@ -643,8 +1328,21 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Tea",
+        "Agi",
+        "Cro",
+        "Dri",
+        "Tec"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Pas",
+        "Ant",
+        "Bal",
+        "Fla",
+        "OtB"
+      ]
     },
     "Playmaking_Winger_IP": {
       "key_attrs": [
@@ -653,8 +1351,23 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Cro",
+        "Dri",
+        "Fir",
+        "Pas",
+        "Tec",
+        "OtB",
+        "Tea",
+        "Vis",
+        "Dec",
+        "Cmp"
+      ],
+      "useful_attrs": [
+        "Fla",
+        "Ant",
+        "Agi"
+      ]
     },
     "Inside_Winger_IP": {
       "key_attrs": [
@@ -663,8 +1376,24 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Tec",
+        "Cmp",
+        "Agi",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Ant",
+        "Bal",
+        "Fla",
+        "Lon",
+        "Pas",
+        "OtB",
+        "Vis"
+      ]
     },
     "Wide_Midfielder_OOP": {
       "key_attrs": [
@@ -673,8 +1402,17 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "Agg",
+        "Ant",
+        "Agi",
+        "OtB"
+      ]
     },
     "Tracking_Wide_Midfielder_OOP": {
       "key_attrs": [
@@ -683,8 +1421,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Agg",
+        "Ant",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Pos",
+        "OtB",
+        "Tck",
+        "Mar",
+        "Agi"
+      ]
     },
     "Wide_Outlet_Wide_Midfielder_OOP": {
       "key_attrs": [
@@ -693,8 +1442,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Fir",
+        "Mar",
+        "Cmp",
+        "Agi"
+      ]
     },
     "Inside_Forward_IP": {
       "key_attrs": [
@@ -703,8 +1464,24 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Tec",
+        "Ant",
+        "Cmp",
+        "OtB",
+        "Agi"
+      ],
+      "useful_attrs": [
+        "Bal",
+        "Fla",
+        "Vis",
+        "Pas",
+        "Lon",
+        "Fin",
+        "Cro"
+      ]
     },
     "Wide_Forward_IP": {
       "key_attrs": [
@@ -713,8 +1490,22 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Tec",
+        "Ant",
+        "Agi",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Cro",
+        "Fin",
+        "Pas",
+        "Cmp",
+        "Fla",
+        "Bal"
+      ]
     },
     "Winger_OOP": {
       "key_attrs": [
@@ -723,8 +1514,17 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "OtB",
+        "Agi",
+        "Agg"
+      ]
     },
     "Tracking_Winger_OOP": {
       "key_attrs": [
@@ -733,8 +1533,19 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Agg",
+        "Dec",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Mar",
+        "Tck",
+        "OtB",
+        "Pos"
+      ]
     },
     "Inside_Outlet_Winger_OOP": {
       "key_attrs": [
@@ -743,8 +1554,20 @@
         "Sta",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea",
+        "Bal"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Fir",
+        "Mar",
+        "Cmp"
+      ]
     },
     "Wide_Outlet_Winger_OOP": {
       "key_attrs": [
@@ -753,8 +1576,20 @@
         "Pac",
         "Wor"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Fir",
+        "Mar",
+        "Agi",
+        "Cmp"
+      ]
     },
     "Deep_Lying_Forward_IP": {
       "key_attrs": [
@@ -762,8 +1597,22 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Tec",
+        "Fir",
+        "Cmp",
+        "OtB",
+        "Str"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Ant",
+        "Bal",
+        "Dec",
+        "Tea",
+        "Vis",
+        "Pas"
+      ]
     },
     "Centre_Forward_IP": {
       "key_attrs": [
@@ -771,8 +1620,23 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Fir",
+        "Hea",
+        "Tec",
+        "Cmp",
+        "Str",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Dri",
+        "Ant",
+        "Agi",
+        "Bal",
+        "Jum",
+        "Dec",
+        "Pas"
+      ]
     },
     "Target_Forward_IP": {
       "key_attrs": [
@@ -780,8 +1644,22 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Hea",
+        "Bra",
+        "Cmp",
+        "Agg",
+        "Bal",
+        "Jum",
+        "Str",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Ant",
+        "Dec",
+        "Tea"
+      ]
     },
     "Poacher_IP": {
       "key_attrs": [
@@ -789,8 +1667,19 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Hea",
+        "Cmp",
+        "Cnt",
+        "OtB"
+      ],
+      "useful_attrs": [
+        "Tec",
+        "Dec",
+        "Bal",
+        "Fir"
+      ]
     },
     "Channel_Forward_IP": {
       "key_attrs": [
@@ -798,8 +1687,24 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Cmp",
+        "OtB",
+        "Wor",
+        "Tec"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Bal",
+        "Sta",
+        "Ant",
+        "Cro",
+        "Hea",
+        "Pas",
+        "Dec"
+      ]
     },
     "False_Nine_IP": {
       "key_attrs": [
@@ -807,8 +1712,23 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dri",
+        "Fir",
+        "Pas",
+        "Tec",
+        "Cmp",
+        "Dec",
+        "OtB",
+        "Tea",
+        "Vis"
+      ],
+      "useful_attrs": [
+        "Agi",
+        "Bal",
+        "Ant",
+        "Fla"
+      ]
     },
     "Centre_Forward_OOP": {
       "key_attrs": [
@@ -816,8 +1736,18 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Dec",
+        "Ant",
+        "Wor"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "Agg",
+        "OtB",
+        "Tea",
+        "Sta"
+      ]
     },
     "Tracking_Centre_Forward_OOP": {
       "key_attrs": [
@@ -825,8 +1755,19 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Sta",
+        "Agg",
+        "Ant",
+        "Dec",
+        "Tea",
+        "Wor"
+      ],
+      "useful_attrs": [
+        "Mar",
+        "OtB",
+        "Pos"
+      ]
     },
     "Central_Outlet_Centre_Forward_OOP": {
       "key_attrs": [
@@ -834,8 +1775,20 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea",
+        "Bal"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Mar",
+        "Cmp",
+        "Str"
+      ]
     },
     "Splitting_Outlet_Centre_Forward_OOP": {
       "key_attrs": [
@@ -843,8 +1796,18 @@
         "Pac",
         "Fin"
       ],
-      "preferred_attrs": [],
-      "useful_attrs": []
+      "preferred_attrs": [
+        "Ant",
+        "Cnt",
+        "Dec",
+        "OtB",
+        "Tea"
+      ],
+      "useful_attrs": [
+        "Fir",
+        "Cmp",
+        "Mar"
+      ]
     }
   }
 }
