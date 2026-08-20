@@ -52,10 +52,10 @@ SET_PIECE_PROFILES = (
     {
         "id": "throws",
         "label": "Long throws",
-        "detail": "raw attribute only",
+        "detail": "taker",
         "raw": "LTh",
-        "score": None,
-        "key": (),
+        "score": "Throws",
+        "key": ("LTh",),
         "preferred": (),
         "useful": (),
     },
@@ -91,18 +91,19 @@ def set_piece_divisor(profile: dict) -> int:
 
 
 def set_piece_formula(profile: dict) -> str:
-    if not profile.get("score"):
-        return f"{profile['label']} = {profile['raw']} (raw only)"
     terms = []
-    for attr in profile["key"]:
+    for attr in profile.get("key") or ():
         terms.append(f"{pc.KEY_WEIGHT:g}×{attr}")
-    for attr in profile["preferred"]:
+    for attr in profile.get("preferred") or ():
         terms.append(f"{pc.PREFERRED_WEIGHT:g}×{attr}")
-    for attr in profile["useful"]:
+    for attr in profile.get("useful") or ():
         if pc.USEFUL_WEIGHT == 1:
             terms.append(attr)
         else:
             terms.append(f"{pc.USEFUL_WEIGHT:g}×{attr}")
+    if not terms or not profile.get("score"):
+        raw = profile.get("raw") or "?"
+        return f"{profile['label']} = {raw} (raw only)"
     return f"{profile['label']} = ({' + '.join(terms)}) ÷ {set_piece_divisor(profile):g}"
 
 
@@ -112,7 +113,7 @@ def set_piece_hint() -> str:
         f"{pc.KEY_WEIGHT:g}× key / {pc.PREFERRED_WEIGHT:g}× preferred / "
         f"{pc.USEFUL_WEIGHT:g}× useful weights as roles. "
         "DFK is a shot from the dead ball; IFK is a delivery into the box. "
-        "Checking DFK or IFK also adds Fre once."
+        "Checked types add their computed score column only."
     )
 
 
@@ -129,17 +130,14 @@ def set_piece_filter_columns(piece_id: str) -> str:
 
 
 def set_piece_columns(selected) -> list[str]:
+    """Computed score columns only for checked set-piece types."""
     chosen = set(selected or [])
     cols = []
     seen: set[str] = set()
     for profile in SET_PIECE_PROFILES:
         if profile["id"] not in chosen:
             continue
-        raw = profile.get("raw")
         score = profile.get("score")
-        if raw and raw not in seen:
-            cols.append(raw)
-            seen.add(raw)
         if score and score not in seen:
             cols.append(score)
             seen.add(score)

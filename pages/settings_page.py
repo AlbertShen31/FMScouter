@@ -18,6 +18,22 @@ BAND_LABELS = (
 )
 
 
+def _set_piece_formula_lines() -> list:
+    lines = []
+    for profile in rs.SET_PIECE_PROFILES:
+        lines.append(
+            html.Div(
+                [
+                    html.Span(profile["label"], className="rs-set-piece-name"),
+                    html.Span(profile.get("detail") or "", className="rs-set-piece-detail"),
+                    html.Span(rs.set_piece_formula(profile), className="rs-set-piece-formula"),
+                ],
+                className="rs-set-piece-line",
+            )
+        )
+    return lines
+
+
 def _color_row(band: str, label: str, colors: dict) -> html.Div:
     return html.Div(
         [
@@ -239,6 +255,24 @@ def _form(settings: dict) -> list:
         ),
         dbc.Card(
             [
+                dbc.CardHeader("Set-piece formulas"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            rs.set_piece_hint(),
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            _set_piece_formula_lines(),
+                            className="rs-set-piece-formulas st-set-piece-formulas",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
                 dbc.CardHeader("Histogram bins"),
                 dbc.CardBody(
                     [
@@ -293,8 +327,8 @@ def layout():
         [
             html.H1("Settings"),
             html.P(
-                "Control Role scores age menus, score bands, footedness, histogram bins, and colors. "
-                "Save named versions so you can switch between them.",
+                "Control Role scores age menus, score bands, footedness, set-piece formulas, "
+                "histogram bins, and colors. Save named versions so you can switch between them.",
                 className="text-muted",
             ),
             *_form(us.load()),

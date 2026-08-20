@@ -54,6 +54,7 @@ from role_scorer import (
     set_piece_filter_columns,
     set_piece_formula,
     set_piece_hint,
+    set_piece_sort_column,
 )
 from canvas_export import build_canvas
 import formations as fm
@@ -280,7 +281,7 @@ def _set_piece_panel(settings=None) -> html.Details:
                         className="rs-metrics-summary-copy",
                     ),
                     *_help_icon(
-                        "Check a type to add columns to the table. "
+                        "Check a type to add its computed score column to the table. "
                         "Min score filters out anyone below that on every checked type.",
                         "rs-help-metrics",
                     ),
@@ -295,7 +296,7 @@ def _set_piece_panel(settings=None) -> html.Details:
                                 [
                                     html.Div("Add columns", className="rs-metrics-section-label"),
                                     html.P(
-                                        "Show raw attributes and computed scores in the shortlist.",
+                                        "Show computed set-piece scores in the shortlist.",
                                         className="rs-metrics-section-hint",
                                     ),
                                 ],
@@ -585,6 +586,7 @@ def layout():
         dcc.Store(id="rs-squad-marked", data=[]),
         dcc.Store(id="rs-hist-open", data=False),
         dcc.Store(id="rs-focus-role", data=[]),
+        dcc.Store(id="rs-set-pieces-prev", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
         html.Div(
             [
@@ -1910,13 +1912,25 @@ def focus_view_role(n_clicks, current_focus):
 
 @callback(
     Output("rs-table", "sort_by"),
+    Output("rs-set-pieces-prev", "data"),
     Input("rs-focus-role", "data"),
+    Input("rs-set-pieces", "value"),
+    State("rs-set-pieces-prev", "data"),
 )
-def sort_from_depth_role(focus_roles):
-    selected = _focus_roles(focus_roles)
-    if not selected:
-        return []
-    return [{"column_id": selected[-1], "direction": "desc"}]
+def sync_table_sort(focus_roles, set_pieces, prev_pieces):
+    selected_pieces = _as_list(set_pieces)
+    if ctx.triggered_id == "rs-set-pieces":
+        prev = _as_list(prev_pieces)
+        added = [piece for piece in selected_pieces if piece not in prev]
+        if added:
+            column = set_piece_sort_column(added[-1])
+            if column:
+                return [{"column_id": column, "direction": "desc"}], selected_pieces
+        return no_update, selected_pieces
+    focused = _focus_roles(focus_roles)
+    if not focused:
+        return [], no_update
+    return [{"column_id": focused[-1], "direction": "desc"}], no_update
 
 
 @callback(

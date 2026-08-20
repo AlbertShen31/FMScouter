@@ -2935,6 +2935,14 @@ body[data-theme="light"] .rc-page {
     color: var(--app-text);
 }
 
+.st-set-piece-formulas {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-inset);
+}
+
 .st-color-list {
     display: grid;
     gap: 10px;
