@@ -180,7 +180,7 @@ def _colored_group_abbr(abbr: str, *, css: str = "rs-pill-groups"):
     return html.Span(parts, className="rs-group-abbr")
 
 
-def _set_piece_panel(settings=None) -> html.Div:
+def _set_piece_panel(settings=None) -> html.Details:
     lines = []
     for profile in SET_PIECE_PROFILES:
         lines.append(
@@ -193,48 +193,63 @@ def _set_piece_panel(settings=None) -> html.Div:
                 className="rs-set-piece-line",
             )
         )
-    return html.Div(
+    return html.Details(
         [
-            html.Div("Set pieces & aerial", className="rs-special-title"),
-            html.P(set_piece_hint(), className="rs-special-sub"),
+            html.Summary("Additional player metrics", className="rs-metrics-summary"),
             html.Div(
                 [
-                    html.Label("Min score", className="rs-set-piece-min-label"),
-                    dbc.Input(
-                        id="rs-set-piece-min-score",
-                        type="number",
-                        min=0,
-                        max=20,
-                        step=0.1,
-                        placeholder="Any",
-                        debounce=True,
-                        className="rs-set-piece-min-dd",
+                    html.P(
+                        "Check a type to add its columns to the table. "
+                        "A min score then filters out anyone below that on every checked type.",
+                        className="rs-special-sub",
+                    ),
+                    html.Div("Add columns", className="rs-chip-label"),
+                    dbc.Checklist(
+                        id="rs-set-pieces",
+                        options=[
+                            {
+                                "label": _set_piece_check_label(profile),
+                                "value": profile["id"],
+                            }
+                            for profile in SET_PIECE_PROFILES
+                        ],
+                        value=[],
+                        inline=True,
+                        className="rs-set-piece-checks",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Set-piece filters", className="rs-chip-label"),
+                            html.Label("Min score", className="rs-set-piece-min-label"),
+                            dbc.Input(
+                                id="rs-set-piece-min-score",
+                                type="number",
+                                min=0,
+                                max=20,
+                                step=0.1,
+                                placeholder="Any",
+                                debounce=True,
+                                className="rs-set-piece-min-dd",
+                            ),
+                        ],
+                        className="rs-set-piece-toolbar",
+                    ),
+                    html.Details(
+                        [
+                            html.Summary(
+                                "Formulas & descriptions",
+                                className="rs-set-piece-formulas-toggle",
+                                title=set_piece_hint(),
+                            ),
+                            html.Div(lines, className="rs-set-piece-formulas"),
+                        ],
+                        className="rs-set-piece-formulas-details",
                     ),
                 ],
-                className="rs-set-piece-toolbar",
-            ),
-            dbc.Checklist(
-                id="rs-set-pieces",
-                options=[
-                    {"label": _set_piece_check_label(profile), "value": profile["id"]}
-                    for profile in SET_PIECE_PROFILES
-                ],
-                value=[],
-                inline=True,
-                className="rs-set-piece-checks",
-            ),
-            html.Details(
-                [
-                    html.Summary(
-                        "Formulas & descriptions",
-                        className="rs-set-piece-formulas-toggle",
-                    ),
-                    html.Div(lines, className="rs-set-piece-formulas"),
-                ],
-                className="rs-set-piece-formulas-details",
+                className="rs-metrics-body",
             ),
         ],
-        className="rs-special-card set-pieces",
+        className="rs-metrics-details",
     )
 
 
@@ -363,34 +378,42 @@ def layout():
             [
         dbc.Card(
             [
-                dbc.CardHeader("2. Weight config"),
-                dbc.CardBody(
-                    [
-                        html.Label("Config file"),
-                        dcc.Dropdown(
-                            id="rs-config",
-                            options=rc.pack_options(),
-                            value=rc.active_pack_id(),
-                            clearable=False,
-                            placeholder="Select a weight config",
-                        ),
-                        dcc.Interval(id="rs-config-tick", interval=2500),
-                        html.Small(
-                            "Scores use this file’s key / preferred / useful weights. "
-                            "Edit and Save a config on the Role configs page.",
-                            className="text-muted",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
                 dbc.CardHeader(
                     [
-                        html.Span("3. Choose roles to score"),
-                        html.Span("Next", className="rs-next-badge"),
+                        html.Div(
+                            [
+                                html.Span("2. Choose roles to score"),
+                                html.Span("Next", className="rs-next-badge"),
+                            ],
+                            className="rs-card-header-title",
+                        ),
+                        html.Div(
+                            [
+                                html.Span("Scoring weights", className="rs-weights-label"),
+                                html.Div(
+                                    dcc.Dropdown(
+                                        id="rs-config",
+                                        options=rc.pack_options(),
+                                        value=rc.active_pack_id(),
+                                        clearable=False,
+                                        placeholder="Select a weight config",
+                                    ),
+                                    className="rs-config-dd",
+                                    title=(
+                                        "Scores use this file’s key / preferred / useful weights. "
+                                        "Edit and Save a config on the Role configs page."
+                                    ),
+                                ),
+                                dcc.Link(
+                                    "Edit",
+                                    href="/role-config",
+                                    className="rs-weights-edit",
+                                    title="Open the Role configs page to edit and save weights.",
+                                ),
+                                dcc.Interval(id="rs-config-tick", interval=2500),
+                            ],
+                            className="rs-weights-bar",
+                        ),
                     ],
                     className="rs-card-header-row",
                 ),
@@ -398,102 +421,122 @@ def layout():
                     [
                         html.Div(
                             [
-                                html.Span("Phase", className="rs-chip-label"),
-                                html.Div(
-                                    _phase_buttons("all"),
-                                    id="rs-phase-row",
-                                    className="rs-chip-row",
-                                ),
-                                html.Span("Group", className="rs-chip-label"),
-                                html.Div(
-                                    _group_buttons("all"),
-                                    id="rs-group-row",
-                                    className="rs-chip-row wrap",
-                                ),
-                                html.Button(
-                                    "Clear",
-                                    id="rs-clear-roles",
-                                    n_clicks=0,
-                                    className="rs-chip ghost",
-                                ),
-                            ],
-                            className="rs-role-toolbar mb-2",
-                        ),
-                        dcc.Dropdown(
-                            id="rs-roles",
-                            options=role_options(),
-                            value=[],
-                            multi=True,
-                            placeholder="Choose roles to score",
-                        ),
-                        html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
-                        html.Small(
-                            "Pick at least one role to score players. "
-                            "Phase and group filters narrow the list; already-selected roles stay. "
-                            "Click a pill to remove it.",
-                            className="text-muted",
-                        ),
-                        html.Div(
-                            [
-                                html.Span("Combine IP + OOP", className="rs-chip-label"),
-                                html.Div(
-                                    [
-                                        html.Span("Group", className="rs-chip-label"),
-                                        html.Div(
-                                            _group_buttons("all", btn_type="rs-combo-group"),
-                                            id="rs-combo-group-row",
-                                            className="rs-chip-row wrap",
-                                        ),
-                                    ],
-                                    className="rs-role-toolbar mb-2",
-                                ),
                                 html.Div(
                                     [
                                         html.Div(
                                             [
-                                                html.Label("IP role"),
-                                                dcc.Dropdown(
-                                                    id="rs-combo-ip",
-                                                    options=role_options(phase="IP"),
-                                                    placeholder="In possession",
-                                                    clearable=True,
+                                                html.Div(
+                                                    [
+                                                        html.Span("Phase", className="rs-chip-label"),
+                                                        html.Div(
+                                                            _phase_buttons("all"),
+                                                            id="rs-phase-row",
+                                                            className="rs-chip-row",
+                                                        ),
+                                                    ],
+                                                    className="rs-filter-cluster",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Span("Group", className="rs-chip-label"),
+                                                        html.Div(
+                                                            _group_buttons("all"),
+                                                            id="rs-group-row",
+                                                            className="rs-chip-row wrap",
+                                                        ),
+                                                    ],
+                                                    className="rs-filter-cluster",
+                                                ),
+                                                html.Button(
+                                                    "Clear",
+                                                    id="rs-clear-roles",
+                                                    n_clicks=0,
+                                                    className="rs-chip ghost",
                                                 ),
                                             ],
-                                            className="rs-combo-field",
+                                            className="rs-role-toolbar mb-2",
+                                        ),
+                                        dcc.Dropdown(
+                                            id="rs-roles",
+                                            options=role_options(),
+                                            value=[],
+                                            multi=True,
+                                            placeholder="Choose roles to score",
+                                        ),
+                                        html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
+                                        html.Small(
+                                            "Pick at least one role to score players. "
+                                            "Phase and group filters narrow the list; already-selected roles stay. "
+                                            "Click a pill to remove it.",
+                                            className="text-muted",
+                                        ),
+                                    ],
+                                    className="rs-roles-col",
+                                ),
+                                html.Div(
+                                    [
+                                        html.Span("Combine IP + OOP", className="rs-chip-label"),
+                                        html.Div(
+                                            [
+                                                html.Span("Group", className="rs-chip-label"),
+                                                html.Div(
+                                                    _group_buttons("all", btn_type="rs-combo-group"),
+                                                    id="rs-combo-group-row",
+                                                    className="rs-chip-row wrap",
+                                                ),
+                                            ],
+                                            className="rs-filter-cluster mb-2",
                                         ),
                                         html.Div(
                                             [
-                                                html.Label("OOP role"),
-                                                dcc.Dropdown(
-                                                    id="rs-combo-oop",
-                                                    options=role_options(phase="OOP"),
-                                                    placeholder="Out of possession",
-                                                    clearable=True,
+                                                html.Div(
+                                                    [
+                                                        html.Label("IP role"),
+                                                        dcc.Dropdown(
+                                                            id="rs-combo-ip",
+                                                            options=role_options(phase="IP"),
+                                                            placeholder="In possession",
+                                                            clearable=True,
+                                                        ),
+                                                    ],
+                                                    className="rs-combo-field",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Label("OOP role"),
+                                                        dcc.Dropdown(
+                                                            id="rs-combo-oop",
+                                                            options=role_options(phase="OOP"),
+                                                            placeholder="Out of possession",
+                                                            clearable=True,
+                                                        ),
+                                                    ],
+                                                    className="rs-combo-field",
+                                                ),
+                                                html.Button(
+                                                    "Add combined",
+                                                    id="rs-combo-add",
+                                                    n_clicks=0,
+                                                    className="rs-chip",
                                                 ),
                                             ],
-                                            className="rs-combo-field",
+                                            className="rs-combo-row",
                                         ),
-                                        html.Button(
-                                            "Add combined",
-                                            id="rs-combo-add",
-                                            n_clicks=0,
-                                            className="rs-chip",
+                                        html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
+                                        html.Small(
+                                            f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
+                                            f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
+                                            "The table still shows both role scores. "
+                                            "A player is eligible for the combined role if they can play either part. "
+                                            "Group filters only these two lists. "
+                                            "Both roles are added to the list above.",
+                                            className="text-muted",
                                         ),
                                     ],
-                                    className="rs-combo-row",
-                                ),
-                                html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
-                                html.Small(
-                                    f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
-                                    f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
-                                    "The table still shows both role scores. "
-                                    "A player is eligible for the combined role if they can play either part. "
-                                    "Group filters only these two lists. "
-                                    "Both roles are added to the list above.",
-                                    className="text-muted",
+                                    className="rs-combo-block",
                                 ),
                             ],
-                            className="rs-combo-block mt-3",
+                            className="rs-score-grid",
                         ),
                     ]
                 ),
@@ -540,12 +583,12 @@ def layout():
         ),
         dbc.Card(
             [
-                dbc.CardHeader("4. Shortlist"),
+                dbc.CardHeader("3. Shortlist"),
                 dbc.CardBody(
                     [
-                        dbc.Row(
+                        html.Div(
                             [
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("View / filter roles"),
                                         dcc.Dropdown(
@@ -560,9 +603,9 @@ def layout():
                                             className="text-muted",
                                         ),
                                     ],
-                                    md=3,
+                                    className="rs-filter-roles",
                                 ),
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("Search"),
                                         dbc.Input(
@@ -571,9 +614,9 @@ def layout():
                                             placeholder="Name, club, position",
                                         ),
                                     ],
-                                    md=2,
+                                    className="rs-filter-search",
                                 ),
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("Max age"),
                                         dcc.Dropdown(
@@ -583,9 +626,9 @@ def layout():
                                             clearable=False,
                                         ),
                                     ],
-                                    md=2,
+                                    className="rs-filter-age",
                                 ),
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("Min score"),
                                         dbc.Input(
@@ -614,9 +657,9 @@ def layout():
                                             className="rs-min-score-mode mt-1",
                                         ),
                                     ],
-                                    md=2,
+                                    className="rs-filter-score",
                                 ),
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("Eligible"),
                                         dbc.Checklist(
@@ -631,9 +674,9 @@ def layout():
                                             switch=True,
                                         ),
                                     ],
-                                    md=1,
+                                    className="rs-filter-elig",
                                 ),
-                                dbc.Col(
+                                html.Div(
                                     [
                                         html.Label("Rows"),
                                         dcc.Dropdown(
@@ -642,16 +685,15 @@ def layout():
                                                 {"label": "25", "value": 25},
                                                 {"label": "50", "value": 50},
                                                 {"label": "100", "value": 100},
-                                                {"label": "All", "value": 1000},
                                             ],
-                                            value=50,
+                                            value=25,
                                             clearable=False,
                                         ),
                                     ],
-                                    md=1,
+                                    className="rs-filter-rows",
                                 ),
                             ],
-                            className="g-2 mb-2",
+                            className="rs-shortlist-filters mb-2",
                         ),
                         html.Div(_set_piece_panel(settings), className="rs-special-scores"),
                         dash_table.DataTable(
@@ -762,7 +804,7 @@ def layout():
         ),
         dbc.Card(
             [
-                dbc.CardHeader("5. Export"),
+                dbc.CardHeader("4. Export"),
                 dbc.CardBody(
                     [
                         dbc.Button(
