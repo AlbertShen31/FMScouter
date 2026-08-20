@@ -95,7 +95,7 @@ def _chart_layout(theme, *, height=240, showlegend=False) -> dict:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         barmode="group",
-        legend_title_text="View role",
+        legend_title_text="Displayed role",
         showlegend=showlegend,
     )
 
@@ -124,11 +124,11 @@ def _hist_figure(rows: list[dict], view_roles: list[str], bins: list, theme) -> 
 BLANK_FIG = _blank_fig("dark")
 
 
-def _group_buttons(active: str = "all", *, btn_type: str = "rs-group") -> list:
+def _group_buttons(active: str = "all") -> list:
     buttons = [
         html.Button(
             "All groups",
-            id={"type": btn_type, "group": "all"},
+            id={"type": "rs-group", "group": "all"},
             n_clicks=0,
             className="rs-chip" + (" active" if active == "all" else ""),
         )
@@ -137,7 +137,7 @@ def _group_buttons(active: str = "all", *, btn_type: str = "rs-group") -> list:
         buttons.append(
             html.Button(
                 label,
-                id={"type": btn_type, "group": group},
+                id={"type": "rs-group", "group": group},
                 n_clicks=0,
                 className="rs-chip" + (" active" if active == group else ""),
             )
@@ -228,7 +228,6 @@ def _set_piece_panel(settings=None) -> html.Details:
                                 max=20,
                                 step=0.1,
                                 placeholder="Any",
-                                debounce=True,
                                 className="rs-set-piece-min-dd",
                             ),
                         ],
@@ -290,6 +289,74 @@ def _role_pills(role_ids: list[str]) -> list:
     return pills
 
 
+def _hybrid_summary_text(combos: list[dict] | None = None) -> str:
+    count = len(normalize_combos(combos))
+    return f"Hybrid roles ({count})" if count else "+ Create hybrid role"
+
+
+def _hybrid_panel() -> html.Details:
+    return html.Details(
+        [
+            html.Summary(
+                _hybrid_summary_text(),
+                id="rs-hybrid-summary",
+                className="rs-hybrid-summary",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Label("IP role"),
+                                    dcc.Dropdown(
+                                        id="rs-combo-ip",
+                                        options=role_options(phase="IP"),
+                                        placeholder="In possession",
+                                        clearable=True,
+                                    ),
+                                ],
+                                className="rs-combo-field",
+                            ),
+                            html.Div(
+                                [
+                                    html.Label("OOP role"),
+                                    dcc.Dropdown(
+                                        id="rs-combo-oop",
+                                        options=role_options(phase="OOP"),
+                                        placeholder="Out of possession",
+                                        clearable=True,
+                                    ),
+                                ],
+                                className="rs-combo-field",
+                            ),
+                            html.Button(
+                                "Add combined",
+                                id="rs-combo-add",
+                                n_clicks=0,
+                                className="rs-chip",
+                            ),
+                        ],
+                        className="rs-combo-row",
+                    ),
+                    html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
+                    html.Small(
+                        f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
+                        f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
+                        "The table still shows both role scores. "
+                        "A player is eligible for the hybrid role if they can play either part. "
+                        "Both parts are scored even if the phase filter above hides one in the list.",
+                        className="text-muted",
+                    ),
+                ],
+                className="rs-hybrid-body",
+            ),
+        ],
+        id="rs-hybrid-details",
+        className="rs-hybrid-details",
+    )
+
+
 def _combo_pills(combos: list[dict] | None) -> list:
     pills = []
     for item in normalize_combos(combos):
@@ -331,7 +398,6 @@ def layout():
         dcc.Store(id="rs-pos-filter", data="all"),
         dcc.Store(id="rs-foot-filter", data=""),
         dcc.Store(id="rs-combos", data=[]),
-        dcc.Store(id="rs-combo-group", data="all"),
         dcc.Store(id="rs-squad-marked", data=[]),
         dcc.Store(id="rs-hist-open", data=False),
         html.Div(
@@ -342,7 +408,6 @@ def layout():
                 html.Button(id={"type": "rs-pill", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-group", "group": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-combo-pill", "combo": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-combo-group", "group": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -351,7 +416,8 @@ def layout():
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-1"),
         html.P(
-            "Upload an FM attribute CSV, choose roles to score, then filter and export. "
+            "Upload an FM attribute CSV, pick scored roles, then choose displayed columns "
+            "in the shortlist and export. Hybrid IP/OOP combinations are optional. "
             "Roles are FM26 IP / OOP (no duties).",
             className="text-muted",
         ),
@@ -382,7 +448,7 @@ def layout():
                     [
                         html.Div(
                             [
-                                html.Span("2. Choose roles to score"),
+                                html.Span("2. Scored roles"),
                                 html.Span("Next", className="rs-next-badge"),
                             ],
                             className="rs-card-header-title",
@@ -421,122 +487,56 @@ def layout():
                     [
                         html.Div(
                             [
+                                html.Span("Find roles", className="rs-chip-label"),
                                 html.Div(
                                     [
                                         html.Div(
                                             [
+                                                html.Span("Phase", className="rs-chip-label"),
                                                 html.Div(
-                                                    [
-                                                        html.Span("Phase", className="rs-chip-label"),
-                                                        html.Div(
-                                                            _phase_buttons("all"),
-                                                            id="rs-phase-row",
-                                                            className="rs-chip-row",
-                                                        ),
-                                                    ],
-                                                    className="rs-filter-cluster",
-                                                ),
-                                                html.Div(
-                                                    [
-                                                        html.Span("Group", className="rs-chip-label"),
-                                                        html.Div(
-                                                            _group_buttons("all"),
-                                                            id="rs-group-row",
-                                                            className="rs-chip-row wrap",
-                                                        ),
-                                                    ],
-                                                    className="rs-filter-cluster",
-                                                ),
-                                                html.Button(
-                                                    "Clear",
-                                                    id="rs-clear-roles",
-                                                    n_clicks=0,
-                                                    className="rs-chip ghost",
+                                                    _phase_buttons("all"),
+                                                    id="rs-phase-row",
+                                                    className="rs-chip-row",
                                                 ),
                                             ],
-                                            className="rs-role-toolbar mb-2",
+                                            className="rs-filter-cluster",
                                         ),
-                                        dcc.Dropdown(
-                                            id="rs-roles",
-                                            options=role_options(),
-                                            value=[],
-                                            multi=True,
-                                            placeholder="Choose roles to score",
-                                        ),
-                                        html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
-                                        html.Small(
-                                            "Pick at least one role to score players. "
-                                            "Phase and group filters narrow the list; already-selected roles stay. "
-                                            "Click a pill to remove it.",
-                                            className="text-muted",
-                                        ),
-                                    ],
-                                    className="rs-roles-col",
-                                ),
-                                html.Div(
-                                    [
-                                        html.Span("Combine IP + OOP", className="rs-chip-label"),
                                         html.Div(
                                             [
                                                 html.Span("Group", className="rs-chip-label"),
                                                 html.Div(
-                                                    _group_buttons("all", btn_type="rs-combo-group"),
-                                                    id="rs-combo-group-row",
+                                                    _group_buttons("all"),
+                                                    id="rs-group-row",
                                                     className="rs-chip-row wrap",
                                                 ),
                                             ],
-                                            className="rs-filter-cluster mb-2",
+                                            className="rs-filter-cluster",
                                         ),
-                                        html.Div(
-                                            [
-                                                html.Div(
-                                                    [
-                                                        html.Label("IP role"),
-                                                        dcc.Dropdown(
-                                                            id="rs-combo-ip",
-                                                            options=role_options(phase="IP"),
-                                                            placeholder="In possession",
-                                                            clearable=True,
-                                                        ),
-                                                    ],
-                                                    className="rs-combo-field",
-                                                ),
-                                                html.Div(
-                                                    [
-                                                        html.Label("OOP role"),
-                                                        dcc.Dropdown(
-                                                            id="rs-combo-oop",
-                                                            options=role_options(phase="OOP"),
-                                                            placeholder="Out of possession",
-                                                            clearable=True,
-                                                        ),
-                                                    ],
-                                                    className="rs-combo-field",
-                                                ),
-                                                html.Button(
-                                                    "Add combined",
-                                                    id="rs-combo-add",
-                                                    n_clicks=0,
-                                                    className="rs-chip",
-                                                ),
-                                            ],
-                                            className="rs-combo-row",
-                                        ),
-                                        html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
-                                        html.Small(
-                                            f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
-                                            f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
-                                            "The table still shows both role scores. "
-                                            "A player is eligible for the combined role if they can play either part. "
-                                            "Group filters only these two lists. "
-                                            "Both roles are added to the list above.",
-                                            className="text-muted",
+                                        html.Button(
+                                            "Clear",
+                                            id="rs-clear-roles",
+                                            n_clicks=0,
+                                            className="rs-chip ghost",
                                         ),
                                     ],
-                                    className="rs-combo-block",
+                                    className="rs-role-toolbar mb-2",
                                 ),
+                                dcc.Dropdown(
+                                    id="rs-roles",
+                                    options=role_options(),
+                                    value=[],
+                                    multi=True,
+                                    placeholder="Choose scored roles",
+                                ),
+                                html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
+                                html.Small(
+                                    "Phase only narrows this list. Group also filters hybrid IP/OOP roles. "
+                                    "Selected pills stay. Click a pill to remove it.",
+                                    className="text-muted d-block mb-2",
+                                ),
+                                _hybrid_panel(),
                             ],
-                            className="rs-score-grid",
+                            className="rs-roles-col",
                         ),
                     ]
                 ),
@@ -551,11 +551,11 @@ def layout():
         html.Div(
             [
                 html.Div(
-                    "Select at least one role to view players",
+                    "Select at least one scored role to view players",
                     className="rs-gate-title",
                 ),
                 html.P(
-                    "Shortlist, chart, and exports appear after you pick a role.",
+                    "Shortlist, chart, and exports appear after you pick a scored role.",
                     className="rs-gate-copy",
                 ),
             ],
@@ -590,16 +590,16 @@ def layout():
                             [
                                 html.Div(
                                     [
-                                        html.Label("View / filter roles"),
+                                        html.Label("Displayed roles"),
                                         dcc.Dropdown(
                                             id="rs-view-role",
                                             multi=True,
-                                            placeholder="Select roles to filter",
+                                            placeholder="Select scored columns to show",
                                         ),
                                         html.Small(
-                                            "Controls which role score columns appear in the table. "
+                                            "Controls which scored columns appear in the table. "
                                             "Position eligible uses that role’s rule; "
-                                            "combined roles count if the player can play either part.",
+                                            "hybrid roles count if the player can play either part.",
                                             className="text-muted",
                                         ),
                                     ],
@@ -638,17 +638,16 @@ def layout():
                                             max=20,
                                             step=0.1,
                                             placeholder="Any",
-                                            debounce=True,
                                         ),
                                         dcc.Dropdown(
                                             id="rs-min-score-mode",
                                             options=[
                                                 {
-                                                    "label": "Every selected role",
+                                                    "label": "Every displayed role",
                                                     "value": "all",
                                                 },
                                                 {
-                                                    "label": "At least one selected role",
+                                                    "label": "At least one displayed role",
                                                     "value": "any",
                                                 },
                                             ],
@@ -786,7 +785,7 @@ def layout():
                                         ),
                                         html.Small(
                                             "Horizontal axis is score band; vertical axis is player count. "
-                                            "Each series is a view role, after the all-role filters.",
+                                            "Each series is a displayed role, after the all-role filters.",
                                             className="text-muted d-block mt-1",
                                         ),
                                     ],
@@ -824,7 +823,7 @@ def layout():
                         html.Div("Planned squad", className="rs-export-subhead"),
                         html.P(
                             "Mark players in the shortlist table, review the preview below, "
-                            "then download a compact CSV with identity fields, view-role scores "
+                            "then download a compact CSV with identity fields, displayed-role scores "
                             "(including combo parts), and any set-piece columns you checked.",
                             className="text-muted",
                         ),
@@ -1183,7 +1182,7 @@ def parse_uploaded(contents, filename):
     except ValueError as exc:
         return None, dbc.Alert(str(exc), color="danger")
     msg = dbc.Alert(
-        f"Loaded {len(players)} players from {name}. Choose roles to score.",
+        f"Loaded {len(players)} players from {name}. Pick scored roles.",
         color="success",
         className="mb-0",
     )
@@ -1243,33 +1242,11 @@ def set_phase(n_clicks):
 
 
 @callback(
-    Output("rs-combo-group", "data"),
-    Output("rs-combo-group-row", "children"),
-    Input({"type": "rs-combo-group", "group": ALL}, "n_clicks"),
-    prevent_initial_call=True,
+    Output("rs-hybrid-summary", "children"),
+    Input("rs-combos", "data"),
 )
-def set_combo_group(n_clicks):
-    if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update, no_update
-    group = ctx.triggered_id["group"]
-    if group == "_":
-        return no_update, no_update
-    return group, _group_buttons(group, btn_type="rs-combo-group")
-
-
-@callback(
-    Output("rs-combo-ip", "options"),
-    Output("rs-combo-oop", "options"),
-    Input("rs-combo-group", "data"),
-    Input("rs-combo-ip", "value"),
-    Input("rs-combo-oop", "value"),
-)
-def filter_combo_role_options(group, ip, oop):
-    group = group or "all"
-    return (
-        role_options(phase="IP", group=group, keep=_as_list(ip)) or [],
-        role_options(phase="OOP", group=group, keep=_as_list(oop)) or [],
-    )
+def render_hybrid_summary(combos):
+    return _hybrid_summary_text(combos)
 
 
 @callback(
@@ -1292,9 +1269,28 @@ def set_group(n_clicks):
     Input("rs-phase", "data"),
     Input("rs-group", "data"),
     Input("rs-roles", "value"),
+    Input("rs-combos", "data"),
 )
-def filter_role_options(phase, group, selected):
-    return role_options(phase=phase, group=group, keep=_as_list(selected)) or []
+def filter_role_options(phase, group, selected, combos):
+    keep = _as_list(selected)
+    for item in normalize_combos(combos):
+        keep.extend((item["ip"], item["oop"]))
+    return role_options(phase=phase, group=group, keep=keep) or []
+
+
+@callback(
+    Output("rs-combo-ip", "options"),
+    Output("rs-combo-oop", "options"),
+    Input("rs-group", "data"),
+    Input("rs-combo-ip", "value"),
+    Input("rs-combo-oop", "value"),
+)
+def filter_combo_role_options(group, ip, oop):
+    group = group or "all"
+    return (
+        role_options(phase="IP", group=group, keep=_as_list(ip)) or [],
+        role_options(phase="OOP", group=group, keep=_as_list(oop)) or [],
+    )
 
 
 @callback(
@@ -1316,6 +1312,7 @@ def render_combo_pills(combos):
 @callback(
     Output("rs-combos", "data"),
     Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-roles", "options", allow_duplicate=True),
     Output("rs-combo-ip", "value"),
     Output("rs-combo-oop", "value"),
     Input("rs-combo-add", "n_clicks"),
@@ -1323,24 +1320,30 @@ def render_combo_pills(combos):
     State("rs-combo-oop", "value"),
     State("rs-combos", "data"),
     State("rs-roles", "value"),
+    State("rs-phase", "data"),
+    State("rs-group", "data"),
     prevent_initial_call=True,
 )
-def add_combo(_clicks, ip, oop, combos, selected):
+def add_combo(_clicks, ip, oop, combos, selected, phase, group):
     if not ip or not oop:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     current = normalize_combos(combos)
     incoming = normalize_combos([{"ip": ip, "oop": oop}])
     if not incoming:
-        return no_update, no_update, None, None
+        return no_update, no_update, no_update, None, None
     pair = incoming[0]
     if any(item["ip"] == pair["ip"] and item["oop"] == pair["oop"] for item in current):
-        return current, no_update, None, None
+        return current, no_update, no_update, None, None
     current.append(pair)
     roles = _as_list(selected)
     for role_id in (pair["ip"], pair["oop"]):
         if role_id not in roles:
             roles.append(role_id)
-    return current, roles, None, None
+    keep = list(roles)
+    for item in current:
+        keep.extend((item["ip"], item["oop"]))
+    options = role_options(phase=phase, group=group, keep=keep) or []
+    return current, roles, options, None, None
 
 
 @callback(
@@ -1399,21 +1402,6 @@ def clear_roles(_clear):
     if not ctx.triggered_id:
         return no_update, no_update
     return [], []
-
-
-@callback(
-    Output("rs-combos", "data", allow_duplicate=True),
-    Input("rs-roles", "value"),
-    State("rs-combos", "data"),
-    prevent_initial_call=True,
-)
-def prune_combos(selected, combos):
-    roles = set(_as_list(selected))
-    current = normalize_combos(combos)
-    kept = [item for item in current if item["ip"] in roles and item["oop"] in roles]
-    if kept == current:
-        return no_update
-    return kept
 
 
 @callback(
@@ -1606,7 +1594,7 @@ def render_shortlist(
             page_size,
             [],
             _blank_fig(theme) if hist_open else no_update,
-            "Upload a file and pick at least one role to score.",
+            "Upload a file and pick at least one scored role.",
         )
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
@@ -1623,7 +1611,7 @@ def render_shortlist(
             page_size,
             [],
             no_update if not hist_open else _blank_fig(theme),
-            "Select at least one view role to filter the table.",
+            "Select at least one displayed role to filter the table.",
         )
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
@@ -1703,7 +1691,7 @@ def render_shortlist(
         f"on all of: {role_list}.{min_note}{extra}{piece_note} "
         "Click a header to sort. Rec uses A+ above A above A-, then B+. "
         f"{mark_note} "
-        f"Combined columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
+        f"Hybrid columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
         f"Source: {payload.get('filename')}."
     )
     cards = _depth_panel(rows, role_ids, view_roles, bands, combos)
@@ -1728,7 +1716,7 @@ def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
     view_roles = _as_list(view_roles)
     if not payload or not view_roles:
         return html.P(
-            "Upload a file and pick at least one view role.",
+            "Upload a file and pick at least one displayed role.",
             className="text-muted mb-0",
         )
     marked = _as_list(marked)

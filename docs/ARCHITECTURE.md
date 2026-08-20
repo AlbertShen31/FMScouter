@@ -67,6 +67,16 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK for filters and attribute sheets. Display badges show **IP** or **OOP**, never the raw keeper-phase token. UI monograms show the base role code (`CF`); score columns use `column_label()` when the same code appears in both phases (`CF-IP`, `CF-OOP`).
 
+## Role scores UI concepts
+
+The Role scores page uses three labels so “role” is not overloaded:
+
+1. **Scored roles** — the FM26 roles you calculate. Phase and group chips under **Find roles** only narrow that picker; they are not extra role types.
+2. **Hybrid roles** — optional IP/OOP weighted columns, created from **+ Create hybrid role**. Scoring still needs both constituent roles; adding a hybrid adds them to scored roles.
+3. **Displayed roles** — which scored (and hybrid) columns the shortlist table, chart, min-score filter, and exports currently use.
+
+Position groups and IP/OOP tags remain part of the data model. They are not a fourth picker called “role.”
+
 ## Config packs
 
-Factory Python weights are the source of truth. The Role configs page loads a pack and edits in memory. **Save** writes a named pack; Built-in cannot be overwritten. **New config** makes a named file that is either a copy of the selected config or a blank slate (attributes off, groups kept). **Reset** reloads the selected role from the last saved pack. **Clear this role** turns off that role’s attributes. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Weight config** picks which pack to score with.
+Factory Python weights are the source of truth. The Role configs page loads a pack and edits in memory. **Save** writes a named pack; Built-in cannot be overwritten. **New config** makes a named file that is either a copy of the selected config or a blank slate (attributes off, groups kept). **Reset** reloads the selected role from the last saved pack. **Clear this role** turns off that role’s attributes. Named packs overlay `key_attrs` / `preferred_attrs` / `useful_attrs` / `groups`. Role scores step **2. Scored roles** picks which pack to score with.
