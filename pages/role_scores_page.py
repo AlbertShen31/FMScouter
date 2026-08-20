@@ -47,6 +47,7 @@ from role_scorer import (
     set_piece_filter_columns,
     set_piece_formula,
     set_piece_hint,
+    expand_view_role_columns,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -102,6 +103,21 @@ def _chart_layout(theme, *, height=240, showlegend=False) -> dict:
 def _blank_fig(theme):
     fig = go.Figure()
     fig.update_layout(**_chart_layout(theme, height=220))
+    return fig
+
+
+def _hist_figure(rows: list[dict], view_roles: list[str], bins: list, theme) -> go.Figure:
+    fig = go.Figure()
+    for role in view_roles:
+        values = [float(row.get(role) or 0) for row in rows]
+        counts = []
+        for _label, lo, hi in bins:
+            if hi == 99:
+                counts.append(sum(1 for v in values if v >= lo))
+            else:
+                counts.append(sum(1 for v in values if lo <= v < hi))
+        fig.add_bar(x=[b[0] for b in bins], y=counts, name=role)
+    fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
     return fig
 
 
@@ -302,6 +318,7 @@ def layout():
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-combo-group", data="all"),
         dcc.Store(id="rs-squad-marked", data=[]),
+        dcc.Store(id="rs-hist-open", data=False),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -319,8 +336,8 @@ def layout():
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-1"),
         html.P(
-            "Upload an FM attribute CSV and score FM26 roles (no duties — IP / OOP). "
-            "Filter by position, foot, and score band, then download a scored sheet or Cursor canvas.",
+            "Upload an FM attribute CSV, choose roles to score, then filter and export. "
+            "Roles are FM26 IP / OOP (no duties).",
             className="text-muted",
         ),
         dbc.Card(
@@ -342,6 +359,8 @@ def layout():
             ],
             className="mb-3",
         ),
+        html.Div(
+            [
         dbc.Card(
             [
                 dbc.CardHeader("2. Weight config"),
@@ -368,7 +387,13 @@ def layout():
         ),
         dbc.Card(
             [
-                dbc.CardHeader("3. Roles to evaluate"),
+                dbc.CardHeader(
+                    [
+                        html.Span("3. Choose roles to score"),
+                        html.Span("Next", className="rs-next-badge"),
+                    ],
+                    className="rs-card-header-row",
+                ),
                 dbc.CardBody(
                     [
                         html.Div(
@@ -399,11 +424,11 @@ def layout():
                             options=role_options(),
                             value=[],
                             multi=True,
-                            placeholder="Select FM26 roles",
+                            placeholder="Choose roles to score",
                         ),
                         html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
                         html.Small(
-                            "No roles are selected until you pick them. "
+                            "Pick at least one role to score players. "
                             "Phase and group filters narrow the list; already-selected roles stay. "
                             "Click a pill to remove it.",
                             className="text-muted",
@@ -473,8 +498,30 @@ def layout():
                     ]
                 ),
             ],
+            id="rs-roles-card",
             className="mb-3",
         ),
+            ],
+            id="rs-setup-wrap",
+            hidden=True,
+        ),
+        html.Div(
+            [
+                html.Div(
+                    "Select at least one role to view players",
+                    className="rs-gate-title",
+                ),
+                html.P(
+                    "Shortlist, chart, and exports appear after you pick a role.",
+                    className="rs-gate-copy",
+                ),
+            ],
+            id="rs-need-roles",
+            className="rs-gate",
+            hidden=True,
+        ),
+        html.Div(
+            [
         html.Div(id="rs-pos-bar"),
         html.Div(
             [
@@ -507,6 +554,7 @@ def layout():
                                             placeholder="Select roles to filter",
                                         ),
                                         html.Small(
+                                            "Controls which role score columns appear in the table. "
                                             "Position eligible uses that role’s rule; "
                                             "combined roles count if the player can play either part.",
                                             className="text-muted",
@@ -606,12 +654,6 @@ def layout():
                             className="g-2 mb-2",
                         ),
                         html.Div(_set_piece_panel(settings), className="rs-special-scores"),
-                        dcc.Graph(id="rs-hist", figure=BLANK_FIG, config={"displayModeBar": False}),
-                        html.Small(
-                            "Horizontal axis is score band; vertical axis is player count. "
-                            "Each series is a view role, after the all-role filters.",
-                            className="text-muted d-block mb-2",
-                        ),
                         dash_table.DataTable(
                             id="rs-table",
                             page_size=50,
@@ -683,6 +725,36 @@ def layout():
                             "Select rows in the table to mark players for a planned squad export.",
                             className="text-muted d-block",
                         ),
+                        html.Div(
+                            [
+                                html.Button(
+                                    "Show score distribution",
+                                    id="rs-hist-toggle",
+                                    n_clicks=0,
+                                    className="rs-hist-toggle",
+                                ),
+                                html.Div(
+                                    [
+                                        dcc.Graph(
+                                            id="rs-hist",
+                                            figure=BLANK_FIG,
+                                            config={"displayModeBar": False},
+                                            responsive=True,
+                                            style={"width": "100%", "height": "240px"},
+                                        ),
+                                        html.Small(
+                                            "Horizontal axis is score band; vertical axis is player count. "
+                                            "Each series is a view role, after the all-role filters.",
+                                            className="text-muted d-block mt-1",
+                                        ),
+                                    ],
+                                    id="rs-hist-wrap",
+                                    className="rs-hist-wrap",
+                                    hidden=True,
+                                ),
+                            ],
+                            className="rs-hist-block",
+                        ),
                     ]
                 ),
             ],
@@ -731,6 +803,10 @@ def layout():
                 ),
             ],
             className="mb-4",
+        ),
+            ],
+            id="rs-results-wrap",
+            hidden=True,
         ),
     ],
     className="rs-page",
@@ -1024,20 +1100,21 @@ def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict
 def _depth_panel(
     rows: list[dict],
     role_ids: list[str],
-    view_roles: list[str],
+    focus_roles: list[str],
     bands: dict | None = None,
     combos: list[dict] | None = None,
 ) -> list:
+    """Cards for every role scored in section 3; focus_roles only drives active highlight."""
     if not rows or not (role_ids or combos):
         return []
     bands = us.normalize(bands)["bands"]
     cards = []
     for item in normalize_combos(combos):
-        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, view_roles, bands)
+        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_roles, bands)
         if card:
             cards.append(card)
     for role_id in role_ids:
-        card = _depth_card(role_meta(role_id), rows, view_roles, bands)
+        card = _depth_card(role_meta(role_id), rows, focus_roles, bands)
         if card:
             cards.append(card)
     return cards
@@ -1064,11 +1141,50 @@ def parse_uploaded(contents, filename):
     except ValueError as exc:
         return None, dbc.Alert(str(exc), color="danger")
     msg = dbc.Alert(
-        f"Loaded {len(players)} players from {name}.",
+        f"Loaded {len(players)} players from {name}. Choose roles to score.",
         color="success",
         className="mb-0",
     )
     return {"filename": name, "players": players}, msg
+
+
+def _workflow_visibility(parsed, payload):
+    has_csv = bool(parsed and parsed.get("players"))
+    has_scores = isinstance(payload, dict) and "rows" in payload
+    setup_hidden = not has_csv
+    results_hidden = not has_scores
+    placeholder_hidden = not (has_csv and not has_scores)
+    roles_class = "mb-3 rs-next-step" if has_csv and not has_scores else "mb-3"
+    return setup_hidden, results_hidden, placeholder_hidden, roles_class
+
+
+@callback(
+    Output("rs-setup-wrap", "hidden"),
+    Output("rs-results-wrap", "hidden"),
+    Output("rs-need-roles", "hidden"),
+    Output("rs-roles-card", "className"),
+    Input("rs-parsed", "data"),
+    Input("rs-rows", "data"),
+)
+def reveal_workflow(parsed, payload):
+    return _workflow_visibility(parsed, payload)
+
+
+@callback(
+    Output("rs-hist-open", "data"),
+    Output("rs-hist-wrap", "hidden"),
+    Output("rs-hist-toggle", "children"),
+    Input("rs-hist-toggle", "n_clicks"),
+    State("rs-hist-open", "data"),
+    prevent_initial_call=True,
+)
+def toggle_score_distribution(_clicks, opened):
+    opened = not bool(opened)
+    return (
+        opened,
+        not opened,
+        "Hide score distribution" if opened else "Show score distribution",
+    )
 
 
 @callback(
@@ -1366,11 +1482,6 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
         seen.add(meta["column"])
     kept = [role for role in _as_list(current_view) if role in labels]
     view = kept or labels
-    combo_cols = [combo_meta(item["ip"], item["oop"])["column"] for item in combos]
-    if len(kept) != 1:
-        for column in combo_cols:
-            if column not in view:
-                view.append(column)
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
@@ -1410,6 +1521,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
+    Input("rs-hist-open", "data"),
     State("ui-settings", "data"),
 )
 def render_shortlist(
@@ -1428,6 +1540,7 @@ def render_shortlist(
     page_size,
     sort_by,
     theme,
+    hist_open,
     settings,
 ):
     settings = us.normalize(settings)
@@ -1437,7 +1550,10 @@ def render_shortlist(
     empty_style = _score_styles([], settings, theme)
     view_roles = _as_list(view_role)
     page_size = int(page_size or 50)
-    if not payload or not payload.get("rows") or not view_roles:
+    hist_open = bool(hist_open)
+    pos_filter = pos_filter or "all"
+    foot_filter = foot_filter or ""
+    if not payload or not payload.get("rows"):
         return (
             None,
             [],
@@ -1447,27 +1563,34 @@ def render_shortlist(
             empty_style,
             page_size,
             [],
-            _blank_fig(theme),
-            "Upload a file and pick at least one view role.",
+            _blank_fig(theme) if hist_open else no_update,
+            "Upload a file and pick at least one role to score.",
         )
     rows = payload["rows"]
-    roles = payload["roles"]
     role_ids = payload.get("role_ids") or []
     combos = normalize_combos(payload.get("combos"))
+    if not view_roles:
+        cards = _depth_panel(rows, role_ids, [], bands, combos)
+        return (
+            _pos_bar(rows, pos_filter, foot_filter),
+            cards,
+            not cards,
+            [],
+            empty_cols,
+            empty_style,
+            page_size,
+            [],
+            no_update if not hist_open else _blank_fig(theme),
+            "Select at least one view role to filter the table.",
+        )
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = us.parse_score_floor(min_score)
     min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
     set_piece_min = us.parse_score_floor(set_piece_min)
     elig_only = "yes" in (eligible or [])
-    pos_filter = pos_filter or "all"
-    foot_filter = foot_filter or ""
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
-    combo_by_col = {
-        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
-        for item in combos
-    }
 
     filtered = []
     for row in rows:
@@ -1500,39 +1623,19 @@ def render_shortlist(
 
     _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
 
-    expanded = []
-    for role in view_roles:
-        if role not in expanded:
-            expanded.append(role)
-        meta = combo_by_col.get(role)
-        if meta:
-            for column in (meta["ip_column"], meta["oop_column"]):
-                if column not in expanded:
-                    expanded.append(column)
+    table_role_cols = expand_view_role_columns(view_roles, combos)
+    fig = _hist_figure(filtered, view_roles, bins, theme) if hist_open else no_update
 
-    fig = go.Figure()
-    for role in view_roles:
-        values = [float(row.get(role) or 0) for row in filtered]
-        counts = []
-        for _label, lo, hi in bins:
-            if hi == 99:
-                counts.append(sum(1 for v in values if v >= lo))
-            else:
-                counts.append(sum(1 for v in values if lo <= v < hi))
-        fig.add_bar(x=[b[0] for b in bins], y=counts, name=role)
-    fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
-
-    ordered_roles = expanded + [role for role in roles if role not in expanded]
     piece_cols = set_piece_columns(set_pieces)
     chosen = set(chosen_pieces)
     score_cols = [
         profile["score"]
         for profile in SET_PIECE_PROFILES
         if profile["id"] in chosen and profile.get("score")
-    ] + ordered_roles
+    ] + table_role_cols
     table_cols = ["Name", "Age", "Height", "Position", "Club", "Rec", "Injury"]
     table_cols.extend(piece_cols)
-    table_cols.extend(ordered_roles)
+    table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
     table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
     page_keys = [player_row_key(row) for row in table_rows]
@@ -1742,13 +1845,20 @@ def download_squad_csv(n_clicks, marked, payload, view_roles, set_pieces):
     Output("rs-download-csv", "data"),
     Input("rs-csv-btn", "n_clicks"),
     State("rs-rows", "data"),
+    State("rs-view-role", "value"),
     prevent_initial_call=True,
 )
-def download_csv(n_clicks, payload):
+def download_csv(n_clicks, payload, view_roles):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
+    view_roles = _as_list(view_roles)
+    if not view_roles:
+        return no_update
+    role_labels = expand_view_role_columns(
+        view_roles, normalize_combos(payload.get("combos"))
+    )
     name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
-    text = scored_csv(payload["rows"], payload["roles"])
+    text = scored_csv(payload["rows"], role_labels)
     return dict(content=text, filename=f"{name}_role_scores.csv")
 
 
@@ -1756,15 +1866,22 @@ def download_csv(n_clicks, payload):
     Output("rs-download-canvas", "data"),
     Input("rs-canvas-btn", "n_clicks"),
     State("rs-rows", "data"),
+    State("rs-view-role", "value"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def download_canvas(n_clicks, payload, settings):
+def download_canvas(n_clicks, payload, view_roles, settings):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
+    view_roles = _as_list(view_roles)
+    if not view_roles:
+        return no_update
+    role_labels = expand_view_role_columns(
+        view_roles, normalize_combos(payload.get("combos"))
+    )
     text = build_canvas(
         payload["rows"],
-        payload["roles"],
+        role_labels,
         payload.get("filename") or "FM export",
         settings,
     )
