@@ -123,6 +123,58 @@ def _hist_figure(rows: list[dict], view_roles: list[str], bins: list, theme) -> 
 
 BLANK_FIG = _blank_fig("dark")
 
+HYBRID_HELP = (
+    f"Hybrid score = ({COMBO_IP_WEIGHT:g}× in possession + {COMBO_OOP_WEIGHT:g}× out of possession) "
+    f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. Both part scores stay in the table. "
+    "A player is eligible if they can play either part."
+)
+
+
+def _help_icon(tip: str, help_id: str) -> list:
+    return [
+        html.Span(
+            "ⓘ",
+            id=help_id,
+            className="rs-help",
+            role="img",
+            **{"aria-label": "Help"},
+        ),
+        dbc.Tooltip(
+            tip,
+            target=help_id,
+            placement="top",
+            class_name="rs-help-tooltip",
+        ),
+    ]
+
+
+def _field_label(
+    text: str,
+    *,
+    primary: bool = False,
+    tip: str | None = None,
+    help_id: str | None = None,
+) -> html.Div:
+    label = html.Span(text, className="rs-field-label" + (" primary" if primary else ""))
+    parts: list = [label]
+    if tip:
+        parts.extend(_help_icon(tip, help_id or f"rs-help-{text.lower().replace(' ', '-')}"))
+    return html.Div(parts, className="rs-field-label-row")
+
+
+def _upload_status_bar(count: int, filename: str) -> list:
+    return [
+        html.Span("✓", className="rs-upload-ok"),
+        html.Span(f"{count:,} players loaded", className="rs-upload-count"),
+        html.Span("·", className="rs-upload-sep"),
+        html.Span(filename, className="rs-upload-name", title=filename),
+        html.Span("·", className="rs-upload-sep"),
+    ]
+
+
+def _upload_error(message: str) -> html.Div:
+    return html.Div(message, className="rs-upload-error")
+
 
 def _group_buttons(active: str = "all") -> list:
     buttons = [
@@ -199,14 +251,19 @@ def _set_piece_panel(settings=None) -> html.Details:
         )
     return html.Details(
         [
-            html.Summary("Additional player metrics", className="rs-metrics-summary"),
+            html.Summary(
+                [
+                    html.Span("Additional player metrics", className="rs-metrics-summary-text"),
+                    *_help_icon(
+                        "Check a type to add columns to the table. "
+                        "Min score filters out anyone below that on every checked type.",
+                        "rs-help-metrics",
+                    ),
+                ],
+                className="rs-metrics-summary-row",
+            ),
             html.Div(
                 [
-                    html.P(
-                        "Check a type to add its columns to the table. "
-                        "A min score then filters out anyone below that on every checked type.",
-                        className="rs-special-sub",
-                    ),
                     html.Div("Add columns", className="rs-chip-label"),
                     dbc.Checklist(
                         id="rs-set-pieces",
@@ -302,9 +359,15 @@ def _hybrid_panel() -> html.Details:
     return html.Details(
         [
             html.Summary(
-                _hybrid_summary_text(),
-                id="rs-hybrid-summary",
-                className="rs-hybrid-summary",
+                [
+                    html.Span(
+                        _hybrid_summary_text(),
+                        id="rs-hybrid-summary",
+                        className="rs-hybrid-summary-text",
+                    ),
+                    *_help_icon(HYBRID_HELP, "rs-help-hybrid"),
+                ],
+                className="rs-hybrid-summary-row",
             ),
             html.Div(
                 [
@@ -312,7 +375,7 @@ def _hybrid_panel() -> html.Details:
                         [
                             html.Div(
                                 [
-                                    html.Label("In possession (IP) role"),
+                                    html.Label("In possession (IP) role", className="rs-field-label"),
                                     dcc.Dropdown(
                                         id="rs-combo-ip",
                                         options=role_options(phase="IP"),
@@ -324,7 +387,7 @@ def _hybrid_panel() -> html.Details:
                             ),
                             html.Div(
                                 [
-                                    html.Label("Out of possession (OOP) role"),
+                                    html.Label("Out of possession (OOP) role", className="rs-field-label"),
                                     dcc.Dropdown(
                                         id="rs-combo-oop",
                                         options=role_options(phase="OOP"),
@@ -343,15 +406,7 @@ def _hybrid_panel() -> html.Details:
                         ],
                         className="rs-combo-row",
                     ),
-                    html.Div(id="rs-combo-pills", className="rs-pill-row mt-2"),
-                    html.Small(
-                        f"Combined score is ({COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP) "
-                        f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. "
-                        "The table still shows both role scores. "
-                        "A player is eligible for the hybrid role if they can play either part. "
-                        "Both parts are scored even if the phase filter above hides one in the list.",
-                        className="text-muted",
-                    ),
+                    html.Div(id="rs-combo-pills", className="rs-selected-roles rs-pill-row mt-2"),
                 ],
                 className="rs-hybrid-body",
             ),
@@ -418,31 +473,45 @@ def layout():
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-canvas"),
         dcc.Download(id="rs-download-squad"),
-        html.H1("FM26 role scores", className="mt-2 mb-1"),
-        html.P(
-            "Upload an FM attribute CSV, pick scored roles, then choose displayed columns "
-            "in the shortlist and export. Hybrid in possession (IP) / out of possession (OOP) "
-            "combinations are optional. Roles are FM26 IP / OOP (no duties).",
-            className="text-muted",
-        ),
+        html.H1("FM26 role scores", className="mt-2 mb-3"),
         dbc.Card(
             [
                 dbc.CardHeader("1. Upload export"),
                 dbc.CardBody(
                     [
-                        dcc.Upload(
-                            id="rs-upload",
-                            children=html.Div(
-                                ["Drag a CSV here, or ", html.A("browse")]
+                        html.Div(
+                            dcc.Upload(
+                                id="rs-upload",
+                                children=html.Div(
+                                    ["Drag a CSV here, or ", html.A("browse")]
+                                ),
+                                className="rs-upload",
+                                multiple=False,
                             ),
-                            className="rs-upload",
-                            multiple=False,
+                            id="rs-upload-wrap",
                         ),
-                        html.Div(id="rs-upload-status", className="mt-2"),
+                        html.Div(
+                            [
+                                html.Div(id="rs-upload-status", className="rs-upload-status"),
+                                html.Div(
+                                    dcc.Upload(
+                                        id="rs-upload-replace",
+                                        children=html.Span(
+                                            "Replace", className="rs-upload-replace"
+                                        ),
+                                        className="rs-upload-replace-wrap",
+                                        multiple=False,
+                                    ),
+                                    id="rs-upload-replace-wrap",
+                                    hidden=True,
+                                ),
+                            ],
+                            className="rs-upload-status-row",
+                        ),
                     ]
                 ),
             ],
-            className="mb-3",
+            className="mb-3 rs-section-card",
         ),
         html.Div(
             [
@@ -491,7 +560,6 @@ def layout():
                     [
                         html.Div(
                             [
-                                html.Span("Find roles", className="rs-chip-label"),
                                 html.Div(
                                     [
                                         html.Div(
@@ -523,31 +591,34 @@ def layout():
                                             className="rs-chip ghost",
                                         ),
                                     ],
-                                    className="rs-role-toolbar mb-2",
+                                    className="rs-role-toolbar",
                                 ),
-                                dcc.Dropdown(
-                                    id="rs-roles",
-                                    options=role_options(),
-                                    value=[],
-                                    multi=True,
-                                    placeholder="Choose scored roles",
-                                ),
-                                html.Div(id="rs-role-pills", className="rs-pill-row mt-2"),
-                                html.Small(
-                                    "Phase only narrows this list. Group also filters hybrid "
-                                    "in possession (IP) / out of possession (OOP) roles. "
-                                    "Selected pills stay. Click a pill to remove it.",
-                                    className="text-muted d-block mb-2",
-                                ),
-                                _hybrid_panel(),
                             ],
-                            className="rs-roles-col",
+                            className="rs-filter-toolbar",
                         ),
+                        _field_label(
+                            "Scored roles",
+                            primary=True,
+                            tip="Every player is scored against the roles you pick here.",
+                            help_id="rs-help-scored-roles",
+                        ),
+                        html.Div(
+                            dcc.Dropdown(
+                                id="rs-roles",
+                                options=role_options(),
+                                value=[],
+                                multi=True,
+                                placeholder="Choose scored roles",
+                            ),
+                            className="rs-primary-control",
+                        ),
+                        html.Div(id="rs-role-pills", className="rs-selected-roles rs-pill-row"),
+                        _hybrid_panel(),
                     ]
                 ),
             ],
             id="rs-roles-card",
-            className="mb-3",
+            className="mb-3 rs-section-card",
         ),
             ],
             id="rs-setup-wrap",
@@ -556,12 +627,8 @@ def layout():
         html.Div(
             [
                 html.Div(
-                    "Select at least one scored role to view players",
+                    "Choose at least one scored role",
                     className="rs-gate-title",
-                ),
-                html.P(
-                    "Shortlist, chart, and exports appear after you pick a scored role.",
-                    className="rs-gate-copy",
                 ),
             ],
             id="rs-need-roles",
@@ -595,24 +662,25 @@ def layout():
                             [
                                 html.Div(
                                     [
-                                        html.Label("Role scores to show"),
+                                        _field_label(
+                                            "Role scores to show",
+                                            tip=(
+                                                "Score columns in the table. Min score and "
+                                                "eligibility filters use this selection."
+                                            ),
+                                            help_id="rs-help-view-roles",
+                                        ),
                                         dcc.Dropdown(
                                             id="rs-view-role",
                                             multi=True,
                                             placeholder="Select roles for table columns",
-                                        ),
-                                        html.Small(
-                                            "These roles appear as score columns in the table. "
-                                            "Min score and eligibility filters apply to this selection. "
-                                            "Hybrid roles count if the player can play either part.",
-                                            className="text-muted",
                                         ),
                                     ],
                                     className="rs-filter-roles",
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Search"),
+                                        html.Label("Search", className="rs-field-label"),
                                         dbc.Input(
                                             id="rs-search",
                                             type="search",
@@ -623,7 +691,7 @@ def layout():
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Max age"),
+                                        html.Label("Max age", className="rs-field-label"),
                                         dcc.Dropdown(
                                             id="rs-age",
                                             options=us.age_options(settings),
@@ -635,7 +703,11 @@ def layout():
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Min score"),
+                                        _field_label(
+                                            "Min score",
+                                            tip="Uses the roles selected above. Leave blank for any.",
+                                            help_id="rs-help-min-score",
+                                        ),
                                         dbc.Input(
                                             id="rs-min-score",
                                             type="number",
@@ -652,17 +724,13 @@ def layout():
                                                     "value": "all",
                                                 },
                                                 {
-                                                    "label": "Any role selected",
+                                                    "label": "At least one selected role",
                                                     "value": "any",
                                                 },
                                             ],
                                             value="all",
                                             clearable=False,
                                             className="rs-min-score-mode mt-1",
-                                        ),
-                                        html.Small(
-                                            "Uses the roles selected above. Leave min score blank for any.",
-                                            className="text-muted d-block mt-1",
                                         ),
                                     ],
                                     className="rs-filter-score",
@@ -688,7 +756,7 @@ def layout():
                                 ),
                                 html.Div(
                                     [
-                                        html.Label("Rows per page"),
+                                        html.Label("Rows per page", className="rs-field-label"),
                                         dcc.Dropdown(
                                             id="rs-page-size",
                                             options=[
@@ -772,11 +840,6 @@ def layout():
                             ],
                             className="rs-table-caption-row mt-2",
                         ),
-                        html.Small(
-                            "Click a column header to sort. "
-                            "Select rows in the table to mark players for a planned squad export.",
-                            className="text-muted d-block",
-                        ),
                         html.Div(
                             [
                                 html.Button(
@@ -784,6 +847,10 @@ def layout():
                                     id="rs-hist-toggle",
                                     n_clicks=0,
                                     className="rs-hist-toggle",
+                                    title=(
+                                        "Score band on the horizontal axis; player count on "
+                                        "the vertical axis. One series per displayed role."
+                                    ),
                                 ),
                                 html.Div(
                                     [
@@ -793,11 +860,6 @@ def layout():
                                             config={"displayModeBar": False},
                                             responsive=True,
                                             style={"width": "100%", "height": "240px"},
-                                        ),
-                                        html.Small(
-                                            "Horizontal axis is score band; vertical axis is player count. "
-                                            "Each series is a displayed role, after the all-role filters.",
-                                            className="text-muted d-block mt-1",
                                         ),
                                     ],
                                     id="rs-hist-wrap",
@@ -810,7 +872,7 @@ def layout():
                     ]
                 ),
             ],
-            className="mb-3",
+            className="mb-3 rs-section-card",
         ),
         dbc.Card(
             [
@@ -829,14 +891,23 @@ def layout():
                             color="secondary",
                             outline=True,
                             className="me-2",
+                            title=(
+                                "Opens beside chat in Cursor. Save to your workspace canvases "
+                                "folder, or open the file directly."
+                            ),
                         ),
                         html.Hr(className="my-3"),
-                        html.Div("Planned squad", className="rs-export-subhead"),
-                        html.P(
-                            "Mark players in the shortlist table, review the preview below, "
-                            "then download a compact CSV with identity fields, displayed-role scores "
-                            "(including combo parts), and any set-piece columns you checked.",
-                            className="text-muted",
+                        html.Div(
+                            [
+                                html.Span("Planned squad", className="rs-export-subhead"),
+                                *_help_icon(
+                                    "Mark players in the shortlist table, then download a CSV "
+                                    "with identity fields, displayed scores, and any set-piece "
+                                    "columns you checked.",
+                                    "rs-help-planned-squad",
+                                ),
+                            ],
+                            className="rs-export-subhead-row",
                         ),
                         html.Div(id="rs-squad-preview", className="rs-squad-preview"),
                         dbc.Button(
@@ -846,15 +917,10 @@ def layout():
                             className="mt-2",
                             disabled=True,
                         ),
-                        html.P(
-                            "The canvas file opens beside chat in Cursor. "
-                            "Put it in this workspace’s canvases folder, or open the file directly.",
-                            className="text-muted mt-3 mb-0",
-                        ),
                     ]
                 ),
             ],
-            className="mb-4",
+            className="mb-4 rs-section-card",
         ),
             ],
             id="rs-results-wrap",
@@ -957,8 +1023,8 @@ def _clicked(n_clicks) -> bool:
 
 
 MIN_SCORE_MODES = {
-    "all": "every role shown",
-    "any": "at least one role shown",
+    "all": "every selected role",
+    "any": "at least one selected role",
 }
 
 
@@ -1175,29 +1241,36 @@ def _depth_panel(
 @callback(
     Output("rs-parsed", "data"),
     Output("rs-upload-status", "children"),
+    Output("rs-upload-wrap", "hidden"),
+    Output("rs-upload-replace-wrap", "hidden"),
     Input("rs-upload", "contents"),
+    Input("rs-upload-replace", "contents"),
     State("rs-upload", "filename"),
+    State("rs-upload-replace", "filename"),
     prevent_initial_call=True,
 )
-def parse_uploaded(contents, filename):
+def parse_uploaded(upload_contents, replace_contents, upload_name, replace_name):
+    contents = upload_contents or replace_contents
     if not contents:
-        return no_update, no_update
-    name = filename or "upload.csv"
+        return no_update, no_update, no_update, no_update
+    name = (replace_name if replace_contents else upload_name) or "upload.csv"
     if not name.lower().endswith(".csv"):
-        return None, dbc.Alert(
-            "Upload the CSV from FM Player Export, not the HTML file.",
-            color="warning",
+        return (
+            None,
+            _upload_error("Upload the CSV from FM Player Export, not the HTML file."),
+            False,
+            True,
         )
     try:
         players = parse_export(_decode_upload(contents))
     except ValueError as exc:
-        return None, dbc.Alert(str(exc), color="danger")
-    msg = dbc.Alert(
-        f"Loaded {len(players)} players from {name}. Pick scored roles.",
-        color="success",
-        className="mb-0",
+        return None, _upload_error(str(exc)), False, True
+    return (
+        {"filename": name, "players": players},
+        _upload_status_bar(len(players), name),
+        True,
+        False,
     )
-    return {"filename": name, "players": players}, msg
 
 
 def _workflow_visibility(parsed, payload):
@@ -1681,7 +1754,6 @@ def render_shortlist(
     table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
     page_keys = [player_row_key(row) for row in table_rows]
     selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
-    role_list = ", ".join(view_roles)
     extras = []
     if pos_filter != "all":
         extras.append(pos_filter)
@@ -1698,12 +1770,9 @@ def render_shortlist(
             f" Min score {min_score:g}+ on {MIN_SCORE_MODES[min_score_mode]}: {role_list}."
         )
     caption = (
-        f"{len(filtered)} of {len(rows)} players meeting eligibility "
-        f"on all of: {role_list}.{min_note}{extra}{piece_note} "
-        "Click a header to sort. Rec uses A+ above A above A-, then B+. "
-        f"{mark_note} "
-        f"Hybrid columns use {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP. "
-        f"Source: {payload.get('filename')}."
+        f"{len(filtered)} of {len(rows)} players"
+        f"{min_note}{extra}{piece_note}{mark_note}"
+        f" · {payload.get('filename')}."
     )
     cards = _depth_panel(rows, role_ids, view_roles, bands, combos)
     return (
@@ -1726,26 +1795,17 @@ SQUAD_PREVIEW_MAX_ROWS = 8
 def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
     view_roles = _as_list(view_roles)
     if not payload or not view_roles:
-        return html.P(
-            "Select at least one role score to show in the table.",
-            className="text-muted mb-0",
-        )
+        return html.P("Pick role scores to show first.", className="text-muted mb-0")
     marked = _as_list(marked)
     if not marked:
-        return html.P(
-            "No players marked yet. Select rows in the shortlist table above.",
-            className="text-muted mb-0",
-        )
+        return html.P("No players marked yet.", className="text-muted mb-0")
     rows = payload.get("rows") or []
     combos = normalize_combos(payload.get("combos"))
     export_rows = planned_squad_export_rows(
         rows, marked, view_roles, combos, _as_list(set_pieces)
     )
     if not export_rows:
-        return html.P(
-            "Marked players are not in the current scored data.",
-            className="text-muted mb-0",
-        )
+        return html.P("Marked players are not in the current data.", className="text-muted mb-0")
     fieldnames = planned_squad_fieldnames(view_roles, combos, _as_list(set_pieces))
     preview_rows = export_rows[:SQUAD_PREVIEW_MAX_ROWS]
     extra = len(export_rows) - len(preview_rows)
