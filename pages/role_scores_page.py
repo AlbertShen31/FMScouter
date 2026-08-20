@@ -49,8 +49,6 @@ from role_scorer import (
     set_piece_formula,
     set_piece_hint,
     expand_view_role_columns,
-    view_combo_option_label,
-    view_role_option_label,
 )
 from canvas_export import build_canvas
 import role_config as rc
@@ -449,6 +447,19 @@ def _depth_id_column(role_key: str) -> str | None:
     return None
 
 
+def _resolved_view_roles(payload: dict | None, focus_role: str | None) -> list[str]:
+    """Table/export columns: one focused depth role, or every role scored in section 2."""
+    if not payload:
+        return []
+    labels = list(payload.get("roles") or [])
+    if not labels:
+        return []
+    focus = str(focus_role or "").strip()
+    if focus and focus in labels:
+        return [focus]
+    return labels
+
+
 def layout():
     settings = us.load()
     return dbc.Container(
@@ -462,6 +473,7 @@ def layout():
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-squad-marked", data=[]),
         dcc.Store(id="rs-hist-open", data=False),
+        dcc.Store(id="rs-focus-role", data=None),
         html.Div(
             [
                 html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
@@ -645,7 +657,17 @@ def layout():
             [
                 html.Div(
                     [
-                        html.Span("Squad depth", className="rs-depth-heading-label"),
+                        html.Div(
+                            [
+                                html.Span("Squad depth", className="rs-depth-heading-label"),
+                                html.Span(
+                                    "Click a card to focus the table on one role. "
+                                    "Click again to show all.",
+                                    className="rs-depth-heading-hint",
+                                ),
+                            ],
+                            className="rs-depth-heading-copy",
+                        ),
                         html.Div(_band_legend(settings), id="rs-band-legend"),
                     ],
                     className="rs-depth-heading",
@@ -663,25 +685,6 @@ def layout():
                     [
                         html.Div(
                             [
-                                html.Div(
-                                    [
-                                        _field_label(
-                                            "Role scores to show",
-                                            tip=(
-                                                "Score columns in the table. Min score and "
-                                                "eligibility filters use this selection."
-                                            ),
-                                            help_id="rs-help-view-roles",
-                                        ),
-                                        dcc.Dropdown(
-                                            id="rs-view-role",
-                                            multi=True,
-                                            placeholder="Select roles for table columns",
-                                            className="rs-view-role-dd",
-                                        ),
-                                    ],
-                                    className="rs-filter-roles",
-                                ),
                                 html.Div(
                                     [
                                         html.Div(
@@ -712,8 +715,8 @@ def layout():
                                                 _field_label(
                                                     "Min score",
                                                     tip=(
-                                                        "Uses the roles selected above. "
-                                                        "Leave blank for any."
+                                                        "Uses scored roles from section 2, or the "
+                                                        "role focused in squad depth. Leave blank for any."
                                                     ),
                                                     help_id="rs-help-min-score",
                                                 ),
@@ -1227,7 +1230,12 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
     )
 
 
-def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict) -> html.Button | None:
+def _depth_card(
+    meta: dict,
+    rows: list[dict],
+    focus_role: str | None,
+    bands: dict,
+) -> html.Button | None:
     column = meta["column"]
     eligible = [row for row in rows if row.get(f"{column} eligible")]
     if not eligible:
@@ -1240,67 +1248,70 @@ def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict
     total = len(scores) or 1
     top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
     names = " · ".join(player.get("Name", "") for player in top)
-    active = " active" if column in view_roles and len(view_roles) == 1 else ""
+    active = " active" if focus_role and column == focus_role else ""
     label = meta.get("short_label") or meta["name"]
+    children = [
+        html.Div(
+            [
+                html.Div(
+                    [
+                        _colored_group_abbr(meta["group_abbr"], css="rs-depth-code"),
+                        html.Span(
+                            meta["phase"],
+                            className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                        ),
+                    ],
+                    className="rs-depth-meta",
+                ),
+                html.Span(label, className="rs-depth-name"),
+            ],
+            className="rs-depth-title",
+        ),
+        html.Div(
+            [
+                html.Span("Avg", className="rs-depth-avg-label"),
+                html.Span(
+                    f"{avg:.1f}",
+                    className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
+                ),
+            ],
+            className="rs-depth-avg-row",
+        ),
+        html.Div(
+            [
+                html.Div(
+                    className=f"rs-depth-seg {band}",
+                    style={"width": f"{counts[band] / total * 100:.1f}%"},
+                )
+                for band in ("elite", "good", "ok", "poor")
+                if counts[band]
+            ],
+            className="rs-depth-bar",
+        ),
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div(str(counts[band]), className=f"rs-tier-val {band}"),
+                        html.Div(tier_label, className="rs-tier-lbl"),
+                    ],
+                    className="rs-tier",
+                )
+                for band, tier_label in (
+                    ("elite", "Elite"),
+                    ("good", "Good"),
+                    ("ok", "OK"),
+                    ("poor", "Poor"),
+                )
+            ],
+            className="rs-depth-tiers",
+        ),
+        html.Div(names, className="rs-depth-players"),
+    ]
+    if active:
+        children.insert(0, html.Span("Focused", className="rs-depth-focus-badge"))
     return html.Button(
-        [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            _colored_group_abbr(meta["group_abbr"], css="rs-depth-code"),
-                            html.Span(
-                                meta["phase"],
-                                className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
-                            ),
-                        ],
-                        className="rs-depth-meta",
-                    ),
-                    html.Span(label, className="rs-depth-name"),
-                ],
-                className="rs-depth-title",
-            ),
-            html.Div(
-                [
-                    html.Span("Avg", className="rs-depth-avg-label"),
-                    html.Span(
-                        f"{avg:.1f}",
-                        className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
-                    ),
-                ],
-                className="rs-depth-avg-row",
-            ),
-            html.Div(
-                [
-                    html.Div(
-                        className=f"rs-depth-seg {band}",
-                        style={"width": f"{counts[band] / total * 100:.1f}%"},
-                    )
-                    for band in ("elite", "good", "ok", "poor")
-                    if counts[band]
-                ],
-                className="rs-depth-bar",
-            ),
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Div(str(counts[band]), className=f"rs-tier-val {band}"),
-                            html.Div(label, className="rs-tier-lbl"),
-                        ],
-                        className="rs-tier",
-                    )
-                    for band, label in (
-                        ("elite", "Elite"),
-                        ("good", "Good"),
-                        ("ok", "OK"),
-                        ("poor", "Poor"),
-                    )
-                ],
-                className="rs-depth-tiers",
-            ),
-            html.Div(names, className="rs-depth-players"),
-        ],
+        children,
         id={"type": "rs-depth", "role": meta["id"]},
         n_clicks=0,
         className="rs-depth-card" + active,
@@ -1311,21 +1322,21 @@ def _depth_card(meta: dict, rows: list[dict], view_roles: list[str], bands: dict
 def _depth_panel(
     rows: list[dict],
     role_ids: list[str],
-    focus_roles: list[str],
+    focus_role: str | None,
     bands: dict | None = None,
     combos: list[dict] | None = None,
 ) -> list:
-    """Cards for every role scored in section 3; focus_roles only drives active highlight."""
+    """Cards for every role scored in section 2; focus_role drives table + active highlight."""
     if not rows or not (role_ids or combos):
         return []
     bands = us.normalize(bands)["bands"]
     cards = []
     for item in normalize_combos(combos):
-        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_roles, bands)
+        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_role, bands)
         if card:
             cards.append(card)
     for role_id in role_ids:
-        card = _depth_card(role_meta(role_id), rows, focus_roles, bands)
+        card = _depth_card(role_meta(role_id), rows, focus_role, bands)
         if card:
             cards.append(card)
     return cards
@@ -1624,11 +1635,12 @@ def apply_ui_settings(settings, age):
 
 
 @callback(
-    Output("rs-view-role", "value", allow_duplicate=True),
+    Output("rs-focus-role", "data", allow_duplicate=True),
     Input({"type": "rs-depth", "role": ALL}, "n_clicks"),
+    State("rs-focus-role", "data"),
     prevent_initial_call=True,
 )
-def focus_view_role(n_clicks):
+def focus_view_role(n_clicks, current_focus):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update
     role = ctx.triggered_id["role"]
@@ -1637,7 +1649,9 @@ def focus_view_role(n_clicks):
     column = _depth_id_column(role)
     if not column:
         return no_update
-    return [column]
+    if current_focus == column:
+        return None
+    return column
 
 
 @callback(
@@ -1650,19 +1664,18 @@ def refresh_config_options(_n):
 
 @callback(
     Output("rs-rows", "data"),
-    Output("rs-view-role", "options"),
-    Output("rs-view-role", "value"),
+    Output("rs-focus-role", "data"),
     Input("rs-parsed", "data"),
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
     Input("rs-config", "value"),
-    State("rs-view-role", "value"),
+    State("rs-focus-role", "data"),
 )
-def rescore(parsed, role_ids, combos, pack_id, current_view):
+def rescore(parsed, role_ids, combos, pack_id, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
-        return None, [], None
+        return None, None
     combos = normalize_combos(combos)
     role_ids = _as_list(role_ids)
     needed = list(role_ids)
@@ -1671,26 +1684,10 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
             if role_id not in needed:
                 needed.append(role_id)
     if not needed:
-        return None, [], None
+        return None, None
     rows = apply_combos(score_players(parsed["players"], needed), combos)
     labels = combo_score_labels(needed, combos)
-    options = []
-    seen = set()
-    for item in combos:
-        meta = combo_meta(item["ip"], item["oop"])
-        if meta["column"] not in seen:
-            options.append(
-                {"label": view_combo_option_label(item["ip"], item["oop"]), "value": meta["column"]}
-            )
-            seen.add(meta["column"])
-    for role_id in needed:
-        meta = role_meta(role_id)
-        if meta["column"] in seen:
-            continue
-        options.append({"label": view_role_option_label(role_id), "value": meta["column"]})
-        seen.add(meta["column"])
-    kept = [role for role in _as_list(current_view) if role in labels]
-    view = kept or labels
+    focus = current_focus if current_focus in labels else None
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
@@ -1699,8 +1696,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
             "role_ids": needed,
             "combos": combos,
         },
-        options,
-        view,
+        focus,
     )
 
 
@@ -1716,7 +1712,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
     Input("rs-rows", "data"),
-    Input("rs-view-role", "value"),
+    Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
@@ -1735,7 +1731,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_view):
 )
 def render_shortlist(
     payload,
-    view_role,
+    focus_role,
     query,
     max_age,
     min_score,
@@ -1757,7 +1753,7 @@ def render_shortlist(
     bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
-    view_roles = _as_list(view_role)
+    view_roles = _resolved_view_roles(payload, focus_role)
     page_size = int(page_size or 50)
     hist_open = bool(hist_open)
     pos_filter = pos_filter or "all"
@@ -1773,7 +1769,7 @@ def render_shortlist(
             page_size,
             [],
             _blank_fig(theme) if hist_open else no_update,
-            "Upload a file and pick at least one role score to show.",
+            "Upload a file and pick at least one role in section 2.",
         )
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
@@ -1790,7 +1786,7 @@ def render_shortlist(
             page_size,
             [],
             no_update if not hist_open else _blank_fig(theme),
-            "Select at least one displayed role to filter the table.",
+            "Pick at least one role in section 2.",
         )
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
@@ -1861,15 +1857,17 @@ def render_shortlist(
     mark_note = f" {len(marked_keys)} marked for planned squad." if marked_keys else ""
     min_note = ""
     if min_score > 0:
+        role_list = ", ".join(view_roles)
         min_note = (
             f" Min score {min_score:g}+ on {MIN_SCORE_MODES[min_score_mode]}: {role_list}."
         )
+    focus_note = f" Focused: {focus_role}." if focus_role else ""
     caption = (
         f"{len(filtered)} of {len(rows)} players"
-        f"{min_note}{extra}{piece_note}{mark_note}"
+        f"{focus_note}{min_note}{extra}{piece_note}{mark_note}"
         f" · {payload.get('filename')}."
     )
-    cards = _depth_panel(rows, role_ids, view_roles, bands, combos)
+    cards = _depth_panel(rows, role_ids, focus_role, bands, combos)
     return (
         _pos_bar(rows, pos_filter, foot_filter),
         cards,
@@ -1890,7 +1888,7 @@ SQUAD_PREVIEW_MAX_ROWS = 8
 def _squad_preview_panel(marked, payload, view_roles, set_pieces) -> html.Div:
     view_roles = _as_list(view_roles)
     if not payload or not view_roles:
-        return html.P("Pick role scores to show first.", className="text-muted mb-0")
+        return html.P("Score roles in section 2 first.", className="text-muted mb-0")
     marked = _as_list(marked)
     if not marked:
         return html.P("No players marked yet.", className="text-muted mb-0")
@@ -1994,16 +1992,17 @@ def clear_squad_marks_on_upload(_parsed):
     Output("rs-squad-btn", "disabled"),
     Input("rs-squad-marked", "data"),
     Input("rs-rows", "data"),
-    Input("rs-view-role", "value"),
+    Input("rs-focus-role", "data"),
     Input("rs-set-pieces", "value"),
 )
-def render_squad_preview(marked, payload, view_roles, set_pieces):
+def render_squad_preview(marked, payload, focus_role, set_pieces):
+    view_roles = _resolved_view_roles(payload, focus_role)
     export_rows = []
-    if payload and _as_list(view_roles) and _as_list(marked):
+    if payload and view_roles and _as_list(marked):
         export_rows = planned_squad_export_rows(
             payload.get("rows") or [],
             _as_list(marked),
-            _as_list(view_roles),
+            view_roles,
             normalize_combos(payload.get("combos")),
             _as_list(set_pieces),
         )
@@ -2015,14 +2014,14 @@ def render_squad_preview(marked, payload, view_roles, set_pieces):
     Input("rs-squad-btn", "n_clicks"),
     State("rs-squad-marked", "data"),
     State("rs-rows", "data"),
-    State("rs-view-role", "value"),
+    State("rs-focus-role", "data"),
     State("rs-set-pieces", "value"),
     prevent_initial_call=True,
 )
-def download_squad_csv(n_clicks, marked, payload, view_roles, set_pieces):
+def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _as_list(view_roles)
+    view_roles = _resolved_view_roles(payload, focus_role)
     marked = _as_list(marked)
     if not view_roles or not marked:
         return no_update
@@ -2041,13 +2040,13 @@ def download_squad_csv(n_clicks, marked, payload, view_roles, set_pieces):
     Output("rs-download-csv", "data"),
     Input("rs-csv-btn", "n_clicks"),
     State("rs-rows", "data"),
-    State("rs-view-role", "value"),
+    State("rs-focus-role", "data"),
     prevent_initial_call=True,
 )
-def download_csv(n_clicks, payload, view_roles):
+def download_csv(n_clicks, payload, focus_role):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _as_list(view_roles)
+    view_roles = _resolved_view_roles(payload, focus_role)
     if not view_roles:
         return no_update
     role_labels = expand_view_role_columns(
@@ -2062,14 +2061,14 @@ def download_csv(n_clicks, payload, view_roles):
     Output("rs-download-canvas", "data"),
     Input("rs-canvas-btn", "n_clicks"),
     State("rs-rows", "data"),
-    State("rs-view-role", "value"),
+    State("rs-focus-role", "data"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def download_canvas(n_clicks, payload, view_roles, settings):
+def download_canvas(n_clicks, payload, focus_role, settings):
     if not n_clicks or not payload or not payload.get("rows"):
         return no_update
-    view_roles = _as_list(view_roles)
+    view_roles = _resolved_view_roles(payload, focus_role)
     if not view_roles:
         return no_update
     role_labels = expand_view_role_columns(

@@ -627,56 +627,11 @@ body {
     border-radius: 10px;
 }
 
-.rs-filter-roles,
 .rs-filter-search,
 .rs-filter-age,
 .rs-filter-score,
 .rs-filter-elig {
     min-width: 0;
-}
-
-.rs-filter-roles {
-    overflow: hidden;
-}
-
-.rs-view-role-dd,
-.rs-view-role-dd .Select,
-.rs-view-role-dd .Select__control {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.rs-view-role-dd .Select__value-container {
-    flex-wrap: wrap;
-    gap: 2px;
-}
-
-.rs-view-role-dd .Select__multi-value {
-    max-width: calc(100% - 4px);
-}
-
-.rs-view-role-dd .Select__multi-value__label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 9rem;
-}
-
-.rs-view-role-dd .Select__menu-list {
-    max-width: min(360px, 92vw);
-}
-
-.rs-view-role-dd .Select__option {
-    white-space: normal;
-    line-height: 1.35;
-    word-break: break-word;
-}
-
-.rs-shortlist-filters .rs-filter-roles {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
 }
 
 .rs-shortlist-filters-row .rs-filter-search,
@@ -693,11 +648,6 @@ body {
 .rs-shortlist-filters-row .rs-filter-age > .rs-field-label {
     margin-bottom: 0;
     flex-shrink: 0;
-}
-
-.rs-shortlist-filters .rs-filter-roles > :not(.rs-field-label-row) {
-    flex: none;
-    width: 100%;
 }
 
 .rs-filter-score .rs-min-score-fields {
@@ -1447,6 +1397,20 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     margin-bottom: 10px;
 }
 
+.rs-depth-heading-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rs-depth-heading-hint {
+    font-size: 12px;
+    color: var(--app-muted);
+    line-height: 1.4;
+    max-width: 42rem;
+}
+
 .rs-depth-heading-label {
     font-size: 10px;
     font-weight: 600;
@@ -1524,6 +1488,7 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 }
 
 .rs-depth-card {
+    position: relative;
     background: var(--app-head);
     border: 1px solid var(--app-line);
     border-radius: 14px;
@@ -1533,12 +1498,49 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     max-width: 280px;
     text-align: left;
     cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
 }
 
-.rs-depth-card:hover,
-.rs-depth-card.active {
+.rs-depth-card:hover {
     border-color: var(--app-faint);
     background: var(--app-card);
+}
+
+.rs-depth-card.active {
+    border-color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 14%, var(--app-card));
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--app-accent) 45%, transparent),
+        0 10px 28px rgba(0, 0, 0, 0.28);
+    transform: translateY(-1px);
+}
+
+.rs-depth-focus-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 22%, var(--app-card));
+    border: 1px solid color-mix(in srgb, var(--app-accent) 55%, var(--app-line));
+    border-radius: 999px;
+    padding: 2px 8px;
+    line-height: 1.3;
+}
+
+.rs-depth-card.active .rs-depth-name {
+    color: var(--app-accent);
+}
+
+.rs-depth-card.active .rs-depth-avg {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent) 35%, transparent);
 }
 
 .rs-depth-title {

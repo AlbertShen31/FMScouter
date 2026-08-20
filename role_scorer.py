@@ -491,15 +491,6 @@ def role_option_label(role_id: str) -> str:
     return compact_role_label(role_id)
 
 
-def view_role_option_label(role_id: str) -> str:
-    """Short label for the shortlist view-role dropdown (matches table column)."""
-    return role_meta(role_id)["column"]
-
-
-def view_combo_option_label(ip: str, oop: str) -> str:
-    return combo_meta(ip, oop)["column"]
-
-
 COMBO_IP_WEIGHT = 2.0
 COMBO_OOP_WEIGHT = 1.0
 
