@@ -12,12 +12,11 @@ from typing import Any
 
 from phases import phase_tone
 import config.fm26_role_weight_config as pc
+from config.paths import FORMATIONS_ACTIVE_PATH, FORMATIONS_PACKS_DIR
 from role_scorer import normalize_combos
 
-ROOT = Path(__file__).resolve().parent
-FORMATIONS_DIR = ROOT / "config" / "formations"
-PACKS_DIR = FORMATIONS_DIR / "packs"
-ACTIVE_PATH = FORMATIONS_DIR / "active.json"
+PACKS_DIR = FORMATIONS_PACKS_DIR
+ACTIVE_PATH = FORMATIONS_ACTIVE_PATH
 
 SCHEMA = 2
 MAX_SLOTS = 11

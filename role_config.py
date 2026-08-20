@@ -1,10 +1,10 @@
 """Load, inspect, and persist FM26 role weight configs.
 
-Python defaults in `config/fm26_role_weight_config.py` stay the source of
-truth. Named JSON packs in `config/packs/` overlay those defaults so the
-config editor and role scores page share one live set of weights. Built-in
-is read-only; Save only writes a named pack. New configs are either a copy
-of the selected pack or a blank slate.
+Python defaults in `config/role_weights/fm26_role_weight_config.py` stay the
+source of truth. Named JSON packs in `config/role_weights/packs/` overlay
+those defaults so the config editor and role scores page share one live set
+of weights. Built-in is read-only; Save only writes a named pack. New configs
+are either a copy of the selected pack or a blank slate.
 
 Pack `group_schema` is 2. Older files omit the field (treated as 1) and
 used `w` for wide midfielders and `wam` for wingers. Load maps those IDs
@@ -20,13 +20,22 @@ from datetime import datetime
 from pathlib import Path
 
 import config.fm26_role_weight_config as pc
+from config.paths import (
+    LEGACY_ROLE_ACTIVE_PATH,
+    LEGACY_ROLE_DEFAULTS_PATH,
+    LEGACY_ROLE_OVERRIDES_PATH,
+    LEGACY_ROLE_PACKS_DIR,
+    ROLE_WEIGHTS_ACTIVE_PATH,
+    ROLE_WEIGHTS_DEFAULTS_PATH,
+    ROLE_WEIGHTS_DIR,
+    ROLE_WEIGHTS_PACKS_DIR,
+)
 from phases import phase_is_gk
 
-ROOT = Path(__file__).resolve().parent
-PACKS_DIR = ROOT / "config" / "packs"
-ACTIVE_PATH = ROOT / "config" / "active_pack.json"
-LEGACY_OVERRIDE_PATH = ROOT / "config" / "role_overrides.json"
-DEFAULTS_PATH = ROOT / "config" / "default_overrides.json"
+PACKS_DIR = ROLE_WEIGHTS_PACKS_DIR
+ACTIVE_PATH = ROLE_WEIGHTS_ACTIVE_PATH
+DEFAULTS_PATH = ROLE_WEIGHTS_DEFAULTS_PATH
+LEGACY_OVERRIDE_PATH = LEGACY_ROLE_OVERRIDES_PATH
 
 BUILTIN = "builtin"
 WORKING = "working"
@@ -317,7 +326,35 @@ def _pack_label(pack_id: str, fallback: str = "") -> str:
     return name or fallback or pack_id.replace("-", " ").replace("_", " ")
 
 
+def _migrate_layout() -> None:
+    """Move pre-reorg role-weight files into ``config/role_weights/``."""
+    ROLE_WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+    PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    if LEGACY_ROLE_PACKS_DIR.exists():
+        for path in LEGACY_ROLE_PACKS_DIR.glob("*.json"):
+            dest = PACKS_DIR / path.name
+            if not dest.exists():
+                path.replace(dest)
+        leftover = [p for p in LEGACY_ROLE_PACKS_DIR.iterdir() if p.name != ".gitkeep"]
+        if not leftover:
+            for keep in LEGACY_ROLE_PACKS_DIR.glob(".gitkeep"):
+                keep.unlink(missing_ok=True)
+            try:
+                LEGACY_ROLE_PACKS_DIR.rmdir()
+            except OSError:
+                pass
+    if LEGACY_ROLE_ACTIVE_PATH.exists() and not ACTIVE_PATH.exists():
+        LEGACY_ROLE_ACTIVE_PATH.replace(ACTIVE_PATH)
+    elif LEGACY_ROLE_ACTIVE_PATH.exists() and ACTIVE_PATH.exists():
+        LEGACY_ROLE_ACTIVE_PATH.unlink(missing_ok=True)
+    if LEGACY_ROLE_DEFAULTS_PATH.exists() and not DEFAULTS_PATH.exists():
+        LEGACY_ROLE_DEFAULTS_PATH.replace(DEFAULTS_PATH)
+    elif LEGACY_ROLE_DEFAULTS_PATH.exists() and DEFAULTS_PATH.exists():
+        LEGACY_ROLE_DEFAULTS_PATH.unlink(missing_ok=True)
+
+
 def _migrate_legacy() -> None:
+    _migrate_layout()
     PACKS_DIR.mkdir(parents=True, exist_ok=True)
     if not LEGACY_OVERRIDE_PATH.exists() or _pack_path(WORKING).exists():
         return

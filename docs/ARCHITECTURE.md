@@ -14,22 +14,45 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 
 | Path | Role |
 | --- | --- |
-| `app.py` | Dash shell and nav (Role scores, Role configs). |
+| `app.py` | Dash shell and nav (Role scores, Role configs, Formations, Settings). |
 | `pages/role_scores_page.py` | Upload CSV, pick roles, filter, export. |
 | `pages/formations_page.py` | Save named lineups of up to 11 hybrid roles. |
+| `pages/settings_page.py` | Score bands, age tiers, footedness, histogram, colors. |
 | `formations.py` | Formation packs, validation, combo export. |
-| `config/formations/packs/` | Named JSON formation files. |
-| `config/formations/active.json` | Last selected formation. |
-| `config/fm26_role_weight_config.py` | Factory roles, group ids, home-group resolution. |
+| `config/paths.py` | Canonical directories for role weights, formations, and settings. |
+| `config/role_weights/` | Role weight domain: factory Python, `active.json`, `packs/`. |
+| `config/role_weights/fm26_role_weight_config.py` | Factory roles, group ids, home-group resolution. |
+| `config/role_weights/packs/` | Named JSON weight packs. |
+| `config/formations/` | Formation domain: `active.json`, `packs/`. |
+| `config/settings/` | UI settings domain: `active.json`, `default-overrides.json`, `packs/`. |
 | `role_scorer.py` | Parse CSV, eligibility, scoring, player POS cards. |
 | `role_config.py` | Packs, live overlays, saved-group migration. |
 | `phases.py` | IP / OOP / GK badges and GK detection. |
 | `utils.py` | Weighted-average formula. |
 | `canvas_export.py` | Cursor canvas export from scored rows. |
-| `config/packs/` | Named JSON weight packs. |
-| `config/active_pack.json` | Which pack is live. |
-| `config/default_overrides.json` | Optional overlay applied under Built-in defaults. |
 | `fm26_player_scoring_system_v2_0.html` | Historical HTML scorer the Python weights were ported from. Not used at runtime. |
+
+### Config layout
+
+Each saved-config domain uses the same shape under `config/`:
+
+```
+config/
+  role_weights/          # scoring weights
+    fm26_role_weight_config.py
+    active.json
+    packs/*.json
+    default-overrides.json   # optional Built-in overlay
+  formations/            # hybrid lineups
+    active.json
+    packs/*.json
+  settings/              # Role scores UI thresholds/colors
+    active.json
+    default-overrides.json
+    packs/*.json
+```
+
+`config/fm26_role_weight_config.py` is a thin import shim for older `import config.fm26_role_weight_config` call sites. Older role-weight files at `config/packs/` or `config/active_pack.json` are moved into `role_weights/` on load.
 
 ## Three different winger names
 

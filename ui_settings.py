@@ -12,11 +12,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent
-SETTINGS_DIR = ROOT / "config" / "settings"
-PACKS_DIR = SETTINGS_DIR / "packs"
-ACTIVE_PATH = SETTINGS_DIR / "active.json"
-DEFAULT_OVERRIDES_PATH = SETTINGS_DIR / "default-overrides.json"
+from config.paths import (
+    SETTINGS_ACTIVE_PATH,
+    SETTINGS_DEFAULTS_PATH,
+    SETTINGS_PACKS_DIR,
+)
+
+PACKS_DIR = SETTINGS_PACKS_DIR
+ACTIVE_PATH = SETTINGS_ACTIVE_PATH
+DEFAULT_OVERRIDES_PATH = SETTINGS_DEFAULTS_PATH
 
 BUILTIN = "default"
 
