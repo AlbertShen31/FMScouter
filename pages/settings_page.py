@@ -5,6 +5,7 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+import role_scorer as rs
 import ui_settings as us
 
 register_page(__name__, path="/settings", name="Settings")
@@ -208,6 +209,36 @@ def _form(settings: dict) -> list:
         ),
         dbc.Card(
             [
+                dbc.CardHeader("Footedness"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Strength scale is 1 (very weak) through 6 (very strong). "
+                            "The threshold is the minimum rating that counts as a usable foot.",
+                            className="text-muted",
+                        ),
+                        dmc.Select(
+                            id="st-foot-threshold",
+                            label="Usable-foot threshold",
+                            data=rs.foot_strength_options(),
+                            value=str(
+                                settings.get("foot_threshold") or us.DEFAULTS["foot_threshold"]
+                            ),
+                            clearable=False,
+                            searchable=False,
+                        ),
+                        html.Small(
+                            id="st-foot-preview",
+                            children=rs.foot_filter_help(settings.get("foot_threshold")),
+                            className="text-muted d-block mt-2",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
                 dbc.CardHeader("Histogram bins"),
                 dbc.CardBody(
                     [
@@ -262,7 +293,7 @@ def layout():
         [
             html.H1("Settings"),
             html.P(
-                "Control Role scores age menus, score bands, histogram bins, and colors. "
+                "Control Role scores age menus, score bands, footedness, histogram bins, and colors. "
                 "Save named versions so you can switch between them.",
                 className="text-muted",
             ),
@@ -299,6 +330,7 @@ def _form_values(settings: dict, specs) -> tuple:
         settings["bands"]["elite"],
         settings["bands"]["good"],
         settings["bands"]["ok"],
+        str(settings.get("foot_threshold") or us.DEFAULTS["foot_threshold"]),
         us.format_list(settings["hist_edges"]),
         _color_values_for(settings, specs),
     )
@@ -321,6 +353,14 @@ def preview_poor(ok):
 
 
 @callback(
+    Output("st-foot-preview", "children"),
+    Input("st-foot-threshold", "value"),
+)
+def preview_foot(threshold):
+    return rs.foot_filter_help(threshold)
+
+
+@callback(
     Output("ui-settings", "data"),
     Output("st-pack", "data"),
     Output("st-pack", "value"),
@@ -329,6 +369,7 @@ def preview_poor(ok):
     Output("st-band-elite", "value"),
     Output("st-band-good", "value"),
     Output("st-band-ok", "value"),
+    Output("st-foot-threshold", "value"),
     Output("st-hist-edges", "value"),
     Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
     Output("st-status", "children"),
@@ -342,6 +383,7 @@ def preview_poor(ok):
     State("st-band-elite", "value"),
     State("st-band-good", "value"),
     State("st-band-ok", "value"),
+    State("st-foot-threshold", "value"),
     State("st-hist-edges", "value"),
     State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
     prevent_initial_call=True,
@@ -356,17 +398,19 @@ def handle_settings(
     elite,
     good,
     ok,
+    foot_threshold,
     edges,
     color_values,
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return (no_update,) * 12
+        return (no_update,) * 13
     specs = ctx.states_list[-1] if ctx.states_list else []
     draft = {
         "id": pack_id,
         "age_tiers": ages,
         "bands": {"elite": elite, "good": good, "ok": ok},
+        "foot_threshold": foot_threshold,
         "hist_edges": edges,
         "colors": _colors_from_state(color_values),
     }
@@ -391,7 +435,7 @@ def handle_settings(
     elif triggered == "st-new":
         label = str(new_name or "").strip()
         if not label:
-            return (no_update,) * 10 + ("Enter a name to create a new settings file.", no_update)
+            return (no_update,) * 11 + ("Enter a name to create a new settings file.", no_update)
         settings = us.create_pack(label, draft)
         status = f"Created {settings['name']}."
         clear_name = ""
@@ -407,7 +451,7 @@ def handle_settings(
             status = f"Saved {settings['name']}."
             update_pack = False
     else:
-        return (no_update,) * 12
+        return (no_update,) * 13
     values = list(_form_values(settings, specs))
     if not update_pack:
         values[1] = no_update

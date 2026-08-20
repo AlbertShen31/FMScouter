@@ -31,6 +31,8 @@ from role_scorer import (
     combo_column,
     combo_meta,
     combo_score_labels,
+    foot_filter_help,
+    foot_filter_hints,
     foot_match,
     group_abbr_tone,
     normalize_combos,
@@ -359,24 +361,6 @@ def _set_piece_panel(settings=None) -> html.Details:
         ],
         className="rs-metrics-details",
     )
-
-
-FOOT_FILTER_HINTS = {
-    "foot-L": (
-        "Left foot stronger than right, with the right foot fairly weak or weaker "
-        "(reasonable, weak, or very weak)."
-    ),
-    "foot-B": "Both feet at least fairly strong.",
-    "foot-R": (
-        "Right foot stronger than left, with the left foot fairly weak or weaker "
-        "(reasonable, weak, or very weak)."
-    ),
-}
-
-FOOT_SECTION_HELP = (
-    "Left / Right: that foot is stronger, and the other is reasonable, weak, or very weak. "
-    "Both feet: each foot is at least fairly strong. Click the active filter again to clear it."
-)
 
 
 def _role_pills(role_ids: list[str]) -> list:
@@ -1325,7 +1309,7 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
     return rules
 
 
-def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
+def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> html.Div:
     counts = {"all": len(rows)}
     for key, _name, _code, _css in POS_CARDS[1:]:
         counts[key] = sum(1 for row in rows if key in (row.get("PosGroups") or []))
@@ -1345,6 +1329,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
                 className=class_name,
             )
         )
+    hints = foot_filter_hints(foot_threshold)
     foot_btns = []
     for key, label in (("foot-L", "Left Foot"), ("foot-B", "Both Feet"), ("foot-R", "Right Foot")):
         foot_btns.append(
@@ -1352,7 +1337,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
                 label,
                 id={"type": "rs-foot", "foot": key},
                 n_clicks=0,
-                title=FOOT_FILTER_HINTS.get(key, ""),
+                title=hints.get(key, ""),
                 className="rs-foot-btn" + (" active" if foot == key else ""),
             )
         )
@@ -1364,7 +1349,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str) -> html.Div:
                     html.Div(
                         [
                             html.Span("Footedness"),
-                            *_help_icon(FOOT_SECTION_HELP, "rs-help-footedness"),
+                            *_help_icon(foot_filter_help(foot_threshold), "rs-help-footedness"),
                         ],
                         className="rs-foot-label",
                     ),
@@ -1823,6 +1808,17 @@ def focus_view_role(n_clicks, current_focus):
 
 
 @callback(
+    Output("rs-table", "sort_by"),
+    Input("rs-focus-role", "data"),
+)
+def sort_from_depth_role(focus_role):
+    column = str(focus_role or "").strip()
+    if not column:
+        return []
+    return [{"column_id": column, "direction": "desc"}]
+
+
+@callback(
     Output("rs-config", "data"),
     Input("rs-config-tick", "n_intervals"),
 )
@@ -1941,7 +1937,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
     Input("rs-hist-open", "data"),
-    State("ui-settings", "data"),
+    Input("ui-settings", "data"),
     State("rs-table-cols-sig", "data"),
 )
 def render_shortlist(
@@ -1966,6 +1962,7 @@ def render_shortlist(
 ):
     settings = us.normalize(settings)
     bands = settings["bands"]
+    foot_threshold = settings["foot_threshold"]
     bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
@@ -1998,7 +1995,7 @@ def render_shortlist(
     if not view_roles:
         cards = _depth_panel(rows, role_ids, [], bands, combos)
         return (
-            _pos_bar(rows, pos_filter, foot_filter),
+            _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
             cards,
             not cards,
             [],
@@ -2025,7 +2022,7 @@ def render_shortlist(
     for row in rows:
         if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
             continue
-        if foot_filter and not foot_match(row, foot_filter):
+        if foot_filter and not foot_match(row, foot_filter, foot_threshold):
             continue
         if elig_only and not all(row.get(f"{role} eligible") for role in view_roles):
             continue
@@ -2094,7 +2091,7 @@ def render_shortlist(
     cards = _depth_panel(rows, role_ids, focus_role, bands, combos)
     page_current, new_sig = _table_page_state(columns, cols_sig)
     return (
-        _pos_bar(rows, pos_filter, foot_filter),
+        _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
         cards,
         not cards,
         table_rows,

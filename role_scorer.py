@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+from enum import IntEnum
 from typing import Any
 
 import config.fm26_role_weight_config as pc
@@ -744,39 +745,125 @@ def parse_export(text: str) -> list[dict[str, Any]]:
     return players
 
 
-def foot_strength(value: str) -> int:
-    text = str(value or "").strip().lower()
-    rating = {
-        "very strong": 5,
-        "strong": 4,
-        "fairly strong": 3,
-        "reasonable": 2,
-        "weak": 1,
-        "very weak": 0,
-    }
-    if text in rating:
-        return rating[text]
+class FootStrength(IntEnum):
+    VERY_WEAK = 1
+    WEAK = 2
+    REASONABLE = 3
+    FAIRLY_STRONG = 4
+    STRONG = 5
+    VERY_STRONG = 6
+
+
+FOOT_STRENGTH_NAMES: dict[FootStrength, str] = {
+    FootStrength.VERY_WEAK: "Very weak",
+    FootStrength.WEAK: "Weak",
+    FootStrength.REASONABLE: "Reasonable",
+    FootStrength.FAIRLY_STRONG: "Fairly strong",
+    FootStrength.STRONG: "Strong",
+    FootStrength.VERY_STRONG: "Very strong",
+}
+
+_FOOT_STRENGTH_FROM_TEXT = {
+    "very weak": FootStrength.VERY_WEAK,
+    "weak": FootStrength.WEAK,
+    "reasonable": FootStrength.REASONABLE,
+    "fairly strong": FootStrength.FAIRLY_STRONG,
+    "strong": FootStrength.STRONG,
+    "very strong": FootStrength.VERY_STRONG,
+}
+
+DEFAULT_FOOT_THRESHOLD = FootStrength.FAIRLY_STRONG
+
+
+def coerce_foot_strength(value, default: FootStrength = DEFAULT_FOOT_THRESHOLD) -> FootStrength:
     try:
-        n = int(float(text.replace(",", ".")))
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    if number in FootStrength._value2member_map_:
+        return FootStrength(number)
+    return default
+
+
+def foot_strength_options() -> list[dict[str, str]]:
+    return [
+        {"label": f"{int(level)} · {FOOT_STRENGTH_NAMES[level]}", "value": str(int(level))}
+        for level in FootStrength
+    ]
+
+
+def foot_strength(value: str) -> FootStrength | None:
+    text = str(value or "").strip().lower()
+    if not text or text == "-":
+        return None
+    if text in _FOOT_STRENGTH_FROM_TEXT:
+        return _FOOT_STRENGTH_FROM_TEXT[text]
+    try:
+        number = int(float(text.replace(",", ".")))
     except ValueError:
-        return 0
-    if 1 <= n <= 20:
-        return round(n / 4)
-    return 0
+        return None
+    if 1 <= number <= 6:
+        return FootStrength(number)
+    if 1 <= number <= 20:
+        return FootStrength(min(6, max(1, ((number - 1) * 6) // 20 + 1)))
+    return None
 
 
-def foot_match(row: dict[str, Any], foot_filter: str) -> bool:
-    lf = foot_strength(row.get("Left Foot") or "")
-    rf = foot_strength(row.get("Right Foot") or "")
-    if not lf and not rf:
+def foot_match(
+    row: dict[str, Any],
+    foot_filter: str,
+    threshold: int | FootStrength | None = None,
+) -> bool:
+    min_strong = coerce_foot_strength(threshold)
+    left = foot_strength(row.get("Left Foot") or "")
+    right = foot_strength(row.get("Right Foot") or "")
+    if left is None or right is None:
         return False
     if foot_filter == "foot-L":
-        return lf > rf and rf <= 2
+        return left > right and right < min_strong
     if foot_filter == "foot-R":
-        return rf > lf and lf <= 2
+        return right > left and left < min_strong
     if foot_filter == "foot-B":
-        return lf >= 3 and rf >= 3
+        return left >= min_strong and right >= min_strong
     return True
+
+
+def _weaker_than_label(threshold: FootStrength) -> str:
+    names = [FOOT_STRENGTH_NAMES[FootStrength(level)].lower() for level in range(1, int(threshold))]
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} or {names[1]}"
+    return ", ".join(names[:-1]) + f", or {names[-1]}"
+
+
+def foot_filter_help(threshold: int | FootStrength | None = None) -> str:
+    level = coerce_foot_strength(threshold)
+    name = FOOT_STRENGTH_NAMES[level].lower()
+    weaker = _weaker_than_label(level)
+    if weaker:
+        sided = (
+            f"Left / Right: that foot is stronger, and the other is below {name} ({weaker})."
+        )
+    else:
+        sided = f"Left / Right: that foot is stronger than the other (no weak-foot cap)."
+    return (
+        f"{sided} Both feet: each foot is at least {name}. "
+        "Click the active filter again to clear it."
+    )
+
+
+def foot_filter_hints(threshold: int | FootStrength | None = None) -> dict[str, str]:
+    level = coerce_foot_strength(threshold)
+    name = FOOT_STRENGTH_NAMES[level].lower()
+    weaker = _weaker_than_label(level) or "any weaker rating"
+    return {
+        "foot-L": f"Left foot stronger than right, and the right foot is {weaker}.",
+        "foot-B": f"Both feet at least {name}.",
+        "foot-R": f"Right foot stronger than left, and the left foot is {weaker}.",
+    }
 
 
 def score_band(

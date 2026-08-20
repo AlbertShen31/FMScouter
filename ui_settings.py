@@ -28,6 +28,7 @@ DEFAULTS: dict[str, Any] = {
     "name": "Default",
     "age_tiers": [21, 25, 30],
     "bands": {"elite": 14.0, "good": 12.0, "ok": 10.0},
+    "foot_threshold": 4,
     "hist_edges": [10.0, 11.0, 12.0, 13.0, 14.0],
     "colors": {
         "elite": {"bg": "#dcfce7", "fg": "#15803d", "bar": "#22c55e"},
@@ -91,6 +92,14 @@ def parse_number_list(text, *, integer: bool = False) -> list[float]:
         values.append(float(number))
     values.sort()
     return values
+
+
+def normalize_foot_threshold(value, default: int = 4) -> int:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        number = default
+    return max(1, min(6, number))
 
 
 def parse_score_floor(value) -> float:
@@ -174,6 +183,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "name": label,
         "age_tiers": ages,
         "bands": normalize_bands(raw.get("bands") or raw),
+        "foot_threshold": normalize_foot_threshold(
+            raw.get("foot_threshold", DEFAULTS["foot_threshold"])
+        ),
         "hist_edges": edges,
         "colors": colors,
     }
@@ -293,6 +305,7 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
         payload = {
             "age_tiers": settings["age_tiers"],
             "bands": settings["bands"],
+            "foot_threshold": settings["foot_threshold"],
             "hist_edges": settings["hist_edges"],
             "colors": settings["colors"],
         }
