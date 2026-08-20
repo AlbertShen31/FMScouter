@@ -17,6 +17,7 @@ from dash import (
     register_page,
 )
 import dash_bootstrap_components as dbc
+import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
 from role_scorer import (
@@ -129,6 +130,12 @@ HYBRID_HELP = (
     f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. Both part scores stay in the table. "
     "A player is eligible if they can play either part."
 )
+
+ROLE_MODE_DATA = [
+    {"label": "Single roles", "value": "single"},
+    {"label": "Hybrid roles", "value": "hybrid"},
+    {"label": "Community", "value": "community", "disabled": True},
+]
 
 
 def _help_icon(tip: str, help_id: str) -> list:
@@ -266,30 +273,30 @@ def _set_piece_panel(settings=None) -> html.Details:
             html.Div(
                 [
                     html.Div("Add columns", className="rs-chip-label"),
-                    dbc.Checklist(
+                    dmc.CheckboxGroup(
                         id="rs-set-pieces",
-                        options=[
-                            {
-                                "label": _set_piece_check_label(profile),
-                                "value": profile["id"],
-                            }
+                        value=[],
+                        children=[
+                            dmc.Checkbox(
+                                label=_set_piece_check_label(profile),
+                                value=profile["id"],
+                            )
                             for profile in SET_PIECE_PROFILES
                         ],
-                        value=[],
-                        inline=True,
                         className="rs-set-piece-checks",
                     ),
                     html.Div(
                         [
                             html.Span("Set-piece filters", className="rs-chip-label"),
-                            html.Label("Min score", className="rs-set-piece-min-label"),
-                            dbc.Input(
+                            dmc.NumberInput(
                                 id="rs-set-piece-min-score",
-                                type="number",
+                                label="Min score",
+                                placeholder="Any",
                                 min=0,
                                 max=20,
                                 step=0.1,
-                                placeholder="Any",
+                                decimalScale=1,
+                                value=None,
                                 className="rs-set-piece-min-dd",
                             ),
                         ],
@@ -351,69 +358,57 @@ def _role_pills(role_ids: list[str]) -> list:
     return pills
 
 
-def _hybrid_summary_text(combos: list[dict] | None = None) -> str:
-    count = len(normalize_combos(combos))
-    return f"Hybrid roles ({count})" if count else "+ Create hybrid role"
-
-
-def _hybrid_panel() -> html.Details:
-    return html.Details(
+def _hybrid_roles_panel() -> html.Div:
+    return html.Div(
         [
-            html.Summary(
-                [
-                    html.Span(
-                        _hybrid_summary_text(),
-                        id="rs-hybrid-summary",
-                        className="rs-hybrid-summary-text",
-                    ),
-                    *_help_icon(HYBRID_HELP, "rs-help-hybrid"),
-                ],
-                className="rs-hybrid-summary-row",
-            ),
             html.Div(
                 [
+                    _field_label(
+                        "Hybrid roles",
+                        primary=True,
+                        tip=HYBRID_HELP,
+                        help_id="rs-help-hybrid",
+                    ),
                     html.Div(
                         [
-                            html.Div(
-                                [
-                                    html.Label("In possession (IP) role", className="rs-field-label"),
-                                    dcc.Dropdown(
-                                        id="rs-combo-ip",
-                                        options=role_options(phase="IP"),
-                                        placeholder="Choose an in possession role",
-                                        clearable=True,
-                                    ),
-                                ],
+                            dmc.Select(
+                                id="rs-combo-ip",
+                                label="In possession (IP) role",
+                                data=role_options(phase="IP"),
+                                placeholder="Choose an in possession role",
+                                clearable=True,
+                                searchable=True,
                                 className="rs-combo-field",
                             ),
-                            html.Div(
-                                [
-                                    html.Label("Out of possession (OOP) role", className="rs-field-label"),
-                                    dcc.Dropdown(
-                                        id="rs-combo-oop",
-                                        options=role_options(phase="OOP"),
-                                        placeholder="Choose an out of possession role",
-                                        clearable=True,
-                                    ),
-                                ],
+                            dmc.Select(
+                                id="rs-combo-oop",
+                                label="Out of possession (OOP) role",
+                                data=role_options(phase="OOP"),
+                                placeholder="Choose an out of possession role",
+                                clearable=True,
+                                searchable=True,
                                 className="rs-combo-field",
                             ),
-                            html.Button(
+                            dmc.Button(
                                 "Add combined",
                                 id="rs-combo-add",
                                 n_clicks=0,
-                                className="rs-chip",
+                                variant="light",
                             ),
                         ],
                         className="rs-combo-row",
                     ),
-                    html.Div(id="rs-combo-pills", className="rs-selected-roles rs-pill-row mt-2"),
+                    html.Div(
+                        id="rs-combo-pills",
+                        className="rs-selected-roles rs-pill-row mt-2",
+                    ),
                 ],
                 className="rs-hybrid-body",
             ),
         ],
-        id="rs-hybrid-details",
-        className="rs-hybrid-details",
+        id="rs-hybrid-panel",
+        className="rs-role-mode-panel",
+        hidden=True,
     )
 
 
@@ -545,12 +540,13 @@ def layout():
                             [
                                 html.Span("Scoring weights", className="rs-weights-label"),
                                 html.Div(
-                                    dcc.Dropdown(
+                                    dmc.Select(
                                         id="rs-config",
-                                        options=rc.pack_options(),
+                                        data=rc.pack_options(),
                                         value=rc.active_pack_id(),
                                         clearable=False,
-                                        placeholder="Select a weight config",
+                                        searchable=False,
+                                        size="sm",
                                     ),
                                     className="rs-config-dd",
                                     title=(
@@ -587,6 +583,7 @@ def layout():
                                                 ),
                                             ],
                                             className="rs-filter-row",
+                                            id="rs-phase-filter-wrap",
                                         ),
                                         html.Div(
                                             [
@@ -599,10 +596,12 @@ def layout():
                                             ],
                                             className="rs-filter-row",
                                         ),
-                                        html.Button(
+                                        dmc.Button(
                                             "Clear",
                                             id="rs-clear-roles",
                                             n_clicks=0,
+                                            variant="subtle",
+                                            size="xs",
                                             className="rs-chip ghost",
                                         ),
                                     ],
@@ -611,24 +610,46 @@ def layout():
                             ],
                             className="rs-filter-toolbar",
                         ),
-                        _field_label(
-                            "Scored roles",
-                            primary=True,
-                            tip="Every player is scored against the roles you pick here.",
-                            help_id="rs-help-scored-roles",
+                        dmc.SegmentedControl(
+                            id="rs-role-mode",
+                            value="single",
+                            data=ROLE_MODE_DATA,
+                            fullWidth=True,
+                            className="rs-role-mode-control",
+                            mb="sm",
                         ),
                         html.Div(
-                            dcc.Dropdown(
-                                id="rs-roles",
-                                options=role_options(),
-                                value=[],
-                                multi=True,
-                                placeholder="Choose scored roles",
-                            ),
-                            className="rs-primary-control",
+                            [
+                                html.Div(
+                                    [
+                                        _field_label(
+                                            "Scored roles",
+                                            primary=True,
+                                            tip="Every player is scored against the roles you pick here.",
+                                            help_id="rs-help-scored-roles",
+                                        ),
+                                        dmc.MultiSelect(
+                                            id="rs-roles",
+                                            data=role_options(),
+                                            value=[],
+                                            placeholder="Choose scored roles",
+                                            searchable=True,
+                                            clearable=True,
+                                            maxDropdownHeight=280,
+                                            className="rs-primary-control",
+                                        ),
+                                        html.Div(
+                                            id="rs-role-pills",
+                                            className="rs-selected-roles rs-pill-row",
+                                        ),
+                                    ],
+                                    id="rs-single-panel",
+                                    className="rs-role-mode-panel",
+                                ),
+                                _hybrid_roles_panel(),
+                            ],
+                            className="rs-role-mode-panels",
                         ),
-                        html.Div(id="rs-role-pills", className="rs-selected-roles rs-pill-row"),
-                        _hybrid_panel(),
                     ]
                 ),
             ],
@@ -690,9 +711,8 @@ def layout():
                                         html.Div(
                                             [
                                                 html.Label("Search", className="rs-field-label"),
-                                                dbc.Input(
+                                                dmc.TextInput(
                                                     id="rs-search",
-                                                    type="search",
                                                     placeholder="Name, club, position",
                                                 ),
                                             ],
@@ -701,11 +721,12 @@ def layout():
                                         html.Div(
                                             [
                                                 html.Label("Max age", className="rs-field-label"),
-                                                dcc.Dropdown(
+                                                dmc.Select(
                                                     id="rs-age",
-                                                    options=us.age_options(settings),
-                                                    value=99,
+                                                    data=us.age_options(settings),
+                                                    value="99",
                                                     clearable=False,
+                                                    searchable=False,
                                                 ),
                                             ],
                                             className="rs-filter-age",
@@ -722,34 +743,33 @@ def layout():
                                                 ),
                                                 html.Div(
                                                     [
-                                                        dbc.Input(
+                                                        dmc.NumberInput(
                                                             id="rs-min-score",
-                                                            type="number",
+                                                            placeholder="Any",
                                                             min=0,
                                                             max=20,
                                                             step=0.1,
-                                                            placeholder="Any",
+                                                            decimalScale=1,
+                                                            value=None,
                                                         ),
-                                                        html.Div(
-                                                            dcc.Dropdown(
-                                                                id="rs-min-score-mode",
-                                                                options=[
-                                                                    {
-                                                                        "label": "Every selected role",
-                                                                        "value": "all",
-                                                                    },
-                                                                    {
-                                                                        "label": (
-                                                                            "At least one selected role"
-                                                                        ),
-                                                                        "value": "any",
-                                                                    },
-                                                                ],
-                                                                value="all",
-                                                                clearable=False,
-                                                                className="rs-min-score-mode",
-                                                            ),
-                                                            className="rs-min-score-mode-wrap",
+                                                        dmc.Select(
+                                                            id="rs-min-score-mode",
+                                                            data=[
+                                                                {
+                                                                    "label": "Every selected role",
+                                                                    "value": "all",
+                                                                },
+                                                                {
+                                                                    "label": (
+                                                                        "At least one selected role"
+                                                                    ),
+                                                                    "value": "any",
+                                                                },
+                                                            ],
+                                                            value="all",
+                                                            clearable=False,
+                                                            searchable=False,
+                                                            className="rs-min-score-mode",
                                                         ),
                                                     ],
                                                     className="rs-min-score-fields",
@@ -759,19 +779,13 @@ def layout():
                                         ),
                                         html.Div(
                                             [
-                                                dbc.Checklist(
+                                                dmc.Switch(
                                                     id="rs-eligible",
-                                                    options=[
-                                                        {
-                                                            "label": (
-                                                                "Only show players eligible for "
-                                                                "the selected role(s)"
-                                                            ),
-                                                            "value": "yes",
-                                                        }
-                                                    ],
-                                                    value=["yes"],
-                                                    switch=True,
+                                                    label=(
+                                                        "Only show players eligible for the "
+                                                        "selected role(s)"
+                                                    ),
+                                                    checked=True,
                                                 ),
                                             ],
                                             className="rs-filter-elig",
@@ -868,25 +882,25 @@ def layout():
                                 html.Div(
                                     [
                                         html.Label("Rows per page", className="rs-field-label"),
-                                        dcc.Dropdown(
+                                        dmc.Select(
                                             id="rs-page-size",
-                                            options=[
-                                                {"label": "25", "value": 25},
-                                                {"label": "50", "value": 50},
-                                                {"label": "100", "value": 100},
+                                            data=[
+                                                {"label": "25", "value": "25"},
+                                                {"label": "50", "value": "50"},
+                                                {"label": "100", "value": "100"},
                                             ],
-                                            value=25,
+                                            value="50",
                                             clearable=False,
+                                            searchable=False,
                                         ),
                                     ],
                                     className="rs-table-page-size",
                                 ),
-                                dbc.Button(
+                                dmc.Button(
                                     "Clear marked rows",
                                     id="rs-squad-clear-btn",
                                     size="sm",
-                                    color="secondary",
-                                    outline=True,
+                                    variant="light",
                                     disabled=True,
                                     className="rs-squad-clear-btn",
                                 ),
@@ -895,15 +909,18 @@ def layout():
                         ),
                         html.Div(
                             [
-                                html.Button(
+                                dmc.Button(
                                     "Show score distribution",
                                     id="rs-hist-toggle",
                                     n_clicks=0,
+                                    variant="light",
                                     className="rs-hist-toggle",
-                                    title=(
-                                        "Score band on the horizontal axis; player count on "
-                                        "the vertical axis. One series per displayed role."
-                                    ),
+                                    buttonProps={
+                                        "title": (
+                                            "Score band on the horizontal axis; player count on "
+                                            "the vertical axis. One series per displayed role."
+                                        ),
+                                    },
                                 ),
                                 html.Div(
                                     [
@@ -932,22 +949,22 @@ def layout():
                 dbc.CardHeader("4. Export"),
                 dbc.CardBody(
                     [
-                        dbc.Button(
+                        dmc.Button(
                             "Download scored CSV",
                             id="rs-csv-btn",
-                            color="primary",
                             className="me-2",
                         ),
-                        dbc.Button(
+                        dmc.Button(
                             "Download Cursor canvas (.tsx)",
                             id="rs-canvas-btn",
-                            color="secondary",
-                            outline=True,
+                            variant="light",
                             className="me-2",
-                            title=(
-                                "Opens beside chat in Cursor. Save to your workspace canvases "
-                                "folder, or open the file directly."
-                            ),
+                            buttonProps={
+                                "title": (
+                                    "Opens beside chat in Cursor. Save to your workspace canvases "
+                                    "folder, or open the file directly."
+                                ),
+                            },
                         ),
                         html.Hr(className="my-3"),
                         html.Div(
@@ -963,10 +980,10 @@ def layout():
                             className="rs-export-subhead-row",
                         ),
                         html.Div(id="rs-squad-preview", className="rs-squad-preview"),
-                        dbc.Button(
+                        dmc.Button(
                             "Download planned squad CSV",
                             id="rs-squad-btn",
-                            color="success",
+                            color="green",
                             className="mt-2",
                             disabled=True,
                         ),
@@ -1430,11 +1447,16 @@ def set_phase(n_clicks):
 
 
 @callback(
-    Output("rs-hybrid-summary", "children"),
-    Input("rs-combos", "data"),
+    Output("rs-single-panel", "hidden"),
+    Output("rs-hybrid-panel", "hidden"),
+    Output("rs-phase-filter-wrap", "hidden"),
+    Input("rs-role-mode", "value"),
 )
-def render_hybrid_summary(combos):
-    return _hybrid_summary_text(combos)
+def sync_role_mode(mode):
+    mode = mode or "single"
+    if mode == "community":
+        mode = "single"
+    return mode != "single", mode != "hybrid", mode == "hybrid"
 
 
 @callback(
@@ -1453,7 +1475,7 @@ def set_group(n_clicks):
 
 
 @callback(
-    Output("rs-roles", "options"),
+    Output("rs-roles", "data"),
     Input("rs-phase", "data"),
     Input("rs-group", "data"),
     Input("rs-roles", "value"),
@@ -1467,8 +1489,8 @@ def filter_role_options(phase, group, selected, combos):
 
 
 @callback(
-    Output("rs-combo-ip", "options"),
-    Output("rs-combo-oop", "options"),
+    Output("rs-combo-ip", "data"),
+    Output("rs-combo-oop", "data"),
     Input("rs-group", "data"),
     Input("rs-combo-ip", "value"),
     Input("rs-combo-oop", "value"),
@@ -1500,7 +1522,7 @@ def render_combo_pills(combos):
 @callback(
     Output("rs-combos", "data"),
     Output("rs-roles", "value", allow_duplicate=True),
-    Output("rs-roles", "options", allow_duplicate=True),
+    Output("rs-roles", "data", allow_duplicate=True),
     Output("rs-combo-ip", "value"),
     Output("rs-combo-oop", "value"),
     Input("rs-combo-add", "n_clicks"),
@@ -1622,7 +1644,7 @@ def set_foot_filter(n_clicks, current):
 
 
 @callback(
-    Output("rs-age", "options"),
+    Output("rs-age", "data"),
     Output("rs-age", "value"),
     Output("rs-band-legend", "children"),
     Input("ui-settings", "data"),
@@ -1631,7 +1653,7 @@ def set_foot_filter(n_clicks, current):
 def apply_ui_settings(settings, age):
     settings = us.normalize(settings)
     ages = us.age_options(settings)
-    return ages, us.clamp_choice(age, ages, 99), _band_legend(settings)
+    return ages, us.clamp_choice(age, ages, "99"), _band_legend(settings)
 
 
 @callback(
@@ -1655,7 +1677,7 @@ def focus_view_role(n_clicks, current_focus):
 
 
 @callback(
-    Output("rs-config", "options"),
+    Output("rs-config", "data"),
     Input("rs-config-tick", "n_intervals"),
 )
 def refresh_config_options(_n):
@@ -1717,7 +1739,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
     Input("rs-min-score-mode", "value"),
-    Input("rs-eligible", "value"),
+    Input("rs-eligible", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
     Input("rs-squad-marked", "data"),
@@ -1793,7 +1815,7 @@ def render_shortlist(
     min_score = us.parse_score_floor(min_score)
     min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
     set_piece_min = us.parse_score_floor(set_piece_min)
-    elig_only = "yes" in (eligible or [])
+    elig_only = bool(eligible)
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
 

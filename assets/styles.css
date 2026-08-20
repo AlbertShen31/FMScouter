@@ -103,6 +103,109 @@ body {
     background: var(--app-hover);
 }
 
+.app-navbar .theme-toggle.mantine-Button-root {
+    font-size: 12px;
+    font-weight: 600;
+    height: auto;
+}
+
+/* Mantine dark mode: match app cool-slate palette (default Mantine grays read brownish). */
+:root[data-mantine-color-scheme="dark"] {
+    --mantine-color-body: var(--app-bg);
+    --mantine-color-text: var(--app-text);
+    --mantine-color-dimmed: var(--app-muted);
+    --mantine-color-default: var(--app-elev);
+    --mantine-color-default-hover: var(--app-hover);
+    --mantine-color-default-color: var(--app-text);
+    --mantine-color-default-border: var(--app-line);
+    --mantine-color-dark-0: #e8eef6;
+    --mantine-color-dark-1: #d1dbe8;
+    --mantine-color-dark-2: #8b9bb0;
+    --mantine-color-dark-3: #6b7c90;
+    --mantine-color-dark-4: #4a6078;
+    --mantine-color-dark-5: #2a3a4c;
+    --mantine-color-dark-6: #223040;
+    --mantine-color-dark-7: #1a2430;
+    --mantine-color-dark-8: #141c26;
+    --mantine-color-dark-9: #0b1118;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Input-input,
+[data-mantine-color-scheme="dark"] .mantine-Select-input,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-input,
+[data-mantine-color-scheme="dark"] .mantine-NumberInput-input {
+    background-color: var(--app-input);
+    border-color: var(--app-line);
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Input-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-Select-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-input::placeholder {
+    color: var(--app-muted);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-dropdown,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-dropdown,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-dropdown {
+    background-color: var(--app-elev);
+    border-color: var(--app-line);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-option,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-option,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option {
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-option[data-combobox-selected],
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-option[data-combobox-selected],
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option[data-combobox-selected],
+[data-mantine-color-scheme="dark"] .mantine-Select-option[data-combobox-active],
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-option[data-combobox-active],
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option[data-combobox-active] {
+    background-color: var(--app-hover);
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-root {
+    background-color: var(--app-inset);
+    border: 1px solid var(--app-line);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-indicator {
+    background-color: var(--app-active);
+    box-shadow: none;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-label {
+    color: var(--app-muted);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-label[data-active] {
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="light"],
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="subtle"] {
+    background-color: var(--app-elev);
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="light"]:hover,
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="subtle"]:hover {
+    background-color: var(--app-hover);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Checkbox-label,
+[data-mantine-color-scheme="dark"] .mantine-Switch-label {
+    color: var(--app-text);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-InputWrapper-label {
+    color: var(--app-muted);
+}
+
 .card {
     background-color: var(--app-card);
     border-color: var(--app-line);
@@ -944,6 +1047,52 @@ html[data-theme="dark"] .rs-phase-tag.combo,
 body[data-theme="dark"] .rs-phase-tag.combo {
     background: rgba(167, 139, 250, 0.2);
     color: #c4b5fd;
+}
+
+.rs-role-mode-control {
+    max-width: 420px;
+}
+
+.rs-page .mantine-SegmentedControl-root {
+    background: var(--app-inset);
+}
+
+.rs-primary-control.mantine-MultiSelect-root,
+.rs-config-dd .mantine-Select-root,
+.rs-table-page-size .mantine-Select-root {
+    width: 100%;
+}
+
+.rs-shortlist-filters-row .mantine-TextInput-root,
+.rs-shortlist-filters-row .mantine-Select-root,
+.rs-shortlist-filters-row .mantine-NumberInput-root {
+    width: 100%;
+}
+
+.rs-filter-elig .mantine-Switch-root {
+    margin-top: 2px;
+}
+
+.rs-combo-row .mantine-Select-root {
+    min-width: 0;
+}
+
+.rs-set-piece-checks .mantine-CheckboxGroup-root {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+}
+
+.rs-role-mode-panels {
+    min-width: 0;
+}
+
+.rs-role-mode-panel[hidden] {
+    display: none !important;
+}
+
+.rs-hybrid-body {
+    padding-bottom: 2px;
 }
 
 .rs-hybrid-details {
@@ -2003,6 +2152,22 @@ body[data-theme="light"] .rc-page {
 .rc-sidebar-search-input::-webkit-search-results-button,
 .rc-sidebar-search-input::-webkit-search-results-decoration {
     -webkit-appearance: none;
+}
+
+.rc-sidebar-search .mantine-TextInput-root {
+    width: 100%;
+}
+
+.rc-sidebar-search .mantine-TextInput-input {
+    background: var(--rc-inset);
+    border-color: var(--rc-line);
+    color: var(--rc-text);
+    font-size: 12px;
+    min-height: 32px;
+}
+
+.rc-sidebar-search .mantine-TextInput-input:focus {
+    border-color: rgba(61, 255, 136, 0.4);
 }
 
 .rc-sidebar-list {

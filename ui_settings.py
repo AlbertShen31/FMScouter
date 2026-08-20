@@ -323,26 +323,24 @@ def is_builtin(pack_id: str | None) -> bool:
 
 def age_options(settings=None) -> list[dict]:
     settings = normalize(settings)
-    options = [{"label": "Any", "value": 99}]
+    options = [{"label": "Any", "value": "99"}]
     for age in settings["age_tiers"]:
         if age != 99:
-            options.append({"label": str(age), "value": int(age)})
+            options.append({"label": str(age), "value": str(int(age))})
     return options
 
 
 def clamp_choice(value, options: list[dict], fallback):
-    allowed = {opt["value"] for opt in options}
-    if value in allowed:
-        return value
+    allowed = {str(opt["value"]) for opt in options}
+    if value is not None and str(value) in allowed:
+        return str(value)
     try:
-        number = float(value)
+        number = str(int(float(value)))
     except (TypeError, ValueError):
-        return fallback
+        return str(fallback)
     if number in allowed:
         return number
-    if int(number) in allowed:
-        return int(number)
-    return fallback
+    return str(fallback)
 
 
 def hist_bins(settings=None) -> list[tuple[str, float, float]]:

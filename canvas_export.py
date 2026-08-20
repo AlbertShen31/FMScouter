@@ -258,7 +258,7 @@ def build_canvas(
     age_js = json.dumps(
         [
             {"value": "any", "label": "Any age"}
-            if opt["value"] == 99
+            if opt["value"] in (99, "99")
             else {"value": str(int(opt["value"])), "label": f"Max {int(opt['value'])}"}
             for opt in us.age_options(settings)
         ],

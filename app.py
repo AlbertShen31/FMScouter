@@ -1,8 +1,51 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, dcc, html
+import dash_mantine_components as dmc
+from dash import Input, Output, State, callback, dcc, html
 
 import ui_settings
+
+# Mantine components require React 18 (useId); Dash 2.x defaults to React 16.
+dash._dash_renderer._set_react_version("18.2.0")
+
+# Cool slate palette aligned with --app-* CSS variables (avoids Mantine's warm gray dark mode).
+APP_DARK = [
+    "#e8eef6",
+    "#d1dbe8",
+    "#8b9bb0",
+    "#6b7c90",
+    "#4a6078",
+    "#2a3a4c",
+    "#223040",
+    "#1a2430",
+    "#141c26",
+    "#0b1118",
+]
+APP_GRAY = [
+    "#f4f7fb",
+    "#e3eaf2",
+    "#c5d0de",
+    "#a3b1c2",
+    "#8b9bb0",
+    "#6b7c90",
+    "#4a6078",
+    "#2a3a4c",
+    "#1a2430",
+    "#0f1720",
+]
+
+MANTINE_THEME = {
+    "fontFamily": "Inter, Segoe UI, sans-serif",
+    "primaryColor": "teal",
+    "defaultRadius": "md",
+    "black": "#0b1118",
+    "white": "#e8eef6",
+    "primaryShade": {"light": 6, "dark": 5},
+    "colors": {
+        "dark": APP_DARK,
+        "gray": APP_GRAY,
+    },
+}
 
 app = dash.Dash(
     __name__,
@@ -14,8 +57,11 @@ app = dash.Dash(
     ],
 )
 
-app.layout = html.Div(
-    [
+app.layout = dmc.MantineProvider(
+    id="mantine-provider",
+    forceColorScheme="dark",
+    theme=MANTINE_THEME,
+    children=[
         dcc.Store(id="theme", data="dark", storage_type="local"),
         dcc.Store(id="ui-settings", data=ui_settings.load()),
         html.Div(id="ui-settings-css"),
@@ -29,12 +75,13 @@ app.layout = html.Div(
                             dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
                             dbc.NavItem(dbc.NavLink("Settings", href="/settings")),
                             dbc.NavItem(
-                                html.Button(
+                                dmc.Button(
                                     "Light mode",
                                     id="theme-toggle",
                                     n_clicks=0,
+                                    variant="subtle",
                                     className="theme-toggle",
-                                    title="Switch color theme",
+                                    buttonProps={"title": "Switch color theme"},
                                 )
                             ),
                         ],
@@ -48,7 +95,6 @@ app.layout = html.Div(
         ),
         dash.page_container,
     ],
-    id="app-shell",
 )
 
 app.clientside_callback(
@@ -83,7 +129,7 @@ app.clientside_callback(
 )
 
 
-@app.callback(
+@callback(
     Output("theme", "data"),
     Input("theme-toggle", "n_clicks"),
     State("theme", "data"),
@@ -91,6 +137,14 @@ app.clientside_callback(
 )
 def toggle_theme(_clicks, current):
     return "light" if (current or "dark") == "dark" else "dark"
+
+
+@callback(
+    Output("mantine-provider", "forceColorScheme"),
+    Input("theme", "data"),
+)
+def sync_mantine_theme(theme):
+    return "light" if theme == "light" else "dark"
 
 
 if __name__ == "__main__":

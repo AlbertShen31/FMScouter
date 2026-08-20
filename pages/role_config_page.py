@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
+import dash_mantine_components as dmc
 
 import role_config as rc
 from role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
@@ -412,37 +413,45 @@ def layout():
                     "Config",
                     [
                         html.Div(
-                            dcc.Dropdown(
+                            dmc.Select(
                                 id="rc-pack",
-                                options=rc.pack_options(),
+                                data=rc.pack_options(),
                                 value=rc.active_pack_id(),
                                 clearable=False,
+                                searchable=False,
                                 className="rc-pack-dd",
                             ),
                             className="rc-pack-wrap",
                         ),
                         html.Span(id="rc-pack-status", className="rc-pack-status"),
                         html.Span(className="rc-bar-split"),
-                        dcc.Input(
+                        dmc.TextInput(
                             id="rc-new-name",
-                            type="text",
                             placeholder="New config name",
                             className="rc-search",
                         ),
                         html.Div(_new_mode_buttons("copy"), id="rc-new-mode-row", className="rc-chip-row"),
-                        html.Button(
+                        dmc.Button(
                             "New config",
                             id="rc-new-pack",
                             n_clicks=0,
+                            variant="light",
                             className="rc-btn",
-                            title="Create a named config from a copy of the selected one, or from scratch",
+                            buttonProps={
+                                "title": (
+                                    "Create a named config from a copy of the selected one, "
+                                    "or from scratch"
+                                ),
+                            },
                         ),
-                        html.Button(
+                        dmc.Button(
                             "Save",
                             id="rc-save",
                             n_clicks=0,
                             className="rc-btn",
-                            title="Write the current weights to the selected named config",
+                            buttonProps={
+                                "title": "Write the current weights to the selected named config",
+                            },
                         ),
                     ],
                 ),
@@ -455,12 +464,10 @@ def layout():
                     [
                         html.Div("Roles", className="rc-sidebar-head"),
                         html.Div(
-                            dcc.Input(
+                            dmc.TextInput(
                                 id="rc-search",
-                                type="search",
                                 placeholder="Search roles",
                                 className="rc-sidebar-search-input",
-                                debounce=False,
                             ),
                             className="rc-sidebar-search",
                         ),
@@ -559,7 +566,7 @@ def pick_role(n_clicks, current):
     Output("rc-rev", "data"),
     Output("rc-pack-status", "children"),
     Output("rc-pack", "value", allow_duplicate=True),
-    Output("rc-pack", "options"),
+    Output("rc-pack", "data"),
     Input({"type": "rc-attr", "attr": ALL}, "n_clicks"),
     Input("rc-reset-role", "n_clicks"),
     Input("rc-clear-role", "n_clicks"),

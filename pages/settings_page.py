@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
+import dash_mantine_components as dmc
 
 import ui_settings as us
 
@@ -32,11 +33,10 @@ def _color_row(band: str, label: str, colors: dict) -> html.Div:
                             className="st-color-swatch",
                             style={"backgroundColor": colors[part]},
                         ),
-                        dbc.Input(
+                        dmc.TextInput(
                             id={"type": "st-color", "band": band, "part": part},
-                            type="text",
                             value=colors[part],
-                            debounce=True,
+                            debounce=500,
                             className="st-color-text",
                             placeholder="#rrggbb",
                         ),
@@ -68,16 +68,17 @@ def _form(settings: dict) -> list:
                         dbc.Row(
                             [
                                 dbc.Col(
-                                    dcc.Dropdown(
+                                    dmc.Select(
                                         id="st-pack",
-                                        options=us.pack_options(),
+                                        data=us.pack_options(),
                                         value=settings.get("id") or us.BUILTIN,
                                         clearable=False,
+                                        searchable=False,
                                     ),
                                     md=4,
                                 ),
                                 dbc.Col(
-                                    dbc.Input(
+                                    dmc.TextInput(
                                         id="st-new-name",
                                         placeholder="New settings name",
                                     ),
@@ -85,24 +86,21 @@ def _form(settings: dict) -> list:
                                 ),
                                 dbc.Col(
                                     [
-                                        dbc.Button(
+                                        dmc.Button(
                                             "New",
                                             id="st-new",
-                                            color="secondary",
-                                            outline=True,
+                                            variant="light",
                                             className="me-2",
                                         ),
-                                        dbc.Button(
+                                        dmc.Button(
                                             "Save",
                                             id="st-save",
-                                            color="primary",
                                             className="me-2",
                                         ),
-                                        dbc.Button(
+                                        dmc.Button(
                                             "Reset defaults",
                                             id="st-reset",
-                                            color="secondary",
-                                            outline=True,
+                                            variant="light",
                                         ),
                                     ],
                                     md=5,
@@ -121,11 +119,11 @@ def _form(settings: dict) -> list:
                 dbc.CardHeader("Age filter"),
                 dbc.CardBody(
                     [
-                        html.Label("Age tiers"),
-                        dbc.Input(
+                        dmc.TextInput(
                             id="st-age-tiers",
+                            label="Age tiers",
                             value=us.format_list(settings["age_tiers"], kind="age"),
-                            debounce=True,
+                            debounce=500,
                         ),
                         html.Small(
                             "Comma-separated maximum ages for the Role scores Max age menu. Any is always included.",
@@ -149,13 +147,13 @@ def _form(settings: dict) -> list:
                             [
                                 dbc.Col(
                                     [
-                                        html.Label("Elite ≥"),
-                                        dbc.Input(
+                                        dmc.NumberInput(
                                             id="st-band-elite",
-                                            type="number",
+                                            label="Elite ≥",
                                             min=0,
                                             max=20,
                                             step=0.5,
+                                            decimalScale=1,
                                             value=bands["elite"],
                                         ),
                                     ],
@@ -163,13 +161,13 @@ def _form(settings: dict) -> list:
                                 ),
                                 dbc.Col(
                                     [
-                                        html.Label("Good ≥"),
-                                        dbc.Input(
+                                        dmc.NumberInput(
                                             id="st-band-good",
-                                            type="number",
+                                            label="Good ≥",
                                             min=0,
                                             max=20,
                                             step=0.5,
+                                            decimalScale=1,
                                             value=bands["good"],
                                         ),
                                     ],
@@ -177,13 +175,13 @@ def _form(settings: dict) -> list:
                                 ),
                                 dbc.Col(
                                     [
-                                        html.Label("OK ≥"),
-                                        dbc.Input(
+                                        dmc.NumberInput(
                                             id="st-band-ok",
-                                            type="number",
+                                            label="OK ≥",
                                             min=0,
                                             max=20,
                                             step=0.5,
+                                            decimalScale=1,
                                             value=bands["ok"],
                                         ),
                                     ],
@@ -213,11 +211,11 @@ def _form(settings: dict) -> list:
                 dbc.CardHeader("Histogram bins"),
                 dbc.CardBody(
                     [
-                        html.Label("Cut points"),
-                        dbc.Input(
+                        dmc.TextInput(
                             id="st-hist-edges",
+                            label="Cut points",
                             value=us.format_list(settings["hist_edges"]),
-                            debounce=True,
+                            debounce=500,
                         ),
                         html.Small(
                             "Comma-separated edges. The first value is the top of the lowest band "
@@ -324,7 +322,7 @@ def preview_poor(ok):
 
 @callback(
     Output("ui-settings", "data"),
-    Output("st-pack", "options"),
+    Output("st-pack", "data"),
     Output("st-pack", "value"),
     Output("st-save", "disabled"),
     Output("st-age-tiers", "value"),
