@@ -395,8 +395,334 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
     return rows
 
 
-def _player_modal_body(player: dict, minutes_required: float) -> html.Div:
-    g = player.get("pos_group") or "mid"
+EVAL_GROUPS = tuple((key, label) for key, label, _css in POS_GROUPS if key != "all")
+
+
+def _normalize_eval_group(group: str | None, fallback: str | None = "mid") -> str:
+    allowed = {key for key, _ in EVAL_GROUPS}
+    g = group or fallback or "mid"
+    if g not in allowed:
+        return fallback if fallback in allowed else "mid"
+    return g
+
+
+def _player_metric_sections(player: dict, eval_group: str | None = None) -> list[dict]:
+    g = _normalize_eval_group(eval_group, player.get("pos_group") or "mid")
+    sections = []
+    for cat in categories_for_group(g):
+        metrics = []
+        for mid in metrics_for(g, cat["id"]):
+            band = band_metric(g, cat["id"], mid, (player.get("stats") or {}).get(mid))
+            meta = metric_defs()[mid]
+            metrics.append(
+                {
+                    "id": mid,
+                    "label": meta["label"],
+                    "abbr": meta["abbr"],
+                    "display": band["display"],
+                    "percentile": band.get("percentile"),
+                    "color": band.get("color"),
+                    "missing": band.get("percentile") is None,
+                }
+            )
+        sections.append({"id": cat["id"], "label": cat["label"], "metrics": metrics})
+    return sections
+
+
+def _seg_switcher(
+    *,
+    options: list[tuple[str, str]],
+    active: str,
+    id_key: str,
+    id_type: str,
+) -> html.Div:
+    buttons = []
+    for value, label in options:
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": id_type, id_key: value},
+                n_clicks=0,
+                className="st-player-seg-btn"
+                + (" active" if active == value else ""),
+            )
+        )
+    return html.Div(buttons, className="st-player-seg")
+
+
+def _view_switcher(active: str) -> html.Div:
+    return _seg_switcher(
+        options=[("values", "Values"), ("bars", "Bars"), ("pizzas", "Pizzas")],
+        active=active,
+        id_key="view",
+        id_type="st-player-view",
+    )
+
+
+def _group_switcher(active: str) -> html.Div:
+    return _seg_switcher(
+        options=list(EVAL_GROUPS),
+        active=active,
+        id_key="group",
+        id_type="st-player-group",
+    )
+
+def _metrics_values(sections: list[dict]) -> list:
+    blocks = []
+    for cat in sections:
+        items = []
+        for metric in cat["metrics"]:
+            if metric["missing"]:
+                value = html.Span("No data", className="rs-player-id-value st-metric-nodata")
+            else:
+                value = html.Span(
+                    metric["display"],
+                    className="rs-player-id-value",
+                    style={"color": metric["color"]} if metric["color"] else None,
+                    title=(
+                        f"~{metric['percentile']:.0f}th percentile"
+                        if metric["percentile"] is not None
+                        else None
+                    ),
+                )
+            items.append(
+                html.Div(
+                    [
+                        html.Span(metric["label"], className="rs-player-id-label"),
+                        value,
+                    ],
+                    className="rs-player-id-item",
+                )
+            )
+        blocks.append(
+            html.Div(
+                [
+                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    html.Div(items, className="rs-player-identity"),
+                ],
+                className="rs-player-id-section",
+            )
+        )
+    return blocks
+
+
+PLAYER_CHART_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "showAxisDragHandles": False,
+    "showAxisRangeEntryBoxes": False,
+}
+
+
+def _normalize_player_view(view: str | None) -> str:
+    return view if view in ("values", "bars", "pizzas") else "bars"
+
+
+def _chart_layout(theme: str | None, *, height: int, margin: dict | None = None) -> dict:
+    dark = (theme or "dark") != "light"
+    return dict(
+        template="plotly_dark" if dark else "plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(
+            color="#f8fafc" if dark else "#0f172a",
+            size=14,
+            family="IBM Plex Sans, Segoe UI, sans-serif",
+        ),
+        margin=margin or dict(l=130, r=72, t=12, b=36),
+        height=height,
+        showlegend=False,
+        dragmode=False,
+        hovermode="closest",
+    )
+
+
+def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
+    dark = (theme or "dark") != "light"
+    label_color = "#f8fafc" if dark else "#0f172a"
+    muted = "#cbd5e1" if dark else "#475569"
+    labels = [m["label"] for m in metrics][::-1]
+    pcts = []
+    colors = []
+    texts = []
+    for metric in metrics[::-1]:
+        if metric["missing"]:
+            pcts.append(0)
+            colors.append("rgba(148, 163, 184, 0.35)")
+            texts.append("No data")
+        else:
+            pcts.append(float(metric["percentile"]))
+            colors.append(metric["color"] or "rgb(64, 220, 120)")
+            texts.append(metric["display"])
+    fig = go.Figure(
+        go.Bar(
+            x=pcts,
+            y=labels,
+            orientation="h",
+            marker=dict(color=colors, line=dict(width=0)),
+            text=texts,
+            textposition="outside",
+            textfont=dict(color=label_color, size=15),
+            cliponaxis=False,
+            hovertemplate="%{y}<br>%{x:.0f}th pct · %{text}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        **_chart_layout(theme, height=max(220, 42 * len(metrics) + 64)),
+        xaxis=dict(
+            range=[0, 112],
+            title=None,
+            ticksuffix="",
+            showgrid=True,
+            gridcolor="rgba(148,163,184,0.22)",
+            zeroline=False,
+            fixedrange=True,
+            tickfont=dict(color=muted, size=13),
+            title_font=dict(color=muted, size=13),
+        ),
+        yaxis=dict(
+            automargin=True,
+            fixedrange=True,
+            tickfont=dict(color=label_color, size=14),
+        ),
+        bargap=0.18,
+        bargroupgap=0.08,
+    )
+    fig.update_xaxes(title_text="Percentile")
+    return fig
+
+
+def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
+    dark = (theme or "dark") != "light"
+    label_color = "#f8fafc" if dark else "#0f172a"
+    muted = "#cbd5e1" if dark else "#475569"
+    if not metrics:
+        fig = go.Figure()
+        fig.update_layout(
+            **_chart_layout(theme, height=320, margin=dict(l=40, r=40, t=20, b=20))
+        )
+        return fig
+
+    theta = []
+    radius = []
+    for metric in metrics:
+        value = "No data" if metric["missing"] else metric["display"]
+        theta.append(f"{metric['abbr']} · {value}")
+        radius.append(0.0 if metric["missing"] else float(metric["percentile"]))
+
+    # Close the shape.
+    theta_closed = theta + [theta[0]]
+    radius_closed = radius + [radius[0]]
+    fill = "rgba(61, 255, 136, 0.22)" if dark else "rgba(34, 139, 87, 0.18)"
+    line = "rgb(61, 255, 136)" if dark else "rgb(22, 163, 74)"
+
+    fig = go.Figure(
+        go.Scatterpolar(
+            r=radius_closed,
+            theta=theta_closed,
+            fill="toself",
+            fillcolor=fill,
+            line=dict(color=line, width=2.5),
+            mode="lines+markers",
+            marker=dict(size=8, color=line),
+            hovertemplate="%{theta}<br>%{r:.0f}th pct<extra></extra>",
+            name="Percentile",
+        )
+    )
+    fig.update_layout(
+        **_chart_layout(theme, height=400, margin=dict(l=64, r=64, t=44, b=44)),
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(
+                range=[0, 100],
+                showticklabels=True,
+                ticksuffix="",
+                gridcolor="rgba(148,163,184,0.28)",
+                tickfont=dict(color=muted, size=13),
+                fixedrange=True,
+            ),
+            angularaxis=dict(
+                gridcolor="rgba(148,163,184,0.24)",
+                tickfont=dict(color=label_color, size=14),
+                fixedrange=True,
+            ),
+        ),
+    )
+    return fig
+
+def _metrics_bars(sections: list[dict], theme: str | None) -> list:
+    blocks = []
+    for cat in sections:
+        if not cat["metrics"]:
+            continue
+        blocks.append(
+            html.Div(
+                [
+                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    dcc.Graph(
+                        figure=_bars_figure(cat["metrics"], theme),
+                        config=PLAYER_CHART_CONFIG,
+                        className="st-player-chart",
+                    ),
+                ],
+                className="rs-player-id-section st-player-chart-section",
+            )
+        )
+    return blocks
+
+
+def _metrics_pizzas(sections: list[dict], theme: str | None) -> list:
+    blocks = []
+    for cat in sections:
+        if not cat["metrics"]:
+            continue
+        legend = html.Div(
+            [
+                html.Div(
+                    [
+                        html.Span(metric["abbr"], className="st-pizza-legend-abbr"),
+                        html.Span(metric["label"], className="st-pizza-legend-name"),
+                        html.Span(
+                            "No data" if metric["missing"] else metric["display"],
+                            className="st-pizza-legend-val"
+                            + (" is-missing" if metric["missing"] else ""),
+                            style=(
+                                None
+                                if metric["missing"] or not metric["color"]
+                                else {"color": metric["color"]}
+                            ),
+                        ),
+                    ],
+                    className="st-pizza-legend-row",
+                )
+                for metric in cat["metrics"]
+            ],
+            className="st-pizza-legend",
+        )
+        blocks.append(
+            html.Div(
+                [
+                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    dcc.Graph(
+                        figure=_pizza_figure(cat["metrics"], theme),
+                        config={
+                            **PLAYER_CHART_CONFIG,
+                            "staticPlot": True,
+                        },
+                        className="st-player-chart st-player-pizza",
+                    ),
+                    legend,
+                ],
+                className="rs-player-id-section st-player-chart-section",
+            )
+        )
+    return blocks
+
+
+def _player_identity(player: dict, minutes_required: float) -> list:
     status = minutes_status(player.get("minutes"), minutes_required)
     identity = []
     for label, key in (
@@ -426,45 +752,47 @@ def _player_modal_body(player: dict, minutes_required: float) -> html.Div:
                 className="rs-player-id-item",
             )
         )
-    sections = []
-    for cat in categories_for_group(g):
-        items = []
-        for mid in metrics_for(g, cat["id"]):
-            band = band_metric(g, cat["id"], mid, (player.get("stats") or {}).get(mid))
-            meta = metric_defs()[mid]
-            tip = (
-                f"~{band['percentile']:.0f}th percentile"
-                if band.get("percentile") is not None
-                else None
-            )
-            items.append(
-                html.Div(
-                    [
-                        html.Span(meta["label"], className="rs-player-id-label"),
-                        html.Span(
-                            band["display"],
-                            className="rs-player-id-value",
-                            style={"color": band["color"]} if band["color"] else None,
-                            title=tip,
-                        ),
-                    ],
-                    className="rs-player-id-item",
-                )
-            )
-        sections.append(
+    return identity
+
+
+def _player_modal_body(
+    player: dict,
+    minutes_required: float,
+    *,
+    view: str = "bars",
+    eval_group: str | None = None,
+    theme: str | None = "dark",
+) -> html.Div:
+    view = _normalize_player_view(view)
+    eval_group = _normalize_eval_group(eval_group, player.get("pos_group") or "mid")
+    sections = _player_metric_sections(player, eval_group)
+    if view == "bars":
+        metrics = _metrics_bars(sections, theme)
+    elif view == "pizzas":
+        metrics = _metrics_pizzas(sections, theme)
+    else:
+        metrics = _metrics_values(sections)
+    return html.Div(
+        [
+            html.Div(_player_identity(player, minutes_required), className="rs-player-identity"),
             html.Div(
                 [
-                    html.Div(cat["label"], className="rs-player-id-section-title"),
-                    html.Div(items, className="rs-player-identity"),
+                    html.Div("Evaluate as", className="st-player-switch-label"),
+                    _group_switcher(eval_group),
                 ],
-                className="rs-player-id-section",
-            )
-        )
-    return html.Div(
-        [html.Div(identity, className="rs-player-identity"), *sections],
+                className="st-player-switch-block",
+            ),
+            html.Div(
+                [
+                    html.Div("Display", className="st-player-switch-label"),
+                    _view_switcher(view),
+                ],
+                className="st-player-switch-block",
+            ),
+            html.Div(metrics, className="st-player-metrics"),
+        ],
         className="rs-player-detail",
     )
-
 
 def _filter_players(
     players,
@@ -516,12 +844,17 @@ def layout(**_kwargs):
             dcc.Store(id="st-category", data="defending"),
             dcc.Store(id="st-foot", data=""),
             dcc.Store(id="st-marked", data=[]),
+            dcc.Store(id="st-player-key", data=None),
+            dcc.Store(id="st-player-view", data="bars", storage_type="local"),
+            dcc.Store(id="st-player-group", data="mid"),
             dcc.Download(id="st-download"),
             html.Div(
                 [
                     html.Button(id={"type": "st-pos", "key": "_"}, n_clicks=0),
                     html.Button(id={"type": "st-cat", "key": "_"}, n_clicks=0),
                     html.Button(id={"type": "st-foot", "foot": "_"}, n_clicks=0),
+                    html.Button(id={"type": "st-player-view", "view": "_"}, n_clicks=0),
+                    html.Button(id={"type": "st-player-group", "group": "_"}, n_clicks=0),
                 ],
                 hidden=True,
             ),            dbc.Card(
@@ -869,7 +1202,7 @@ def layout(**_kwargs):
                 ],
                 id="st-player-modal",
                 is_open=False,
-                size="lg",
+                size="xl",
                 className="rs-player-modal",
             ),
         ],
@@ -1180,32 +1513,124 @@ def sync_marks(selected_rows, table_data, marked):
     Output("st-player-modal", "is_open"),
     Output("st-player-modal-title", "children"),
     Output("st-player-modal-body", "children"),
+    Output("st-player-key", "data"),
+    Output("st-player-group", "data"),
     Input("st-table", "active_cell"),
     Input("st-player-modal-close", "n_clicks"),
     State("st-table", "derived_viewport_data"),
     State("st-parsed", "data"),
     State("st-minutes-required", "value"),
+    State("theme", "data"),
+    State("st-player-view", "data"),
     prevent_initial_call=True,
 )
-def open_player(active_cell, _close, viewport, parsed, minutes_required):
+def open_player(active_cell, _close, viewport, parsed, minutes_required, theme, view):
     if ctx.triggered_id == "st-player-modal-close":
-        return False, no_update, no_update
+        return False, no_update, no_update, None, "mid"
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     rows = viewport or []
     idx = active_cell.get("row")
     if idx is None or idx >= len(rows):
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     key = rows[idx].get("_key")
     players = (parsed or {}).get("players") or []
     player = next((p for p in players if player_key(p) == key), None)
+    view = _normalize_player_view(view)
     if not player:
-        return True, "Player", html.Div("Player not found.")
+        return True, "Player", html.Div("Player not found."), None, "mid"
+    minutes_required = float(minutes_required or default_minutes_required())
+    eval_group = _normalize_eval_group(player.get("pos_group"), "mid")
     return (
         True,
         player.get("name"),
         _player_modal_body(
-            player, float(minutes_required or default_minutes_required())
+            player,
+            minutes_required,
+            view=view,
+            eval_group=eval_group,
+            theme=theme,
+        ),
+        key,
+        eval_group,
+    )
+
+
+def _lookup_modal_player(parsed, player_key_value):
+    players = (parsed or {}).get("players") or []
+    return next((p for p in players if player_key(p) == player_key_value), None)
+
+
+@callback(
+    Output("st-player-view", "data", allow_duplicate=True),
+    Output("st-player-modal-body", "children", allow_duplicate=True),
+    Input({"type": "st-player-view", "view": ALL}, "n_clicks"),
+    State("st-player-view", "data"),
+    State("st-player-group", "data"),
+    State("st-player-key", "data"),
+    State("st-parsed", "data"),
+    State("st-minutes-required", "value"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def switch_player_view(
+    n_clicks, current, eval_group, player_key_value, parsed, minutes_required, theme
+):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    view = ctx.triggered_id.get("view")
+    if view == "_" or view not in ("values", "bars", "pizzas"):
+        return no_update, no_update
+    if view == current:
+        return no_update, no_update
+    player = _lookup_modal_player(parsed, player_key_value)
+    if not player:
+        return view, html.Div("Player not found.")
+    return (
+        view,
+        _player_modal_body(
+            player,
+            float(minutes_required or default_minutes_required()),
+            view=view,
+            eval_group=eval_group,
+            theme=theme,
+        ),
+    )
+
+
+@callback(
+    Output("st-player-group", "data", allow_duplicate=True),
+    Output("st-player-modal-body", "children", allow_duplicate=True),
+    Input({"type": "st-player-group", "group": ALL}, "n_clicks"),
+    State("st-player-group", "data"),
+    State("st-player-view", "data"),
+    State("st-player-key", "data"),
+    State("st-parsed", "data"),
+    State("st-minutes-required", "value"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def switch_player_group(
+    n_clicks, current, view, player_key_value, parsed, minutes_required, theme
+):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    group = ctx.triggered_id.get("group")
+    if group == "_" or group not in {key for key, _ in EVAL_GROUPS}:
+        return no_update, no_update
+    if group == current:
+        return no_update, no_update
+    player = _lookup_modal_player(parsed, player_key_value)
+    if not player:
+        return group, html.Div("Player not found.")
+    return (
+        group,
+        _player_modal_body(
+            player,
+            float(minutes_required or default_minutes_required()),
+            view=_normalize_player_view(view),
+            eval_group=group,
+            theme=theme,
         ),
     )
 
