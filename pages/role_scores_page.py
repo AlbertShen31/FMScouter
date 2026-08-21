@@ -2386,9 +2386,10 @@ def parse_uploaded(upload_contents, replace_contents, upload_name, replace_name)
     Output("rs-upload-wrap", "hidden", allow_duplicate=True),
     Output("rs-upload-replace-wrap", "hidden", allow_duplicate=True),
     Input("rs-parsed", "data"),
+    Input("rs-hydrate-tick", "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
-def restore_upload_ui(parsed):
+def restore_upload_ui(parsed, _tick):
     """Re-show upload status when session-stored CSV survives page navigation."""
     if not parsed or not parsed.get("players"):
         return no_update, no_update, no_update
