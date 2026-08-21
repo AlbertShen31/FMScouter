@@ -39,6 +39,66 @@ ATTR_POLARITY = {
     "Temperament": 1,
 }
 
+# Concise high/low meanings from the FM Scout personality guide.
+ATTR_INFO: dict[str, dict[str, str]] = {
+    "Ambition": {
+        "definition": "How much the player wants to achieve success or break new ground.",
+        "high": (
+            "Pushes for trophies and progress; better training growth and tutoring. "
+            "Also demands bigger contracts and higher-reputation clubs."
+        ),
+        "low": "More content with the current level; less driven to force moves or wage rises.",
+    },
+    "Controversy": {
+        "definition": "How outspoken, brash, or feisty the player is.",
+        "high": (
+            "More likely to criticize the manager, react badly in talks/media, "
+            "and ignore guidance on roles, training, traits, or tutoring."
+        ),
+        "low": "Keeps a lower profile with the media and staff; easier to manage publicly.",
+    },
+    "Loyalty": {
+        "definition": "How strong the player’s allegiance is to their current club.",
+        "high": (
+            "More likely to stay, accept lower wages, and back transfer decisions — "
+            "but harder to buy away from their club."
+        ),
+        "low": "More open to leaving; easier to unsettle or recruit from elsewhere.",
+    },
+    "Pressure": {
+        "definition": "How well the player copes with demanding or high-pressure situations.",
+        "high": (
+            "Less rattled by pressure, criticism, or bad mental states; "
+            "steadier body language and big-match performances."
+        ),
+        "low": "Needs a lighter touch; more likely to struggle when the heat is on.",
+    },
+    "Professionalism": {
+        "definition": "Overall attitude to career, matches, and training.",
+        "high": (
+            "Works hard in training, progresses well, recovers and declines later, "
+            "and reacts better to management and tutoring."
+        ),
+        "low": "Weaker training habits and attitude; more complaints and poorer development.",
+    },
+    "Sportsmanship": {
+        "definition": "How ethical or sportsmanlike the player is.",
+        "high": (
+            "Respects opponents and supports decisions like tutoring — "
+            "but may avoid the “dirty work” that wins tight games."
+        ),
+        "low": "More willing to bend ethics for an edge; less “sporting” in conduct.",
+    },
+    "Temperament": {
+        "definition": "How disciplined the player stays when things go against them.",
+        "high": (
+            "Less frustration or aggression when struggling or decisions go against them; "
+            "handles criticism and discipline better."
+        ),
+        "low": "Volatile under adversity; needs careful handling and is harder to discipline.",
+    },
+}
+
 # Graduated red (1) → yellow (10.5) → green (20) — bright for dark UI.
 _COLOR_RED = (255, 92, 92)
 _COLOR_YELLOW = (255, 210, 64)
@@ -130,6 +190,24 @@ def format_range(bounds: tuple[int, int] | None) -> str:
         return "—"
     lo, hi = bounds
     return str(lo) if lo == hi else f"{lo}–{hi}"
+
+
+def attr_help(attr: str) -> dict[str, str] | None:
+    """Definition / high / low copy for tooltips, or None if unknown."""
+    info = ATTR_INFO.get(attr)
+    return dict(info) if info else None
+
+
+def attr_help_text(attr: str) -> str:
+    """Plain-text tooltip: definition plus high/low score meaning."""
+    info = ATTR_INFO.get(attr)
+    if not info:
+        return attr
+    return (
+        f"{info['definition']}\n\n"
+        f"High: {info['high']}\n\n"
+        f"Low: {info['low']}"
+    )
 
 
 def _lerp_rgb(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[int, int, int]:

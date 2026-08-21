@@ -61,7 +61,7 @@ from role_scorer import (
     set_piece_sort_column,
 )
 from canvas_export import build_canvas
-from personality_ranges import estimate_hidden_ranges, range_color
+from personality_ranges import attr_help, estimate_hidden_ranges, range_color
 from attr_columns import attr_grid, attr_group_columns, attr_row
 import formations as fm
 import role_config as rc
@@ -413,10 +413,34 @@ def _player_personality_section(player: dict) -> html.Div | None:
         if info.get("from_media"):
             tip_bits.append(f"Media {info['from_media']}")
         color = range_color(attr, info.get("range"))
+        help_id = f"rs-pers-help-{attr.lower()}"
+        help_info = attr_help(attr)
+        label_children: list = [
+            html.Span(attr, id=help_id, className="rs-player-id-label rs-pers-attr-label"),
+        ]
+        if help_info:
+            label_children.append(
+                dbc.Tooltip(
+                    [
+                        html.Div(help_info["definition"], className="rs-pers-tip-def"),
+                        html.Div(
+                            [html.Strong("High: "), help_info["high"]],
+                            className="rs-pers-tip-line",
+                        ),
+                        html.Div(
+                            [html.Strong("Low: "), help_info["low"]],
+                            className="rs-pers-tip-line",
+                        ),
+                    ],
+                    target=help_id,
+                    placement="top",
+                    class_name="rs-help-tooltip rs-pers-attr-tooltip",
+                )
+            )
         items.append(
             html.Div(
                 [
-                    html.Span(attr, className="rs-player-id-label"),
+                    html.Div(label_children, className="rs-pers-attr-label-wrap"),
                     html.Span(
                         info["label"],
                         className=(

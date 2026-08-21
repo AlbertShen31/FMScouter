@@ -259,6 +259,27 @@ body {
     line-height: 1.4;
 }
 
+.tooltip.rs-pers-attr-tooltip .tooltip-inner {
+    max-width: 340px;
+}
+
+.rs-pers-attr-label {
+    cursor: help;
+    border-bottom: 1px dotted color-mix(in srgb, var(--app-muted) 70%, transparent);
+}
+
+.rs-pers-attr-label:hover {
+    color: var(--app-text);
+}
+
+.rs-pers-tip-def {
+    margin-bottom: 0.45rem;
+}
+
+.rs-pers-tip-line {
+    margin-top: 0.35rem;
+}
+
 .rs-field-label-row {
     display: flex;
     align-items: center;
