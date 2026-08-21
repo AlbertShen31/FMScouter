@@ -28,11 +28,14 @@ from stats_scorer import (
     POS_GROUPS,
     band_metric,
     benchmarks,
+    canonical_category,
     categories_for_group,
+    category_average_band,
+    category_label,
     default_category_for_group,
     default_minutes_required,
-    is_gk_category,
     is_gk_group,
+    labeled_view_categories,
     metric_defs,
     metrics_for,
     minutes_color,
@@ -40,6 +43,7 @@ from stats_scorer import (
     parse_stats_export,
     passes_minutes_filter,
     player_key,
+    view_categories,
 )
 import ui_settings as us
 
@@ -136,39 +140,28 @@ def _sort_table_rows(rows: list[dict], sort_by) -> None:
 
 
 def _resolve_category(group: str, category: str) -> tuple[str, str]:
-    """Pick a valid category for the active position filter.
+    """Pick a valid shared category for the active position filter.
 
-    GK and outfield categories never map onto each other. Switching into
-    Goalkeepers resets to the first GK category when needed; switching to
-    any outfield filter (including All) resets to the first outfield one.
+    Categories are always Defending / Final third / Possession (plus All).
+    Goalkeepers use the mapped GK benchmark blocks under those same ids.
     """
     g = "gk" if is_gk_group(group) else (group if group in ("def", "mid", "fwd") else "def")
-    cats = categories_for_group(g)
-    if any(c["id"] == category for c in cats):
-        return g, category
+    cat = canonical_category(category)
+    if cat == "all":
+        return g, "all"
+    if any(c["id"] == cat for c in view_categories()):
+        return g, cat
     return g, default_category_for_group(g)
 
 
 def _band_group_cat(player: dict, view_group: str, view_cat: str) -> tuple[str | None, str | None]:
-    """Benchmark group/category for one player under the current view.
-
-    Keepers only use GK categories; outfielders only use outfield ones.
-    No cross-domain remapping (e.g. Possession ↛ GK Possession).
-    """
+    """Benchmark group + shared category for one player under the current view."""
     pg = player.get("pos_group") or "mid"
-    if view_group not in ("", "all"):
-        # Filtered to one pos card — columns already match that domain.
-        if is_gk_group(view_group):
-            return ("gk", view_cat) if is_gk_group(pg) else (None, None)
-        return (pg, view_cat) if not is_gk_group(pg) else (None, None)
-
-    # All players: score each row with its own group, but only when the
-    # selected category belongs to that player's domain.
-    if is_gk_category(view_cat):
-        return ("gk", view_cat) if is_gk_group(pg) else (None, None)
-    if is_gk_group(pg):
+    cat = canonical_category(view_cat)
+    if view_group not in ("", "all") and pg != view_group:
         return None, None
-    return pg, view_cat
+    use_g = "gk" if is_gk_group(pg) else pg
+    return use_g, cat
 
 
 def _pos_bar(players: list[dict], active: str) -> html.Div:
@@ -197,7 +190,10 @@ def _pos_bar(players: list[dict], active: str) -> html.Div:
 
 def _category_tabs(group: str, active: str) -> html.Div:
     _g, active = _resolve_category(group, active)
-    g = "gk" if is_gk_group(group) else (group if group in ("def", "mid", "fwd") else "def")
+    cats = [
+        {"id": "all", "label": "All"},
+        *labeled_view_categories(group=group),
+    ]
     cards = [
         html.Button(
             html.Span(cat["label"], className="rs-pos-name"),
@@ -205,7 +201,7 @@ def _category_tabs(group: str, active: str) -> html.Div:
             n_clicks=0,
             className="rs-pos-card" + (" active" if cat["id"] == active else ""),
         )
-        for cat in categories_for_group(g)
+        for cat in cats
     ]
     return html.Div(
         [
@@ -344,6 +340,11 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
     ]
 
 
+def _avg_category_columns(group: str) -> list[dict[str, str]]:
+    """All-category average columns; Final third shows both outfield + GK names."""
+    return labeled_view_categories(group=group, dual_final_third=True)
+
+
 def _table_columns(group: str, category: str) -> list[dict]:
     g, cat = _resolve_category(group, category)
     cols = [
@@ -353,6 +354,16 @@ def _table_columns(group: str, category: str) -> list[dict]:
         {"name": "Position", "id": "Position"},
         {"name": "Minutes", "id": "Minutes", "presentation": "markdown"},
     ]
+    if cat == "all":
+        for section in _avg_category_columns(group):
+            cols.append(
+                {
+                    "name": section["label"],
+                    "id": section["id"],
+                    "presentation": "markdown",
+                }
+            )
+        return cols
     for mid in metrics_for(g, cat):
         abbr = metric_defs()[mid]["abbr"]
         cols.append({"name": abbr, "id": abbr, "presentation": "markdown"})
@@ -361,7 +372,8 @@ def _table_columns(group: str, category: str) -> list[dict]:
 
 def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
     g, cat = _resolve_category(group, category)
-    metric_ids = metrics_for(g, cat)
+    metric_ids = [] if cat == "all" else metrics_for(g, cat)
+    avg_cats = _avg_category_columns(group) if cat == "all" else []
     rows = []
     for p in players:
         if group not in ("", "all") and p.get("pos_group") != group:
@@ -380,6 +392,17 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
         }
         stats = p.get("stats") or {}
         bg, bc = _band_group_cat(p, group, cat)
+        if cat == "all":
+            for section in avg_cats:
+                col_id = section["id"]
+                if bg is None or bc is None:
+                    row[col_id] = "—"
+                    continue
+                use_g = g if group not in ("", "all") else bg
+                band = category_average_band(use_g, section["id"], stats)
+                row[col_id] = _colored_cell(band["display"], band["color"])
+            rows.append(row)
+            continue
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
             if bg is None or bc is None:
@@ -642,12 +665,10 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
                 ticksuffix="",
                 gridcolor="rgba(148,163,184,0.28)",
                 tickfont=dict(color=muted, size=13),
-                fixedrange=True,
             ),
             angularaxis=dict(
                 gridcolor="rgba(148,163,184,0.24)",
                 tickfont=dict(color=label_color, size=14),
-                fixedrange=True,
             ),
         ),
     )
@@ -1417,15 +1438,20 @@ def refresh_table(
         caption += f" · {len(marked_set)} marked"
 
     fig = BLANK_FIG
-    mids = metrics_for(g, category)
-    if mids and filtered:
-        mid = mids[0]
-        values = [
-            float(v)
-            for p in filtered
-            if (v := (p.get("stats") or {}).get(mid)) is not None
-        ]
-        if values:
+    if category == "all" and filtered:
+        avg_cats = _avg_category_columns(pos)
+        first = avg_cats[0] if avg_cats else None
+        values = []
+        if first:
+            for p in filtered:
+                bg, bc = _band_group_cat(p, pos, category)
+                if bg is None or bc is None:
+                    continue
+                use_g = g if pos not in ("", "all") else bg
+                band = category_average_band(use_g, first["id"], p.get("stats") or {})
+                if band.get("percentile") is not None:
+                    values.append(float(band["percentile"]))
+        if values and first:
             fig = go.Figure(
                 data=[go.Histogram(x=values, nbinsx=20, marker_color="#3b82f6")]
             )
@@ -1435,10 +1461,33 @@ def refresh_table(
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=40, r=20, t=30, b=40),
                 height=240,
-                title=dict(text=metric_defs()[mid]["label"], font=dict(size=12)),
-                xaxis_title=metric_defs()[mid]["abbr"],
+                title=dict(text=f"{first['label']} avg percentile", font=dict(size=12)),
+                xaxis_title="Percentile",
                 yaxis_title="Players",
             )
+    else:
+        mids = metrics_for(g, category)
+        if mids and filtered:
+            mid = mids[0]
+            values = [
+                float(v)
+                for p in filtered
+                if (v := (p.get("stats") or {}).get(mid)) is not None
+            ]
+            if values:
+                fig = go.Figure(
+                    data=[go.Histogram(x=values, nbinsx=20, marker_color="#3b82f6")]
+                )
+                fig.update_layout(
+                    template="plotly_dark" if (theme or "dark") != "light" else "plotly_white",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    margin=dict(l=40, r=20, t=30, b=40),
+                    height=240,
+                    title=dict(text=metric_defs()[mid]["label"], font=dict(size=12)),
+                    xaxis_title=metric_defs()[mid]["abbr"],
+                    yaxis_title="Players",
+                )
 
     preview = (
         f"{len(marked_set)} player(s) marked"

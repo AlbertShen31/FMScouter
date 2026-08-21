@@ -35,6 +35,18 @@ POS_GROUPS = (
     ("fwd", "Forwards", "fwd"),
 )
 
+# UI / store always uses outfield category ids. GK benchmark blocks map onto them.
+_CATEGORY_ALIASES = {
+    "goalkeeping": "final_third",
+    "gk_def": "defending",
+    "gk_possession": "possession",
+}
+_GK_STORAGE_CATEGORY = {
+    "defending": "gk_def",
+    "final_third": "goalkeeping",
+    "possession": "gk_possession",
+}
+
 
 @lru_cache(maxsize=1)
 def benchmarks() -> dict[str, Any]:
@@ -49,37 +61,101 @@ def is_gk_group(group: str | None) -> bool:
     return (group or "") == "gk"
 
 
+def canonical_category(category: str | None) -> str:
+    """Normalize legacy GK category ids onto the shared outfield ids."""
+    cat = (category or "").strip()
+    if cat == "all":
+        return "all"
+    return _CATEGORY_ALIASES.get(cat, cat)
+
+
+def storage_category(group: str | None, category: str | None) -> str | None:
+    """Benchmark JSON category key for a position group + UI category."""
+    cat = canonical_category(category)
+    if cat in ("", "all"):
+        return None
+    if is_gk_group(group):
+        return _GK_STORAGE_CATEGORY.get(cat)
+    if cat in _GK_STORAGE_CATEGORY:
+        return cat
+    return None
+
+
 def category_domain(category: str | None) -> str:
-    """Return 'gk' or 'outfield' for a category id."""
-    cat = category or ""
-    gk_ids = {c["id"] for c in benchmarks()["categories"]["gk"]}
-    if cat in gk_ids:
-        return "gk"
-    return "outfield"
+    """Return 'gk' only for legacy GK storage ids; shared UI ids are 'outfield'."""
+    return "gk" if is_gk_category(category) else "outfield"
 
 
 def is_gk_category(category: str | None) -> bool:
-    return category_domain(category) == "gk"
+    """True only for legacy GK storage ids (goalkeeping / gk_*)."""
+    return (category or "").strip() in _CATEGORY_ALIASES
+
+
+def view_categories() -> list[dict[str, str]]:
+    """Shared category tabs/columns for every position group."""
+    return list(benchmarks()["categories"]["outfield"])
+
+
+def category_label(
+    category: str | None,
+    *,
+    group: str | None = None,
+    dual_final_third: bool = False,
+) -> str:
+    """UI label for a shared category id.
+
+    - Goalkeeper filter: ``final_third`` → Goalkeeping
+    - All-category averages: ``final_third`` → Final third / Goalkeeping
+    """
+    cat = canonical_category(category)
+    outfield = {c["id"]: c["label"] for c in view_categories()}
+    if cat == "all":
+        return "All"
+    if cat == "final_third":
+        gk_name = next(
+            (c["label"] for c in benchmarks()["categories"]["gk"] if c["id"] == "goalkeeping"),
+            "Goalkeeping",
+        )
+        if dual_final_third:
+            return f"{outfield.get('final_third', 'Final third')} / {gk_name}"
+        if is_gk_group(group):
+            return gk_name
+    return outfield.get(cat, cat or "")
+
+
+def labeled_view_categories(
+    *,
+    group: str | None = None,
+    dual_final_third: bool = False,
+) -> list[dict[str, str]]:
+    """view_categories() with context-aware display labels."""
+    return [
+        {
+            "id": cat["id"],
+            "label": category_label(
+                cat["id"], group=group, dual_final_third=dual_final_third
+            ),
+        }
+        for cat in view_categories()
+    ]
 
 
 def categories_for_group(group: str) -> list[dict[str, str]]:
-    """GK groups use GK-only categories; every other group uses outfield categories."""
-    data = benchmarks()
-    if is_gk_group(group):
-        return list(data["categories"]["gk"])
-    return list(data["categories"]["outfield"])
+    """Same shared categories for GK and outfield (labels: Defending / Final third / Possession)."""
+    return labeled_view_categories(group=group)
 
 
 def default_category_for_group(group: str) -> str:
-    cats = categories_for_group(group)
-    return cats[0]["id"] if cats else ("goalkeeping" if is_gk_group(group) else "defending")
+    cats = view_categories()
+    return cats[0]["id"] if cats else "defending"
 
 
 def metrics_for(group: str, category: str) -> list[str]:
-    """Metrics for one position group + category. Never crosses GK ↔ outfield."""
-    if is_gk_group(group) != is_gk_category(category):
+    """Metrics for one position group + shared category (GK uses mapped storage keys)."""
+    stored = storage_category(group, category)
+    if not stored:
         return []
-    block = (benchmarks()["benchmarks"].get(group) or {}).get(category) or {}
+    block = (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
     return list(block.keys())
 
 
@@ -330,12 +406,11 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
 
 def band_metric(group: str, category: str, metric_id: str, value: float | None) -> dict[str, Any]:
     meta = metric_defs().get(metric_id) or {}
-    # GK and outfield never share threshold tables.
-    if is_gk_group(group) != is_gk_category(category):
-        thresholds = None
-    else:
+    stored = storage_category(group, category)
+    thresholds = None
+    if stored:
         thresholds = (
-            (benchmarks()["benchmarks"].get(group) or {}).get(category) or {}
+            (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
         ).get(metric_id)
     if value is None or not thresholds:
         return {
@@ -364,6 +439,31 @@ def band_metric(group: str, category: str, metric_id: str, value: float | None) 
     }
 
 
+def category_average_band(
+    group: str, category: str, stats: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Mean estimated percentile across metrics in one category (missing skipped)."""
+    pcts: list[float] = []
+    for mid in metrics_for(group, category):
+        band = band_metric(group, category, mid, (stats or {}).get(mid))
+        if band.get("percentile") is not None:
+            pcts.append(float(band["percentile"]))
+    if not pcts:
+        return {
+            "value": None,
+            "display": "—",
+            "percentile": None,
+            "color": None,
+        }
+    avg = sum(pcts) / len(pcts)
+    return {
+        "value": avg,
+        "display": f"{avg:.0f}",
+        "percentile": avg,
+        "color": percentile_color(avg),
+    }
+
+
 def player_key(player: dict) -> str:
     return player_row_key({"Name": player.get("name"), "Club": player.get("club")})
 
@@ -388,13 +488,14 @@ def format_stat_export_rows(
     category: str,
     minutes_required: float,
 ) -> tuple[list[str], list[dict]]:
-    """Export rows for one position filter + category.
+    """Export rows for one position filter + shared category.
 
-    GK categories only apply to keepers; outfield categories only to
-    outfielders. Mixed ``all`` uses each player's own group when the
-    category belongs to that player's domain.
+    Category ids are always outfield-shaped (``defending`` / ``final_third`` /
+    ``possession`` / ``all``). Keepers use the mapped GK benchmark blocks.
     """
-    if group == "all":
+    category = canonical_category(category)
+    if category == "all":
+        cats = labeled_view_categories(group=group, dual_final_third=True)
         fieldnames = [
             "Name",
             "Age",
@@ -404,6 +505,44 @@ def format_stat_export_rows(
             "Minutes",
             "Minutes Status",
         ]
+        for cat in cats:
+            fieldnames.append(cat["label"])
+        rows = []
+        for p in players:
+            g = p.get("pos_group") or "mid"
+            if group not in ("", "all") and g != group:
+                continue
+            status = minutes_status(p.get("minutes"), minutes_required)
+            row = {
+                "Name": p["name"],
+                "Age": p.get("age"),
+                "Club": p.get("club"),
+                "Position": p.get("position"),
+                "Pos Group": g,
+                "Minutes": p.get("minutes"),
+                "Minutes Status": status,
+            }
+            use_g = "gk" if is_gk_group(g) else g
+            for cat in cats:
+                band = category_average_band(use_g, cat["id"], p.get("stats") or {})
+                row[cat["label"]] = band["display"]
+            rows.append(row)
+        return fieldnames, rows
+
+    if group == "all":
+        # Column set follows outfield metrics; keepers fill overlapping ids only.
+        metric_ids = metrics_for("def", category)
+        fieldnames = [
+            "Name",
+            "Age",
+            "Club",
+            "Position",
+            "Pos Group",
+            "Minutes",
+            "Minutes Status",
+        ]
+        for mid in metric_ids:
+            fieldnames.append(metric_defs()[mid]["abbr"])
         rows = []
         for p in players:
             g = p.get("pos_group") or "mid"
@@ -417,13 +556,14 @@ def format_stat_export_rows(
                 "Minutes": p.get("minutes"),
                 "Minutes Status": status,
             }
-            if is_gk_group(g) == is_gk_category(category):
-                for mid in metrics_for(g, category):
-                    band = band_metric(g, category, mid, (p.get("stats") or {}).get(mid))
-                    label = metric_defs()[mid]["abbr"]
-                    row[label] = band["display"]
-                    if label not in fieldnames:
-                        fieldnames.append(label)
+            use_g = "gk" if is_gk_group(g) else g
+            for mid in metric_ids:
+                label = metric_defs()[mid]["abbr"]
+                if mid not in metrics_for(use_g, category):
+                    row[label] = "—"
+                    continue
+                band = band_metric(use_g, category, mid, (p.get("stats") or {}).get(mid))
+                row[label] = band["display"]
             rows.append(row)
         return fieldnames, rows
 
