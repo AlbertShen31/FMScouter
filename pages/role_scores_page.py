@@ -61,6 +61,7 @@ from role_scorer import (
     set_piece_sort_column,
 )
 from canvas_export import build_canvas
+from personality_ranges import estimate_hidden_ranges, range_color
 from attr_columns import attr_grid, attr_group_columns, attr_row
 import formations as fm
 import role_config as rc
@@ -240,6 +241,8 @@ PLAYER_IDENTITY_HIDDEN = frozenset(
         "ability",
         "potential",
         "squad",
+        "personality",
+        "media_handling",
     }
 )
 
@@ -256,8 +259,6 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Best pos", "best_pos"),
                 ("Best role", "best_role"),
                 ("Style", "style"),
-                ("Personality", "personality"),
-                ("Media handling", "media_handling"),
                 ("Height", "height"),
                 ("Left foot", "left_foot"),
                 ("Right foot", "right_foot"),
@@ -382,6 +383,80 @@ def _player_attributes(player: dict, bands: dict) -> html.Div:
     )
 
 
+def _player_personality_section(player: dict) -> html.Div | None:
+    """Estimated hidden-attribute ranges from Personality + Media Handling."""
+    attrs = player.get("attrs") or {}
+    det = attrs.get("Det")
+    estimate = estimate_hidden_ranges(
+        player.get("personality"),
+        player.get("media_handling"),
+        determination=int(det) if det not in (None, "") else None,
+    )
+    if not estimate["matched"]:
+        return None
+
+    subtitle_parts = []
+    if estimate["personality"]:
+        subtitle_parts.append(estimate["personality"])
+    elif player.get("personality"):
+        subtitle_parts.append(str(player.get("personality")))
+    if estimate["media_handling"]:
+        subtitle_parts.append(estimate["media_handling"])
+    elif player.get("media_handling"):
+        subtitle_parts.append(str(player.get("media_handling")))
+
+    items = []
+    for attr, info in estimate["hidden"].items():
+        tip_bits = []
+        if info.get("from_personality"):
+            tip_bits.append(f"Personality {info['from_personality']}")
+        if info.get("from_media"):
+            tip_bits.append(f"Media {info['from_media']}")
+        color = range_color(attr, info.get("range"))
+        items.append(
+            html.Div(
+                [
+                    html.Span(attr, className="rs-player-id-label"),
+                    html.Span(
+                        info["label"],
+                        className=(
+                            "rs-player-id-value rs-personality-range"
+                            + (" is-conflict" if info.get("range") is None else "")
+                        ),
+                        style={"color": color} if color else None,
+                        title=" · ".join(tip_bits) if tip_bits else "No constraint (1–20)",
+                    ),
+                ],
+                className="rs-player-id-item",
+            )
+        )
+
+    notes = []
+    ldr_info = estimate["visible"].get("Leadership") or {}
+    if ldr_info.get("label"):
+        ldr = attrs.get("Ldr")
+        actual = f" (actual {ldr})" if ldr is not None else ""
+        notes.append(
+            html.Div(
+                f"Leadership expected {ldr_info['label']}{actual}",
+                className="rs-personality-note",
+            )
+        )
+
+    children = [
+        html.Div("Personality", className="rs-player-id-section-title"),
+    ]
+    if subtitle_parts:
+        children.append(
+            html.Div(" · ".join(subtitle_parts), className="rs-personality-subtitle")
+        )
+    children.append(
+        html.Div(items, className="rs-player-identity rs-personality-ranges")
+    )
+    children.extend(notes)
+    return html.Div(children, className="rs-player-id-section rs-personality-section")
+
+
 def _combo_columns_by_label(combos) -> dict[str, dict]:
     return {
         combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
@@ -501,8 +576,13 @@ def _player_detail_card(
             sections.extend(row_blocks)
     return html.Div(
         [
-            *sections,
-            _player_attributes(player, bands),
+            child
+            for child in (
+                *sections,
+                _player_personality_section(player),
+                _player_attributes(player, bands),
+            )
+            if child is not None
         ],
         className="rs-player-detail",
     )

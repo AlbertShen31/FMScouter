@@ -1,0 +1,712 @@
+{
+  "source": "FM Scout \u2014 Guide to Player Personalities on Football Manager",
+  "hidden_attributes": [
+    "Ambition",
+    "Controversy",
+    "Loyalty",
+    "Pressure",
+    "Professionalism",
+    "Sportsmanship",
+    "Temperament"
+  ],
+  "visible_attributes": [
+    "Determination",
+    "Leadership"
+  ],
+  "personalities": {
+    "Model Citizen": {
+      "Ambition": [
+        12,
+        20
+      ],
+      "Determination": [
+        14,
+        20
+      ],
+      "Loyalty": [
+        15,
+        20
+      ],
+      "Pressure": [
+        14,
+        20
+      ],
+      "Professionalism": [
+        15,
+        20
+      ],
+      "Sportsmanship": [
+        15,
+        20
+      ],
+      "Temperament": [
+        15,
+        20
+      ]
+    },
+    "Perfectionist": {
+      "Ambition": [
+        14,
+        20
+      ],
+      "Determination": [
+        14,
+        20
+      ],
+      "Professionalism": [
+        14,
+        20
+      ],
+      "Temperament": [
+        1,
+        9
+      ]
+    },
+    "Resolute": {
+      "Ambition": [
+        5,
+        20
+      ],
+      "Determination": [
+        15,
+        17
+      ],
+      "Pressure": [
+        1,
+        16
+      ],
+      "Professionalism": [
+        15,
+        20
+      ],
+      "Sportsmanship": [
+        12,
+        20
+      ]
+    },
+    "Model Professional": {
+      "Professionalism": [
+        20,
+        20
+      ],
+      "Temperament": [
+        10,
+        20
+      ]
+    },
+    "Professional": {
+      "Professionalism": [
+        18,
+        20
+      ],
+      "Temperament": [
+        10,
+        20
+      ]
+    },
+    "Fairly Professional": {
+      "Determination": [
+        1,
+        14
+      ],
+      "Professionalism": [
+        15,
+        20
+      ]
+    },
+    "Spirited": {
+      "Determination": [
+        1,
+        17
+      ],
+      "Pressure": [
+        15,
+        20
+      ],
+      "Professionalism": [
+        11,
+        17
+      ],
+      "Sportsmanship": [
+        1,
+        14
+      ],
+      "Temperament": [
+        10,
+        20
+      ]
+    },
+    "Driven": {
+      "Ambition": [
+        12,
+        20
+      ],
+      "Determination": [
+        17,
+        20
+      ]
+    },
+    "Determined": {
+      "Ambition": [
+        1,
+        11
+      ],
+      "Determination": [
+        17,
+        20
+      ]
+    },
+    "Fairly Determined": {
+      "Determination": [
+        15,
+        17
+      ],
+      "Pressure": [
+        1,
+        16
+      ],
+      "Professionalism": [
+        1,
+        14
+      ],
+      "Sportsmanship": [
+        5,
+        20
+      ]
+    },
+    "Iron Willed": {
+      "Determination": [
+        15,
+        17
+      ],
+      "Pressure": [
+        20,
+        20
+      ],
+      "Sportsmanship": [
+        5,
+        20
+      ]
+    },
+    "Resilient": {
+      "Ambition": [
+        8,
+        20
+      ],
+      "Determination": [
+        15,
+        17
+      ],
+      "Pressure": [
+        17,
+        20
+      ],
+      "Sportsmanship": [
+        5,
+        20
+      ]
+    },
+    "Charismatic Leader": {
+      "Leadership": [
+        18,
+        20
+      ],
+      "Sportsmanship": [
+        18,
+        20
+      ],
+      "Temperament": [
+        18,
+        20
+      ]
+    },
+    "Born Leader": {
+      "Determination": [
+        20,
+        20
+      ],
+      "Leadership": [
+        20,
+        20
+      ]
+    },
+    "Leader": {
+      "Leadership": [
+        19,
+        20
+      ]
+    },
+    "Very Ambitious": {
+      "Ambition": [
+        20,
+        20
+      ],
+      "Determination": [
+        1,
+        17
+      ],
+      "Loyalty": [
+        1,
+        10
+      ]
+    },
+    "Ambitious": {
+      "Ambition": [
+        16,
+        20
+      ],
+      "Determination": [
+        1,
+        17
+      ],
+      "Loyalty": [
+        1,
+        10
+      ]
+    },
+    "Fairly Ambitious": {
+      "Ambition": [
+        15,
+        20
+      ],
+      "Determination": [
+        1,
+        14
+      ],
+      "Professionalism": [
+        1,
+        14
+      ]
+    },
+    "Fickle": {
+      "Ambition": [
+        15,
+        20
+      ],
+      "Determination": [
+        1,
+        14
+      ],
+      "Loyalty": [
+        1,
+        14
+      ],
+      "Professionalism": [
+        1,
+        14
+      ]
+    },
+    "Mercenary": {
+      "Ambition": [
+        16,
+        20
+      ],
+      "Determination": [
+        1,
+        17
+      ],
+      "Loyalty": [
+        1,
+        3
+      ]
+    },
+    "Slack": {
+      "Determination": [
+        1,
+        9
+      ],
+      "Professionalism": [
+        1,
+        1
+      ],
+      "Temperament": [
+        5,
+        20
+      ]
+    },
+    "Casual": {
+      "Determination": [
+        1,
+        9
+      ],
+      "Professionalism": [
+        1,
+        4
+      ],
+      "Temperament": [
+        5,
+        20
+      ]
+    },
+    "Temperamental": {
+      "Professionalism": [
+        1,
+        10
+      ],
+      "Temperament": [
+        1,
+        4
+      ]
+    },
+    "Easily Discouraged": {
+      "Ambition": [
+        1,
+        10
+      ],
+      "Determination": [
+        1,
+        1
+      ],
+      "Professionalism": [
+        5,
+        20
+      ],
+      "Sportsmanship": [
+        1,
+        17
+      ]
+    },
+    "Low Determination": {
+      "Ambition": [
+        1,
+        10
+      ],
+      "Determination": [
+        1,
+        5
+      ],
+      "Professionalism": [
+        5,
+        20
+      ],
+      "Sportsmanship": [
+        1,
+        17
+      ]
+    },
+    "Spineless": {
+      "Determination": [
+        1,
+        10
+      ],
+      "Pressure": [
+        1,
+        1
+      ],
+      "Professionalism": [
+        5,
+        20
+      ],
+      "Sportsmanship": [
+        1,
+        17
+      ]
+    },
+    "Low Self-Belief": {
+      "Determination": [
+        1,
+        10
+      ],
+      "Pressure": [
+        1,
+        3
+      ],
+      "Professionalism": [
+        5,
+        20
+      ],
+      "Sportsmanship": [
+        1,
+        17
+      ]
+    },
+    "Unambitious": {
+      "Ambition": [
+        1,
+        5
+      ],
+      "Determination": [
+        1,
+        17
+      ],
+      "Loyalty": [
+        11,
+        20
+      ]
+    },
+    "Jovial": {
+      "Determination": [
+        1,
+        17
+      ],
+      "Pressure": [
+        15,
+        20
+      ],
+      "Professionalism": [
+        1,
+        10
+      ],
+      "Sportsmanship": [
+        1,
+        14
+      ],
+      "Temperament": [
+        10,
+        20
+      ]
+    },
+    "Light-Hearted": {
+      "Determination": [
+        1,
+        17
+      ],
+      "Pressure": [
+        15,
+        20
+      ],
+      "Professionalism": [
+        1,
+        17
+      ],
+      "Sportsmanship": [
+        15,
+        20
+      ],
+      "Temperament": [
+        10,
+        20
+      ]
+    },
+    "Devoted / Very Loyal": {
+      "Ambition": [
+        5,
+        8
+      ],
+      "Determination": [
+        18,
+        20
+      ],
+      "Loyalty": [
+        20,
+        20
+      ]
+    },
+    "Loyal": {
+      "Ambition": [
+        1,
+        7
+      ],
+      "Determination": [
+        6,
+        17
+      ],
+      "Loyalty": [
+        17,
+        19
+      ]
+    },
+    "Fairly Loyal": {
+      "Ambition": [
+        6,
+        14
+      ],
+      "Determination": [
+        1,
+        14
+      ],
+      "Loyalty": [
+        15,
+        20
+      ],
+      "Professionalism": [
+        1,
+        14
+      ]
+    },
+    "Honest": {
+      "Determination": [
+        1,
+        10
+      ],
+      "Professionalism": [
+        5,
+        20
+      ],
+      "Sportsmanship": [
+        20,
+        20
+      ]
+    },
+    "Sporting": {
+      "Determination": [
+        1,
+        10
+      ],
+      "Professionalism": [
+        8,
+        20
+      ],
+      "Sportsmanship": [
+        18,
+        20
+      ]
+    },
+    "Fairly Sporting": {
+      "Ambition": [
+        1,
+        14
+      ],
+      "Determination": [
+        1,
+        14
+      ],
+      "Loyalty": [
+        1,
+        14
+      ],
+      "Professionalism": [
+        1,
+        14
+      ],
+      "Sportsmanship": [
+        15,
+        20
+      ]
+    },
+    "Unsporting": {
+      "Determination": [
+        10,
+        17
+      ],
+      "Sportsmanship": [
+        1,
+        1
+      ]
+    },
+    "Realist": {
+      "Determination": [
+        10,
+        17
+      ],
+      "Sportsmanship": [
+        1,
+        4
+      ]
+    },
+    "Balanced": {
+      "Ambition": [
+        1,
+        14
+      ],
+      "Determination": [
+        1,
+        14
+      ],
+      "Loyalty": [
+        1,
+        14
+      ],
+      "Professionalism": [
+        1,
+        14
+      ],
+      "Sportsmanship": [
+        1,
+        14
+      ]
+    }
+  },
+  "media_handling": {
+    "Confrontational": {
+      "Sportsmanship": [
+        1,
+        4
+      ],
+      "Temperament": [
+        1,
+        4
+      ]
+    },
+    "Evasive": {
+      "Controversy": [
+        6,
+        14
+      ],
+      "Pressure": [
+        15,
+        20
+      ],
+      "Professionalism": [
+        15,
+        20
+      ],
+      "Temperament": [
+        7,
+        14
+      ]
+    },
+    "Level-Headed": {
+      "Controversy": [
+        1,
+        14
+      ],
+      "Temperament": [
+        7,
+        20
+      ],
+      "Loyalty": [
+        11,
+        20
+      ]
+    },
+    "Media-Friendly": {
+      "Controversy": [
+        1,
+        14
+      ]
+    },
+    "Outspoken": {
+      "Controversy": [
+        15,
+        20
+      ]
+    },
+    "Reserved": {
+      "Controversy": [
+        1,
+        5
+      ],
+      "Professionalism": [
+        15,
+        20
+      ],
+      "Temperament": [
+        7,
+        20
+      ]
+    },
+    "Short-Tempered": {
+      "Temperament": [
+        1,
+        4
+      ]
+    },
+    "Unflappable": {
+      "Pressure": [
+        15,
+        20
+      ],
+      "Temperament": [
+        15,
+        20
+      ]
+    },
+    "Volatile": {
+      "Temperament": [
+        1,
+        6
+      ]
+    }
+  }
+}
