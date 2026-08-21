@@ -1109,33 +1109,6 @@ def layout():
         ),
         html.Div(
             [
-        html.Div(id="rs-pos-bar"),
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Span("Squad depth", className="rs-depth-heading-label"),
-                                html.Span(
-                                    "Click cards to focus the table on one or more roles. "
-                                    "Click again to remove a role; clear all to show every role. "
-                                    "Click a player name in the shortlist for full details.",
-                                    className="rs-depth-heading-hint",
-                                ),
-                            ],
-                            className="rs-depth-heading-copy",
-                        ),
-                        html.Div(_band_legend(settings), id="rs-band-legend"),
-                    ],
-                    className="rs-depth-heading",
-                ),
-                html.Div(id="rs-summary", className="rs-depth-grid"),
-            ],
-            id="rs-depth-wrap",
-            className="rs-depth-panel",
-            hidden=True,
-        ),
         dbc.Card(
             [
                 dbc.CardHeader("3. Shortlist"),
@@ -1143,6 +1116,36 @@ def layout():
                     [
                         html.Div(
                             [
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            [
+                                                html.Span(
+                                                    "Squad depth",
+                                                    className="rs-depth-heading-label",
+                                                ),
+                                                html.Span(
+                                                    "Click cards to focus the table on one or more roles. "
+                                                    "Click again to remove a role; clear all to show every role. "
+                                                    "Click a player name in the shortlist for full details.",
+                                                    className="rs-depth-heading-hint",
+                                                ),
+                                            ],
+                                            className="rs-depth-heading-copy",
+                                        ),
+                                        html.Div(_band_legend(settings), id="rs-band-legend"),
+                                    ],
+                                    className="rs-depth-heading",
+                                ),
+                                html.Div(id="rs-summary", className="rs-depth-grid"),
+                            ],
+                            id="rs-depth-wrap",
+                            className="rs-depth-panel",
+                            hidden=True,
+                        ),
+                        html.Div(
+                            [
+                                html.Div(id="rs-pos-bar"),
                                 html.Div(
                                     [
                                         html.Div(
@@ -1187,7 +1190,6 @@ def layout():
                                                             max=20,
                                                             step=0.1,
                                                             decimalScale=1,
-                                                            # Default: OK band floor (scores below = Poor).
                                                             value=settings["bands"]["ok"],
                                                         ),
                                                         dmc.Select(
@@ -1217,36 +1219,32 @@ def layout():
                                         ),
                                         html.Div(
                                             [
-                                                html.Div(
-                                                    [
-                                                        _field_label(
-                                                            "Position match",
-                                                            tip=(
-                                                                "Same green / yellow / red rules as the "
-                                                                "Position column. Full = green only; "
-                                                                "At least partial = yellow + green; "
-                                                                "Any = includes red. Hybrids need both "
-                                                                "parts for green."
-                                                            ),
-                                                            help_id="rs-help-pos-match",
-                                                        ),
-                                                        dmc.Select(
-                                                            id="rs-pos-match",
-                                                            data=POS_MATCH_OPTIONS,
-                                                            value="yes",
-                                                            clearable=False,
-                                                            searchable=False,
-                                                        ),
-                                                    ],
-                                                    className="rs-filter-pos-match",
+                                                _field_label(
+                                                    "Position match",
+                                                    tip=(
+                                                        "Same green / yellow / red rules as the "
+                                                        "Position column. Full = green only; "
+                                                        "At least partial = yellow + green; "
+                                                        "Any = includes red. Hybrids need both "
+                                                        "parts for green."
+                                                    ),
+                                                    help_id="rs-help-pos-match",
                                                 ),
-                                                dmc.Switch(
-                                                    id="rs-hybrids-only",
-                                                    label="Show only hybrid roles",
-                                                    checked=False,
+                                                dmc.Select(
+                                                    id="rs-pos-match",
+                                                    data=POS_MATCH_OPTIONS,
+                                                    value="yes",
+                                                    clearable=False,
+                                                    searchable=False,
                                                 ),
                                             ],
-                                            className="rs-filter-toggles",
+                                            className="rs-filter-pos-match",
+                                        ),
+                                        dmc.Switch(
+                                            id="rs-hybrids-only",
+                                            label="Show only hybrid roles",
+                                            checked=False,
+                                            className="rs-filter-hybrids",
                                         ),
                                     ],
                                     className="rs-shortlist-filters-row",
