@@ -620,8 +620,8 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
 
 def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
     dark = (theme or "dark") != "light"
-    label_color = "#f8fafc" if dark else "#0f172a"
     muted = "#cbd5e1" if dark else "#475569"
+    missing_fill = "rgba(148, 163, 184, 0.18)" if dark else "rgba(148, 163, 184, 0.22)"
     if not metrics:
         fig = go.Figure()
         fig.update_layout(
@@ -629,50 +629,121 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
         )
         return fig
 
+    n = len(metrics)
+    # Full-width wedges so arcs meet with no gaps.
+    width = 360.0 / n
     theta = []
     radius = []
-    for metric in metrics:
-        value = "No data" if metric["missing"] else metric["display"]
-        theta.append(f"{metric['abbr']} · {value}")
-        radius.append(0.0 if metric["missing"] else float(metric["percentile"]))
-
-    # Close the shape.
-    theta_closed = theta + [theta[0]]
-    radius_closed = radius + [radius[0]]
-    fill = "rgba(61, 255, 136, 0.22)" if dark else "rgba(34, 139, 87, 0.18)"
-    line = "rgb(61, 255, 136)" if dark else "rgb(22, 163, 74)"
+    colors = []
+    custom = []
+    for i, metric in enumerate(metrics):
+        theta.append(i * width)
+        if metric["missing"]:
+            radius.append(4.0)
+            colors.append(missing_fill)
+            custom.append(f"{metric['abbr']} · No data")
+        else:
+            pct = float(metric["percentile"])
+            radius.append(pct)
+            colors.append(metric["color"] or ("rgb(61, 255, 136)" if dark else "rgb(22, 163, 74)"))
+            custom.append(f"{metric['abbr']} · {metric['display']}<br>{pct:.0f}th pct")
 
     fig = go.Figure(
-        go.Scatterpolar(
-            r=radius_closed,
-            theta=theta_closed,
-            fill="toself",
-            fillcolor=fill,
-            line=dict(color=line, width=2.5),
-            mode="lines+markers",
-            marker=dict(size=8, color=line),
-            hovertemplate="%{theta}<br>%{r:.0f}th pct<extra></extra>",
+        go.Barpolar(
+            r=radius,
+            theta=theta,
+            width=[width] * n,
+            marker=dict(
+                color=colors,
+                line=dict(
+                    color="rgba(15, 23, 42, 0.45)" if dark else "rgba(255,255,255,0.75)",
+                    width=1.25,
+                ),
+            ),
+            hovertemplate="%{customdata}<extra></extra>",
+            customdata=custom,
             name="Percentile",
         )
     )
     fig.update_layout(
-        **_chart_layout(theme, height=400, margin=dict(l=64, r=64, t=44, b=44)),
+        **_chart_layout(theme, height=360, margin=dict(l=24, r=24, t=24, b=24)),
         polar=dict(
             bgcolor="rgba(0,0,0,0)",
+            hole=0.14,
             radialaxis=dict(
                 range=[0, 100],
-                showticklabels=True,
-                ticksuffix="",
+                showticklabels=False,
+                ticks="",
                 gridcolor="rgba(148,163,184,0.28)",
-                tickfont=dict(color=muted, size=13),
+                tickfont=dict(color=muted, size=11),
+                showline=False,
             ),
             angularaxis=dict(
-                gridcolor="rgba(148,163,184,0.24)",
-                tickfont=dict(color=label_color, size=14),
+                rotation=90,
+                direction="clockwise",
+                period=360,
+                showticklabels=False,
+                ticks="",
+                gridcolor="rgba(148,163,184,0.18)",
+                showline=False,
             ),
         ),
     )
     return fig
+
+
+def _pizza_infobox(metrics: list[dict]) -> html.Div:
+    rows = []
+    for metric in metrics:
+        swatch = metric["color"] or "rgba(148, 163, 184, 0.35)"
+        if metric["missing"]:
+            value = "No data"
+            pct = "—"
+        else:
+            value = metric["display"]
+            pct = f"~{metric['percentile']:.0f}th"
+        rows.append(
+            html.Div(
+                [
+                    html.Span(
+                        className="st-pizza-swatch",
+                        style={"background": swatch},
+                    ),
+                    html.Div(
+                        [
+                            html.Span(metric["abbr"], className="st-pizza-legend-abbr"),
+                            html.Span(metric["label"], className="st-pizza-legend-name"),
+                        ],
+                        className="st-pizza-legend-text",
+                    ),
+                    html.Div(
+                        [
+                            html.Span(
+                                value,
+                                className="st-pizza-legend-val"
+                                + (" is-missing" if metric["missing"] else ""),
+                                style=(
+                                    None
+                                    if metric["missing"] or not metric["color"]
+                                    else {"color": metric["color"]}
+                                ),
+                            ),
+                            html.Span(pct, className="st-pizza-legend-pct"),
+                        ],
+                        className="st-pizza-legend-nums",
+                    ),
+                ],
+                className="st-pizza-legend-row",
+            )
+        )
+    return html.Div(
+        [
+            html.Div("Metrics", className="st-pizza-infobox-title"),
+            html.Div(rows, className="st-pizza-legend"),
+        ],
+        className="st-pizza-infobox",
+    )
+
 
 def _metrics_bars(sections: list[dict], theme: str | None) -> list:
     blocks = []
@@ -700,42 +771,24 @@ def _metrics_pizzas(sections: list[dict], theme: str | None) -> list:
     for cat in sections:
         if not cat["metrics"]:
             continue
-        legend = html.Div(
-            [
-                html.Div(
-                    [
-                        html.Span(metric["abbr"], className="st-pizza-legend-abbr"),
-                        html.Span(metric["label"], className="st-pizza-legend-name"),
-                        html.Span(
-                            "No data" if metric["missing"] else metric["display"],
-                            className="st-pizza-legend-val"
-                            + (" is-missing" if metric["missing"] else ""),
-                            style=(
-                                None
-                                if metric["missing"] or not metric["color"]
-                                else {"color": metric["color"]}
-                            ),
-                        ),
-                    ],
-                    className="st-pizza-legend-row",
-                )
-                for metric in cat["metrics"]
-            ],
-            className="st-pizza-legend",
-        )
         blocks.append(
             html.Div(
                 [
                     html.Div(cat["label"], className="rs-player-id-section-title"),
-                    dcc.Graph(
-                        figure=_pizza_figure(cat["metrics"], theme),
-                        config={
-                            **PLAYER_CHART_CONFIG,
-                            "staticPlot": True,
-                        },
-                        className="st-player-chart st-player-pizza",
+                    html.Div(
+                        [
+                            dcc.Graph(
+                                figure=_pizza_figure(cat["metrics"], theme),
+                                config={
+                                    **PLAYER_CHART_CONFIG,
+                                    "staticPlot": True,
+                                },
+                                className="st-player-chart st-player-pizza",
+                            ),
+                            _pizza_infobox(cat["metrics"]),
+                        ],
+                        className="st-pizza-layout",
                     ),
-                    legend,
                 ],
                 className="rs-player-id-section st-player-chart-section",
             )
