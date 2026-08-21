@@ -661,6 +661,12 @@ def _hybrid_roles_panel() -> html.Div:
                                 n_clicks=0,
                                 variant="light",
                             ),
+                            dmc.Button(
+                                "Clear",
+                                id={"type": "rs-clear-roles", "loc": "hybrid"},
+                                n_clicks=0,
+                                variant="subtle",
+                            ),
                         ],
                         className="rs-combo-row",
                     ),
@@ -864,6 +870,7 @@ def layout():
                 html.Button(id={"type": "rs-pill", "role": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-group", "group": "_"}, n_clicks=0),
                 html.Button(id={"type": "rs-combo-pill", "combo": "_"}, n_clicks=0),
+                html.Button(id={"type": "rs-clear-roles", "loc": "_"}, n_clicks=0),
             ],
             hidden=True,
         ),
@@ -997,14 +1004,6 @@ def layout():
                                             ],
                                             className="rs-filter-row",
                                         ),
-                                        dmc.Button(
-                                            "Clear",
-                                            id="rs-clear-roles",
-                                            n_clicks=0,
-                                            variant="subtle",
-                                            size="xs",
-                                            className="rs-chip ghost",
-                                        ),
                                     ],
                                     className="rs-role-toolbar",
                                 ),
@@ -1023,15 +1022,48 @@ def layout():
                                             tip="Every player is scored against the roles you pick here.",
                                             help_id="rs-help-scored-roles",
                                         ),
-                                        dmc.MultiSelect(
-                                            id="rs-roles",
-                                            data=role_options(),
-                                            value=[],
-                                            placeholder="Choose scored roles",
-                                            searchable=True,
-                                            clearable=True,
-                                            maxDropdownHeight=280,
-                                            className="rs-primary-control",
+                                        html.Div(
+                                            [
+                                                dmc.MultiSelect(
+                                                    id="rs-roles",
+                                                    data=role_options(),
+                                                    value=[],
+                                                    placeholder="Choose scored roles",
+                                                    searchable=True,
+                                                    clearable=True,
+                                                    maxDropdownHeight=280,
+                                                    w="100%",
+                                                    className="rs-primary-control",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        dmc.Button(
+                                                            "Add all",
+                                                            id="rs-add-all-roles",
+                                                            n_clicks=0,
+                                                            variant="light",
+                                                            size="sm",
+                                                            className="rs-add-all-roles",
+                                                            buttonProps={
+                                                                "title": (
+                                                                    "Select every role matching the Phase and "
+                                                                    "Group filters above."
+                                                                ),
+                                                            },
+                                                        ),
+                                                        dmc.Button(
+                                                            "Clear",
+                                                            id={"type": "rs-clear-roles", "loc": "single"},
+                                                            n_clicks=0,
+                                                            variant="subtle",
+                                                            size="sm",
+                                                            className="rs-clear-roles",
+                                                        ),
+                                                    ],
+                                                    className="rs-roles-select-actions",
+                                                ),
+                                            ],
+                                            className="rs-roles-select-row",
                                         ),
                                         html.Div(
                                             id="rs-role-pills",
@@ -2870,12 +2902,38 @@ def remove_role(n_clicks, selected, combos):
 
 @callback(
     Output("rs-roles", "value", allow_duplicate=True),
-    Output("rs-combos", "data", allow_duplicate=True),
-    Input("rs-clear-roles", "n_clicks"),
+    Input("rs-add-all-roles", "n_clicks"),
+    State("rs-phase", "data"),
+    State("rs-group", "data"),
+    State("rs-roles", "value"),
     prevent_initial_call=True,
 )
-def clear_roles(_clear):
-    if not ctx.triggered_id:
+def add_all_filtered_roles(n_clicks, phase, group, selected):
+    """Add every role matching the current Phase / Group chip filters."""
+    if not n_clicks:
+        return no_update
+    matching = [
+        opt["value"]
+        for opt in role_options(phase=phase, group=group, keep=[])
+    ]
+    if not matching:
+        return no_update
+    current = _as_list(selected)
+    # Union: keep any already-selected roles, then append newly matched ones.
+    merged = list(dict.fromkeys([*current, *matching]))
+    return merged
+
+
+@callback(
+    Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-combos", "data", allow_duplicate=True),
+    Input({"type": "rs-clear-roles", "loc": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_roles(n_clicks):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    if ctx.triggered_id.get("loc") == "_":
         return no_update, no_update
     return [], []
 

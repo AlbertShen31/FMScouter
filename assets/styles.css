@@ -301,6 +301,69 @@ body {
     margin-bottom: 10px;
 }
 
+.rs-roles-select-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+.rs-roles-select-row .rs-primary-control {
+    flex: 1 1 0;
+    min-width: 28rem;
+    width: auto;
+    margin-bottom: 0;
+}
+
+.rs-roles-select-row .rs-primary-control .mantine-MultiSelect-root,
+.rs-roles-select-row .rs-primary-control .mantine-InputWrapper-root,
+.rs-roles-select-row .rs-primary-control .mantine-MultiSelect-wrapper {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0;
+}
+
+/* Keep each selected role on a single line (no mid-label wrap). */
+.rs-roles-select-row .mantine-MultiSelect-pill,
+.rs-roles-select-row .mantine-Pill-label,
+.rs-roles-select-row .mantine-Pill-root {
+    white-space: nowrap !important;
+    max-width: none;
+}
+
+.rs-roles-select-row .mantine-MultiSelect-pillsList {
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+@media (max-width: 720px) {
+    .rs-roles-select-row {
+        flex-wrap: wrap;
+    }
+
+    .rs-roles-select-row .rs-primary-control {
+        min-width: 100%;
+        flex-basis: 100%;
+    }
+}
+
+.rs-roles-select-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 4px;
+    margin-left: auto;
+}
+
+.rs-add-all-roles,
+.rs-clear-roles {
+    flex-shrink: 0;
+    margin: 0;
+    white-space: nowrap;
+}
+
 .rs-primary-control .Select-control,
 .rs-primary-control .Select__control {
     min-height: 42px;
@@ -1113,14 +1176,6 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     gap: 8px;
     width: 100%;
     position: relative;
-    padding-right: 64px;
-}
-
-.rs-role-toolbar .rs-chip.ghost {
-    position: absolute;
-    top: 0;
-    right: 0;
-    margin-left: 0;
 }
 
 .rs-filter-row {
@@ -1398,7 +1453,7 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 
 .rs-combo-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
     gap: 8px;
     align-items: end;
 }
