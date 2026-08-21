@@ -1281,70 +1281,7 @@ def layout():
                                 "width": "100%",
                                 "minWidth": "100%",
                             },
-                            css=[
-                                {
-                                    "selector": (
-                                        "td:hover, tr:hover td, tr:hover th, th:hover, "
-                                        "td.focused, td.cell--selected, th.focused, "
-                                        "th.cell--selected"
-                                    ),
-                                    "rule": (
-                                        "background-color: var(--table-hover-bg) !important; "
-                                        "color: var(--table-hover-fg) !important;"
-                                    ),
-                                },
-                                {
-                                    "selector": ".rs-feet-cell",
-                                    "rule": (
-                                        "display: block !important; width: 100% !important; "
-                                        "text-align: center !important; line-height: 0 !important;"
-                                    ),
-                                },
-                                {
-                                    "selector": ".rs-feet",
-                                    "rule": (
-                                        "display: inline-flex !important; "
-                                        "align-items: center; justify-content: center; "
-                                        "gap: 1px; line-height: 0; vertical-align: middle;"
-                                    ),
-                                },
-                                {
-                                    "selector": ".rs-foot-icon",
-                                    "rule": (
-                                        "display: block !important; flex-shrink: 0; "
-                                        "overflow: visible;"
-                                    ),
-                                },
-                                {
-                                    "selector": (
-                                        'td.dash-cell[data-dash-column="Feet"] .dash-cell-value, '
-                                        'td.dash-cell[data-dash-column="Feet"] .markdown, '
-                                        'td.dash-cell[data-dash-column="Feet"] .markdown p'
-                                    ),
-                                    "rule": (
-                                        "width: 100% !important; max-width: 100% !important; "
-                                        "margin: 0 !important; padding: 0 !important; "
-                                        "text-align: center !important; line-height: 0 !important;"
-                                    ),
-                                },
-                                {
-                                    "selector": 'td.dash-cell[data-dash-column="Feet"]',
-                                    "rule": (
-                                        "overflow: visible !important; "
-                                        "min-width: 84px !important; "
-                                        "width: 84px !important; "
-                                        "text-align: center !important;"
-                                    ),
-                                },
-                                {
-                                    "selector": 'th.dash-header[data-dash-column="Feet"]',
-                                    "rule": (
-                                        "min-width: 84px !important; "
-                                        "width: 84px !important; "
-                                        "text-align: center !important;"
-                                    ),
-                                },
-                            ],
+                            css=_table_css(),
                             style_cell={
                                 "fontFamily": "Inter, Segoe UI, sans-serif",
                                 "fontSize": "14px",
@@ -1825,9 +1762,102 @@ def _score_header_styles(role_labels: list[str], theme: str | None = None) -> li
                 "if": {"column_id": label},
                 "color": color,
                 "textAlign": "center",
+                "fontWeight": "700",
             }
         )
     return rules
+
+
+def _score_header_css(role_labels: list[str], theme: str | None = None) -> list[dict]:
+    """Per-column header colors with !important (covers codes without -IP/-OOP)."""
+    colors = _header_phase_colors(theme)
+    rules = []
+    for label in role_labels:
+        tone = _score_column_tone(label)
+        color = colors.get(tone)
+        if not color:
+            continue
+        # Escape quotes in column ids for CSS attribute selectors.
+        safe = str(label).replace("\\", "\\\\").replace('"', '\\"')
+        rules.append(
+            {
+                "selector": (
+                    f'th.dash-header[data-dash-column="{safe}"], '
+                    f'th.dash-header[data-dash-column="{safe}"] .column-header-name'
+                ),
+                "rule": f"color: {color} !important; font-weight: 700;",
+            }
+        )
+    return rules
+
+
+def _table_css(role_labels: list[str] | None = None, theme: str | None = None) -> list[dict]:
+    """Static table CSS plus phase-colored score headers."""
+    base = [
+        {
+            "selector": (
+                "td:hover, tr:hover td, tr:hover th, th:hover, "
+                "td.focused, td.cell--selected, th.focused, "
+                "th.cell--selected"
+            ),
+            "rule": (
+                "background-color: var(--table-hover-bg) !important; "
+                "color: var(--table-hover-fg) !important;"
+            ),
+        },
+        {
+            "selector": ".rs-feet-cell",
+            "rule": (
+                "display: block !important; width: 100% !important; "
+                "text-align: center !important; line-height: 0 !important;"
+            ),
+        },
+        {
+            "selector": ".rs-feet",
+            "rule": (
+                "display: inline-flex !important; "
+                "align-items: center; justify-content: center; "
+                "gap: 1px; line-height: 0; vertical-align: middle;"
+            ),
+        },
+        {
+            "selector": ".rs-foot-icon",
+            "rule": (
+                "display: block !important; flex-shrink: 0; "
+                "overflow: visible;"
+            ),
+        },
+        {
+            "selector": (
+                'td.dash-cell[data-dash-column="Feet"] .dash-cell-value, '
+                'td.dash-cell[data-dash-column="Feet"] .markdown, '
+                'td.dash-cell[data-dash-column="Feet"] .markdown p'
+            ),
+            "rule": (
+                "width: 100% !important; max-width: 100% !important; "
+                "margin: 0 !important; padding: 0 !important; "
+                "text-align: center !important; line-height: 0 !important;"
+            ),
+        },
+        {
+            "selector": 'td.dash-cell[data-dash-column="Feet"]',
+            "rule": (
+                "overflow: visible !important; "
+                "min-width: 84px !important; "
+                "width: 84px !important; "
+                "text-align: center !important;"
+            ),
+        },
+        {
+            "selector": 'th.dash-header[data-dash-column="Feet"]',
+            "rule": (
+                "min-width: 84px !important; "
+                "width: 84px !important; "
+                "text-align: center !important;"
+            ),
+        },
+    ]
+    return base + _score_header_css(role_labels or [], theme)
 
 
 def _column_signature(columns: list[dict]) -> str:
@@ -3049,6 +3079,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
     Output("rs-table", "style_header_conditional"),
+    Output("rs-table", "css"),
     Output("rs-table", "style_table"),
     Output("rs-table", "page_size"),
     Output("rs-table", "page_current"),
@@ -3107,6 +3138,7 @@ def render_shortlist(
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
     empty_header = _score_header_styles([], theme)
+    empty_css = _table_css([], theme)
     hybrids_only = bool(hybrids_only)
     page_size = int(page_size or 50)
     empty_table_style = _table_style_table(0, page_size)
@@ -3123,6 +3155,7 @@ def render_shortlist(
             empty_cols,
             empty_style,
             empty_header,
+            empty_css,
             empty_table_style,
             page_size,
             empty_page,
@@ -3154,6 +3187,7 @@ def render_shortlist(
             empty_cols,
             empty_style,
             empty_header,
+            empty_css,
             empty_table_style,
             page_size,
             empty_page,
@@ -3300,6 +3334,7 @@ def render_shortlist(
         columns,
         _score_styles(score_cols, settings, theme),
         _score_header_styles(score_cols, theme),
+        _table_css(score_cols, theme),
         _table_style_table(len(table_rows), page_size),
         page_size,
         page_current,

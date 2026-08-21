@@ -662,26 +662,43 @@ body {
     text-align: center !important;
 }
 
-/* Phase-colored score headers (backup if inline styles fight theme CSS). */
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] {
-    color: #3dff88;
+/* Phase-colored score headers.
+   Hybrids are `IP+OOP` and often end in `-OOP` — color those purple first,
+   then IP/OOP only when the id is not a hybrid. */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name {
+    color: #c4b5fd !important;
 }
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] {
-    color: #f87171;
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]),
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]) .column-header-name {
+    color: #3dff88 !important;
 }
-html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
-html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"],
-body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
-body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] {
-    color: #15803d;
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]),
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]) .column-header-name {
+    color: #f87171 !important;
 }
-html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
-html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"],
-body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
-body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] {
-    color: #b91c1c;
+
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name,
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name {
+    color: #6d28d9 !important;
+}
+
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]),
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]) .column-header-name,
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]),
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]) .column-header-name {
+    color: #15803d !important;
+}
+
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]),
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]) .column-header-name,
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]),
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]) .column-header-name {
+    color: #b91c1c !important;
 }
 
 #rs-table .dash-spreadsheet-inner th .column-header--sort {
