@@ -1394,10 +1394,22 @@ def layout():
                                 "backgroundColor": "transparent",
                                 "color": "var(--app-text)",
                                 "cursor": "pointer",
-                                "padding": "12px 28px 12px 10px",
-                                "height": "46px",
+                                "padding": "10px 28px 10px 10px",
+                                "height": "auto",
+                                "minHeight": "46px",
+                                "whiteSpace": "pre-line",
+                                "lineHeight": "1.15",
+                                "verticalAlign": "middle",
+                                "textAlign": "center",
                                 "borderBottom": "2px solid var(--app-line)",
                             },
+                            style_header_conditional=[
+                                {
+                                    "if": {"column_id": col},
+                                    "textAlign": "left",
+                                }
+                                for col in ("Name", "Position", "Club", "Injury")
+                            ],
                             style_data_conditional=[
                                 {
                                     "if": {"filter_query": '{Injury} != "-"'},
@@ -1686,16 +1698,58 @@ def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score
     )
 
 
+def _is_hybrid_column(col_id: str) -> bool:
+    """Hybrid score columns are `IPLabel+OOPLabel` (not identity text cols)."""
+    return (
+        isinstance(col_id, str)
+        and "+" in col_id
+        and col_id not in TABLE_TEXT_COLS
+    )
+
+
+def _column_display_name(col_id: str) -> str:
+    """Hybrid headers wrap visually (newline) without a real multi-row header."""
+    if not _is_hybrid_column(col_id):
+        return col_id
+    ip, _, oop = col_id.partition("+")
+    if not ip or not oop:
+        return col_id
+    return f"{ip}+\n{oop}"
+
+
 def _table_columns(col_ids: list[str]) -> list[dict]:
     columns = []
     for col in col_ids:
-        spec = {"name": col, "id": col}
+        spec = {"name": _column_display_name(col), "id": col}
         if col in TABLE_MARKDOWN_COLS:
             spec["presentation"] = "markdown"
         elif col not in TABLE_TEXT_COLS:
             spec["type"] = "numeric"
         columns.append(spec)
     return columns
+
+
+def _score_column_styles(role_labels: list[str]) -> list[dict]:
+    """Center score cells; keep hybrid columns narrower with wrapped headers."""
+    rules = []
+    for label in role_labels:
+        rule = {
+            "if": {"column_id": label},
+            "textAlign": "center",
+        }
+        if _is_hybrid_column(label):
+            rule.update(
+                {
+                    "minWidth": "52px",
+                    "width": "56px",
+                    "maxWidth": "68px",
+                    "paddingLeft": "4px",
+                    "paddingRight": "4px",
+                    "whiteSpace": "pre-line",
+                }
+            )
+        rules.append(rule)
+    return rules
 
 
 def _column_signature(columns: list[dict]) -> str:
@@ -1923,6 +1977,7 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
                 },
             ]
         )
+    rules.extend(_score_column_styles(role_labels))
     return rules
 
 

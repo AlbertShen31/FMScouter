@@ -612,6 +612,37 @@ body {
     pointer-events: none;
 }
 
+/* Hybrid columns: wrapped header (IP+ / OOP) — keep the column narrow. */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
+#rs-table .dash-spreadsheet-inner td[data-dash-column*="+"] {
+    min-width: 52px !important;
+    max-width: 72px !important;
+    width: 58px !important;
+    text-align: center !important;
+    padding-left: 4px !important;
+    padding-right: 14px !important;
+    white-space: pre-line !important;
+    line-height: 1.15 !important;
+    vertical-align: middle !important;
+}
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name {
+    white-space: pre-line !important;
+    text-align: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header--sort {
+    padding-right: 4px;
+}
+
+/* Center all numeric score columns (headers + values). */
+#rs-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
+#rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
+    text-align: center !important;
+}
+
 #rs-table .dash-spreadsheet-inner th .column-header--sort {
     color: var(--app-accent) !important;
     opacity: 1 !important;
