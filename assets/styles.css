@@ -758,6 +758,7 @@ body {
 .rs-filter-age,
 .rs-filter-score,
 .rs-filter-elig,
+.rs-filter-pos-match,
 .rs-filter-toggles {
     min-width: 0;
 }
@@ -792,12 +793,17 @@ body {
 .rs-filter-toggles {
     grid-column: 1 / -1;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 24px;
     padding-top: 12px;
     margin-top: 2px;
     border-top: 1px solid var(--app-line);
+}
+
+.rs-filter-pos-match {
+    min-width: 220px;
+    max-width: 280px;
 }
 
 .rs-filter-toggles .mantine-Switch-root,

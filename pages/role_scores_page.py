@@ -71,9 +71,36 @@ PERSIST_DEFAULTS = {
     "role_mode": "formations",
     "set_pieces": [],
     "hybrids_only": False,
-    "eligible": True,
+    "pos_match": "yes",
     "focus_role": [],
 }
+
+POS_MATCH_OPTIONS = [
+    {"value": "yes", "label": "Full match only (green)"},
+    {"value": "partial", "label": "At least partial (yellow + green)"},
+    {"value": "no", "label": "Any (includes red)"},
+]
+POS_MATCH_VALUES = {opt["value"] for opt in POS_MATCH_OPTIONS}
+
+
+def _normalize_pos_match(value) -> str:
+    """Map persisted filter value; migrate legacy eligible bool / Any."""
+    if value in POS_MATCH_VALUES:
+        return value
+    if value is True or value == "eligible":
+        return "yes"
+    if value is False or value == "any":
+        return "no"
+    return "yes"
+
+
+def _passes_pos_match(pos_elig: str, pos_match: str) -> bool:
+    """Threshold filter: green ⊂ yellow ⊂ red/any."""
+    if pos_match == "yes":
+        return pos_elig == "yes"
+    if pos_match == "partial":
+        return pos_elig in ("yes", "partial")
+    return True
 
 
 def _band_legend(settings=None) -> html.Div:
@@ -713,7 +740,7 @@ def _resolved_view_roles(payload: dict | None, focus_roles) -> list[str]:
 
 def _no_match_placeholder(
     *,
-    elig_only: bool,
+    pos_match: str,
     pos_filter: str,
     foot_filter: str,
     min_score: float,
@@ -722,10 +749,14 @@ def _no_match_placeholder(
     max_age: int,
 ) -> html.Div:
     tips: list[str] = []
-    if elig_only:
+    if pos_match == "yes":
         tips.append(
-            "Turn off “Only show players eligible for the selected role(s)” "
-            "(the position requirement filter)."
+            "Set Position match to “At least partial” or “Any” — Full match only "
+            "requires every focused role, and both parts of a hybrid."
+        )
+    elif pos_match == "partial":
+        tips.append(
+            "Set Position match to Any — At least partial still hides red (no match)."
         )
     if pos_filter != "all":
         tips.append("Select All in the position bar above.")
@@ -1182,13 +1213,28 @@ def layout():
                                         ),
                                         html.Div(
                                             [
-                                                dmc.Switch(
-                                                    id="rs-eligible",
-                                                    label=(
-                                                        "Only show players eligible for the "
-                                                        "selected role(s)"
-                                                    ),
-                                                    checked=True,
+                                                html.Div(
+                                                    [
+                                                        _field_label(
+                                                            "Position match",
+                                                            tip=(
+                                                                "Same green / yellow / red rules as the "
+                                                                "Position column. Full = green only; "
+                                                                "At least partial = yellow + green; "
+                                                                "Any = includes red. Hybrids need both "
+                                                                "parts for green."
+                                                            ),
+                                                            help_id="rs-help-pos-match",
+                                                        ),
+                                                        dmc.Select(
+                                                            id="rs-pos-match",
+                                                            data=POS_MATCH_OPTIONS,
+                                                            value="yes",
+                                                            clearable=False,
+                                                            searchable=False,
+                                                        ),
+                                                    ],
+                                                    className="rs-filter-pos-match",
                                                 ),
                                                 dmc.Switch(
                                                     id="rs-hybrids-only",
@@ -1947,7 +1993,7 @@ def restore_upload_ui(parsed):
     Input("rs-formation", "value"),
     Input("rs-role-mode", "value"),
     Input("rs-set-pieces", "value"),
-    Input("rs-eligible", "checked"),
+    Input("rs-pos-match", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-focus-role", "data"),
     State("rs-hydrated", "data"),
@@ -1959,7 +2005,7 @@ def save_page_persist(
     formation,
     role_mode,
     set_pieces,
-    eligible,
+    pos_match,
     hybrids_only,
     focus_role,
     hydrated,
@@ -1973,7 +2019,7 @@ def save_page_persist(
         "role_mode": role_mode or "formations",
         "set_pieces": _as_list(set_pieces),
         "hybrids_only": bool(hybrids_only),
-        "eligible": True if eligible is None else bool(eligible),
+        "pos_match": _normalize_pos_match(pos_match),
         "focus_role": _as_list(focus_role),
     }
 
@@ -2009,7 +2055,7 @@ clientside_callback(
     Output("rs-role-mode", "value", allow_duplicate=True),
     Output("rs-formation", "value", allow_duplicate=True),
     Output("rs-set-pieces", "value"),
-    Output("rs-eligible", "checked"),
+    Output("rs-pos-match", "value"),
     Output("rs-hybrids-only", "checked"),
     Output("rs-focus-role", "data", allow_duplicate=True),
     Output("rs-hydrated", "data"),
@@ -2043,7 +2089,11 @@ def hydrate_page_persist(persist, hydrated, phase, group):
     mode = persist.get("role_mode") or "formations"
     formation = persist.get("formation") or None
     set_pieces = _as_list(persist.get("set_pieces"))
-    eligible = bool(persist.get("eligible", True))
+    # Prefer pos_match; fall back to legacy eligible bool.
+    if "pos_match" in persist:
+        pos_match = _normalize_pos_match(persist.get("pos_match"))
+    else:
+        pos_match = _normalize_pos_match(persist.get("eligible", True))
     hybrids_only = bool(persist.get("hybrids_only", False))
     focus = _as_list(persist.get("focus_role"))
     keep = list(roles)
@@ -2057,7 +2107,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
         or set_pieces
         or focus
         or hybrids_only
-        or not eligible
+        or pos_match != "yes"
         or mode != "formations"
     )
     if not has_state:
@@ -2082,7 +2132,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
         mode,
         formation,
         set_pieces,
-        eligible,
+        pos_match,
         hybrids_only,
         focus,
         True,
@@ -2664,7 +2714,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
     Input("rs-min-score-mode", "value"),
-    Input("rs-eligible", "checked"),
+    Input("rs-pos-match", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
@@ -2685,7 +2735,7 @@ def render_shortlist(
     max_age,
     min_score,
     min_score_mode,
-    eligible,
+    pos_match,
     hybrids_only,
     set_pieces,
     set_piece_min,
@@ -2766,9 +2816,10 @@ def render_shortlist(
     min_score = us.parse_score_floor(min_score)
     min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
     set_piece_min = us.parse_score_floor(set_piece_min)
-    elig_only = bool(eligible)
+    pos_match = _normalize_pos_match(pos_match)
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
+    combo_by_col = _combo_columns_by_label(combos)
 
     filtered = []
     for row in rows:
@@ -2776,7 +2827,10 @@ def render_shortlist(
             continue
         if foot_filter and not foot_match(row, foot_filter, foot_threshold):
             continue
-        if elig_only and not all(row.get(f"{role} eligible") for role in view_roles):
+        pos_elig = (
+            _position_eligibility(row, view_roles, combo_by_col=combo_by_col) or "no"
+        )
+        if not _passes_pos_match(pos_elig, pos_match):
             continue
         if to_int(row.get("Age")) > max_age:
             continue
@@ -2797,6 +2851,8 @@ def render_shortlist(
             blob = f"{row.get('Name','')} {row.get('Club','')} {row.get('Position','')} {row.get('Division','')}".lower()
             if query not in blob:
                 continue
+        row = dict(row)
+        row["_PosEligible"] = pos_elig
         filtered.append(row)
 
     _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
@@ -2815,16 +2871,10 @@ def render_shortlist(
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
-    combo_by_col = _combo_columns_by_label(combos)
     table_rows = []
     for row in filtered:
         item = {key: row.get(key, "-") for key in table_cols}
-        item["PosEligible"] = (
-            _position_eligibility(
-                row, view_roles, combo_by_col=combo_by_col
-            )
-            or "no"
-        )
+        item["PosEligible"] = row.get("_PosEligible") or "no"
         table_rows.append(item)
     page_keys = [player_row_key(row) for row in table_rows]
     selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
@@ -2864,7 +2914,7 @@ def render_shortlist(
     no_matches = not table_rows
     empty_panel = (
         _no_match_placeholder(
-            elig_only=elig_only,
+            pos_match=pos_match,
             pos_filter=pos_filter,
             foot_filter=foot_filter,
             min_score=min_score,
