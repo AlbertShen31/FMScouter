@@ -3583,6 +3583,32 @@ body[data-theme="light"] .st-player-metrics .rs-player-id-section-title {
     line-height: 1.15;
 }
 
+.st-metric-value-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.55rem;
+    width: 100%;
+}
+
+.st-metric-pct {
+    font-size: 0.85rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: #cbd5e1;
+    white-space: nowrap;
+}
+
+html[data-theme="light"] .st-metric-pct,
+body[data-theme="light"] .st-metric-pct {
+    color: #64748b;
+}
+
+.st-metric-pct.is-missing {
+    color: var(--app-muted);
+    font-weight: 500;
+}
+
 .st-player-chart-section {
     gap: 0.45rem;
 }

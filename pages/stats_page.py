@@ -419,18 +419,34 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
 
 
 EVAL_GROUPS = tuple((key, label) for key, label, _css in POS_GROUPS if key != "all")
+EVAL_GROUPS_GK = tuple((key, label) for key, label in EVAL_GROUPS if key == "gk")
+EVAL_GROUPS_OUTFIELD = tuple((key, label) for key, label in EVAL_GROUPS if key != "gk")
 
 
-def _normalize_eval_group(group: str | None, fallback: str | None = "mid") -> str:
-    allowed = {key for key, _ in EVAL_GROUPS}
-    g = group or fallback or "mid"
-    if g not in allowed:
-        return fallback if fallback in allowed else "mid"
-    return g
+def _eval_groups_for_player(player: dict | None) -> tuple[tuple[str, str], ...]:
+    pg = (player or {}).get("pos_group") or "mid"
+    return EVAL_GROUPS_GK if is_gk_group(pg) else EVAL_GROUPS_OUTFIELD
+
+
+def _normalize_eval_group(
+    group: str | None,
+    fallback: str | None = "mid",
+    *,
+    player: dict | None = None,
+) -> str:
+    options = _eval_groups_for_player(player) if player is not None else EVAL_GROUPS
+    allowed = {key for key, _ in options}
+    default = fallback or (options[0][0] if options else "mid")
+    if default not in allowed:
+        default = next(iter(allowed), "mid")
+    g = group or default
+    return g if g in allowed else default
 
 
 def _player_metric_sections(player: dict, eval_group: str | None = None) -> list[dict]:
-    g = _normalize_eval_group(eval_group, player.get("pos_group") or "mid")
+    g = _normalize_eval_group(
+        eval_group, player.get("pos_group") or "mid", player=player
+    )
     sections = []
     for cat in categories_for_group(g):
         metrics = []
@@ -482,9 +498,9 @@ def _view_switcher(active: str) -> html.Div:
     )
 
 
-def _group_switcher(active: str) -> html.Div:
+def _group_switcher(active: str, player: dict | None = None) -> html.Div:
     return _seg_switcher(
-        options=list(EVAL_GROUPS),
+        options=list(_eval_groups_for_player(player)),
         active=active,
         id_key="group",
         id_type="st-player-group",
@@ -496,17 +512,29 @@ def _metrics_values(sections: list[dict]) -> list:
         items = []
         for metric in cat["metrics"]:
             if metric["missing"]:
-                value = html.Span("No data", className="rs-player-id-value st-metric-nodata")
+                value = html.Div(
+                    [
+                        html.Span("No data", className="rs-player-id-value st-metric-nodata"),
+                        html.Span("—", className="st-metric-pct is-missing"),
+                    ],
+                    className="st-metric-value-row",
+                )
             else:
-                value = html.Span(
-                    metric["display"],
-                    className="rs-player-id-value",
-                    style={"color": metric["color"]} if metric["color"] else None,
-                    title=(
-                        f"~{metric['percentile']:.0f}th percentile"
-                        if metric["percentile"] is not None
-                        else None
-                    ),
+                pct = metric["percentile"]
+                value = html.Div(
+                    [
+                        html.Span(
+                            metric["display"],
+                            className="rs-player-id-value",
+                            style={"color": metric["color"]} if metric["color"] else None,
+                        ),
+                        html.Span(
+                            f"~{pct:.0f}th",
+                            className="st-metric-pct",
+                            title=f"~{pct:.0f}th percentile",
+                        ),
+                    ],
+                    className="st-metric-value-row",
                 )
             items.append(
                 html.Div(
@@ -594,7 +622,11 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
         )
     )
     fig.update_layout(
-        **_chart_layout(theme, height=max(220, 42 * len(metrics) + 64)),
+        **_chart_layout(
+            theme,
+            height=max(220, 42 * len(metrics) + 64),
+            margin=dict(l=168, r=72, t=12, b=36),
+        ),
         xaxis=dict(
             range=[0, 112],
             title=None,
@@ -605,11 +637,16 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
             fixedrange=True,
             tickfont=dict(color=muted, size=13),
             title_font=dict(color=muted, size=13),
+            domain=[0.02, 1],
         ),
         yaxis=dict(
             automargin=True,
             fixedrange=True,
             tickfont=dict(color=label_color, size=14),
+            ticksuffix="   ",
+            ticklabelposition="outside",
+            ticklabeloverflow="allow",
+            ticklabelstandoff=18,
         ),
         bargap=0.18,
         bargroupgap=0.08,
@@ -618,9 +655,22 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
     return fig
 
 
+def _pizza_radius(percentile: float) -> float:
+    """Map 0–100 percentile onto a visible polar radius (0th still a sliver).
+
+    Tops out slightly under 100 so the outer 100% ring stays visible.
+    """
+    floor = 10.0
+    ceiling = 96.0
+    p = max(0.0, min(100.0, float(percentile)))
+    return floor + (p / 100.0) * (ceiling - floor)
+
+
 def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
     dark = (theme or "dark") != "light"
+    label_color = "#f8fafc" if dark else "#0f172a"
     muted = "#cbd5e1" if dark else "#475569"
+    ring_color = "rgba(226, 232, 240, 0.85)" if dark else "rgba(71, 85, 105, 0.75)"
     missing_fill = "rgba(148, 163, 184, 0.18)" if dark else "rgba(148, 163, 184, 0.22)"
     if not metrics:
         fig = go.Figure()
@@ -639,42 +689,61 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
     for i, metric in enumerate(metrics):
         theta.append(i * width)
         if metric["missing"]:
-            radius.append(4.0)
+            radius.append(5.0)
             colors.append(missing_fill)
             custom.append(f"{metric['abbr']} · No data")
         else:
             pct = float(metric["percentile"])
-            radius.append(pct)
+            radius.append(_pizza_radius(pct))
             colors.append(metric["color"] or ("rgb(61, 255, 136)" if dark else "rgb(22, 163, 74)"))
             custom.append(f"{metric['abbr']} · {metric['display']}<br>{pct:.0f}th pct")
 
+    tickvals = [i * width for i in range(n)]
+    ticktext = [metric["abbr"] for metric in metrics]
+    # Explicit closed ring at r=100 so the outer percentile bound is always visible.
+    ring_theta = list(range(0, 361, 3))
     fig = go.Figure(
-        go.Barpolar(
-            r=radius,
-            theta=theta,
-            width=[width] * n,
-            marker=dict(
-                color=colors,
-                line=dict(
-                    color="rgba(15, 23, 42, 0.45)" if dark else "rgba(255,255,255,0.75)",
-                    width=1.25,
+        data=[
+            go.Barpolar(
+                r=radius,
+                theta=theta,
+                width=[width] * n,
+                base=0,
+                marker=dict(
+                    color=colors,
+                    line=dict(
+                        color="rgba(15, 23, 42, 0.45)" if dark else "rgba(255,255,255,0.75)",
+                        width=1.25,
+                    ),
                 ),
+                hovertemplate="%{customdata}<extra></extra>",
+                customdata=custom,
+                name="Percentile",
             ),
-            hovertemplate="%{customdata}<extra></extra>",
-            customdata=custom,
-            name="Percentile",
-        )
+            go.Scatterpolar(
+                r=[100] * len(ring_theta),
+                theta=ring_theta,
+                mode="lines",
+                line=dict(color=ring_color, width=2),
+                hoverinfo="skip",
+                showlegend=False,
+                cliponaxis=False,
+            ),
+        ]
     )
     fig.update_layout(
-        **_chart_layout(theme, height=360, margin=dict(l=24, r=24, t=24, b=24)),
+        **_chart_layout(theme, height=360, margin=dict(l=48, r=48, t=36, b=36)),
         polar=dict(
             bgcolor="rgba(0,0,0,0)",
-            hole=0.14,
+            hole=0.08,
             radialaxis=dict(
                 range=[0, 100],
+                autorange=False,
+                tickvals=[0, 25, 50, 75, 100],
                 showticklabels=False,
                 ticks="",
-                gridcolor="rgba(148,163,184,0.28)",
+                gridcolor="rgba(148,163,184,0.32)",
+                gridwidth=1,
                 tickfont=dict(color=muted, size=11),
                 showline=False,
             ),
@@ -682,9 +751,13 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
                 rotation=90,
                 direction="clockwise",
                 period=360,
-                showticklabels=False,
+                tickmode="array",
+                tickvals=tickvals,
+                ticktext=ticktext,
+                showticklabels=True,
                 ticks="",
                 gridcolor="rgba(148,163,184,0.18)",
+                tickfont=dict(color=label_color, size=12),
                 showline=False,
             ),
         ),
@@ -838,7 +911,9 @@ def _player_modal_body(
     theme: str | None = "dark",
 ) -> html.Div:
     view = _normalize_player_view(view)
-    eval_group = _normalize_eval_group(eval_group, player.get("pos_group") or "mid")
+    eval_group = _normalize_eval_group(
+        eval_group, player.get("pos_group") or "mid", player=player
+    )
     sections = _player_metric_sections(player, eval_group)
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -852,7 +927,7 @@ def _player_modal_body(
             html.Div(
                 [
                     html.Div("Evaluate as", className="st-player-switch-label"),
-                    _group_switcher(eval_group),
+                    _group_switcher(eval_group, player),
                 ],
                 className="st-player-switch-block",
             ),
@@ -1642,7 +1717,7 @@ def open_player(active_cell, _close, viewport, parsed, minutes_required, theme, 
     if not player:
         return True, "Player", html.Div("Player not found."), None, "mid"
     minutes_required = float(minutes_required or default_minutes_required())
-    eval_group = _normalize_eval_group(player.get("pos_group"), "mid")
+    eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
     return (
         True,
         player.get("name"),
@@ -1718,13 +1793,14 @@ def switch_player_group(
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
     group = ctx.triggered_id.get("group")
-    if group == "_" or group not in {key for key, _ in EVAL_GROUPS}:
+    player = _lookup_modal_player(parsed, player_key_value)
+    if not player:
+        return no_update, no_update
+    allowed = {key for key, _ in _eval_groups_for_player(player)}
+    if group == "_" or group not in allowed:
         return no_update, no_update
     if group == current:
         return no_update, no_update
-    player = _lookup_modal_player(parsed, player_key_value)
-    if not player:
-        return group, html.Div("Player not found.")
     return (
         group,
         _player_modal_body(
