@@ -807,46 +807,78 @@ def foot_strength(value: str) -> FootStrength | None:
     return None
 
 
+def resolve_foot_thresholds(
+    thresholds: dict[str, Any] | int | FootStrength | None = None,
+) -> dict[str, FootStrength]:
+    """Accept settings dict, legacy single threshold, or None → left/both/right levels."""
+    defaults = {
+        "left": FootStrength.VERY_STRONG,
+        "both": DEFAULT_FOOT_THRESHOLD,
+        "right": FootStrength.VERY_STRONG,
+    }
+    if thresholds is None:
+        return dict(defaults)
+    if isinstance(thresholds, (int, FootStrength)) or (
+        isinstance(thresholds, str) and str(thresholds).strip().isdigit()
+    ):
+        level = coerce_foot_strength(thresholds)
+        return {"left": level, "both": level, "right": level}
+    if not isinstance(thresholds, dict):
+        return dict(defaults)
+    # Support either flat thresholds or nested foot_thresholds from settings.
+    src = thresholds.get("foot_thresholds") if "foot_thresholds" in thresholds else thresholds
+    if not isinstance(src, dict):
+        src = {}
+    return {
+        "left": coerce_foot_strength(src.get("left"), defaults["left"]),
+        "both": coerce_foot_strength(src.get("both"), defaults["both"]),
+        "right": coerce_foot_strength(src.get("right"), defaults["right"]),
+    }
+
+
 def foot_match(
     row: dict[str, Any],
     foot_filter: str,
-    threshold: int | FootStrength | None = None,
+    thresholds: dict[str, Any] | int | FootStrength | None = None,
 ) -> bool:
-    min_strong = coerce_foot_strength(threshold)
+    levels = resolve_foot_thresholds(thresholds)
     left = foot_strength(row.get("Left Foot") or "")
     right = foot_strength(row.get("Right Foot") or "")
     if left is None or right is None:
         return False
-    # Left / Right: that foot is Very Strong (other foot unrestricted → overlaps Both).
+    # Sided filters only require that foot; Both requires both ≥ threshold (overlap OK).
     if foot_filter == "foot-L":
-        return left >= FootStrength.VERY_STRONG
+        return left >= levels["left"]
     if foot_filter == "foot-R":
-        return right >= FootStrength.VERY_STRONG
+        return right >= levels["right"]
     if foot_filter == "foot-B":
-        return left >= min_strong and right >= min_strong
+        return left >= levels["both"] and right >= levels["both"]
     return True
 
 
-def foot_filter_help(threshold: int | FootStrength | None = None) -> str:
-    level = coerce_foot_strength(threshold)
-    name = FOOT_STRENGTH_NAMES[level].lower()
-    vs = FOOT_STRENGTH_NAMES[FootStrength.VERY_STRONG].lower()
+def foot_filter_help(thresholds: dict[str, Any] | int | FootStrength | None = None) -> str:
+    levels = resolve_foot_thresholds(thresholds)
+    left = FOOT_STRENGTH_NAMES[levels["left"]].lower()
+    both = FOOT_STRENGTH_NAMES[levels["both"]].lower()
+    right = FOOT_STRENGTH_NAMES[levels["right"]].lower()
     return (
-        f"Left / Right: that foot is {vs} (the other foot can be anything). "
-        f"Both feet: each foot is at least {name}. "
+        f"Left: left foot at least {left}. "
+        f"Right: right foot at least {right}. "
+        f"Both: each foot at least {both}. "
         "Players can match more than one filter. "
         "Click the active filter again to clear it."
     )
 
 
-def foot_filter_hints(threshold: int | FootStrength | None = None) -> dict[str, str]:
-    level = coerce_foot_strength(threshold)
-    name = FOOT_STRENGTH_NAMES[level].lower()
-    vs = FOOT_STRENGTH_NAMES[FootStrength.VERY_STRONG].lower()
+def foot_filter_hints(thresholds: dict[str, Any] | int | FootStrength | None = None) -> dict[str, str]:
+    levels = resolve_foot_thresholds(thresholds)
+    left = FOOT_STRENGTH_NAMES[levels["left"]].lower()
+    both = FOOT_STRENGTH_NAMES[levels["both"]].lower()
+    right = FOOT_STRENGTH_NAMES[levels["right"]].lower()
     return {
-        "foot-L": f"Left foot is {vs}.",
-        "foot-B": f"Both feet at least {name}.",
-        "foot-R": f"Right foot is {vs}.",
+        "foot-L": f"Left foot at least {left}.",
+        "foot-B": f"Both feet at least {both}.",
+        "foot-R": f"Right foot at least {right}.",
     }
 
 

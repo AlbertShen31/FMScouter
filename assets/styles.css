@@ -1572,16 +1572,30 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     text-align: center !important;
 }
 
-.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .dash-cell-value {
-    overflow: visible !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .dash-cell-value,
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .markdown,
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .markdown p {
     width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    text-align: center !important;
+    line-height: 0 !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .rs-feet-cell {
+    display: block;
+    width: 100%;
+    text-align: center;
+    line-height: 0;
 }
 
 .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .rs-feet {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
     gap: 1px;
+    vertical-align: middle;
 }
 
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
@@ -2934,6 +2948,18 @@ body[data-theme="light"] .rc-page {
     font-size: 22px;
     font-weight: 700;
     margin-bottom: 6px;
+}
+
+.st-foot-thresholds {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 720px) {
+    .st-foot-thresholds {
+        grid-template-columns: 1fr;
+    }
 }
 
 .st-actions {

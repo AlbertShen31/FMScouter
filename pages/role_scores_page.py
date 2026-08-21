@@ -1294,11 +1294,18 @@ def layout():
                                     ),
                                 },
                                 {
+                                    "selector": ".rs-feet-cell",
+                                    "rule": (
+                                        "display: block !important; width: 100% !important; "
+                                        "text-align: center !important; line-height: 0 !important;"
+                                    ),
+                                },
+                                {
                                     "selector": ".rs-feet",
                                     "rule": (
                                         "display: inline-flex !important; "
                                         "align-items: center; justify-content: center; "
-                                        "gap: 1px; line-height: 0; margin: 0 auto;"
+                                        "gap: 1px; line-height: 0; vertical-align: middle;"
                                     ),
                                 },
                                 {
@@ -1310,14 +1317,14 @@ def layout():
                                 },
                                 {
                                     "selector": (
-                                        'td.dash-cell[data-dash-column="Feet"] '
-                                        ".dash-cell-value"
+                                        'td.dash-cell[data-dash-column="Feet"] .dash-cell-value, '
+                                        'td.dash-cell[data-dash-column="Feet"] .markdown, '
+                                        'td.dash-cell[data-dash-column="Feet"] .markdown p'
                                     ),
                                     "rule": (
-                                        "display: flex !important; "
-                                        "justify-content: center !important; "
-                                        "align-items: center !important; "
-                                        "width: 100% !important;"
+                                        "width: 100% !important; max-width: 100% !important; "
+                                        "margin: 0 !important; padding: 0 !important; "
+                                        "text-align: center !important; line-height: 0 !important;"
                                     ),
                                 },
                                 {
@@ -1587,12 +1594,16 @@ def _foot_color(level: FootStrength | None) -> str:
 
 
 def _footprint_svg(side: str, color: str, label: str) -> str:
-    """Inline SVG sole+toes; `side` is L or R (R is mirrored)."""
-    mirror = ' transform="translate(24 0) scale(-1 1)"' if side == "R" else ""
+    """Inline SVG sole+toes; `side` is L or R (R is mirrored inside a group)."""
+    # Mirror via inner <g> so the SVG layout box stays 16×24 (root transform
+    # shifts paint without updating the box, which breaks cell centering).
+    open_g = '<g transform="translate(24 0) scale(-1 1)">' if side == "R" else ""
+    close_g = "</g>" if side == "R" else ""
     return (
         f'<svg class="rs-foot-icon" viewBox="0 0 24 36" width="16" height="24" '
-        f'aria-label="{label}" role="img"{mirror}>'
+        f'aria-label="{label}" role="img">'
         f'<title>{label}</title>'
+        f"{open_g}"
         # Heel / sole
         f'<ellipse cx="12" cy="23" rx="7.2" ry="10.5" fill="{color}"/>'
         # Toes (big toe on the inner side before mirror)
@@ -1601,6 +1612,7 @@ def _footprint_svg(side: str, color: str, label: str) -> str:
         f'<ellipse cx="14.0" cy="6.2" rx="1.8" ry="2.9" fill="{color}"/>'
         f'<ellipse cx="17.4" cy="7.4" rx="1.6" ry="2.6" fill="{color}"/>'
         f'<ellipse cx="19.8" cy="10.0" rx="1.35" ry="2.2" fill="{color}"/>'
+        f"{close_g}"
         f"</svg>"
     )
 
@@ -1611,11 +1623,14 @@ def _feet_cell(row: dict) -> str:
     left_label = FOOT_STRENGTH_NAMES.get(left, "Unknown") if left else "Unknown"
     right_label = FOOT_STRENGTH_NAMES.get(right, "Unknown") if right else "Unknown"
     tip = f"L: {left_label} · R: {right_label}"
+    # Full-width centered wrapper: Dash markdown nests <p> tags that break
+    # parent flex centering, so use text-align + inline-flex instead.
     return (
-        f'<span class="rs-feet" title="{tip}">'
+        f'<div class="rs-feet-cell" title="{tip}">'
+        f'<span class="rs-feet">'
         f'{_footprint_svg("L", _foot_color(left), f"Left foot: {left_label}")}'
         f'{_footprint_svg("R", _foot_color(right), f"Right foot: {right_label}")}'
-        f"</span>"
+        f"</span></div>"
     )
 
 
@@ -1911,7 +1926,7 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
     return rules
 
 
-def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> html.Div:
+def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> html.Div:
     counts = {"all": len(rows)}
     for key, _name, _code, _css in POS_CARDS[1:]:
         counts[key] = sum(1 for row in rows if key in (row.get("PosGroups") or []))
@@ -1931,7 +1946,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> h
                 className=class_name,
             )
         )
-    hints = foot_filter_hints(foot_threshold)
+    hints = foot_filter_hints(foot_thresholds)
     foot_btns = []
     for key, label in (("foot-L", "Left Foot"), ("foot-B", "Both Feet"), ("foot-R", "Right Foot")):
         foot_btns.append(
@@ -1951,7 +1966,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> h
                     html.Div(
                         [
                             html.Span("Footedness"),
-                            *_help_icon(foot_filter_help(foot_threshold), "rs-help-footedness"),
+                            *_help_icon(foot_filter_help(foot_thresholds), "rs-help-footedness"),
                         ],
                         className="rs-foot-label",
                     ),
@@ -2942,7 +2957,7 @@ def render_shortlist(
 ):
     settings = us.normalize(settings)
     bands = settings["bands"]
-    foot_threshold = settings["foot_threshold"]
+    foot_thresholds = settings["foot_thresholds"]
     bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
@@ -2985,7 +3000,7 @@ def render_shortlist(
             rows, role_ids, [], bands, combos, hybrids_only=hybrids_only
         )
         return (
-            _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
+            _pos_bar(rows, pos_filter, foot_filter, foot_thresholds),
             cards,
             not cards,
             [],
@@ -3016,7 +3031,7 @@ def render_shortlist(
     for row in rows:
         if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
             continue
-        if foot_filter and not foot_match(row, foot_filter, foot_threshold):
+        if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
             continue
         pos_elig = (
             _position_eligibility(row, view_roles, combo_by_col=combo_by_col) or "no"
@@ -3127,7 +3142,7 @@ def render_shortlist(
     pos_bar = (
         no_update
         if focus_sort_only
-        else _pos_bar(rows, pos_filter, foot_filter, foot_threshold)
+        else _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
     )
     return (
         pos_bar,

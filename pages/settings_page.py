@@ -230,22 +230,47 @@ def _form(settings: dict) -> list:
                     [
                         html.P(
                             "Strength scale is 1 (very weak) through 6 (very strong). "
-                            "The threshold is the minimum rating that counts as a usable foot.",
+                            "Each Role scores filter uses its own minimum rating for that foot.",
                             className="text-muted",
                         ),
-                        dmc.Select(
-                            id="st-foot-threshold",
-                            label="Usable-foot threshold",
-                            data=rs.foot_strength_options(),
-                            value=str(
-                                settings.get("foot_threshold") or us.DEFAULTS["foot_threshold"]
-                            ),
-                            clearable=False,
-                            searchable=False,
+                        html.Div(
+                            [
+                                dmc.Select(
+                                    id="st-foot-left",
+                                    label="Left foot filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(
+                                        settings["foot_thresholds"]["left"]
+                                    ),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                                dmc.Select(
+                                    id="st-foot-both",
+                                    label="Both feet filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(
+                                        settings["foot_thresholds"]["both"]
+                                    ),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                                dmc.Select(
+                                    id="st-foot-right",
+                                    label="Right foot filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(
+                                        settings["foot_thresholds"]["right"]
+                                    ),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                            ],
+                            className="st-foot-thresholds",
                         ),
                         html.Small(
                             id="st-foot-preview",
-                            children=rs.foot_filter_help(settings.get("foot_threshold")),
+                            children=rs.foot_filter_help(settings["foot_thresholds"]),
                             className="text-muted d-block mt-2",
                         ),
                     ]
@@ -355,6 +380,7 @@ def _color_values_for(settings: dict, specs) -> list[str]:
 
 
 def _form_values(settings: dict, specs) -> tuple:
+    feet = settings["foot_thresholds"]
     return (
         settings,
         us.pack_options(),
@@ -364,7 +390,9 @@ def _form_values(settings: dict, specs) -> tuple:
         settings["bands"]["elite"],
         settings["bands"]["good"],
         settings["bands"]["ok"],
-        str(settings.get("foot_threshold") or us.DEFAULTS["foot_threshold"]),
+        str(feet["left"]),
+        str(feet["both"]),
+        str(feet["right"]),
         us.format_list(settings["hist_edges"]),
         _color_values_for(settings, specs),
     )
@@ -388,10 +416,12 @@ def preview_poor(ok):
 
 @callback(
     Output("st-foot-preview", "children"),
-    Input("st-foot-threshold", "value"),
+    Input("st-foot-left", "value"),
+    Input("st-foot-both", "value"),
+    Input("st-foot-right", "value"),
 )
-def preview_foot(threshold):
-    return rs.foot_filter_help(threshold)
+def preview_foot(left, both, right):
+    return rs.foot_filter_help({"left": left, "both": both, "right": right})
 
 
 @callback(
@@ -403,7 +433,9 @@ def preview_foot(threshold):
     Output("st-band-elite", "value"),
     Output("st-band-good", "value"),
     Output("st-band-ok", "value"),
-    Output("st-foot-threshold", "value"),
+    Output("st-foot-left", "value"),
+    Output("st-foot-both", "value"),
+    Output("st-foot-right", "value"),
     Output("st-hist-edges", "value"),
     Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
     Output("st-status", "children"),
@@ -417,7 +449,9 @@ def preview_foot(threshold):
     State("st-band-elite", "value"),
     State("st-band-good", "value"),
     State("st-band-ok", "value"),
-    State("st-foot-threshold", "value"),
+    State("st-foot-left", "value"),
+    State("st-foot-both", "value"),
+    State("st-foot-right", "value"),
     State("st-hist-edges", "value"),
     State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
     prevent_initial_call=True,
@@ -432,19 +466,25 @@ def handle_settings(
     elite,
     good,
     ok,
-    foot_threshold,
+    foot_left,
+    foot_both,
+    foot_right,
     edges,
     color_values,
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return (no_update,) * 13
+        return (no_update,) * 15
     specs = ctx.states_list[-1] if ctx.states_list else []
     draft = {
         "id": pack_id,
         "age_tiers": ages,
         "bands": {"elite": elite, "good": good, "ok": ok},
-        "foot_threshold": foot_threshold,
+        "foot_thresholds": {
+            "left": foot_left,
+            "both": foot_both,
+            "right": foot_right,
+        },
         "hist_edges": edges,
         "colors": _colors_from_state(color_values),
     }
@@ -469,7 +509,7 @@ def handle_settings(
     elif triggered == "st-new":
         label = str(new_name or "").strip()
         if not label:
-            return (no_update,) * 11 + ("Enter a name to create a new settings file.", no_update)
+            return (no_update,) * 13 + ("Enter a name to create a new settings file.", no_update)
         settings = us.create_pack(label, draft)
         status = f"Created {settings['name']}."
         clear_name = ""
@@ -485,7 +525,7 @@ def handle_settings(
             status = f"Saved {settings['name']}."
             update_pack = False
     else:
-        return (no_update,) * 13
+        return (no_update,) * 15
     values = list(_form_values(settings, specs))
     if not update_pack:
         values[1] = no_update

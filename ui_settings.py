@@ -32,7 +32,8 @@ DEFAULTS: dict[str, Any] = {
     "name": "Default",
     "age_tiers": [21, 25, 30],
     "bands": {"elite": 14.0, "good": 12.0, "ok": 10.0},
-    "foot_threshold": 4,
+    # Left / Right default to Very Strong (6); Both to Fairly Strong (4).
+    "foot_thresholds": {"left": 6, "both": 4, "right": 6},
     "hist_edges": [10.0, 11.0, 12.0, 13.0, 14.0],
     "colors": {
         "elite": {"bg": "#dcfce7", "fg": "#15803d", "bar": "#22c55e"},
@@ -104,6 +105,22 @@ def normalize_foot_threshold(value, default: int = 4) -> int:
     except (TypeError, ValueError):
         number = default
     return max(1, min(6, number))
+
+
+def normalize_foot_thresholds(raw=None) -> dict[str, int]:
+    """Normalize left/both/right thresholds; migrate legacy `foot_threshold` → both."""
+    raw = raw or {}
+    defaults = DEFAULTS["foot_thresholds"]
+    src = raw.get("foot_thresholds") if isinstance(raw.get("foot_thresholds"), dict) else {}
+    legacy = raw.get("foot_threshold")
+    both_fallback = legacy if legacy is not None else defaults["both"]
+    return {
+        "left": normalize_foot_threshold(src.get("left"), defaults["left"]),
+        "both": normalize_foot_threshold(
+            src.get("both", both_fallback), defaults["both"]
+        ),
+        "right": normalize_foot_threshold(src.get("right"), defaults["right"]),
+    }
 
 
 def parse_score_floor(value) -> float:
@@ -187,9 +204,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "name": label,
         "age_tiers": ages,
         "bands": normalize_bands(raw.get("bands") or raw),
-        "foot_threshold": normalize_foot_threshold(
-            raw.get("foot_threshold", DEFAULTS["foot_threshold"])
-        ),
+        "foot_thresholds": normalize_foot_thresholds(raw),
         "hist_edges": edges,
         "colors": colors,
     }
@@ -245,6 +260,15 @@ def _default_settings() -> dict[str, Any]:
     merged = {**base, **overrides}
     if overrides.get("bands"):
         merged["bands"] = {**base["bands"], **overrides["bands"]}
+    if overrides.get("foot_thresholds") or overrides.get("foot_threshold") is not None:
+        merged["foot_thresholds"] = {
+            **base["foot_thresholds"],
+            **(overrides.get("foot_thresholds") or {}),
+        }
+        if overrides.get("foot_threshold") is not None and "both" not in (
+            overrides.get("foot_thresholds") or {}
+        ):
+            merged["foot_thresholds"]["both"] = overrides["foot_threshold"]
     if overrides.get("colors"):
         merged["colors"] = {
             band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
@@ -309,7 +333,7 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
         payload = {
             "age_tiers": settings["age_tiers"],
             "bands": settings["bands"],
-            "foot_threshold": settings["foot_threshold"],
+            "foot_thresholds": settings["foot_thresholds"],
             "hist_edges": settings["hist_edges"],
             "colors": settings["colors"],
         }
