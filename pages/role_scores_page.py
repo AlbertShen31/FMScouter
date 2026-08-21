@@ -780,6 +780,7 @@ def layout():
         dcc.Store(id="rs-table-cols-sig", data=""),
         dcc.Store(id="rs-hydrated", data=False),
         dcc.Store(id="rs-persist-boot"),
+        dcc.Store(id="rs-role-mode-prev", data=None),
         dcc.Interval(id="rs-hydrate-tick", interval=50, max_intervals=1),
         dbc.Modal(
             [
@@ -1845,10 +1846,18 @@ def _depth_panel(
     prevent_initial_call=True,
 )
 def parse_uploaded(upload_contents, replace_contents, upload_name, replace_name):
-    contents = upload_contents or replace_contents
+    # Prefer the control that fired — initial upload contents stay set after Replace.
+    if ctx.triggered_id == "rs-upload-replace":
+        contents = replace_contents
+        name = replace_name or "upload.csv"
+    elif ctx.triggered_id == "rs-upload":
+        contents = upload_contents
+        name = upload_name or "upload.csv"
+    else:
+        contents = replace_contents or upload_contents
+        name = (replace_name or upload_name) or "upload.csv"
     if not contents:
         return no_update, no_update, no_update, no_update
-    name = (replace_name if replace_contents else upload_name) or "upload.csv"
     if not name.lower().endswith(".csv"):
         return (
             None,
@@ -1960,6 +1969,7 @@ clientside_callback(
     Output("rs-hybrids-only", "checked"),
     Output("rs-focus-role", "data", allow_duplicate=True),
     Output("rs-hydrated", "data"),
+    Output("rs-role-mode-prev", "data"),
     Input("rs-persist-boot", "data"),
     State("rs-hydrated", "data"),
     State("rs-phase", "data"),
@@ -1969,6 +1979,7 @@ clientside_callback(
 def hydrate_page_persist(persist, hydrated, phase, group):
     if hydrated or persist is None:
         return (
+            no_update,
             no_update,
             no_update,
             no_update,
@@ -2015,6 +2026,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
             no_update,
             no_update,
             True,
+            mode,
         )
     return (
         roles,
@@ -2027,6 +2039,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
         hybrids_only,
         focus,
         True,
+        mode,
     )
 
 
@@ -2189,6 +2202,48 @@ def sync_role_mode(mode):
         mode != "single",
         body,
     )
+
+
+@callback(
+    Output("rs-roles", "value", allow_duplicate=True),
+    Output("rs-combos", "data", allow_duplicate=True),
+    Output("rs-formation", "value", allow_duplicate=True),
+    Output("rs-focus-role", "data", allow_duplicate=True),
+    Output("rs-combo-ip", "value", allow_duplicate=True),
+    Output("rs-combo-oop", "value", allow_duplicate=True),
+    Output("rs-squad-marked", "data", allow_duplicate=True),
+    Output("rs-role-mode-prev", "data", allow_duplicate=True),
+    Input("rs-role-mode", "value"),
+    State("rs-role-mode-prev", "data"),
+    prevent_initial_call=True,
+)
+def clear_on_role_mode_change(mode, prev_mode):
+    """Reset scored-role selections when switching Single / Hybrid / Formations."""
+    mode = mode or "formations"
+    if prev_mode == mode:
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            mode,
+        )
+    if prev_mode is None:
+        # Seed after hydrate/layout without wiping restored selections.
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            mode,
+        )
+    return [], [], None, [], None, None, [], mode
 
 
 @callback(
