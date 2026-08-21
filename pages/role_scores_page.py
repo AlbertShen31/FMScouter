@@ -56,6 +56,7 @@ from role_scorer import (
     set_piece_columns,
     set_piece_filter_columns,
     set_piece_formula,
+    set_piece_header,
     set_piece_hint,
     set_piece_sort_column,
 )
@@ -1688,9 +1689,12 @@ def _strip_phase_suffix(label: str) -> str:
 
 
 def _column_display_name(col_id: str) -> str:
-    """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM."""
+    """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM; set pieces as COR/AER/…"""
     if col_id in TABLE_TEXT_COLS:
         return col_id
+    piece = set_piece_header(col_id)
+    if piece != col_id:
+        return piece
     if _is_hybrid_column(col_id):
         ip, _, oop = col_id.partition("+")
         if not ip or not oop:

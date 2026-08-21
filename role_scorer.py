@@ -22,6 +22,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "corners",
         "label": "Corners",
+        "abbr": "COR",
         "detail": "taker",
         "raw": "Cor",
         "score": "Corners",
@@ -32,6 +33,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "dfk",
         "label": "DFK",
+        "abbr": "DFK",
         "detail": "direct — shooting chance",
         "raw": "Fre",
         "score": "DFK",
@@ -42,6 +44,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "ifk",
         "label": "IFK",
+        "abbr": "IFK",
         "detail": "indirect — crossing chance",
         "raw": "Fre",
         "score": "IFK",
@@ -52,6 +55,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "throws",
         "label": "Long throws",
+        "abbr": "LTH",
         "detail": "taker",
         "raw": "LTh",
         "score": "Throws",
@@ -62,6 +66,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "pens",
         "label": "Penalties",
+        "abbr": "PEN",
         "detail": "spot kicks",
         "raw": "Pen",
         "score": "Pens",
@@ -72,6 +77,7 @@ SET_PIECE_PROFILES = (
     {
         "id": "aerial",
         "label": "Aerial threat",
+        "abbr": "AER",
         "detail": "in the box",
         "raw": None,
         "score": "Aerial",
@@ -142,6 +148,14 @@ def set_piece_columns(selected) -> list[str]:
             cols.append(score)
             seen.add(score)
     return cols
+
+
+def set_piece_header(score_col: str) -> str:
+    """Short table header for a set-piece score column (e.g. Corners → COR)."""
+    for profile in SET_PIECE_PROFILES:
+        if profile.get("score") == score_col:
+            return profile.get("abbr") or profile.get("label") or score_col
+    return score_col
 
 
 def apply_set_piece_scores(row: dict[str, Any], attrs: dict[str, int]) -> None:
