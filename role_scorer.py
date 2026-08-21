@@ -817,38 +817,24 @@ def foot_match(
     right = foot_strength(row.get("Right Foot") or "")
     if left is None or right is None:
         return False
+    # Left / Right: that foot is Very Strong (other foot unrestricted → overlaps Both).
     if foot_filter == "foot-L":
-        return left > right and right < min_strong
+        return left >= FootStrength.VERY_STRONG
     if foot_filter == "foot-R":
-        return right > left and left < min_strong
+        return right >= FootStrength.VERY_STRONG
     if foot_filter == "foot-B":
         return left >= min_strong and right >= min_strong
     return True
 
 
-def _weaker_than_label(threshold: FootStrength) -> str:
-    names = [FOOT_STRENGTH_NAMES[FootStrength(level)].lower() for level in range(1, int(threshold))]
-    if not names:
-        return ""
-    if len(names) == 1:
-        return names[0]
-    if len(names) == 2:
-        return f"{names[0]} or {names[1]}"
-    return ", ".join(names[:-1]) + f", or {names[-1]}"
-
-
 def foot_filter_help(threshold: int | FootStrength | None = None) -> str:
     level = coerce_foot_strength(threshold)
     name = FOOT_STRENGTH_NAMES[level].lower()
-    weaker = _weaker_than_label(level)
-    if weaker:
-        sided = (
-            f"Left / Right: that foot is stronger, and the other is below {name} ({weaker})."
-        )
-    else:
-        sided = f"Left / Right: that foot is stronger than the other (no weak-foot cap)."
+    vs = FOOT_STRENGTH_NAMES[FootStrength.VERY_STRONG].lower()
     return (
-        f"{sided} Both feet: each foot is at least {name}. "
+        f"Left / Right: that foot is {vs} (the other foot can be anything). "
+        f"Both feet: each foot is at least {name}. "
+        "Players can match more than one filter. "
         "Click the active filter again to clear it."
     )
 
@@ -856,11 +842,11 @@ def foot_filter_help(threshold: int | FootStrength | None = None) -> str:
 def foot_filter_hints(threshold: int | FootStrength | None = None) -> dict[str, str]:
     level = coerce_foot_strength(threshold)
     name = FOOT_STRENGTH_NAMES[level].lower()
-    weaker = _weaker_than_label(level) or "any weaker rating"
+    vs = FOOT_STRENGTH_NAMES[FootStrength.VERY_STRONG].lower()
     return {
-        "foot-L": f"Left foot stronger than right, and the right foot is {weaker}.",
+        "foot-L": f"Left foot is {vs}.",
         "foot-B": f"Both feet at least {name}.",
-        "foot-R": f"Right foot stronger than left, and the left foot is {weaker}.",
+        "foot-R": f"Right foot is {vs}.",
     }
 
 

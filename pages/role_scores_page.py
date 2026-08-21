@@ -24,6 +24,8 @@ import plotly.graph_objects as go
 from role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
+    FOOT_STRENGTH_NAMES,
+    FootStrength,
     GROUP_DEFS,
     POS_CARDS,
     SET_PIECE_PROFILES,
@@ -36,6 +38,7 @@ from role_scorer import (
     foot_filter_help,
     foot_filter_hints,
     foot_match,
+    foot_strength,
     group_abbr_tone,
     normalize_combos,
     parse_combo_id,
@@ -1184,7 +1187,8 @@ def layout():
                                                             max=20,
                                                             step=0.1,
                                                             decimalScale=1,
-                                                            value=None,
+                                                            # Default: OK band floor (scores below = Poor).
+                                                            value=settings["bands"]["ok"],
                                                         ),
                                                         dmc.Select(
                                                             id="rs-min-score-mode",
@@ -1270,6 +1274,7 @@ def layout():
                             selected_rows=[],
                             filter_action="none",
                             fill_width=True,
+                            markdown_options={"html": True},
                             style_table={
                                 "overflowX": "auto",
                                 "borderRadius": "12px",
@@ -1287,15 +1292,59 @@ def layout():
                                         "background-color: var(--table-hover-bg) !important; "
                                         "color: var(--table-hover-fg) !important;"
                                     ),
-                                }
+                                },
+                                {
+                                    "selector": ".rs-feet",
+                                    "rule": (
+                                        "display: inline-flex !important; "
+                                        "align-items: center; justify-content: center; "
+                                        "gap: 1px; line-height: 0; margin: 0 auto;"
+                                    ),
+                                },
+                                {
+                                    "selector": ".rs-foot-icon",
+                                    "rule": (
+                                        "display: block !important; flex-shrink: 0; "
+                                        "overflow: visible;"
+                                    ),
+                                },
+                                {
+                                    "selector": (
+                                        'td.dash-cell[data-dash-column="Feet"] '
+                                        ".dash-cell-value"
+                                    ),
+                                    "rule": (
+                                        "display: flex !important; "
+                                        "justify-content: center !important; "
+                                        "align-items: center !important; "
+                                        "width: 100% !important;"
+                                    ),
+                                },
+                                {
+                                    "selector": 'td.dash-cell[data-dash-column="Feet"]',
+                                    "rule": (
+                                        "overflow: visible !important; "
+                                        "min-width: 84px !important; "
+                                        "width: 84px !important; "
+                                        "text-align: center !important;"
+                                    ),
+                                },
+                                {
+                                    "selector": 'th.dash-header[data-dash-column="Feet"]',
+                                    "rule": (
+                                        "min-width: 84px !important; "
+                                        "width: 84px !important; "
+                                        "text-align: center !important;"
+                                    ),
+                                },
                             ],
                             style_cell={
                                 "fontFamily": "Inter, Segoe UI, sans-serif",
-                                "fontSize": "13px",
+                                "fontSize": "14px",
                                 "padding": "10px 12px",
                                 "whiteSpace": "nowrap",
                                 "backgroundColor": "transparent",
-                                "color": "inherit",
+                                "color": "var(--app-text)",
                                 "border": "1px solid transparent",
                                 "textAlign": "right",
                             },
@@ -1314,6 +1363,14 @@ def layout():
                                     "textAlign": "left",
                                 },
                                 {
+                                    "if": {"column_id": "Feet"},
+                                    "textAlign": "center",
+                                    "padding": "8px 10px",
+                                    "minWidth": "84px",
+                                    "width": "84px",
+                                    "overflow": "visible",
+                                },
+                                {
                                     "if": {"column_id": "Club"},
                                     "textAlign": "left",
                                 },
@@ -1325,10 +1382,10 @@ def layout():
                             style_header={
                                 "fontWeight": "600",
                                 "textTransform": "uppercase",
-                                "fontSize": "11px",
+                                "fontSize": "12px",
                                 "letterSpacing": "0.04em",
                                 "backgroundColor": "transparent",
-                                "color": "inherit",
+                                "color": "var(--app-text)",
                                 "cursor": "pointer",
                                 "padding": "12px 28px 12px 10px",
                                 "height": "46px",
@@ -1506,9 +1563,68 @@ def _cell_number(value) -> float:
         return 0.0
 
 
-TABLE_TEXT_COLS = {"Name", "Age", "Height", "Position", "Club", "Rec", "Injury"}
+TABLE_TEXT_COLS = {"Name", "Age", "Height", "Position", "Feet", "Club", "Rec", "Injury"}
+TABLE_MARKDOWN_COLS = {"Feet"}
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
 _REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
+
+# Dark red (very weak) → bright green (very strong)
+FOOT_STRENGTH_COLORS = {
+    FootStrength.VERY_WEAK: "#7f1d1d",
+    FootStrength.WEAK: "#dc2626",
+    FootStrength.REASONABLE: "#f59e0b",
+    FootStrength.FAIRLY_STRONG: "#a3e635",
+    FootStrength.STRONG: "#22c55e",
+    FootStrength.VERY_STRONG: "#4ade80",
+}
+_FOOT_UNKNOWN = "#64748b"
+
+
+def _foot_color(level: FootStrength | None) -> str:
+    if level is None:
+        return _FOOT_UNKNOWN
+    return FOOT_STRENGTH_COLORS.get(level, _FOOT_UNKNOWN)
+
+
+def _footprint_svg(side: str, color: str, label: str) -> str:
+    """Inline SVG sole+toes; `side` is L or R (R is mirrored)."""
+    mirror = ' transform="translate(24 0) scale(-1 1)"' if side == "R" else ""
+    return (
+        f'<svg class="rs-foot-icon" viewBox="0 0 24 36" width="16" height="24" '
+        f'aria-label="{label}" role="img"{mirror}>'
+        f'<title>{label}</title>'
+        # Heel / sole
+        f'<ellipse cx="12" cy="23" rx="7.2" ry="10.5" fill="{color}"/>'
+        # Toes (big toe on the inner side before mirror)
+        f'<ellipse cx="6.2" cy="8.2" rx="2.1" ry="3.2" fill="{color}"/>'
+        f'<ellipse cx="10.2" cy="6.4" rx="1.9" ry="3.0" fill="{color}"/>'
+        f'<ellipse cx="14.0" cy="6.2" rx="1.8" ry="2.9" fill="{color}"/>'
+        f'<ellipse cx="17.4" cy="7.4" rx="1.6" ry="2.6" fill="{color}"/>'
+        f'<ellipse cx="19.8" cy="10.0" rx="1.35" ry="2.2" fill="{color}"/>'
+        f"</svg>"
+    )
+
+
+def _feet_cell(row: dict) -> str:
+    left = foot_strength(row.get("Left Foot") or "")
+    right = foot_strength(row.get("Right Foot") or "")
+    left_label = FOOT_STRENGTH_NAMES.get(left, "Unknown") if left else "Unknown"
+    right_label = FOOT_STRENGTH_NAMES.get(right, "Unknown") if right else "Unknown"
+    tip = f"L: {left_label} · R: {right_label}"
+    return (
+        f'<span class="rs-feet" title="{tip}">'
+        f'{_footprint_svg("L", _foot_color(left), f"Left foot: {left_label}")}'
+        f'{_footprint_svg("R", _foot_color(right), f"Right foot: {right_label}")}'
+        f"</span>"
+    )
+
+
+def _feet_sort_key(row: dict) -> tuple:
+    left = foot_strength(row.get("Left Foot") or "")
+    right = foot_strength(row.get("Right Foot") or "")
+    l_n = int(left) if left else 0
+    r_n = int(right) if right else 0
+    return (0, max(l_n, r_n), l_n + r_n) if (l_n or r_n) else (1, 0, 0)
 
 
 def rec_sort_key(value) -> tuple:
@@ -1524,7 +1640,9 @@ def rec_sort_key(value) -> tuple:
     return (0, ord(letter) - ord("A"), _REC_SUFFIX[suffix], text)
 
 
-def _column_sort_key(column_id: str, value):
+def _column_sort_key(column_id: str, value, row: dict | None = None):
+    if column_id == "Feet" and row is not None:
+        return _feet_sort_key(row)
     if column_id == "Rec":
         return rec_sort_key(value)
     blank = value in (None, "", "-")
@@ -1538,7 +1656,10 @@ def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score
         item = sort_by[0]
         column = item.get("column_id")
         reverse = item.get("direction") == "desc"
-        rows.sort(key=lambda row: _column_sort_key(column, row.get(column)), reverse=reverse)
+        rows.sort(
+            key=lambda row: _column_sort_key(column, row.get(column), row),
+            reverse=reverse,
+        )
         return
     rows.sort(
         key=lambda row: (
@@ -1554,7 +1675,9 @@ def _table_columns(col_ids: list[str]) -> list[dict]:
     columns = []
     for col in col_ids:
         spec = {"name": col, "id": col}
-        if col not in TABLE_TEXT_COLS:
+        if col in TABLE_MARKDOWN_COLS:
+            spec["presentation"] = "markdown"
+        elif col not in TABLE_TEXT_COLS:
             spec["type"] = "numeric"
         columns.append(spec)
     return columns
@@ -1604,9 +1727,11 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
     zebra = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.025)"
     selected_bg = "rgba(61, 255, 136, 0.14)" if dark else "rgba(34, 139, 87, 0.12)"
     eligible = "#3dff88" if dark else "#15803d"
-    partial = "#fbbf24" if dark else "#ca8a04"
-    ineligible = "#f87171" if dark else "#b91c1c"
-    return [
+    partial = "#fbbf24" if dark else "#a16207"
+    ineligible = "#fb7185" if dark else "#be123c"
+    # Brighter than muted so Age / Height / Club stay readable.
+    plain = "#f1f5f9" if dark else "#0f172a"
+    rules = [
         {"if": {"row_index": "odd"}, "backgroundColor": zebra},
         {
             "if": {"state": "selected"},
@@ -1623,18 +1748,36 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
         },
         {
             "if": {"column_id": "Club"},
-            "color": "var(--app-muted)",
+            "color": plain,
             "maxWidth": "200px",
+        },
+        {
+            "if": {"column_id": "Feet"},
+            "textAlign": "center",
+            "padding": "8px 10px",
+            "minWidth": "84px",
+            "width": "84px",
+            "overflow": "visible",
         },
         {
             "if": {"column_id": "Rec"},
             "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-            "fontSize": "12px",
+            "fontSize": "13px",
             "letterSpacing": "0.03em",
+            "fontWeight": "700",
+            "textAlign": "center",
+        },
+        {
+            "if": {"column_id": "Age"},
+            "color": plain,
+        },
+        {
+            "if": {"column_id": "Height"},
+            "color": plain,
         },
         {
             "if": {"column_id": "Injury", "filter_query": '{Injury} != "-"'},
-            "color": "#b45309" if not dark else "#fbbf24",
+            "color": "#fbbf24" if dark else "#b45309",
             "fontWeight": "600",
         },
         {
@@ -1662,6 +1805,54 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
             "fontWeight": "600",
         },
     ]
+    rules.extend(_rec_highlight_styles(theme))
+    return rules
+
+
+def _rec_grades() -> list[str]:
+    grades = [f"{letter}{suffix}" for letter in "ABCDE" for suffix in ("+", "", "-")]
+    grades.append("F")
+    return grades
+
+
+def _lerp_channel(a: int, b: int, t: float) -> int:
+    return int(round(a + (b - a) * t))
+
+
+def _rec_highlight_styles(theme: str | None = None) -> list[dict]:
+    """Color Rec from green (A+) to red (F)."""
+    dark = _is_dark(theme)
+    # Dark: bright fg on soft tinted bg. Light: deep fg on soft tinted bg.
+    green_bg = (22, 101, 52) if dark else (220, 252, 231)
+    red_bg = (127, 29, 29) if dark else (254, 226, 226)
+    green_fg = (74, 222, 128) if dark else (21, 128, 61)
+    red_fg = (252, 165, 165) if dark else (185, 28, 28)
+    rules = []
+    grades = _rec_grades()
+    last = max(len(grades) - 1, 1)
+    for index, grade in enumerate(grades):
+        t = index / last
+        bg = "#{:02x}{:02x}{:02x}".format(
+            _lerp_channel(green_bg[0], red_bg[0], t),
+            _lerp_channel(green_bg[1], red_bg[1], t),
+            _lerp_channel(green_bg[2], red_bg[2], t),
+        )
+        fg = "#{:02x}{:02x}{:02x}".format(
+            _lerp_channel(green_fg[0], red_fg[0], t),
+            _lerp_channel(green_fg[1], red_fg[1], t),
+            _lerp_channel(green_fg[2], red_fg[2], t),
+        )
+        rules.append(
+            {
+                "if": {
+                    "filter_query": f'{{Rec}} = "{grade}"',
+                    "column_id": "Rec",
+                },
+                "backgroundColor": bg,
+                "color": fg,
+            }
+        )
+    return rules
 
 
 def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
@@ -2867,13 +3058,16 @@ def render_shortlist(
         for profile in SET_PIECE_PROFILES
         if profile["id"] in chosen and profile.get("score")
     ] + table_role_cols
-    table_cols = ["Name", "Age", "Height", "Position", "Club", "Rec", "Injury"]
+    table_cols = ["Name", "Age", "Height", "Position", "Feet", "Club", "Rec", "Injury"]
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
     table_rows = []
     for row in filtered:
-        item = {key: row.get(key, "-") for key in table_cols}
+        item = {
+            key: (_feet_cell(row) if key == "Feet" else row.get(key, "-"))
+            for key in table_cols
+        }
         item["PosEligible"] = row.get("_PosEligible") or "no"
         table_rows.append(item)
     page_keys = [player_row_key(row) for row in table_rows]

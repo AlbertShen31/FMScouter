@@ -578,7 +578,7 @@ body {
 
 #rs-table .dash-spreadsheet-inner th {
     background-color: var(--app-head);
-    color: var(--app-muted);
+    color: var(--app-text);
 }
 
 #rs-table .dash-spreadsheet-inner td.dash-cell:hover,
@@ -600,7 +600,7 @@ body {
 
 #rs-table .dash-spreadsheet-inner th {
     background-color: var(--app-head);
-    color: var(--app-muted);
+    color: var(--app-text);
     cursor: pointer;
     position: relative !important;
     user-select: none;
@@ -1562,6 +1562,26 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 
 .rs-table-shell .dash-spreadsheet-inner table {
     width: 100% !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"],
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Feet"] {
+    min-width: 84px !important;
+    width: 84px !important;
+    overflow: visible !important;
+    text-align: center !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .dash-cell-value {
+    overflow: visible !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"] .rs-feet {
+    gap: 1px;
 }
 
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
