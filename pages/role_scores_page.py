@@ -1707,14 +1707,60 @@ def _is_hybrid_column(col_id: str) -> bool:
     )
 
 
+_PHASE_DISPLAY_SUFFIXES = ("-IP", "-OOP", "-GK")
+_HEADER_LEFT_COLS = ("Name", "Position", "Club", "Injury")
+_COLUMN_TONE_BY_ID: dict[str, str] | None = None
+
+
+def _strip_phase_suffix(label: str) -> str:
+    """Drop -IP / -OOP / -GK from a display label (data id stays unchanged)."""
+    for suffix in _PHASE_DISPLAY_SUFFIXES:
+        if label.endswith(suffix):
+            return label[: -len(suffix)]
+    return label
+
+
 def _column_display_name(col_id: str) -> str:
-    """Hybrid headers wrap visually (newline) without a real multi-row header."""
-    if not _is_hybrid_column(col_id):
+    """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM."""
+    if col_id in TABLE_TEXT_COLS:
         return col_id
-    ip, _, oop = col_id.partition("+")
-    if not ip or not oop:
-        return col_id
-    return f"{ip}+\n{oop}"
+    if _is_hybrid_column(col_id):
+        ip, _, oop = col_id.partition("+")
+        if not ip or not oop:
+            return col_id
+        return f"{_strip_phase_suffix(ip)}+\n{_strip_phase_suffix(oop)}"
+    return _strip_phase_suffix(col_id)
+
+
+def _column_tone_map() -> dict[str, str]:
+    """Map score column id → phase tone (ip / oop / gk)."""
+    global _COLUMN_TONE_BY_ID
+    if _COLUMN_TONE_BY_ID is None:
+        import config.role_weights.fm26_role_weight_config as pc
+
+        _COLUMN_TONE_BY_ID = {
+            role_meta(role_id)["column"]: role_meta(role_id)["tone"]
+            for role_id in pc.all_positions
+        }
+    return _COLUMN_TONE_BY_ID
+
+
+def _score_column_tone(col_id: str) -> str:
+    if col_id in TABLE_TEXT_COLS:
+        return ""
+    if _is_hybrid_column(col_id):
+        return "combo"
+    return _column_tone_map().get(col_id, "")
+
+
+def _header_phase_colors(theme: str | None = None) -> dict[str, str]:
+    dark = _is_dark(theme)
+    return {
+        "ip": "#3dff88" if dark else "#15803d",
+        "oop": "#f87171" if dark else "#b91c1c",
+        "gk": "#fbbf24" if dark else "#b45309",
+        "combo": "#c4b5fd" if dark else "#6d28d9",
+    }
 
 
 def _table_columns(col_ids: list[str]) -> list[dict]:
@@ -1730,25 +1776,57 @@ def _table_columns(col_ids: list[str]) -> list[dict]:
 
 
 def _score_column_styles(role_labels: list[str]) -> list[dict]:
-    """Center score cells; keep hybrid columns narrower with wrapped headers."""
+    """Center score cells; give short role/score cols a stable min width."""
     rules = []
     for label in role_labels:
-        rule = {
-            "if": {"column_id": label},
-            "textAlign": "center",
-        }
         if _is_hybrid_column(label):
-            rule.update(
+            rules.append(
                 {
-                    "minWidth": "52px",
-                    "width": "56px",
-                    "maxWidth": "68px",
-                    "paddingLeft": "4px",
-                    "paddingRight": "4px",
+                    "if": {"column_id": label},
+                    "textAlign": "center",
+                    "minWidth": "64px",
+                    "width": "68px",
+                    "maxWidth": "80px",
+                    "paddingLeft": "6px",
+                    "paddingRight": "6px",
                     "whiteSpace": "pre-line",
                 }
             )
-        rules.append(rule)
+        else:
+            # Short codes (CF, WB) and 2–3 digit scores — keep readable + sortable.
+            rules.append(
+                {
+                    "if": {"column_id": label},
+                    "textAlign": "center",
+                    "minWidth": "58px",
+                    "width": "62px",
+                    "maxWidth": "76px",
+                    "paddingLeft": "6px",
+                    "paddingRight": "6px",
+                }
+            )
+    return rules
+
+
+def _score_header_styles(role_labels: list[str], theme: str | None = None) -> list[dict]:
+    """Left-align identity headers; color IP green / OOP red / hybrid purple."""
+    rules = [
+        {"if": {"column_id": col}, "textAlign": "left"}
+        for col in _HEADER_LEFT_COLS
+    ]
+    colors = _header_phase_colors(theme)
+    for label in role_labels:
+        tone = _score_column_tone(label)
+        color = colors.get(tone)
+        if not color:
+            continue
+        rules.append(
+            {
+                "if": {"column_id": label},
+                "color": color,
+                "textAlign": "center",
+            }
+        )
     return rules
 
 
@@ -1835,14 +1913,25 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
             "letterSpacing": "0.03em",
             "fontWeight": "700",
             "textAlign": "center",
+            "minWidth": "52px",
+            "width": "56px",
+            "maxWidth": "64px",
         },
         {
             "if": {"column_id": "Age"},
             "color": plain,
+            "textAlign": "center",
+            "minWidth": "52px",
+            "width": "56px",
+            "maxWidth": "64px",
         },
         {
             "if": {"column_id": "Height"},
             "color": plain,
+            "textAlign": "center",
+            "minWidth": "68px",
+            "width": "72px",
+            "maxWidth": "84px",
         },
         {
             "if": {"column_id": "Injury", "filter_query": '{Injury} != "-"'},
@@ -2959,6 +3048,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Output("rs-table", "data"),
     Output("rs-table", "columns"),
     Output("rs-table", "style_data_conditional"),
+    Output("rs-table", "style_header_conditional"),
     Output("rs-table", "style_table"),
     Output("rs-table", "page_size"),
     Output("rs-table", "page_current"),
@@ -3016,6 +3106,7 @@ def render_shortlist(
     bins = us.hist_bins(settings)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
+    empty_header = _score_header_styles([], theme)
     hybrids_only = bool(hybrids_only)
     page_size = int(page_size or 50)
     empty_table_style = _table_style_table(0, page_size)
@@ -3031,6 +3122,7 @@ def render_shortlist(
             [],
             empty_cols,
             empty_style,
+            empty_header,
             empty_table_style,
             page_size,
             empty_page,
@@ -3061,6 +3153,7 @@ def render_shortlist(
             [],
             empty_cols,
             empty_style,
+            empty_header,
             empty_table_style,
             page_size,
             empty_page,
@@ -3206,6 +3299,7 @@ def render_shortlist(
         table_rows,
         columns,
         _score_styles(score_cols, settings, theme),
+        _score_header_styles(score_cols, theme),
         _table_style_table(len(table_rows), page_size),
         page_size,
         page_current,

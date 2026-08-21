@@ -615,11 +615,11 @@ body {
 /* Hybrid columns: wrapped header (IP+ / OOP) — keep the column narrow. */
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
 #rs-table .dash-spreadsheet-inner td[data-dash-column*="+"] {
-    min-width: 52px !important;
-    max-width: 72px !important;
-    width: 58px !important;
+    min-width: 64px !important;
+    max-width: 80px !important;
+    width: 68px !important;
     text-align: center !important;
-    padding-left: 4px !important;
+    padding-left: 6px !important;
     padding-right: 14px !important;
     white-space: pre-line !important;
     line-height: 1.15 !important;
@@ -637,10 +637,51 @@ body {
     padding-right: 4px;
 }
 
+/* Short identity cols: Age / Rec (~2 chars) and Height (~5'11"). */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
+#rs-table .dash-spreadsheet-inner td[data-dash-column="Age"],
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
+#rs-table .dash-spreadsheet-inner td[data-dash-column="Rec"] {
+    min-width: 52px !important;
+    width: 56px !important;
+    max-width: 64px !important;
+    text-align: center !important;
+}
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
+#rs-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
+    min-width: 68px !important;
+    width: 72px !important;
+    max-width: 84px !important;
+    text-align: center !important;
+}
+
 /* Center all numeric score columns (headers + values). */
 #rs-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
 #rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
     text-align: center !important;
+}
+
+/* Phase-colored score headers (backup if inline styles fight theme CSS). */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] {
+    color: #3dff88;
+}
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] {
+    color: #f87171;
+}
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"],
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] {
+    color: #15803d;
+}
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
+html[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"],
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
+body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] {
+    color: #b91c1c;
 }
 
 #rs-table .dash-spreadsheet-inner th .column-header--sort {
