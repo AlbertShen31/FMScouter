@@ -276,20 +276,102 @@ def _player_attributes(player: dict, bands: dict) -> html.Div:
     )
 
 
-def _player_detail_card(player: dict, settings=None) -> html.Div:
+def _combo_columns_by_label(combos) -> dict[str, dict]:
+    return {
+        combo_meta(item["ip"], item["oop"])["column"]: combo_meta(item["ip"], item["oop"])
+        for item in normalize_combos(combos)
+    }
+
+
+def _role_match_level(row: dict, role_column: str, combos=None) -> str:
+    """How well Position matches one viewed column: full, partial, or none.
+
+    Hybrids require both IP and OOP parts for full; one part is partial.
+    """
+    meta = _combo_columns_by_label(combos).get(role_column)
+    if meta:
+        ip_ok = bool(row.get(f"{meta['ip_column']} eligible"))
+        oop_ok = bool(row.get(f"{meta['oop_column']} eligible"))
+        if ip_ok and oop_ok:
+            return "full"
+        if ip_ok or oop_ok:
+            return "partial"
+        return "none"
+    if bool(row.get(f"{role_column} eligible")):
+        return "full"
+    return "none"
+
+
+def _position_eligibility(row: dict, roles: list[str], combos=None) -> str | None:
+    """Pos highlight: yes (all full), partial (some), no (none)."""
+    if not roles:
+        return None
+    levels = [_role_match_level(row, role, combos) for role in roles]
+    if all(level == "full" for level in levels):
+        return "yes"
+    if any(level != "none" for level in levels):
+        return "partial"
+    return "no"
+
+
+def _find_scored_row(payload, name: str, club: str) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+    name = (name or "").strip()
+    club = (club or "").strip()
+    club_key = "" if club in ("", "-") else club
+    for row in payload.get("rows") or []:
+        if str(row.get("Name") or "").strip() != name:
+            continue
+        row_club = str(row.get("Club") or "").strip()
+        if row_club in ("", "-"):
+            row_club = ""
+        if row_club == club_key:
+            return row
+    return None
+
+
+_POS_ELIG_TIPS = {
+    "yes": "Eligible for every focused / viewed role (hybrids need both parts)",
+    "partial": "Only matches some of the focused / viewed roles (or one hybrid part)",
+    "no": "Not eligible for the focused / viewed role(s)",
+}
+
+
+def _player_detail_card(
+    player: dict,
+    settings=None,
+    *,
+    position_eligible: str | None = None,
+) -> html.Div:
     settings = us.normalize(settings)
     bands = settings["bands"]
-    identity = [
-        html.Div(
-            [
-                html.Span(label, className="rs-player-id-label"),
-                html.Span(str(player.get(key) or "—"), className="rs-player-id-value"),
-            ],
-            className="rs-player-id-item",
+    identity = []
+    for label, key in PLAYER_IDENTITY_FIELDS:
+        if player.get(key) in (None, ""):
+            continue
+        value_class = "rs-player-id-value"
+        tip = None
+        if key == "position" and position_eligible in _POS_ELIG_TIPS:
+            value_class += {
+                "yes": " is-eligible",
+                "partial": " is-partial",
+                "no": " is-ineligible",
+            }[position_eligible]
+            tip = _POS_ELIG_TIPS[position_eligible]
+        identity.append(
+            html.Div(
+                [
+                    html.Span(label, className="rs-player-id-label"),
+                    html.Span(
+                        str(player.get(key) or "—"),
+                        className=value_class,
+                        title=tip,
+                    ),
+                ],
+                className="rs-player-id-item",
+            )
         )
-        for label, key in PLAYER_IDENTITY_FIELDS
-        if player.get(key) not in (None, "")
-    ]
     return html.Div(
         [
             html.Div(identity, className="rs-player-identity"),
@@ -1460,6 +1542,9 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
     dark = _is_dark(theme)
     zebra = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.025)"
     selected_bg = "rgba(61, 255, 136, 0.14)" if dark else "rgba(34, 139, 87, 0.12)"
+    eligible = "#3dff88" if dark else "#15803d"
+    partial = "#fbbf24" if dark else "#ca8a04"
+    ineligible = "#f87171" if dark else "#b91c1c"
     return [
         {"if": {"row_index": "odd"}, "backgroundColor": zebra},
         {
@@ -1489,6 +1574,30 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
         {
             "if": {"column_id": "Injury", "filter_query": '{Injury} != "-"'},
             "color": "#b45309" if not dark else "#fbbf24",
+            "fontWeight": "600",
+        },
+        {
+            "if": {
+                "filter_query": '{PosEligible} = "yes"',
+                "column_id": "Position",
+            },
+            "color": eligible,
+            "fontWeight": "700",
+        },
+        {
+            "if": {
+                "filter_query": '{PosEligible} = "partial"',
+                "column_id": "Position",
+            },
+            "color": partial,
+            "fontWeight": "700",
+        },
+        {
+            "if": {
+                "filter_query": '{PosEligible} = "no"',
+                "column_id": "Position",
+            },
+            "color": ineligible,
             "fontWeight": "600",
         },
     ]
@@ -1953,10 +2062,23 @@ def reveal_workflow(parsed, payload):
     Input("rs-player-modal", "is_open"),
     State("rs-table", "derived_viewport_data"),
     State("rs-parsed", "data"),
+    State("rs-rows", "data"),
+    State("rs-focus-role", "data"),
+    State("rs-hybrids-only", "checked"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def open_player_modal(active_cell, _close_clicks, is_open, viewport, parsed, settings):
+def open_player_modal(
+    active_cell,
+    _close_clicks,
+    is_open,
+    viewport,
+    parsed,
+    payload,
+    focus_role,
+    hybrids_only,
+    settings,
+):
     if ctx.triggered_id == "rs-player-modal":
         # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
         if not is_open:
@@ -1989,8 +2111,30 @@ def open_player_modal(active_cell, _close_clicks, is_open, viewport, parsed, set
             ),
             None,
         )
+    view_roles = _hybrid_only_roles(
+        _resolved_view_roles(payload, focus_role),
+        (payload or {}).get("combos"),
+        hybrids_only,
+    )
+    scored = _find_scored_row(payload, name, club)
+    position_eligible = None
+    if scored is not None and view_roles:
+        position_eligible = _position_eligibility(
+            scored,
+            view_roles,
+            (payload or {}).get("combos"),
+        )
     title = player.get("name") or name or "Player"
-    return True, title, _player_detail_card(player, settings), None
+    return (
+        True,
+        title,
+        _player_detail_card(
+            player,
+            settings,
+            position_eligible=position_eligible,
+        ),
+        None,
+    )
 
 
 @callback(
@@ -2558,7 +2702,13 @@ def render_shortlist(
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
-    table_rows = [{key: row.get(key, "-") for key in table_cols} for row in filtered]
+    table_rows = []
+    for row in filtered:
+        item = {key: row.get(key, "-") for key in table_cols}
+        item["PosEligible"] = (
+            _position_eligibility(row, view_roles, combos) or "no"
+        )
+        table_rows.append(item)
     page_keys = [player_row_key(row) for row in table_rows]
     selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
     extras = []

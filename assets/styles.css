@@ -3246,6 +3246,26 @@ body[data-theme="light"] .rs-player-modal .btn-close {
     overflow-wrap: anywhere;
 }
 
+.rs-player-id-value.is-eligible {
+    color: var(--app-accent);
+    font-weight: 700;
+}
+
+.rs-player-id-value.is-partial {
+    color: #fbbf24;
+    font-weight: 700;
+}
+
+html[data-theme="light"] .rs-player-id-value.is-partial,
+body[data-theme="light"] .rs-player-id-value.is-partial {
+    color: #ca8a04;
+}
+
+.rs-player-id-value.is-ineligible {
+    color: var(--app-danger);
+    font-weight: 700;
+}
+
 .rs-player-attrs-title {
     font-size: 13px;
     font-weight: 800;
