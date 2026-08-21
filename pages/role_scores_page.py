@@ -283,12 +283,12 @@ def _combo_columns_by_label(combos) -> dict[str, dict]:
     }
 
 
-def _role_match_level(row: dict, role_column: str, combos=None) -> str:
+def _role_match_level(row: dict, role_column: str, combo_by_col: dict | None = None) -> str:
     """How well Position matches one viewed column: full, partial, or none.
 
     Hybrids require both IP and OOP parts for full; one part is partial.
     """
-    meta = _combo_columns_by_label(combos).get(role_column)
+    meta = (combo_by_col or {}).get(role_column)
     if meta:
         ip_ok = bool(row.get(f"{meta['ip_column']} eligible"))
         oop_ok = bool(row.get(f"{meta['oop_column']} eligible"))
@@ -302,16 +302,30 @@ def _role_match_level(row: dict, role_column: str, combos=None) -> str:
     return "none"
 
 
-def _position_eligibility(row: dict, roles: list[str], combos=None) -> str | None:
+def _position_eligibility(
+    row: dict,
+    roles: list[str],
+    combos=None,
+    *,
+    combo_by_col: dict | None = None,
+) -> str | None:
     """Pos highlight: yes (all full), partial (some), no (none)."""
     if not roles:
         return None
-    levels = [_role_match_level(row, role, combos) for role in roles]
+    lookup = combo_by_col if combo_by_col is not None else _combo_columns_by_label(combos)
+    levels = [_role_match_level(row, role, lookup) for role in roles]
     if all(level == "full" for level in levels):
         return "yes"
     if any(level != "none" for level in levels):
         return "partial"
     return "no"
+
+
+def _sort_by_focus(focus_roles) -> list[dict]:
+    focused = _focus_roles(focus_roles)
+    if not focused:
+        return []
+    return [{"column_id": focused[-1], "direction": "desc"}]
 
 
 def _find_scored_row(payload, name: str, club: str) -> dict | None:
@@ -1713,12 +1727,7 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_threshold=None) -> h
     )
 
 
-def _depth_card(
-    meta: dict,
-    rows: list[dict],
-    focus_roles,
-    bands: dict,
-) -> html.Button | None:
+def _depth_card_stats(meta: dict, rows: list[dict], bands: dict) -> dict | None:
     column = meta["column"]
     eligible = [row for row in rows if row.get(f"{column} eligible")]
     if not eligible:
@@ -1731,6 +1740,21 @@ def _depth_card(
     total = len(scores) or 1
     top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
     names = " · ".join(player.get("Name", "") for player in top)
+    return {
+        "meta": meta,
+        "avg": avg,
+        "counts": counts,
+        "total": total,
+        "names": names,
+    }
+
+
+def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button:
+    meta = stats["meta"]
+    column = meta["column"]
+    avg = stats["avg"]
+    counts = stats["counts"]
+    total = stats["total"]
     active = " active" if column in _focus_roles(focus_roles) else ""
     label = meta.get("short_label") or meta["name"]
     children = [
@@ -1789,7 +1813,7 @@ def _depth_card(
             ],
             className="rs-depth-tiers",
         ),
-        html.Div(names, className="rs-depth-players"),
+        html.Div(stats["names"], className="rs-depth-players"),
     ]
     if active:
         children.insert(0, html.Span("Focused", className="rs-depth-focus-badge"))
@@ -1800,6 +1824,9 @@ def _depth_card(
         className="rs-depth-card" + active,
         title=meta.get("compact") or meta["name"],
     )
+
+
+_DEPTH_STATS_CACHE: dict = {"sig": None, "stats": []}
 
 
 def _depth_panel(
@@ -1815,23 +1842,40 @@ def _depth_panel(
     if not rows or not (role_ids or combos):
         return []
     bands = us.normalize(bands)["bands"]
-    cards = []
-    combo_parts = set()
-    for item in normalize_combos(combos):
-        combo_parts.add(item["ip"])
-        combo_parts.add(item["oop"])
-        card = _depth_card(combo_meta(item["ip"], item["oop"]), rows, focus_roles, bands)
-        if card:
-            cards.append(card)
-    if hybrids_only:
-        return cards
-    for role_id in role_ids:
-        if role_id in combo_parts:
-            continue
-        card = _depth_card(role_meta(role_id), rows, focus_roles, bands)
-        if card:
-            cards.append(card)
-    return cards
+    combo_items = normalize_combos(combos)
+    sig = (
+        id(rows),
+        tuple(role_ids),
+        tuple((item["ip"], item["oop"]) for item in combo_items),
+        bool(hybrids_only),
+        bands.get("elite"),
+        bands.get("good"),
+        bands.get("ok"),
+    )
+    if _DEPTH_STATS_CACHE["sig"] != sig:
+        stats_list = []
+        combo_parts = set()
+        for item in combo_items:
+            combo_parts.add(item["ip"])
+            combo_parts.add(item["oop"])
+            payload = _depth_card_stats(
+                combo_meta(item["ip"], item["oop"]), rows, bands
+            )
+            if payload:
+                stats_list.append(payload)
+        if not hybrids_only:
+            for role_id in role_ids:
+                if role_id in combo_parts:
+                    continue
+                payload = _depth_card_stats(role_meta(role_id), rows, bands)
+                if payload:
+                    stats_list.append(payload)
+        _DEPTH_STATS_CACHE["sig"] = sig
+        _DEPTH_STATS_CACHE["stats"] = stats_list
+    return [
+        _depth_card_from_stats(stats, focus_roles, bands)
+        for stats in _DEPTH_STATS_CACHE["stats"]
+    ]
 
 
 @callback(
@@ -1970,6 +2014,7 @@ clientside_callback(
     Output("rs-focus-role", "data", allow_duplicate=True),
     Output("rs-hydrated", "data"),
     Output("rs-role-mode-prev", "data"),
+    Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-persist-boot", "data"),
     State("rs-hydrated", "data"),
     State("rs-phase", "data"),
@@ -1979,6 +2024,7 @@ clientside_callback(
 def hydrate_page_persist(persist, hydrated, phase, group):
     if hydrated or persist is None:
         return (
+            no_update,
             no_update,
             no_update,
             no_update,
@@ -2027,6 +2073,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
             no_update,
             True,
             mode,
+            no_update,
         )
     return (
         roles,
@@ -2040,6 +2087,7 @@ def hydrate_page_persist(persist, hydrated, phase, group):
         focus,
         True,
         mode,
+        _sort_by_focus(focus),
     )
 
 
@@ -2213,6 +2261,7 @@ def sync_role_mode(mode):
     Output("rs-combo-oop", "value", allow_duplicate=True),
     Output("rs-squad-marked", "data", allow_duplicate=True),
     Output("rs-role-mode-prev", "data", allow_duplicate=True),
+    Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-role-mode", "value"),
     State("rs-role-mode-prev", "data"),
     prevent_initial_call=True,
@@ -2230,6 +2279,7 @@ def clear_on_role_mode_change(mode, prev_mode):
             no_update,
             no_update,
             mode,
+            no_update,
         )
     if prev_mode is None:
         # Seed after hydrate/layout without wiping restored selections.
@@ -2242,8 +2292,9 @@ def clear_on_role_mode_change(mode, prev_mode):
             no_update,
             no_update,
             mode,
+            no_update,
         )
-    return [], [], None, [], None, None, [], mode
+    return [], [], None, [], None, None, [], mode, []
 
 
 @callback(
@@ -2445,46 +2496,45 @@ def apply_ui_settings(settings, age):
 
 @callback(
     Output("rs-focus-role", "data", allow_duplicate=True),
+    Output("rs-table", "sort_by", allow_duplicate=True),
     Input({"type": "rs-depth", "role": ALL}, "n_clicks"),
     State("rs-focus-role", "data"),
     prevent_initial_call=True,
 )
 def focus_view_role(n_clicks, current_focus):
     if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update
+        return no_update, no_update
     role = ctx.triggered_id["role"]
     if role == "_":
-        return no_update
+        return no_update, no_update
     column = _depth_id_column(role)
     if not column:
-        return no_update
+        return no_update, no_update
     selected = _focus_roles(current_focus)
     if column in selected:
-        return [item for item in selected if item != column]
-    return selected + [column]
+        next_focus = [item for item in selected if item != column]
+    else:
+        next_focus = selected + [column]
+    # Update focus + sort together so render_shortlist runs once (not twice).
+    return next_focus, _sort_by_focus(next_focus)
 
 
 @callback(
     Output("rs-table", "sort_by"),
     Output("rs-set-pieces-prev", "data"),
-    Input("rs-focus-role", "data"),
     Input("rs-set-pieces", "value"),
     State("rs-set-pieces-prev", "data"),
+    prevent_initial_call=True,
 )
-def sync_table_sort(focus_roles, set_pieces, prev_pieces):
+def sync_table_sort(set_pieces, prev_pieces):
     selected_pieces = _as_list(set_pieces)
-    if ctx.triggered_id == "rs-set-pieces":
-        prev = _as_list(prev_pieces)
-        added = [piece for piece in selected_pieces if piece not in prev]
-        if added:
-            column = set_piece_sort_column(added[-1])
-            if column:
-                return [{"column_id": column, "direction": "desc"}], selected_pieces
-        return no_update, selected_pieces
-    focused = _focus_roles(focus_roles)
-    if not focused:
-        return [], no_update
-    return [{"column_id": focused[-1], "direction": "desc"}], no_update
+    prev = _as_list(prev_pieces)
+    added = [piece for piece in selected_pieces if piece not in prev]
+    if added:
+        column = set_piece_sort_column(added[-1])
+        if column:
+            return [{"column_id": column, "direction": "desc"}], selected_pieces
+    return no_update, selected_pieces
 
 
 @callback(
@@ -2515,6 +2565,7 @@ def refresh_formation_options(_n, current):
     Output("rs-roles", "data", allow_duplicate=True),
     Output("rs-role-mode", "value"),
     Output("rs-focus-role", "data", allow_duplicate=True),
+    Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-formation", "value"),
     State("rs-phase", "data"),
     State("rs-group", "data"),
@@ -2523,7 +2574,7 @@ def refresh_formation_options(_n, current):
 )
 def load_formation(formation_id, phase, group, current_combos):
     if not formation_id or not fm.exists(formation_id):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     formation = fm.load(formation_id, persist=False)
     combos = fm.combos_from_formation(formation)
     keep = []
@@ -2532,25 +2583,28 @@ def load_formation(formation_id, phase, group, current_combos):
     options = role_options(phase=phase, group=group, keep=keep) or []
     # Hydrate restores formation + combos together; skip resetting focus.
     if normalize_combos(current_combos) == normalize_combos(combos):
-        return no_update, no_update, options, "formations", no_update
+        return no_update, no_update, options, "formations", no_update, no_update
     first = _first_combo_column(combos)
-    return combos, [], options, "formations", [first] if first else []
+    focus = [first] if first else []
+    return combos, [], options, "formations", focus, _sort_by_focus(focus)
 
 
 @callback(
     Output("rs-rows", "data"),
     Output("rs-focus-role", "data"),
+    Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-parsed", "data"),
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
     Input("rs-config", "value"),
     State("rs-focus-role", "data"),
+    prevent_initial_call="initial_duplicate",
 )
 def rescore(parsed, role_ids, combos, pack_id, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
-        return None, no_update
+        return None, no_update, no_update
     combos = normalize_combos(combos)
     role_ids = _as_list(role_ids)
     needed = list(role_ids)
@@ -2559,18 +2613,21 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
             if role_id not in needed:
                 needed.append(role_id)
     if not needed:
-        return None, no_update
+        return None, no_update, no_update
     rows = apply_combos(score_players(parsed["players"], needed), combos)
     labels = combo_score_labels(needed, combos)
     selected = _focus_roles(current_focus)
     kept = [role for role in selected if role in labels]
     if kept and kept == selected:
         focus = no_update
+        sort = no_update
     elif ctx.triggered_id == "rs-combos":
         first = _first_combo_column(combos)
         focus = [first] if first in labels else []
+        sort = _sort_by_focus(focus)
     else:
         focus = kept
+        sort = _sort_by_focus(focus)
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
@@ -2580,6 +2637,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
             "combos": combos,
         },
         focus,
+        sort,
     )
 
 
@@ -2757,11 +2815,15 @@ def render_shortlist(
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
+    combo_by_col = _combo_columns_by_label(combos)
     table_rows = []
     for row in filtered:
         item = {key: row.get(key, "-") for key in table_cols}
         item["PosEligible"] = (
-            _position_eligibility(row, view_roles, combos) or "no"
+            _position_eligibility(
+                row, view_roles, combo_by_col=combo_by_col
+            )
+            or "no"
         )
         table_rows.append(item)
     page_keys = [player_row_key(row) for row in table_rows]
@@ -2813,8 +2875,18 @@ def render_shortlist(
         if no_matches
         else None
     )
+    # Focus/sort clicks should not rebuild the position bar (same counts).
+    triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
+    focus_sort_only = bool(triggered_props) and triggered_props.issubset(
+        {"rs-focus-role.data", "rs-table.sort_by"}
+    )
+    pos_bar = (
+        no_update
+        if focus_sort_only
+        else _pos_bar(rows, pos_filter, foot_filter, foot_threshold)
+    )
     return (
-        _pos_bar(rows, pos_filter, foot_filter, foot_threshold),
+        pos_bar,
         cards,
         not cards,
         table_rows,
