@@ -1583,28 +1583,33 @@ def layout():
                                 html.Div(id="rs-table-caption", className="text-muted"),
                                 html.Div(
                                     [
-                                        html.Label("Rows per page", className="rs-field-label"),
-                                        dmc.Select(
-                                            id="rs-page-size",
-                                            data=[
-                                                {"label": "25", "value": "25"},
-                                                {"label": "50", "value": "50"},
-                                                {"label": "100", "value": "100"},
+                                        html.Div(
+                                            [
+                                                html.Label("Rows per page", className="rs-field-label"),
+                                                dmc.Select(
+                                                    id="rs-page-size",
+                                                    data=[
+                                                        {"label": "25", "value": "25"},
+                                                        {"label": "50", "value": "50"},
+                                                        {"label": "100", "value": "100"},
+                                                    ],
+                                                    value="50",
+                                                    clearable=False,
+                                                    searchable=False,
+                                                ),
                                             ],
-                                            value="50",
-                                            clearable=False,
-                                            searchable=False,
+                                            className="rs-table-page-size",
+                                        ),
+                                        dmc.Button(
+                                            "Clear marked rows",
+                                            id="rs-squad-clear-btn",
+                                            size="sm",
+                                            variant="light",
+                                            disabled=True,
+                                            className="rs-squad-clear-btn",
                                         ),
                                     ],
-                                    className="rs-table-page-size",
-                                ),
-                                dmc.Button(
-                                    "Clear marked rows",
-                                    id="rs-squad-clear-btn",
-                                    size="sm",
-                                    variant="light",
-                                    disabled=True,
-                                    className="rs-squad-clear-btn",
+                                    className="rs-table-caption-actions",
                                 ),
                             ],
                             className="rs-table-caption-row mt-2",
