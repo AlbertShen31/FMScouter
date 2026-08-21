@@ -1961,7 +1961,7 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-pos-card.fb.active { border-bottom-color: #fb923c; }
 .rs-pos-card.mid.active { border-bottom-color: #60a5fa; }
 .rs-pos-card.w.active { border-bottom-color: #4ade80; }
-.rs-pos-card.st.active { border-bottom-color: #e879f9; }
+.rs-pos-card.st.active { border-bottom-color: #a855f7; }
 
 .rs-pos-name { font-size: 11px; font-weight: 600; color: var(--app-text); line-height: 1; }
 .rs-pos-code { font-size: 9px; font-weight: 500; color: var(--app-muted); line-height: 1; }
@@ -1971,7 +1971,9 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-pos-card.fb .rs-pos-count { color: #ea580c; }
 .rs-pos-card.mid .rs-pos-count { color: #2563eb; }
 .rs-pos-card.w .rs-pos-count { color: #16a34a; }
-.rs-pos-card.st .rs-pos-count { color: #c026d3; }
+.rs-pos-card.st .rs-pos-count { color: #9333ea; }
+.rs-pos-card.fwd.active { border-bottom-color: #a855f7; }
+.rs-pos-card.fwd .rs-pos-count { color: #9333ea; }
 
 .rs-pos-utils {
     display: flex;
@@ -3646,3 +3648,150 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* Player stats table — share Role scores look via #st-table */
+#st-table {
+    position: relative;
+    z-index: 1;
+}
+
+#st-table .dash-spreadsheet-inner td,
+#st-table .dash-spreadsheet-inner th {
+    background-color: var(--app-card);
+    color: var(--app-text);
+    border-color: var(--app-line) !important;
+}
+
+#st-table .dash-spreadsheet-inner th {
+    background-color: var(--app-head);
+    color: var(--app-text);
+    cursor: pointer;
+    position: relative !important;
+    user-select: none;
+}
+
+#st-table .dash-spreadsheet-inner td.dash-cell:hover,
+#st-table .dash-spreadsheet-inner tr:hover td,
+#st-table .dash-spreadsheet-inner tr:hover th,
+#st-table .dash-spreadsheet-inner th:hover,
+#st-table .dash-spreadsheet-inner th.dash-header:hover,
+#st-table .dash-spreadsheet-inner td.focused,
+#st-table .dash-spreadsheet-inner td.cell--selected,
+#st-table .dash-spreadsheet-inner td.cell--selected:hover,
+#st-table .dash-spreadsheet-inner td.focused:hover,
+#st-table .dash-spreadsheet-inner th.focused,
+#st-table .dash-spreadsheet-inner th.cell--selected,
+#st-table .dash-spreadsheet-inner th.dash-header.focused,
+#st-table .dash-spreadsheet-inner th.dash-header.cell--selected {
+    background-color: var(--table-hover-bg) !important;
+    color: var(--table-hover-fg) !important;
+}
+
+#st-table .dash-spreadsheet-inner th .column-header-name {
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#st-table .dash-spreadsheet-inner th .column-header--sort {
+    color: var(--app-accent) !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    box-sizing: border-box;
+    cursor: pointer;
+    z-index: 2;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Age"] {
+    min-width: 52px !important;
+    width: 56px !important;
+    max-width: 64px !important;
+    text-align: center !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]),
+#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) {
+    text-align: center !important;
+}
+
+.st-filter-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 0.85rem;
+}
+
+.st-filter-stack .rs-pos-bar {
+    margin-bottom: 8px;
+}
+
+.st-filter-stack .rs-pos-bar:last-child {
+    margin-bottom: 0;
+}
+
+.st-cat-bar .rs-pos-utils,
+.st-foot-bar .rs-pos-utils {
+    border-top: none;
+}
+
+.st-cat-bar .rs-pos-cards {
+    flex: 1;
+}
+
+.st-page .rs-shortlist-filters-row {
+    grid-template-columns:
+        minmax(180px, 1.4fr)
+        minmax(96px, 0.45fr)
+        minmax(280px, 1.3fr);
+}
+
+.st-filter-minutes {
+    min-width: 0;
+}
+
+.st-filter-minutes .rs-field-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 1.25rem;
+}
+
+.st-filter-minutes .rs-field-label-row .rs-field-label {
+    margin-bottom: 0;
+}
+
+.st-minutes-fields {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+}
+
+.st-minutes-fields .mantine-Select-root {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.st-minutes-fields .mantine-NumberInput-root {
+    flex: 0 0 5.75rem;
+    width: 5.75rem;
+}
+
+.st-page .rs-hist-toggle {
+    min-width: 14rem;
+}
+

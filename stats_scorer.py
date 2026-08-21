@@ -1,0 +1,449 @@
+"""Parse FM stats exports and band values against MustermannFM benchmarks."""
+
+from __future__ import annotations
+
+import csv
+import io
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from role_scorer import (
+    IDENTITY,
+    foot_strength,
+    parse_positions,
+    pick,
+    player_row_key,
+    sniff_delimiter,
+    unique_headers,
+)
+
+DATA_PATH = Path(__file__).resolve().parent / "config" / "stats_benchmarks.json"
+
+# PDF / FM-style graduated colors (percentile 0 → 100).
+_COLOR_RED = (255, 92, 92)
+_COLOR_YELLOW = (255, 210, 64)
+_COLOR_GREEN = (64, 220, 120)
+
+POS_GROUPS = (
+    ("all", "All", "all"),
+    ("gk", "Goalkeepers", "gk"),
+    ("def", "Defenders", "def"),
+    ("mid", "Midfielders", "mid"),
+    ("fwd", "Forwards", "fwd"),
+)
+
+
+@lru_cache(maxsize=1)
+def benchmarks() -> dict[str, Any]:
+    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+
+
+def metric_defs() -> dict[str, dict[str, Any]]:
+    return benchmarks()["metrics"]
+
+
+def is_gk_group(group: str | None) -> bool:
+    return (group or "") == "gk"
+
+
+def category_domain(category: str | None) -> str:
+    """Return 'gk' or 'outfield' for a category id."""
+    cat = category or ""
+    gk_ids = {c["id"] for c in benchmarks()["categories"]["gk"]}
+    if cat in gk_ids:
+        return "gk"
+    return "outfield"
+
+
+def is_gk_category(category: str | None) -> bool:
+    return category_domain(category) == "gk"
+
+
+def categories_for_group(group: str) -> list[dict[str, str]]:
+    """GK groups use GK-only categories; every other group uses outfield categories."""
+    data = benchmarks()
+    if is_gk_group(group):
+        return list(data["categories"]["gk"])
+    return list(data["categories"]["outfield"])
+
+
+def default_category_for_group(group: str) -> str:
+    cats = categories_for_group(group)
+    return cats[0]["id"] if cats else ("goalkeeping" if is_gk_group(group) else "defending")
+
+
+def metrics_for(group: str, category: str) -> list[str]:
+    """Metrics for one position group + category. Never crosses GK ↔ outfield."""
+    if is_gk_group(group) != is_gk_category(category):
+        return []
+    block = (benchmarks()["benchmarks"].get(group) or {}).get(category) or {}
+    return list(block.keys())
+
+
+def default_minutes_required() -> int:
+    return int(benchmarks().get("default_minutes_required") or 900)
+
+
+def classify_best_pos(best_pos: str, position: str = "") -> str:
+    """Map Best Pos / Position text to gk / def / mid / fwd."""
+    text = f"{best_pos or ''} {position or ''}".upper()
+    if re.search(r"\bGK\b", text):
+        return "gk"
+    if re.search(r"\b(ST|CF|SC)\b", text) or re.search(r"\bAM\s*\(\s*[LR]\s*\)", text):
+        return "fwd"
+    if re.search(r"\b(WB|FB)\b", text) or re.search(r"\bD\b", text):
+        return "def"
+    if re.search(r"\b(DM|MC|MR|ML|AMC|AM)\b", text) or re.search(
+        r"\bM\s*\(|\bAM\s*\(\s*C\s*\)", text
+    ):
+        return "mid"
+    # Fallbacks from looser tokens
+    if "ST" in text or "FORWARD" in text:
+        return "fwd"
+    if "WING" in text and "BACK" not in text:
+        return "fwd"
+    if "MID" in text:
+        return "mid"
+    if "DEF" in text or "BACK" in text:
+        return "def"
+    return "mid"
+
+
+def parse_number(value: Any) -> float | None:
+    if value in (None, "", "-"):
+        return None
+    text = str(value).strip().replace("%", "").replace(" ", "")
+    text = text.replace(",", ".")
+    if not text or text == "-":
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _lerp_rgb(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+    t = max(0.0, min(1.0, t))
+    return tuple(int(round(x + (y - x) * t)) for x, y in zip(a, b))
+
+
+def percentile_color(percentile: float | None) -> str | None:
+    """CSS rgb for estimated percentile 0–100 (PDF/FM red→yellow→green)."""
+    if percentile is None:
+        return None
+    p = max(0.0, min(100.0, float(percentile)))
+    mid = 50.0
+    if p <= mid:
+        t = p / mid
+        rgb = _lerp_rgb(_COLOR_RED, _COLOR_YELLOW, t)
+    else:
+        t = (p - mid) / (100.0 - mid)
+        rgb = _lerp_rgb(_COLOR_YELLOW, _COLOR_GREEN, t)
+    return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
+
+
+def estimate_percentile(value: float, thresholds: list[float], *, higher_is_better: bool) -> float:
+    """Map a value onto ~0–100 using 20/40/60/80 boundaries."""
+    if len(thresholds) != 4:
+        raise ValueError("Expected four percentile thresholds")
+    t20, t40, t60, t80 = (float(x) for x in thresholds)
+    points = [20.0, 40.0, 60.0, 80.0]
+    bounds = [t20, t40, t60, t80]
+
+    def lerp(v: float, lo: float, hi: float, plo: float, phi: float) -> float:
+        if hi == lo:
+            return phi
+        return plo + (phi - plo) * ((v - lo) / (hi - lo))
+
+    if higher_is_better:
+        if value <= bounds[0]:
+            # Below 20th — slide toward 0
+            span = abs(bounds[0]) if bounds[0] != 0 else 1.0
+            return max(0.0, 20.0 * (1.0 - (bounds[0] - value) / span))
+        for i in range(3):
+            if value <= bounds[i + 1]:
+                return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
+        # Above 80th
+        span = abs(bounds[3]) if bounds[3] != 0 else 1.0
+        return min(100.0, 80.0 + 20.0 * min(1.0, (value - bounds[3]) / span))
+
+    # Lower is better: thresholds decrease as quality improves
+    if value >= bounds[0]:
+        span = abs(bounds[0]) if bounds[0] != 0 else 1.0
+        return max(0.0, 20.0 * (1.0 - (value - bounds[0]) / span))
+    for i in range(3):
+        if value >= bounds[i + 1]:
+            return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
+    span = abs(bounds[3]) if bounds[3] != 0 else 1.0
+    return min(100.0, 80.0 + 20.0 * min(1.0, (bounds[3] - value) / span))
+
+
+def minutes_status(minutes: float | None, required: float) -> str:
+    """meet / half / fail for the minutes requirement filter."""
+    if required <= 0:
+        return "meet"
+    if minutes is None:
+        return "fail"
+    if minutes >= required:
+        return "meet"
+    if minutes >= required / 2:
+        return "half"
+    return "fail"
+
+
+def minutes_color(status: str) -> str:
+    return {
+        "meet": "rgb(64, 220, 120)",
+        "half": "rgb(255, 210, 64)",
+        "fail": "rgb(255, 92, 92)",
+    }.get(status, "rgb(255, 92, 92)")
+
+
+def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
+    meta = metric_defs()[metric_id]
+    aliases = list(meta.get("csv") or [])
+    prefer_per90 = bool(meta.get("prefer_per90"))
+    if prefer_per90:
+        # Prefer first alias that looks like per90 when present and non-empty
+        for alias in aliases:
+            if "90" in alias or alias.endswith("/90"):
+                val = parse_number(pick(row, [alias]))
+                if val is not None:
+                    return val
+        for alias in aliases:
+            val = parse_number(pick(row, [alias]))
+            if val is not None:
+                # raw total — convert if minutes available
+                if meta.get("unit") == "per90":
+                    minutes = parse_number(pick(row, ["Minutes"]))
+                    if minutes and minutes > 0:
+                        return val / (minutes / 90.0)
+                return val
+        return None
+
+    if meta.get("derive") == "per90_from_total":
+        total = None
+        for alias in aliases:
+            total = parse_number(pick(row, [alias]))
+            if total is not None:
+                break
+        if total is None:
+            return None
+        minutes = parse_number(pick(row, ["Minutes"]))
+        if not minutes or minutes <= 0:
+            return None
+        return total / (minutes / 90.0)
+
+    for alias in aliases:
+        val = parse_number(pick(row, [alias]))
+        if val is not None:
+            return val
+    return None
+
+
+def _has_stats_columns(header: list[str]) -> bool:
+    bases = {h.split(".")[0] for h in header}
+    markers = {
+        "Minutes",
+        "Possession Won per 90",
+        "Goals per 90 minutes",
+        "xG/90",
+        "Passes Attempted per 90",
+        "Goals Allowed",
+    }
+    return bool(bases & markers)
+
+
+def parse_stats_export(text: str) -> list[dict[str, Any]]:
+    if not text or not text.strip():
+        raise ValueError("The file is empty.")
+    delim = sniff_delimiter(text)
+    reader = csv.reader(io.StringIO(text), delimiter=delim)
+    try:
+        raw_header = next(reader)
+    except StopIteration as exc:
+        raise ValueError("The file has no header row.") from exc
+    header = unique_headers(raw_header)
+    if not any(alias in header or alias in {h.split(".")[0] for h in header} for alias in IDENTITY["Name"]):
+        raise ValueError("CSV must include a Name or Player column.")
+    if not _has_stats_columns(header):
+        raise ValueError(
+            "CSV must include statistics columns (Minutes, per-90 rates, etc.). "
+            "Use the Moneyball statistics export, not the attributes-only file."
+        )
+
+    players: list[dict[str, Any]] = []
+    for raw in reader:
+        if not raw or all(not cell.strip() for cell in raw):
+            continue
+        if len(raw) < len(header):
+            raw = list(raw) + [""] * (len(header) - len(raw))
+        elif len(raw) > len(header):
+            raw = raw[: len(header)]
+        row = dict(zip(header, raw))
+        name = pick(row, IDENTITY["Name"])
+        if not name:
+            continue
+        best_pos = pick(row, IDENTITY["BestPos"])
+        position = pick(row, IDENTITY["Position"])
+        minutes = parse_number(pick(row, ["Minutes"]))
+        group = classify_best_pos(best_pos, position)
+        stats: dict[str, float | None] = {}
+        for metric_id in metric_defs():
+            stats[metric_id] = _pick_metric_raw(row, metric_id)
+        players.append(
+            {
+                "name": name,
+                "age": pick(row, IDENTITY["Age"]),
+                "club": pick(row, IDENTITY["Club"]),
+                "division": pick(row, IDENTITY["Division"]),
+                "nation": pick(row, IDENTITY["Nation"]),
+                "position": position,
+                "best_pos": best_pos,
+                "best_role": pick(row, IDENTITY.get("BestRole", ["Best Role"])),
+                "style": pick(row, IDENTITY["Style"]),
+                "personality": pick(row, IDENTITY.get("Personality", ["Personality"])),
+                "media_handling": pick(row, IDENTITY.get("MediaHandling", ["Media Handling"])),
+                "height": pick(row, IDENTITY["Height"]).strip('"'),
+                "left_foot": pick(row, IDENTITY["LeftFoot"]),
+                "right_foot": pick(row, IDENTITY["RightFoot"]),
+                "rec": pick(row, IDENTITY["Rec"]),
+                "inf": pick(row, IDENTITY["Inf"]),
+                "injury": pick(row, IDENTITY["Injury"]),
+                "squad": pick(row, IDENTITY["Squad"]),
+                "minutes": minutes,
+                "pos_group": group,
+                "stats": stats,
+                "positions": parse_positions(position)
+                + parse_positions(pick(row, IDENTITY["SecPosition"])),
+                "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),
+                "right_foot_n": int(foot_strength(pick(row, IDENTITY["RightFoot"])) or 0),
+            }
+        )
+    if not players:
+        raise ValueError("No player rows found. Check that the file is an FM stats CSV export.")
+    return players
+
+
+def band_metric(group: str, category: str, metric_id: str, value: float | None) -> dict[str, Any]:
+    meta = metric_defs().get(metric_id) or {}
+    # GK and outfield never share threshold tables.
+    if is_gk_group(group) != is_gk_category(category):
+        thresholds = None
+    else:
+        thresholds = (
+            (benchmarks()["benchmarks"].get(group) or {}).get(category) or {}
+        ).get(metric_id)
+    if value is None or not thresholds:
+        return {
+            "value": value,
+            "display": "—",
+            "percentile": None,
+            "color": None,
+            "higher_is_better": bool(meta.get("higher_is_better", True)),
+        }
+    hib = bool(meta.get("higher_is_better", True))
+    pct = estimate_percentile(float(value), list(thresholds), higher_is_better=hib)
+    unit = meta.get("unit")
+    if unit == "percent":
+        display = f"{value:.1f}%"
+    elif abs(value) >= 10:
+        display = f"{value:.2f}".rstrip("0").rstrip(".")
+    else:
+        display = f"{value:.2f}"
+    return {
+        "value": value,
+        "display": display,
+        "percentile": pct,
+        "color": percentile_color(pct),
+        "higher_is_better": hib,
+        "thresholds": thresholds,
+    }
+
+
+def player_key(player: dict) -> str:
+    return player_row_key({"Name": player.get("name"), "Club": player.get("club")})
+
+
+def passes_minutes_filter(status: str, wanted: str) -> bool:
+    wanted = (wanted or "any").strip().lower()
+    if wanted in ("", "any", "all"):
+        return True
+    if wanted == "meet":
+        return status == "meet"
+    if wanted == "half":
+        return status in ("meet", "half")
+    if wanted == "fail":
+        return status == "fail"
+    return True
+
+
+def format_stat_export_rows(
+    players: list[dict],
+    *,
+    group: str,
+    category: str,
+    minutes_required: float,
+) -> tuple[list[str], list[dict]]:
+    """Export rows for one position filter + category.
+
+    GK categories only apply to keepers; outfield categories only to
+    outfielders. Mixed ``all`` uses each player's own group when the
+    category belongs to that player's domain.
+    """
+    if group == "all":
+        fieldnames = [
+            "Name",
+            "Age",
+            "Club",
+            "Position",
+            "Pos Group",
+            "Minutes",
+            "Minutes Status",
+        ]
+        rows = []
+        for p in players:
+            g = p.get("pos_group") or "mid"
+            status = minutes_status(p.get("minutes"), minutes_required)
+            row = {
+                "Name": p["name"],
+                "Age": p.get("age"),
+                "Club": p.get("club"),
+                "Position": p.get("position"),
+                "Pos Group": g,
+                "Minutes": p.get("minutes"),
+                "Minutes Status": status,
+            }
+            if is_gk_group(g) == is_gk_category(category):
+                for mid in metrics_for(g, category):
+                    band = band_metric(g, category, mid, (p.get("stats") or {}).get(mid))
+                    label = metric_defs()[mid]["abbr"]
+                    row[label] = band["display"]
+                    if label not in fieldnames:
+                        fieldnames.append(label)
+            rows.append(row)
+        return fieldnames, rows
+
+    metric_ids = metrics_for(group, category)
+    fieldnames = ["Name", "Age", "Club", "Position", "Minutes", "Minutes Status"]
+    for mid in metric_ids:
+        fieldnames.append(metric_defs()[mid]["abbr"])
+    rows = []
+    for p in players:
+        status = minutes_status(p.get("minutes"), minutes_required)
+        row = {
+            "Name": p["name"],
+            "Age": p.get("age"),
+            "Club": p.get("club"),
+            "Position": p.get("position"),
+            "Minutes": p.get("minutes"),
+            "Minutes Status": status,
+        }
+        for mid in metric_ids:
+            band = band_metric(group, category, mid, (p.get("stats") or {}).get(mid))
+            row[metric_defs()[mid]["abbr"]] = band["display"]
+        rows.append(row)
+    return fieldnames, rows

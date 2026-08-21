@@ -66,6 +66,7 @@ app.layout = dmc.MantineProvider(
         dcc.Store(id="ui-settings", data=ui_settings.load()),
         dcc.Store(id="rs-parsed", storage_type="session"),
         dcc.Store(id="rs-persist", data={}, storage_type="session"),
+        dcc.Store(id="st-parsed", storage_type="session"),
         html.Div(id="ui-settings-css"),
         dbc.Navbar(
             dbc.Container(
@@ -74,6 +75,7 @@ app.layout = dmc.MantineProvider(
                     dbc.Nav(
                         [
                             dbc.NavItem(dbc.NavLink("Role scores", href="/")),
+                            dbc.NavItem(dbc.NavLink("Player stats", href="/stats")),
                             dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
                             dbc.NavItem(dbc.NavLink("Formations", href="/formations")),
                             dbc.NavItem(dbc.NavLink("Settings", href="/settings")),

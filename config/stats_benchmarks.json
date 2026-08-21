@@ -1,0 +1,269 @@
+{
+  "id": "mustermann-wdgll-2026-02",
+  "name": "What Does Good Look Like (MustermannFM, Feb 2026)",
+  "source": "What Does Good Look Like Desktop.pdf",
+  "percentiles": [20, 40, 60, 80],
+  "default_minutes_required": 900,
+  "groups": ["gk", "def", "mid", "fwd"],
+  "group_labels": {
+    "gk": "Goalkeepers",
+    "def": "Defenders",
+    "mid": "Midfielders",
+    "fwd": "Forwards"
+  },
+  "categories": {
+    "gk": [
+      {"id": "goalkeeping", "label": "Goalkeeping"},
+      {"id": "gk_possession", "label": "Possession"},
+      {"id": "gk_def", "label": "Def"}
+    ],
+    "outfield": [
+      {"id": "defending", "label": "Defending"},
+      {"id": "final_third", "label": "Final third"},
+      {"id": "possession", "label": "Possession"}
+    ]
+  },
+  "metrics": {
+    "xg_prevented": {
+      "label": "xG Prevented",
+      "abbr": "xGP/90",
+      "csv": ["xGP/90", "xGP"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "goals_conceded": {
+      "label": "Goals Conceded",
+      "abbr": "Conc/90",
+      "csv": ["Goals Allowed"],
+      "derive": "per90_from_total",
+      "higher_is_better": false,
+      "unit": "per90"
+    },
+    "possession_lost": {
+      "label": "Possession Lost",
+      "abbr": "Poss Lost",
+      "csv": ["Possession Lost per 90"],
+      "higher_is_better": false,
+      "unit": "per90"
+    },
+    "progressive_passes": {
+      "label": "Progressive Passes",
+      "abbr": "Prog Pass",
+      "csv": ["Progressive Passes per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "passes_attempted": {
+      "label": "Passes Attempted",
+      "abbr": "Pass Att",
+      "csv": ["Passes Attempted per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "possession_won": {
+      "label": "Possession Won",
+      "abbr": "Poss Won",
+      "csv": ["Possession Won per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "header_win_rate": {
+      "label": "Header Win Rate",
+      "abbr": "Hdr %",
+      "csv": ["Headers Won Percentage"],
+      "higher_is_better": true,
+      "unit": "percent"
+    },
+    "headers_attempted": {
+      "label": "Headers Attempted",
+      "abbr": "Hdr Att",
+      "csv": ["Headers Attempted per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "tackle_win_rate": {
+      "label": "Tackle Win Rate",
+      "abbr": "Tck %",
+      "csv": ["Tackle Completion Percentage"],
+      "higher_is_better": true,
+      "unit": "percent"
+    },
+    "tackles_attempted": {
+      "label": "Tackles Attempted",
+      "abbr": "Tck Att",
+      "csv": ["Tackles Attempted"],
+      "derive": "per90_from_total",
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "interceptions": {
+      "label": "Interceptions",
+      "abbr": "Int",
+      "csv": ["Interceptions per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "clearances": {
+      "label": "Clearances",
+      "abbr": "Clr",
+      "csv": ["Clearances per 90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "blocks": {
+      "label": "Blocks",
+      "abbr": "Blk",
+      "csv": ["Blk/90", "Shts Blckd/90"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "goals": {
+      "label": "Goals",
+      "abbr": "Gls",
+      "csv": ["Goals per 90 minutes", "Goals"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "expected_goals": {
+      "label": "Expected Goals",
+      "abbr": "xG",
+      "csv": ["xG/90", "xG"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "shots": {
+      "label": "Shots",
+      "abbr": "Shots",
+      "csv": ["Shot/90", "Shots"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "assists": {
+      "label": "Assists",
+      "abbr": "Ast",
+      "csv": ["Asts/90", "Assists"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "expected_assists": {
+      "label": "Expected Assists",
+      "abbr": "xA",
+      "csv": ["xA/90", "xA"],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "key_passes": {
+      "label": "Key Passes",
+      "abbr": "Key Ps",
+      "csv": ["Key Passes per 90", "Key Passes"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "dribbles": {
+      "label": "Dribbles",
+      "abbr": "Drb",
+      "csv": ["Dribbles per 90", "Dribbles"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    }
+  },
+  "benchmarks": {
+    "gk": {
+      "goalkeeping": {
+        "xg_prevented": [-0.16, -0.12, -0.07, -0.02],
+        "goals_conceded": [1.57, 1.45, 1.31, 1.20]
+      },
+      "gk_possession": {
+        "possession_lost": [8.21, 6.04, 3.67, 2.35],
+        "progressive_passes": [0.37, 0.58, 0.74, 0.98],
+        "passes_attempted": [21.58, 23.26, 24.38, 26.06]
+      },
+      "gk_def": {
+        "possession_won": [7.25, 7.62, 8.17, 8.53]
+      }
+    },
+    "def": {
+      "defending": {
+        "possession_won": [8.33, 9.09, 9.77, 10.54],
+        "header_win_rate": [52.4, 60.8, 65.6, 70.7],
+        "headers_attempted": [3.15, 3.82, 4.57, 5.35],
+        "tackle_win_rate": [72.4, 74.7, 76.7, 79.0],
+        "tackles_attempted": [0.87, 1.07, 2.25, 3.48],
+        "interceptions": [2.38, 2.65, 2.88, 3.12],
+        "clearances": [0.90, 1.03, 1.13, 1.28],
+        "blocks": [0.56, 0.62, 0.68, 0.75]
+      },
+      "final_third": {
+        "goals": [0.01, 0.02, 0.03, 0.05],
+        "expected_goals": [0.01, 0.02, 0.03, 0.04],
+        "shots": [0.25, 0.34, 0.48, 0.68],
+        "assists": [0.01, 0.02, 0.06, 0.13],
+        "expected_assists": [0.02, 0.03, 0.06, 0.13],
+        "key_passes": [0.20, 0.29, 0.77, 1.39]
+      },
+      "possession": {
+        "dribbles": [0.04, 0.08, 0.55, 1.75],
+        "possession_lost": [12.01, 8.18, 4.90, 4.05],
+        "progressive_passes": [3.19, 4.44, 6.18, 7.95],
+        "passes_attempted": [50.96, 56.45, 62.33, 69.88]
+      }
+    },
+    "mid": {
+      "defending": {
+        "possession_won": [5.63, 6.92, 7.82, 8.53],
+        "header_win_rate": [27.0, 36.1, 44.8, 54.4],
+        "headers_attempted": [1.67, 2.16, 2.64, 3.45],
+        "tackle_win_rate": [67.3, 69.8, 72.4, 74.7],
+        "tackles_attempted": [1.49, 1.98, 2.34, 2.72],
+        "interceptions": [1.96, 2.32, 2.52, 2.86],
+        "clearances": [0.49, 0.70, 0.84, 1.01],
+        "blocks": [0.27, 0.40, 0.51, 0.61]
+      },
+      "final_third": {
+        "goals": [0.04, 0.07, 0.11, 0.23],
+        "expected_goals": [0.04, 0.06, 0.11, 0.22],
+        "shots": [0.88, 1.17, 1.57, 2.02],
+        "assists": [0.05, 0.08, 0.13, 0.20],
+        "expected_assists": [0.06, 0.09, 0.13, 0.19],
+        "key_passes": [0.87, 1.2, 1.6, 2.08]
+      },
+      "possession": {
+        "dribbles": [0.22, 0.37, 0.72, 1.56],
+        "possession_lost": [10.21, 8.44, 7.15, 6.04],
+        "progressive_passes": [3.69, 5.02, 5.82, 6.91],
+        "passes_attempted": [48.62, 54.66, 60.74, 68.83]
+      }
+    },
+    "fwd": {
+      "defending": {
+        "possession_won": [2.47, 4.16, 6.52, 7.52],
+        "header_win_rate": [19.5, 26.9, 33.5, 40.3],
+        "headers_attempted": [2.92, 3.60, 4.94, 6.86],
+        "tackle_win_rate": [65.3, 70.7, 74.0, 76.6],
+        "tackles_attempted": [0.48, 1.24, 2.34, 2.94],
+        "interceptions": [0.90, 1.37, 1.97, 2.34],
+        "clearances": [0.17, 0.31, 0.49, 0.64],
+        "blocks": [0.10, 0.16, 0.24, 0.32]
+      },
+      "final_third": {
+        "goals": [0.22, 0.29, 0.37, 0.47],
+        "expected_goals": [0.21, 0.26, 0.32, 0.40],
+        "shots": [1.96, 2.22, 2.47, 2.81],
+        "assists": [0.12, 0.17, 0.22, 0.27],
+        "expected_assists": [0.12, 0.16, 0.21, 0.26],
+        "key_passes": [1.18, 1.53, 1.95, 2.31]
+      },
+      "possession": {
+        "dribbles": [0.84, 1.63, 3.43, 5.62],
+        "possession_lost": [14.95, 12.36, 8.53, 6.12],
+        "progressive_passes": [0.98, 2.10, 3.55, 4.75],
+        "passes_attempted": [28.63, 35.10, 43.27, 50.29]
+      }
+    }
+  }
+}
