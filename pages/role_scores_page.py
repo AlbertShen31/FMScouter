@@ -233,22 +233,97 @@ def _upload_error(message: str) -> html.Div:
     return html.Div(message, className="rs-upload-error")
 
 
-PLAYER_IDENTITY_FIELDS = [
-    ("Age", "age"),
-    ("Club", "club"),
-    ("Division", "division"),
-    ("Nation", "nation"),
-    ("Position", "position"),
-    ("Best pos", "best_pos"),
-    ("Style", "style"),
-    ("Height", "height"),
-    ("Left foot", "left_foot"),
-    ("Right foot", "right_foot"),
-    ("Rec", "rec"),
-    ("Inf", "inf"),
-    ("Injury", "injury"),
-    ("Squad", "squad"),
+# Shown on the player modal. Parsed CSV fields listed here are hidden for now.
+PLAYER_IDENTITY_HIDDEN = frozenset(
+    {
+        "world_reputation",
+        "ability",
+        "potential",
+        "squad",
+    }
+)
+
+PLAYER_IDENTITY_SECTIONS = [
+    (
+        None,
+        [
+            [
+                ("Age", "age"),
+                ("Club", "club"),
+                ("Division", "division"),
+                ("Nation", "nation"),
+                ("Position", "position"),
+                ("Best pos", "best_pos"),
+                ("Best role", "best_role"),
+                ("Style", "style"),
+                ("Personality", "personality"),
+                ("Media handling", "media_handling"),
+                ("Height", "height"),
+                ("Left foot", "left_foot"),
+                ("Right foot", "right_foot"),
+                ("Rec", "rec"),
+                ("Inf", "inf"),
+                ("Injury", "injury"),
+            ],
+        ],
+    ),
+    (
+        "International & youth",
+        [
+            [
+                ("National team", "national_team"),
+                ("Int apps", "int_apps"),
+                ("Int goals", "int_gls"),
+                ("Int assists", "int_assists"),
+                ("Int goals conceded", "int_goals_conceded"),
+                ("Youth apps", "yth_apps"),
+                ("Youth goals", "yth_gls"),
+            ],
+            [
+                ("Int apps (season)", "int_apps_season"),
+                ("Int rating", "avg_rating_int"),
+                ("Last 5 int", "last_5_int"),
+                ("Int form", "form_int"),
+            ],
+        ],
+    ),
 ]
+
+
+def _identity_value_present(value) -> bool:
+    text = str(value if value is not None else "").strip()
+    return text not in ("", "-")
+
+
+def _player_identity_item(
+    label: str,
+    key: str,
+    player: dict,
+    *,
+    position_eligible: str | None = None,
+) -> html.Div | None:
+    if key in PLAYER_IDENTITY_HIDDEN or not _identity_value_present(player.get(key)):
+        return None
+    value_class = "rs-player-id-value"
+    tip = None
+    if key == "position" and position_eligible in _POS_ELIG_TIPS:
+        value_class += {
+            "yes": " is-eligible",
+            "partial": " is-partial",
+            "no": " is-ineligible",
+        }[position_eligible]
+        tip = _POS_ELIG_TIPS[position_eligible]
+    return html.Div(
+        [
+            html.Span(label, className="rs-player-id-label"),
+            html.Span(
+                str(player.get(key) or "—"),
+                className=value_class,
+                title=tip,
+            ),
+        ],
+        className="rs-player-id-item",
+    )
 
 
 def _find_parsed_player(parsed, name: str, club: str) -> dict | None:
@@ -391,35 +466,42 @@ def _player_detail_card(
 ) -> html.Div:
     settings = us.normalize(settings)
     bands = settings["bands"]
-    identity = []
-    for label, key in PLAYER_IDENTITY_FIELDS:
-        if player.get(key) in (None, ""):
+    sections = []
+    for title, rows in PLAYER_IDENTITY_SECTIONS:
+        row_blocks = []
+        for fields in rows:
+            items = [
+                item
+                for item in (
+                    _player_identity_item(
+                        label,
+                        key,
+                        player,
+                        position_eligible=position_eligible,
+                    )
+                    for label, key in fields
+                )
+                if item is not None
+            ]
+            if items:
+                row_blocks.append(html.Div(items, className="rs-player-identity"))
+        if not row_blocks:
             continue
-        value_class = "rs-player-id-value"
-        tip = None
-        if key == "position" and position_eligible in _POS_ELIG_TIPS:
-            value_class += {
-                "yes": " is-eligible",
-                "partial": " is-partial",
-                "no": " is-ineligible",
-            }[position_eligible]
-            tip = _POS_ELIG_TIPS[position_eligible]
-        identity.append(
-            html.Div(
-                [
-                    html.Span(label, className="rs-player-id-label"),
-                    html.Span(
-                        str(player.get(key) or "—"),
-                        className=value_class,
-                        title=tip,
-                    ),
-                ],
-                className="rs-player-id-item",
+        if title:
+            sections.append(
+                html.Div(
+                    [
+                        html.Div(title, className="rs-player-id-section-title"),
+                        *row_blocks,
+                    ],
+                    className="rs-player-id-section",
+                )
             )
-        )
+        else:
+            sections.extend(row_blocks)
     return html.Div(
         [
-            html.Div(identity, className="rs-player-identity"),
+            *sections,
             _player_attributes(player, bands),
         ],
         className="rs-player-detail",

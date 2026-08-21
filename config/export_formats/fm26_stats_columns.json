@@ -1,0 +1,1049 @@
+{
+  "id": "fm26-moneyball-stats",
+  "name": "FM26 Moneyball statistics export",
+  "delimiter": ";",
+  "encoding": "utf-8-sig",
+  "source_file": "moneyball_export_20260821_104754.csv",
+  "captured": "2026-08-21",
+  "notes": "Player statistics view from FM26PlayerExport (vinteset). Shares the same identity prefix as the attributes export through Int Apps; remaining columns are match/season statistics. Not imported by Role scores yet.",
+  "identity_prefix_through": "Int Apps",
+  "column_count": 148,
+  "columns": [
+    {
+      "index": 0,
+      "name": "Squad",
+      "category": "identity",
+      "type": "text",
+      "sample": "Main"
+    },
+    {
+      "index": 1,
+      "name": "Inf",
+      "category": "identity",
+      "type": "text",
+      "sample": "Wnt"
+    },
+    {
+      "index": 2,
+      "name": "Player",
+      "category": "identity",
+      "type": "text",
+      "sample": "Cristian Manea"
+    },
+    {
+      "index": 3,
+      "name": "Personality",
+      "category": "identity",
+      "type": "text",
+      "sample": "Fairly Ambitious"
+    },
+    {
+      "index": 4,
+      "name": "Best Pos",
+      "category": "identity",
+      "type": "text",
+      "sample": "D (R)"
+    },
+    {
+      "index": 5,
+      "name": "Best Role",
+      "category": "identity",
+      "type": "text",
+      "sample": "WB"
+    },
+    {
+      "index": 6,
+      "name": "Style",
+      "category": "identity",
+      "type": "text",
+      "sample": "Physical"
+    },
+    {
+      "index": 7,
+      "name": "Based In",
+      "category": "identity",
+      "type": "text",
+      "sample": "Romania"
+    },
+    {
+      "index": 8,
+      "name": "Club",
+      "category": "identity",
+      "type": "text",
+      "sample": "FC Rapid"
+    },
+    {
+      "index": 9,
+      "name": "Division",
+      "category": "identity",
+      "type": "text",
+      "sample": "Liga I"
+    },
+    {
+      "index": 10,
+      "name": "Injury",
+      "category": "identity",
+      "type": "text",
+      "sample": "An abdominal strain"
+    },
+    {
+      "index": 11,
+      "name": "Age",
+      "category": "identity",
+      "type": "integer",
+      "sample": "28"
+    },
+    {
+      "index": 12,
+      "name": "Best Position",
+      "category": "identity",
+      "type": "text",
+      "sample": "D (R)"
+    },
+    {
+      "index": 13,
+      "name": "Height",
+      "category": "identity",
+      "type": "text",
+      "sample": "6'0\""
+    },
+    {
+      "index": 14,
+      "name": "Left Foot",
+      "category": "identity",
+      "type": "text",
+      "sample": "Weak"
+    },
+    {
+      "index": 15,
+      "name": "Right Foot",
+      "category": "identity",
+      "type": "text",
+      "sample": "Very Strong"
+    },
+    {
+      "index": 16,
+      "name": "Media Handling",
+      "category": "identity",
+      "type": "text",
+      "sample": "Level-headed"
+    },
+    {
+      "index": 17,
+      "name": "Position",
+      "category": "identity",
+      "type": "text",
+      "sample": "D/WB (R)"
+    },
+    {
+      "index": 18,
+      "name": "Sec. Position",
+      "category": "identity",
+      "type": "text",
+      "sample": "WB (R)"
+    },
+    {
+      "index": 19,
+      "name": "World Reputation",
+      "category": "identity",
+      "type": "number",
+      "sample": "4,5"
+    },
+    {
+      "index": 20,
+      "name": "Best Role",
+      "category": "identity",
+      "type": "text",
+      "sample": "Wing back"
+    },
+    {
+      "index": 21,
+      "name": "Ability",
+      "category": "identity",
+      "type": "text",
+      "sample": "Unknown"
+    },
+    {
+      "index": 22,
+      "name": "Potential",
+      "category": "identity",
+      "type": "text",
+      "sample": "Unknown"
+    },
+    {
+      "index": 23,
+      "name": "Rec.",
+      "category": "identity",
+      "type": "text",
+      "sample": "C+"
+    },
+    {
+      "index": 24,
+      "name": "International Appearances (Season)",
+      "category": "identity",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 25,
+      "name": "International Assists",
+      "category": "identity",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 26,
+      "name": "Average Rating International",
+      "category": "identity",
+      "type": "number",
+      "sample": "7.00"
+    },
+    {
+      "index": 27,
+      "name": "National Team",
+      "category": "identity",
+      "type": "text",
+      "sample": "Main"
+    },
+    {
+      "index": 28,
+      "name": "Yth Apps",
+      "category": "identity",
+      "type": "integer",
+      "sample": "18"
+    },
+    {
+      "index": 29,
+      "name": "Yth Gls",
+      "category": "identity",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 30,
+      "name": "Last 5 Games International",
+      "category": "identity",
+      "type": "number",
+      "sample": "7.00"
+    },
+    {
+      "index": 31,
+      "name": "Form International",
+      "category": "identity",
+      "type": "text",
+      "sample": ""
+    },
+    {
+      "index": 32,
+      "name": "International Goals Conceded",
+      "category": "identity",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 33,
+      "name": "Int Gls",
+      "category": "identity",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 34,
+      "name": "Int Apps",
+      "category": "identity",
+      "type": "integer",
+      "sample": "27"
+    },
+    {
+      "index": 35,
+      "name": "Headers Attempted",
+      "category": "heading",
+      "type": "integer",
+      "sample": "13"
+    },
+    {
+      "index": 36,
+      "name": "Headers Attempted per 90",
+      "category": "heading",
+      "type": "number",
+      "sample": "3.9"
+    },
+    {
+      "index": 37,
+      "name": "Headers Lost per 90",
+      "category": "heading",
+      "type": "number",
+      "sample": "1.2"
+    },
+    {
+      "index": 38,
+      "name": "Headers Won",
+      "category": "heading",
+      "type": "integer",
+      "sample": "9"
+    },
+    {
+      "index": 39,
+      "name": "Headers Won per 90",
+      "category": "heading",
+      "type": "number",
+      "sample": "2.7"
+    },
+    {
+      "index": 40,
+      "name": "Headers Won Percentage",
+      "category": "heading",
+      "type": "integer",
+      "sample": "69"
+    },
+    {
+      "index": 41,
+      "name": "Key Headers per 90",
+      "category": "heading",
+      "type": "number",
+      "sample": "0.9"
+    },
+    {
+      "index": 42,
+      "name": "AT Apps",
+      "category": "other",
+      "type": "integer",
+      "sample": "258"
+    },
+    {
+      "index": 43,
+      "name": "AT Gls",
+      "category": "other",
+      "type": "integer",
+      "sample": "11"
+    },
+    {
+      "index": 44,
+      "name": "AT League Apps",
+      "category": "other",
+      "type": "integer",
+      "sample": "257"
+    },
+    {
+      "index": 45,
+      "name": "AT League Goals",
+      "category": "goals",
+      "type": "integer",
+      "sample": "11"
+    },
+    {
+      "index": 46,
+      "name": "Crosses Completed Ratio",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "25"
+    },
+    {
+      "index": 47,
+      "name": "Crosses Attempted",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "8"
+    },
+    {
+      "index": 48,
+      "name": "Crosses Attempted per 90",
+      "category": "crossing",
+      "type": "number",
+      "sample": "2.4"
+    },
+    {
+      "index": 49,
+      "name": "Crosses Completed",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 50,
+      "name": "Crosses Completed per 90",
+      "category": "crossing",
+      "type": "number",
+      "sample": "0.6"
+    },
+    {
+      "index": 51,
+      "name": "Open Play Cross Completion Percentage",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "25"
+    },
+    {
+      "index": 52,
+      "name": "Open Play Crosses Attempted",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "8"
+    },
+    {
+      "index": 53,
+      "name": "Open Play Crosses Attempted per 90",
+      "category": "crossing",
+      "type": "number",
+      "sample": "2.4"
+    },
+    {
+      "index": 54,
+      "name": "Open Play Crosses Completed",
+      "category": "crossing",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 55,
+      "name": "Open Play Crosses Completed per 90",
+      "category": "crossing",
+      "type": "number",
+      "sample": "0.6"
+    },
+    {
+      "index": 56,
+      "name": "Appearances",
+      "category": "general",
+      "type": "text",
+      "sample": "3 (3)"
+    },
+    {
+      "index": 57,
+      "name": "Assists",
+      "category": "creating",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 58,
+      "name": "Mins/Gl",
+      "category": "goals",
+      "type": "number",
+      "sample": "0"
+    },
+    {
+      "index": 59,
+      "name": "Rating",
+      "category": "general",
+      "type": "number",
+      "sample": "7.00"
+    },
+    {
+      "index": 60,
+      "name": "Average Rating Club",
+      "category": "general",
+      "type": "number",
+      "sample": "6.70"
+    },
+    {
+      "index": 61,
+      "name": "Shutouts",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 62,
+      "name": "All/90",
+      "category": "general",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 63,
+      "name": "Cln/90",
+      "category": "goalkeeping",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 64,
+      "name": "xA",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.13"
+    },
+    {
+      "index": 65,
+      "name": "xA/90",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 66,
+      "name": "xG-OP",
+      "category": "expected",
+      "type": "number",
+      "sample": "-0.07"
+    },
+    {
+      "index": 67,
+      "name": "xG/90",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 68,
+      "name": "Fouls Against",
+      "category": "discipline",
+      "type": "integer",
+      "sample": "3"
+    },
+    {
+      "index": 69,
+      "name": "Fouls Made",
+      "category": "discipline",
+      "type": "integer",
+      "sample": "3"
+    },
+    {
+      "index": 70,
+      "name": "Goals",
+      "category": "goals",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 71,
+      "name": "Goals Allowed",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 72,
+      "name": "Goals per 90 minutes",
+      "category": "goals",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 73,
+      "name": "Minutes",
+      "category": "general",
+      "type": "integer",
+      "sample": "297"
+    },
+    {
+      "index": 74,
+      "name": "Mins/Gm",
+      "category": "general",
+      "type": "number",
+      "sample": "49.5"
+    },
+    {
+      "index": 75,
+      "name": "Minutes Since Last Conceded",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 76,
+      "name": "Minutes Since Last Goal",
+      "category": "goals",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 77,
+      "name": "NP-xG",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.07"
+    },
+    {
+      "index": 78,
+      "name": "NP-xG/90",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 79,
+      "name": "Penalties Taken",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 80,
+      "name": "Penalties Faced",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 81,
+      "name": "Penalties Saved",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 82,
+      "name": "Penalties Saved Ratio",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 83,
+      "name": "Penalties Scored",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 84,
+      "name": "Penalties Scored Ratio",
+      "category": "penalties",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 85,
+      "name": "Player of the Match",
+      "category": "general",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 86,
+      "name": "Red cards",
+      "category": "discipline",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 87,
+      "name": "Starts",
+      "category": "general",
+      "type": "integer",
+      "sample": "3"
+    },
+    {
+      "index": 88,
+      "name": "Saves per 90",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 89,
+      "name": "xG",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.07"
+    },
+    {
+      "index": 90,
+      "name": "Yellow Cards",
+      "category": "discipline",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 91,
+      "name": "Mistakes Leading to Goals",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 92,
+      "name": "Distance",
+      "category": "physical",
+      "type": "text",
+      "sample": "24.8mi"
+    },
+    {
+      "index": 93,
+      "name": "Dist/90",
+      "category": "physical",
+      "type": "number",
+      "sample": "12.1"
+    },
+    {
+      "index": 94,
+      "name": "Dribbles",
+      "category": "dribbling",
+      "type": "integer",
+      "sample": "3"
+    },
+    {
+      "index": 95,
+      "name": "Dribbles per 90",
+      "category": "dribbling",
+      "type": "number",
+      "sample": "0.9"
+    },
+    {
+      "index": 96,
+      "name": "Sprints/90",
+      "category": "physical",
+      "type": "number",
+      "sample": "17.6"
+    },
+    {
+      "index": 97,
+      "name": "Off",
+      "category": "creating",
+      "type": "integer",
+      "sample": "1"
+    },
+    {
+      "index": 98,
+      "name": "Asts/90",
+      "category": "creating",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 99,
+      "name": "Chances Created per 90",
+      "category": "creating",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 100,
+      "name": "Clear Cut Chances Created",
+      "category": "creating",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 101,
+      "name": "Key Passes",
+      "category": "passing",
+      "type": "integer",
+      "sample": "4"
+    },
+    {
+      "index": 102,
+      "name": "Key Passes per 90",
+      "category": "passing",
+      "type": "number",
+      "sample": "1.2"
+    },
+    {
+      "index": 103,
+      "name": "Open Play Key Passes per 90",
+      "category": "passing",
+      "type": "number",
+      "sample": "1.2"
+    },
+    {
+      "index": 104,
+      "name": "Pass Completion Percentage",
+      "category": "passing",
+      "type": "percent",
+      "sample": "91%"
+    },
+    {
+      "index": 105,
+      "name": "Passes Attempted",
+      "category": "passing",
+      "type": "integer",
+      "sample": "209"
+    },
+    {
+      "index": 106,
+      "name": "Passes Attempted per 90",
+      "category": "passing",
+      "type": "number",
+      "sample": "63.3"
+    },
+    {
+      "index": 107,
+      "name": "Passes Completed",
+      "category": "passing",
+      "type": "integer",
+      "sample": "191"
+    },
+    {
+      "index": 108,
+      "name": "Passes Completed per 90",
+      "category": "passing",
+      "type": "number",
+      "sample": "57.9"
+    },
+    {
+      "index": 109,
+      "name": "Possession Lost per 90",
+      "category": "possession",
+      "type": "number",
+      "sample": "14.2"
+    },
+    {
+      "index": 110,
+      "name": "PsP",
+      "category": "passing",
+      "type": "integer",
+      "sample": "23"
+    },
+    {
+      "index": 111,
+      "name": "Progressive Passes per 90",
+      "category": "passing",
+      "type": "number",
+      "sample": "7.0"
+    },
+    {
+      "index": 112,
+      "name": "xGP",
+      "category": "expected",
+      "type": "number",
+      "sample": "0"
+    },
+    {
+      "index": 113,
+      "name": "xGP/90",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 114,
+      "name": "Expected Save Percentage",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 115,
+      "name": "Save Percentage",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 116,
+      "name": "Saves Held",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 117,
+      "name": "Saves Parried",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 118,
+      "name": "Saves Tipped",
+      "category": "goalkeeping",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 119,
+      "name": "Conv %",
+      "category": "shooting",
+      "type": "percent",
+      "sample": "0%"
+    },
+    {
+      "index": 120,
+      "name": "xG/shot",
+      "category": "expected",
+      "type": "number",
+      "sample": "0.035"
+    },
+    {
+      "index": 121,
+      "name": "Free Kick Shots",
+      "category": "shooting",
+      "type": "integer",
+      "sample": "1"
+    },
+    {
+      "index": 122,
+      "name": "Goals From Outside The Box",
+      "category": "shooting",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 123,
+      "name": "Shots",
+      "category": "shooting",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 124,
+      "name": "Shots From Outside The Box Per 90 minutes",
+      "category": "shooting",
+      "type": "number",
+      "sample": "0.3"
+    },
+    {
+      "index": 125,
+      "name": "Shots on Target",
+      "category": "shooting",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 126,
+      "name": "Shots on Target per 90",
+      "category": "shooting",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 127,
+      "name": "Shots on Target Percentage",
+      "category": "shooting",
+      "type": "percent",
+      "sample": "0%"
+    },
+    {
+      "index": 128,
+      "name": "Shot/90",
+      "category": "shooting",
+      "type": "number",
+      "sample": "0.6"
+    },
+    {
+      "index": 129,
+      "name": "Blk",
+      "category": "defending",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 130,
+      "name": "Blk/90",
+      "category": "defending",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 131,
+      "name": "Clearances",
+      "category": "defending",
+      "type": "integer",
+      "sample": "3"
+    },
+    {
+      "index": 132,
+      "name": "Clearances per 90",
+      "category": "defending",
+      "type": "number",
+      "sample": "0.9"
+    },
+    {
+      "index": 133,
+      "name": "Interceptions",
+      "category": "defending",
+      "type": "integer",
+      "sample": "17"
+    },
+    {
+      "index": 134,
+      "name": "Interceptions per 90",
+      "category": "defending",
+      "type": "number",
+      "sample": "5.2"
+    },
+    {
+      "index": 135,
+      "name": "Key Tackles",
+      "category": "defending",
+      "type": "integer",
+      "sample": "0"
+    },
+    {
+      "index": 136,
+      "name": "Key Tackles per 90",
+      "category": "defending",
+      "type": "number",
+      "sample": "0.0"
+    },
+    {
+      "index": 137,
+      "name": "Possession Won per 90",
+      "category": "defending",
+      "type": "number",
+      "sample": "11.8"
+    },
+    {
+      "index": 138,
+      "name": "Pres A",
+      "category": "pressing",
+      "type": "integer",
+      "sample": "31"
+    },
+    {
+      "index": 139,
+      "name": "Pres A/90",
+      "category": "pressing",
+      "type": "number",
+      "sample": "9.4"
+    },
+    {
+      "index": 140,
+      "name": "Pres C",
+      "category": "pressing",
+      "type": "integer",
+      "sample": "8"
+    },
+    {
+      "index": 141,
+      "name": "Pres C/90",
+      "category": "pressing",
+      "type": "number",
+      "sample": "2.4"
+    },
+    {
+      "index": 142,
+      "name": "Shts Blckd",
+      "category": "defending",
+      "type": "integer",
+      "sample": "2"
+    },
+    {
+      "index": 143,
+      "name": "Shts Blckd/90",
+      "category": "defending",
+      "type": "number",
+      "sample": "0.6"
+    },
+    {
+      "index": 144,
+      "name": "Tackle Completion Percentage",
+      "category": "defending",
+      "type": "integer",
+      "sample": "90"
+    },
+    {
+      "index": 145,
+      "name": "Tackles Attempted",
+      "category": "defending",
+      "type": "integer",
+      "sample": "10"
+    },
+    {
+      "index": 146,
+      "name": "Tackled Completed",
+      "category": "defending",
+      "type": "integer",
+      "sample": "9"
+    },
+    {
+      "index": 147,
+      "name": "Tackles Completed per 90",
+      "category": "defending",
+      "type": "number",
+      "sample": "2.7"
+    }
+  ]
+}

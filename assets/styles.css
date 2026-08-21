@@ -3443,6 +3443,20 @@ body[data-theme="light"] .rs-player-modal .btn-close {
     gap: 0.4rem 0.85rem;
 }
 
+.rs-player-id-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.rs-player-id-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+}
+
 .rs-player-id-item {
     display: flex;
     flex-direction: column;

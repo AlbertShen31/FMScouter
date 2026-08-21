@@ -247,7 +247,13 @@ IDENTITY = {
     "Position": ["Position"],
     "SecPosition": ["Sec. Position", "Secondary Position", "Sec Position"],
     "BestPos": ["Best Pos", "Best Position"],
+    "BestRole": ["Best Role"],
     "Style": ["Style"],
+    "Personality": ["Personality"],
+    "MediaHandling": ["Media Handling"],
+    "WorldReputation": ["World Reputation"],
+    "Ability": ["Ability", "CA"],
+    "Potential": ["Potential", "PA"],
     "Height": ["Height"],
     "LeftFoot": ["Left Foot", "LFoot", "L"],
     "RightFoot": ["Right Foot", "RFoot", "R"],
@@ -255,6 +261,17 @@ IDENTITY = {
     "Inf": ["Inf"],
     "Injury": ["Injury"],
     "Squad": ["Squad"],
+    "NationalTeam": ["National Team"],
+    "IntAppsSeason": ["International Appearances (Season)"],
+    "IntAssists": ["International Assists"],
+    "AvgRatingInt": ["Average Rating International"],
+    "Last5Int": ["Last 5 Games International"],
+    "FormInt": ["Form International"],
+    "IntGoalsConceded": ["International Goals Conceded"],
+    "IntGls": ["Int Gls", "International Goals"],
+    "IntApps": ["Int Apps", "International Appearances"],
+    "YthApps": ["Yth Apps", "Youth Apps"],
+    "YthGls": ["Yth Gls", "Youth Goals"],
 }
 
 DEFAULT_ROLE_CODES = []
@@ -391,6 +408,41 @@ def pick(row: dict[str, str], aliases: list[str]) -> str:
             if key.split(".")[0] == alias and row[key] not in (None, ""):
                 return str(row[key]).strip()
     return ""
+
+
+def pick_all(row: dict[str, str], aliases: list[str]) -> list[str]:
+    """All non-empty values for aliases, including ``Best Role.1`` duplicates."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for alias in aliases:
+        for key, value in row.items():
+            if key != alias and key.split(".")[0] != alias:
+                continue
+            text = "" if value in (None, "") else str(value).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+def pick_best_role(row: dict[str, str]) -> str:
+    """Prefer the full Best Role label when the export also has a short code."""
+    values = [
+        value
+        for value in pick_all(row, IDENTITY["BestRole"])
+        if value.casefold() != "unknown"
+    ]
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    # e.g. "WB" + "Wing back" → "Wing back (WB)"
+    by_len = sorted(values, key=len)
+    short, long = by_len[0], by_len[-1]
+    if short.casefold() in long.casefold():
+        return long
+    return f"{long} ({short})"
 
 
 def to_int(value: Any) -> int:
@@ -738,7 +790,13 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "nation": pick(row, IDENTITY["Nation"]),
                 "position": pos,
                 "best_pos": pick(row, IDENTITY["BestPos"]),
+                "best_role": pick_best_role(row),
                 "style": pick(row, IDENTITY["Style"]),
+                "personality": pick(row, IDENTITY["Personality"]),
+                "media_handling": pick(row, IDENTITY["MediaHandling"]),
+                "world_reputation": pick(row, IDENTITY["WorldReputation"]),
+                "ability": pick(row, IDENTITY["Ability"]),
+                "potential": pick(row, IDENTITY["Potential"]),
                 "height": pick(row, IDENTITY["Height"]).strip('"'),
                 "left_foot": pick(row, IDENTITY["LeftFoot"]),
                 "right_foot": pick(row, IDENTITY["RightFoot"]),
@@ -746,6 +804,17 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "inf": pick(row, IDENTITY["Inf"]),
                 "injury": pick(row, IDENTITY["Injury"]),
                 "squad": pick(row, IDENTITY["Squad"]),
+                "national_team": pick(row, IDENTITY["NationalTeam"]),
+                "int_apps_season": pick(row, IDENTITY["IntAppsSeason"]),
+                "int_assists": pick(row, IDENTITY["IntAssists"]),
+                "avg_rating_int": pick(row, IDENTITY["AvgRatingInt"]),
+                "last_5_int": pick(row, IDENTITY["Last5Int"]),
+                "form_int": pick(row, IDENTITY["FormInt"]),
+                "int_goals_conceded": pick(row, IDENTITY["IntGoalsConceded"]),
+                "int_gls": pick(row, IDENTITY["IntGls"]),
+                "int_apps": pick(row, IDENTITY["IntApps"]),
+                "yth_apps": pick(row, IDENTITY["YthApps"]),
+                "yth_gls": pick(row, IDENTITY["YthGls"]),
                 "attrs": attrs,
                 "attr_hits": attr_count(row),
                 "positions": positions,
