@@ -1,4 +1,4 @@
-"""Persisted UI thresholds and colors for Role scores.
+"""Persisted UI thresholds and colors for Role scores and Player stats.
 
 Named JSON packs live in `config/settings/packs/`. Default uses built-in
 values; edits are saved to `default-overrides.json`. Named packs save to
@@ -41,6 +41,8 @@ DEFAULTS: dict[str, Any] = {
         "ok": {"bg": "#fef3c7", "fg": "#b45309", "bar": "#f59e0b"},
         "poor": {"bg": "#fee2e2", "fg": "#b91c1c", "bar": "#ef4444"},
     },
+    # Filled from stats_benchmarks.json on normalize; empty means built-in.
+    "stats_thresholds": {},
 }
 
 
@@ -148,6 +150,54 @@ def _hex_color(value, default: str) -> str:
     return default
 
 
+def default_stats_thresholds() -> dict[str, Any]:
+    """Built-in MustermannFM cut-points copied from stats_benchmarks.json."""
+    from stats_scorer import benchmarks
+
+    return copy.deepcopy(benchmarks()["benchmarks"])
+
+
+def _valid_threshold_row(value) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    out: list[float] = []
+    for item in value:
+        try:
+            number = float(item)
+        except (TypeError, ValueError):
+            return None
+        if number != number:
+            return None
+        out.append(number)
+    return out
+
+
+def normalize_stats_thresholds(raw=None) -> dict[str, Any]:
+    """Merge optional overrides onto the built-in benchmark threshold tree."""
+    base = default_stats_thresholds()
+    if not isinstance(raw, dict) or not raw:
+        return base
+    for group, cats in base.items():
+        src_group = raw.get(group)
+        if not isinstance(src_group, dict):
+            continue
+        for cat, metrics in cats.items():
+            src_cat = src_group.get(cat)
+            if not isinstance(src_cat, dict):
+                continue
+            for metric_id in list(metrics.keys()):
+                parsed = _valid_threshold_row(src_cat.get(metric_id))
+                if parsed is not None:
+                    metrics[metric_id] = parsed
+    return base
+
+
+def stats_thresholds_differ(tree: dict[str, Any] | None) -> bool:
+    """True when `tree` differs from the built-in benchmark cut-points."""
+    current = normalize_stats_thresholds(tree)
+    return current != default_stats_thresholds()
+
+
 def normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
     raw = raw or {}
     elite = _clamp_score(raw.get("elite"), DEFAULTS["bands"]["elite"])
@@ -207,6 +257,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "foot_thresholds": normalize_foot_thresholds(raw),
         "hist_edges": edges,
         "colors": colors,
+        "stats_thresholds": normalize_stats_thresholds(raw.get("stats_thresholds")),
     }
 
 
@@ -274,6 +325,8 @@ def _default_settings() -> dict[str, Any]:
             band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
             for band in BAND_KEYS
         }
+    if overrides.get("stats_thresholds"):
+        merged["stats_thresholds"] = overrides["stats_thresholds"]
     return normalize(merged, pack_id=BUILTIN, name="Default")
 
 
@@ -337,6 +390,8 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
             "hist_edges": settings["hist_edges"],
             "colors": settings["colors"],
         }
+        if stats_thresholds_differ(settings.get("stats_thresholds")):
+            payload["stats_thresholds"] = settings["stats_thresholds"]
         _write_json(DEFAULT_OVERRIDES_PATH, payload)
         _set_active(BUILTIN)
         return settings

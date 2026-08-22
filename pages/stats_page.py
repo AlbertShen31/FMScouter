@@ -471,7 +471,14 @@ def _header_tooltips(group: str, category: str) -> dict[str, str]:
     return tips
 
 
-def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
+def _build_rows(
+    players,
+    *,
+    group,
+    category,
+    minutes_required,
+    threshold_overrides=None,
+) -> list[dict]:
     g, cat = _resolve_category(group, category)
     metric_ids = [] if cat == "all" else metrics_for(g, cat)
     avg_cats = _avg_category_columns(group) if cat == "all" else []
@@ -507,7 +514,9 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
             else:
                 use_g = g if group not in ("", "all") else bg
                 row[OVERALL_COL["id"]] = _percentile_cell(
-                    overall_average_band(use_g, stats)
+                    overall_average_band(
+                        use_g, stats, threshold_overrides=threshold_overrides
+                    )
                 )
             for section in avg_cats:
                 col_id = section["id"]
@@ -515,7 +524,12 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
                     row[col_id] = _percentile_cell({"percentile": None, "color": None})
                     continue
                 use_g = g if group not in ("", "all") else bg
-                band = category_average_band(use_g, section["id"], stats)
+                band = category_average_band(
+                    use_g,
+                    section["id"],
+                    stats,
+                    threshold_overrides=threshold_overrides,
+                )
                 row[col_id] = _percentile_cell(band)
             rows.append(row)
             continue
@@ -527,7 +541,9 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
         else:
             use_g, use_c = (g, cat) if group not in ("", "all") else (bg, bc)
             row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
-                category_average_band(use_g, use_c, stats)
+                category_average_band(
+                    use_g, use_c, stats, threshold_overrides=threshold_overrides
+                )
             )
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
@@ -538,7 +554,13 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
             if mid not in metrics_for(use_g, use_c):
                 row[abbr] = "—"
                 continue
-            band = band_metric(use_g, use_c, mid, stats.get(mid))
+            band = band_metric(
+                use_g,
+                use_c,
+                mid,
+                stats.get(mid),
+                threshold_overrides=threshold_overrides,
+            )
             row[abbr] = _colored_cell(band["display"], band["color"])
         rows.append(row)
     return rows
@@ -569,7 +591,12 @@ def _normalize_eval_group(
     return g if g in allowed else default
 
 
-def _player_metric_sections(player: dict, eval_group: str | None = None) -> list[dict]:
+def _player_metric_sections(
+    player: dict,
+    eval_group: str | None = None,
+    *,
+    threshold_overrides=None,
+) -> list[dict]:
     g = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
@@ -578,7 +605,13 @@ def _player_metric_sections(player: dict, eval_group: str | None = None) -> list
     for cat in categories_for_group(g):
         metrics = []
         for mid in metrics_for(g, cat["id"]):
-            band = band_metric(g, cat["id"], mid, stats.get(mid))
+            band = band_metric(
+                g,
+                cat["id"],
+                mid,
+                stats.get(mid),
+                threshold_overrides=threshold_overrides,
+            )
             meta = metric_defs()[mid]
             metrics.append(
                 {
@@ -1081,12 +1114,15 @@ def _player_modal_body(
     view: str = "bars",
     eval_group: str | None = None,
     theme: str | None = "dark",
+    threshold_overrides=None,
 ) -> html.Div:
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
-    sections = _player_metric_sections(player, eval_group)
+    sections = _player_metric_sections(
+        player, eval_group, threshold_overrides=threshold_overrides
+    )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
     elif view == "pizzas":
@@ -1590,6 +1626,7 @@ def refresh_table(
     settings = us.normalize(settings)
     minutes_required = float(minutes_required or default_minutes_required())
     g, category = _resolve_category(pos, category or "")
+    thresh = settings.get("stats_thresholds")
 
     filtered = _filter_players(
         players,
@@ -1602,7 +1639,11 @@ def refresh_table(
         foot_thresholds=settings["foot_thresholds"],
     )
     rows = _build_rows(
-        filtered, group=pos, category=category, minutes_required=minutes_required
+        filtered,
+        group=pos,
+        category=category,
+        minutes_required=minutes_required,
+        threshold_overrides=thresh,
     )
     cols = _table_columns(pos, category)
     col_ids = {c["id"] for c in cols}
@@ -1635,7 +1676,12 @@ def refresh_table(
                 if bg is None or bc is None:
                     continue
                 use_g = g if pos not in ("", "all") else bg
-                band = category_average_band(use_g, first["id"], scoring_stats(p))
+                band = category_average_band(
+                    use_g,
+                    first["id"],
+                    scoring_stats(p),
+                    threshold_overrides=thresh,
+                )
                 if band.get("percentile") is not None:
                     values.append(float(band["percentile"]))
         if values and first:
@@ -1765,9 +1811,12 @@ def sync_marks(selected_rows, table_data, marked):
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("st-player-view", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def open_player(active_cell, _close, viewport, parsed, minutes_required, theme, view):
+def open_player(
+    active_cell, _close, viewport, parsed, minutes_required, theme, view, settings
+):
     if ctx.triggered_id == "st-player-modal-close":
         return False, no_update, no_update, None, "mid"
     if not active_cell or active_cell.get("column_id") != "Name":
@@ -1784,6 +1833,7 @@ def open_player(active_cell, _close, viewport, parsed, minutes_required, theme, 
         return True, "Player", html.Div("Player not found."), None, "mid"
     minutes_required = float(minutes_required or default_minutes_required())
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
+    thresh = us.normalize(settings).get("stats_thresholds")
     return (
         True,
         player.get("name"),
@@ -1793,6 +1843,7 @@ def open_player(active_cell, _close, viewport, parsed, minutes_required, theme, 
             view=view,
             eval_group=eval_group,
             theme=theme,
+            threshold_overrides=thresh,
         ),
         key,
         eval_group,
@@ -1814,10 +1865,18 @@ def _lookup_modal_player(parsed, player_key_value):
     State("st-parsed", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
 def switch_player_view(
-    n_clicks, current, eval_group, player_key_value, parsed, minutes_required, theme
+    n_clicks,
+    current,
+    eval_group,
+    player_key_value,
+    parsed,
+    minutes_required,
+    theme,
+    settings,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -1829,6 +1888,7 @@ def switch_player_view(
     player = _lookup_modal_player(parsed, player_key_value)
     if not player:
         return view, html.Div("Player not found.")
+    thresh = us.normalize(settings).get("stats_thresholds")
     return (
         view,
         _player_modal_body(
@@ -1837,6 +1897,7 @@ def switch_player_view(
             view=view,
             eval_group=eval_group,
             theme=theme,
+            threshold_overrides=thresh,
         ),
     )
 
@@ -1851,10 +1912,11 @@ def switch_player_view(
     State("st-parsed", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
 def switch_player_group(
-    n_clicks, current, view, player_key_value, parsed, minutes_required, theme
+    n_clicks, current, view, player_key_value, parsed, minutes_required, theme, settings
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -1867,6 +1929,7 @@ def switch_player_group(
         return no_update, no_update
     if group == current:
         return no_update, no_update
+    thresh = us.normalize(settings).get("stats_thresholds")
     return (
         group,
         _player_modal_body(
@@ -1875,6 +1938,7 @@ def switch_player_group(
             view=_normalize_player_view(view),
             eval_group=group,
             theme=theme,
+            threshold_overrides=thresh,
         ),
     )
 
@@ -1939,7 +2003,11 @@ def download_csv(
         marked_set = set(marked or [])
         filtered = [p for p in filtered if player_key(p) in marked_set]
     table_rows = _build_rows(
-        filtered, group=pos, category=category, minutes_required=minutes_required
+        filtered,
+        group=pos,
+        category=category,
+        minutes_required=minutes_required,
+        threshold_overrides=settings.get("stats_thresholds"),
     )
     fieldnames = [c["id"] for c in _table_columns(pos, category)]
     export_rows = [{k: _strip_cell(r.get(k)) for k in fieldnames} for r in table_rows]

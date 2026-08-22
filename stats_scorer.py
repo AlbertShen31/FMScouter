@@ -467,14 +467,53 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
     return players
 
 
-def band_metric(group: str, category: str, metric_id: str, value: float | None) -> dict[str, Any]:
-    meta = metric_defs().get(metric_id) or {}
+def percentile_marks() -> list[int]:
+    """Boundary percentiles used by the benchmark tables (e.g. 20/40/60/80)."""
+    marks = benchmarks().get("percentiles") or [20, 40, 60, 80]
+    return [int(x) for x in marks]
+
+
+def resolve_thresholds(
+    group: str,
+    category: str,
+    metric_id: str,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> list[float] | None:
+    """Four cut-points for a metric; prefer settings overrides when present."""
     stored = storage_category(group, category)
-    thresholds = None
-    if stored:
-        thresholds = (
+    if not stored:
+        return None
+    root = (
+        threshold_overrides
+        if isinstance(threshold_overrides, dict) and threshold_overrides
+        else benchmarks()["benchmarks"]
+    )
+    values = ((root.get(group) or {}).get(stored) or {}).get(metric_id)
+    if not values or len(values) != 4:
+        # Fall back to built-in when an override tree is incomplete.
+        values = (
             (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
         ).get(metric_id)
+    if not values or len(values) != 4:
+        return None
+    try:
+        return [float(x) for x in values]
+    except (TypeError, ValueError):
+        return None
+
+
+def band_metric(
+    group: str,
+    category: str,
+    metric_id: str,
+    value: float | None,
+    *,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    meta = metric_defs().get(metric_id) or {}
+    thresholds = resolve_thresholds(
+        group, category, metric_id, threshold_overrides=threshold_overrides
+    )
     if value is None or not thresholds:
         return {
             "value": value,
@@ -503,12 +542,22 @@ def band_metric(group: str, category: str, metric_id: str, value: float | None) 
 
 
 def category_average_band(
-    group: str, category: str, stats: dict[str, Any] | None
+    group: str,
+    category: str,
+    stats: dict[str, Any] | None,
+    *,
+    threshold_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Mean estimated percentile across metrics in one category (missing skipped)."""
     pcts: list[float] = []
     for mid in metrics_for(group, category):
-        band = band_metric(group, category, mid, (stats or {}).get(mid))
+        band = band_metric(
+            group,
+            category,
+            mid,
+            (stats or {}).get(mid),
+            threshold_overrides=threshold_overrides,
+        )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
     if not pcts:
@@ -527,11 +576,18 @@ def category_average_band(
     }
 
 
-def overall_average_band(group: str, stats: dict[str, Any] | None) -> dict[str, Any]:
+def overall_average_band(
+    group: str,
+    stats: dict[str, Any] | None,
+    *,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Mean of the three category average percentiles (missing categories skipped)."""
     pcts: list[float] = []
     for cat in view_categories():
-        band = category_average_band(group, cat["id"], stats)
+        band = category_average_band(
+            group, cat["id"], stats, threshold_overrides=threshold_overrides
+        )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
     if not pcts:
