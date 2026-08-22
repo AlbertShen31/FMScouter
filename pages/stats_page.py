@@ -1760,7 +1760,7 @@ def sync_st_controls_from_settings(settings):
     Output("st-table", "tooltip_header"),
     Output("st-table", "style_data_conditional"),
     Output("st-table", "page_size"),
-    Output("st-table", "selected_rows"),
+    Output("st-table", "selected_row_ids"),
     Output("st-table", "sort_by"),
     Output("st-sort-memory", "data"),
     Output("st-table-caption", "children"),
@@ -1840,13 +1840,16 @@ def refresh_table(
     _sort_table_rows(rows, sort_by)
     header_tips = _header_tooltips(pos, category, thresh, settings=settings)
     col_ids = [c["id"] for c in cols]
-    table_rows = [{col: row.get(col, "—") for col in col_ids} for row in rows]
+    table_rows = []
+    for row in rows:
+        item = {col: row.get(col, "—") for col in col_ids}
+        key = str(row.get("_key") or "").strip()
+        if key:
+            item["id"] = key  # DataTable row id (stable across refreshes)
+            item["_key"] = key
+        table_rows.append(item)
     marked_set = set(marked or [])
-    selected = [
-        i
-        for i, row in enumerate(table_rows)
-        if _row_mark_key(row) in marked_set
-    ]
+    selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]
     page_size_i = int(page_size or 50)
     style_data = _table_base_styles(theme)
 
@@ -1917,6 +1920,25 @@ def refresh_table(
         else "No players marked yet."
     )
     foot_filter = foot or ""
+    # Updating `data` resets DataTable selection and re-fires selected_rows as [],
+    # which clears marks. When only marks changed, leave the row data alone.
+    if ctx.triggered_id == "st-marked":
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            selected_ids,
+            no_update,
+            no_update,
+            caption,
+            not bool(marked_set),
+            not bool(marked_set),
+            preview,
+            no_update,
+        )
     return (
         _filters_bar(
             players,
@@ -1930,7 +1952,7 @@ def refresh_table(
         header_tips,
         style_data,
         page_size_i,
-        selected,
+        selected_ids,
         sort_by,
         sort_by,
         caption,
@@ -1967,23 +1989,24 @@ def clear_marks(_n):
 
 @callback(
     Output("st-marked", "data", allow_duplicate=True),
-    Input("st-table", "selected_rows"),
+    Input("st-table", "selected_row_ids"),
     State("st-table", "data"),
     State("st-marked", "data"),
     prevent_initial_call=True,
 )
-def sync_marks(selected_rows, table_data, marked):
+def sync_marks(selected_ids, table_data, marked):
     table_data = table_data or []
-    keys_on_page = [_row_mark_key(r) for r in table_data]
+    keys_on_page = [
+        str(row.get("id") or _row_mark_key(row) or "").strip() for row in table_data
+    ]
+    keys_on_page = [key for key in keys_on_page if key]
     marked_set = set(marked or [])
-    expected = {i for i, key in enumerate(keys_on_page) if key in marked_set}
-    selected = set(selected_rows or [])
+    expected = {key for key in keys_on_page if key in marked_set}
+    selected = {str(key) for key in (selected_ids or []) if key}
     if selected == expected:
         return no_update
-    marked_set -= {key for key in keys_on_page if key}
-    for i in selected:
-        if 0 <= i < len(keys_on_page) and keys_on_page[i]:
-            marked_set.add(keys_on_page[i])
+    marked_set -= set(keys_on_page)
+    marked_set |= selected
     return sorted(marked_set)
 
 

@@ -559,6 +559,7 @@ def player_data_table(
             sort_as_null=list(sort_as_null or ("-", "—", "")),
             row_selectable="multi",
             selected_rows=[],
+            selected_row_ids=[],
             filter_action="none",
             fill_width=True,
             markdown_options={"html": True},
