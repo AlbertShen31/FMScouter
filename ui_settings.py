@@ -55,9 +55,6 @@ ALLOWED_MODAL_EXTRA_FIELDS = (
 )
 
 MODAL_EXTRA_FIELD_OPTIONS = (
-    ("ability", "Ability"),
-    ("potential", "Potential"),
-    ("world_reputation", "World reputation"),
     ("squad", "Squad"),
     ("personality", "Personality"),
     ("media_handling", "Media handling"),
@@ -121,9 +118,6 @@ DEFAULT_MODAL_IDENTITY_ORDER = [
     "avg_rating_int",
     "last_5_int",
     "form_int",
-    "ability",
-    "potential",
-    "world_reputation",
     "squad",
     "personality",
     "media_handling",
@@ -155,9 +149,6 @@ DEFAULT_MODAL_IDENTITY_SCOPES = {
     "avg_rating_int": "both",
     "last_5_int": "both",
     "form_int": "both",
-    "ability": "off",
-    "potential": "off",
-    "world_reputation": "off",
     "squad": "off",
     "personality": "off",
     "media_handling": "off",
@@ -585,16 +576,20 @@ def normalize_modal_identity_fields(raw=None, *, legacy_extra=None) -> dict[str,
         return defaults
 
     if isinstance(raw, dict) and "order" in raw:
+        from player_modal import STAR_ATTRIBUTES_BROKEN
+
         order: list[str] = []
         seen: set[str] = set()
         for key in raw.get("order") or []:
             text = str(key)
+            if text in STAR_ATTRIBUTES_BROKEN:
+                continue
             if text in allowed and text not in seen:
                 order.append(text)
                 seen.add(text)
         scopes = dict(defaults["scopes"])
         for key, scope in (raw.get("scopes") or {}).items():
-            if str(key) in allowed:
+            if str(key) in allowed and str(key) not in STAR_ATTRIBUTES_BROKEN:
                 scopes[str(key)] = _normalize_scope(scope)
         for _label, key, _section in _modal_field_catalog():
             if key not in order:
@@ -612,12 +607,16 @@ def modal_identity_scope_values(cfg: dict[str, Any]) -> list[str]:
 
 def modal_identity_fields_for(page: str, settings=None) -> list[tuple[str, str, str]]:
     """(label, key, section) rows for the player modal on one page."""
+    from player_modal import STAR_ATTRIBUTES_BROKEN
+
     cfg = normalize(settings)["modal_identity_fields"]
     page_key = "role_scores" if page == "role_scores" else "player_stats"
     labels = {key: label for label, key, section in _modal_field_catalog()}
     sections = {key: section for label, key, section in _modal_field_catalog()}
     out: list[tuple[str, str, str]] = []
     for key in cfg.get("order") or []:
+        if key in STAR_ATTRIBUTES_BROKEN:
+            continue
         scope = _normalize_scope((cfg.get("scopes") or {}).get(key))
         if scope in ("off",):
             continue

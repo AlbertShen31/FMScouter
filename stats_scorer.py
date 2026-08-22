@@ -13,6 +13,7 @@ from typing import Any
 from role_scorer import (
     IDENTITY,
     extract_attrs,
+    extract_record_fields,
     foot_strength,
     parse_positions,
     pick,
@@ -463,6 +464,7 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "int_apps": pick(row, IDENTITY["IntApps"]),
                 "yth_apps": pick(row, IDENTITY["YthApps"]),
                 "yth_gls": pick(row, IDENTITY["YthGls"]),
+                **extract_record_fields(row),
                 "minutes": minutes,
                 "pos_group": group,
                 "stats": stats,

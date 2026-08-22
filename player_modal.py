@@ -12,13 +12,12 @@ import dash_bootstrap_components as dbc
 
 from personality_ranges import attr_help, estimate_hidden_ranges, range_color
 
-# Shown on the player modal. Parsed CSV fields listed here are hidden for now
-# unless the user enables them via Settings → modal_extra_fields.
+# FM26 Moneyball export: star ratings are unreliable — never show in the UI.
+STAR_ATTRIBUTES_BROKEN = frozenset({"ability", "potential", "world_reputation"})
+
+# Optional identity fields hidden by default (personality section covers personality/media).
 PLAYER_IDENTITY_HIDDEN = frozenset(
     {
-        "world_reputation",
-        "ability",
-        "potential",
         "squad",
         "personality",
         "media_handling",
@@ -26,12 +25,24 @@ PLAYER_IDENTITY_HIDDEN = frozenset(
 )
 
 MODAL_EXTRA_FIELD_DEFS = (
-    ("Ability", "ability"),
-    ("Potential", "potential"),
-    ("World reputation", "world_reputation"),
     ("Squad", "squad"),
     ("Personality", "personality"),
     ("Media handling", "media_handling"),
+)
+
+CAREER_MODAL_FIELDS = (
+    ("Career apps", "at_apps"),
+    ("Career goals", "at_gls"),
+    ("League apps", "at_league_apps"),
+    ("League goals", "at_league_goals"),
+)
+
+DISCIPLINE_MODAL_FIELDS = (
+    ("Appearances", "appearances"),
+    ("Yellow cards", "yellow_cards"),
+    ("Red cards", "red_cards"),
+    ("Fouls made", "fouls_made"),
+    ("Fouls against", "fouls_against"),
 )
 
 PLAYER_IDENTITY_SECTIONS = [
@@ -104,7 +115,7 @@ def iter_modal_field_defs() -> list[tuple[str, str, str]]:
                     out.append((label, key, section))
                     seen.add(key)
     for label, key in MODAL_EXTRA_FIELD_DEFS:
-        if key not in seen:
+        if key not in seen and key not in STAR_ATTRIBUTES_BROKEN:
             out.append((label, key, "identity"))
             seen.add(key)
     return out
@@ -120,10 +131,16 @@ def player_identity_sections(
     field_formatters: Mapping[str, FieldFormatter] | None = None,
 ) -> list:
     """Build identity + international section nodes (no personality)."""
-    configured = list(fields or [])
+    configured = [
+        (label, key, section)
+        for label, key, section in (fields or [])
+        if key not in STAR_ATTRIBUTES_BROKEN
+    ]
     if extra_identity_fields:
         configured.extend(
-            (label, key, "identity") for label, key in extra_identity_fields
+            (label, key, "identity")
+            for label, key in extra_identity_fields
+            if key not in STAR_ATTRIBUTES_BROKEN
         )
     if not configured:
         return []
@@ -169,6 +186,49 @@ def player_identity_sections(
         else:
             sections.append(row)
     return sections
+
+
+def player_record_section(
+    player: dict,
+    title: str,
+    field_defs: Sequence[tuple[str, str]],
+    *,
+    field_styles: Mapping[str, dict] | None = None,
+    field_formatters: Mapping[str, FieldFormatter] | None = None,
+) -> html.Div | None:
+    """Career totals, discipline, etc. from the stats export."""
+    items = [
+        item
+        for item in (
+            player_identity_item(
+                label,
+                key,
+                player,
+                field_styles=field_styles,
+                field_formatters=field_formatters,
+            )
+            for label, key in field_defs
+        )
+        if item is not None
+    ]
+    if not items:
+        return None
+    return html.Div(
+        [
+            html.Div(title, className="rs-player-id-section-title"),
+            html.Div(items, className="rs-player-identity"),
+        ],
+        className="rs-player-id-section",
+    )
+
+
+def player_career_section(player: dict, **kwargs) -> html.Div | None:
+    return player_record_section(player, "Career totals", CAREER_MODAL_FIELDS, **kwargs)
+
+
+def player_discipline_section(player: dict, **kwargs) -> html.Div | None:
+    return player_record_section(player, "Discipline", DISCIPLINE_MODAL_FIELDS, **kwargs)
+
 
 def player_identity_item(
     label: str,
@@ -322,7 +382,11 @@ def player_detail_body(
     after_identity=None,
     bottom=None,
 ) -> html.Div:
-    """Shared modal body: identity → international → personality → page content."""
+    """Shared modal body: identity → international → career → discipline → personality → page content."""
+    section_kwargs = {
+        "field_styles": field_styles,
+        "field_formatters": field_formatters,
+    }
     children = [
         *player_identity_sections(
             player,
@@ -332,6 +396,8 @@ def player_detail_body(
             field_styles=field_styles,
             field_formatters=field_formatters,
         ),
+        player_career_section(player, **section_kwargs),
+        player_discipline_section(player, **section_kwargs),
         player_personality_section(player, id_prefix=id_prefix),
     ]
     if after_identity is not None:

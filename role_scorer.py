@@ -319,6 +319,22 @@ IDENTITY = {
     "YthGls": ["Yth Gls", "Youth Goals"],
 }
 
+# FM26 Moneyball export: star ratings (Ability / Potential / World Reputation) are unreliable.
+CAREER_CSV = {
+    "at_apps": ["AT Apps"],
+    "at_gls": ["AT Gls"],
+    "at_league_apps": ["AT League Apps"],
+    "at_league_goals": ["AT League Goals"],
+}
+
+DISCIPLINE_CSV = {
+    "appearances": ["Appearances"],
+    "yellow_cards": ["Yellow Cards"],
+    "red_cards": ["Red cards", "Red Cards"],
+    "fouls_made": ["Fouls Made"],
+    "fouls_against": ["Fouls Against"],
+}
+
 DEFAULT_ROLE_CODES = []
 DEFAULT_ROLES = [pc.role_code_to_id[code] for code in DEFAULT_ROLE_CODES]
 
@@ -453,6 +469,16 @@ def pick(row: dict[str, str], aliases: list[str]) -> str:
             if key.split(".")[0] == alias and row[key] not in (None, ""):
                 return str(row[key]).strip()
     return ""
+
+
+def extract_record_fields(row: dict[str, str]) -> dict[str, str]:
+    """Career totals and discipline columns from the stats export (when present)."""
+    out: dict[str, str] = {}
+    for key, aliases in {**CAREER_CSV, **DISCIPLINE_CSV}.items():
+        value = pick(row, aliases)
+        if value not in ("", "-"):
+            out[key] = value
+    return out
 
 
 def pick_all(row: dict[str, str], aliases: list[str]) -> list[str]:
@@ -860,6 +886,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "int_apps": pick(row, IDENTITY["IntApps"]),
                 "yth_apps": pick(row, IDENTITY["YthApps"]),
                 "yth_gls": pick(row, IDENTITY["YthGls"]),
+                **extract_record_fields(row),
                 "attrs": attrs,
                 "attr_hits": attr_count(row),
                 "positions": positions,
