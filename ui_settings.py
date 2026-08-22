@@ -41,8 +41,6 @@ DEFAULTS: dict[str, Any] = {
         "ok": {"bg": "#fef3c7", "fg": "#b45309", "bar": "#f59e0b"},
         "poor": {"bg": "#fee2e2", "fg": "#b91c1c", "bar": "#ef4444"},
     },
-    # Filled from stats_benchmarks.json on normalize; empty means built-in.
-    "stats_thresholds": {},
 }
 
 
@@ -151,51 +149,22 @@ def _hex_color(value, default: str) -> str:
 
 
 def default_stats_thresholds() -> dict[str, Any]:
-    """Built-in MustermannFM cut-points copied from stats_benchmarks.json."""
-    from stats_scorer import benchmarks
+    """Active MustermannFM / pack cut-points (compat helper)."""
+    import stats_threshold_packs as stp
 
-    return copy.deepcopy(benchmarks()["benchmarks"])
-
-
-def _valid_threshold_row(value) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 4:
-        return None
-    out: list[float] = []
-    for item in value:
-        try:
-            number = float(item)
-        except (TypeError, ValueError):
-            return None
-        if number != number:
-            return None
-        out.append(number)
-    return out
+    return stp.builtin_thresholds()
 
 
 def normalize_stats_thresholds(raw=None) -> dict[str, Any]:
-    """Merge optional overrides onto the built-in benchmark threshold tree."""
-    base = default_stats_thresholds()
-    if not isinstance(raw, dict) or not raw:
-        return base
-    for group, cats in base.items():
-        src_group = raw.get(group)
-        if not isinstance(src_group, dict):
-            continue
-        for cat, metrics in cats.items():
-            src_cat = src_group.get(cat)
-            if not isinstance(src_cat, dict):
-                continue
-            for metric_id in list(metrics.keys()):
-                parsed = _valid_threshold_row(src_cat.get(metric_id))
-                if parsed is not None:
-                    metrics[metric_id] = parsed
-    return base
+    import stats_threshold_packs as stp
+
+    return stp.normalize_thresholds(raw)
 
 
 def stats_thresholds_differ(tree: dict[str, Any] | None) -> bool:
-    """True when `tree` differs from the built-in benchmark cut-points."""
-    current = normalize_stats_thresholds(tree)
-    return current != default_stats_thresholds()
+    import stats_threshold_packs as stp
+
+    return stp.thresholds_differ(tree)
 
 
 def normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
@@ -249,6 +218,8 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     label = name if name is not None else raw.get("name") or (
         "Default" if pack_id == BUILTIN else pack_id
     )
+    import stats_threshold_packs as stp
+
     return {
         "id": pack_id,
         "name": label,
@@ -257,7 +228,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "foot_thresholds": normalize_foot_thresholds(raw),
         "hist_edges": edges,
         "colors": colors,
-        "stats_thresholds": normalize_stats_thresholds(raw.get("stats_thresholds")),
+        # Resolved from the separate stats-threshold pack domain (not stored here).
+        "stats_thresholds": stp.load_tree(),
+        "stats_threshold_pack_id": stp.active_id(),
     }
 
 
@@ -325,8 +298,6 @@ def _default_settings() -> dict[str, Any]:
             band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
             for band in BAND_KEYS
         }
-    if overrides.get("stats_thresholds"):
-        merged["stats_thresholds"] = overrides["stats_thresholds"]
     return normalize(merged, pack_id=BUILTIN, name="Default")
 
 
@@ -390,14 +361,25 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
             "hist_edges": settings["hist_edges"],
             "colors": settings["colors"],
         }
-        if stats_thresholds_differ(settings.get("stats_thresholds")):
-            payload["stats_thresholds"] = settings["stats_thresholds"]
         _write_json(DEFAULT_OVERRIDES_PATH, payload)
         _set_active(BUILTIN)
         return settings
     settings = normalize(raw, pack_id=current, name=raw.get("name"))
     settings["id"] = current
-    _write_json(_pack_path(current), settings)
+    # Named packs should not embed the separate stats-threshold domain.
+    to_write = {
+        key: settings[key]
+        for key in (
+            "id",
+            "name",
+            "age_tiers",
+            "bands",
+            "foot_thresholds",
+            "hist_edges",
+            "colors",
+        )
+    }
+    _write_json(_pack_path(current), to_write)
     _set_active(current)
     return settings
 
@@ -408,7 +390,19 @@ def create_pack(name: str, raw) -> dict[str, Any]:
     settings = normalize(raw, pack_id=pack_id, name=label)
     settings["id"] = pack_id
     settings["name"] = label
-    _write_json(_pack_path(pack_id), settings)
+    to_write = {
+        key: settings[key]
+        for key in (
+            "id",
+            "name",
+            "age_tiers",
+            "bands",
+            "foot_thresholds",
+            "hist_edges",
+            "colors",
+        )
+    }
+    _write_json(_pack_path(pack_id), to_write)
     _set_active(pack_id)
     return settings
 

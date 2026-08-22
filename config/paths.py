@@ -28,6 +28,11 @@ SETTINGS_PACKS_DIR = SETTINGS_DIR / "packs"
 SETTINGS_ACTIVE_PATH = SETTINGS_DIR / "active.json"
 SETTINGS_DEFAULTS_PATH = SETTINGS_DIR / "default-overrides.json"
 
+STATS_THRESHOLDS_DIR = SETTINGS_DIR / "stats_thresholds"
+STATS_THRESHOLDS_PACKS_DIR = STATS_THRESHOLDS_DIR / "packs"
+STATS_THRESHOLDS_ACTIVE_PATH = STATS_THRESHOLDS_DIR / "active.json"
+STATS_THRESHOLDS_DEFAULTS_PATH = STATS_THRESHOLDS_DIR / "default-overrides.json"
+
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"
 LEGACY_ROLE_ACTIVE_PATH = CONFIG_DIR / "active_pack.json"

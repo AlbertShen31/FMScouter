@@ -408,7 +408,9 @@ def _display_blank(value) -> str:
     return text if text and text not in ("-", "—") else "-"
 
 
-def _table_columns(group: str, category: str) -> list[dict]:
+def _table_columns(
+    group: str, category: str, threshold_overrides=None
+) -> list[dict]:
     g, cat = _resolve_category(group, category)
     cols = [
         {"name": "Name", "id": "Name"},
@@ -447,13 +449,15 @@ def _table_columns(group: str, category: str) -> list[dict]:
                 "presentation": "markdown",
             }
         )
-    for mid in metrics_for(g, cat):
+    for mid in metrics_for(g, cat, threshold_overrides):
         abbr = metric_defs()[mid]["abbr"]
         cols.append({"name": abbr, "id": abbr, "presentation": "markdown"})
     return cols
 
 
-def _header_tooltips(group: str, category: str) -> dict[str, str]:
+def _header_tooltips(
+    group: str, category: str, threshold_overrides=None
+) -> dict[str, str]:
     """Full names for abbreviated Mins / Ht / percentile / metric headers."""
     g, cat = _resolve_category(group, category)
     tips = identity_header_tooltips("Height", "Minutes")
@@ -465,7 +469,7 @@ def _header_tooltips(group: str, category: str) -> dict[str, str]:
     avg_section = _single_category_avg_section(group, cat)
     if avg_section:
         tips[CATEGORY_AVG_COL["id"]] = f"{avg_section['label']} average"
-    for mid in metrics_for(g, cat):
+    for mid in metrics_for(g, cat, threshold_overrides):
         meta = metric_defs()[mid]
         tips[meta["abbr"]] = meta["label"]
     return tips
@@ -480,7 +484,9 @@ def _build_rows(
     threshold_overrides=None,
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
-    metric_ids = [] if cat == "all" else metrics_for(g, cat)
+    metric_ids = (
+        [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
+    )
     avg_cats = _avg_category_columns(group) if cat == "all" else []
     rows = []
     for p in players:
@@ -551,7 +557,7 @@ def _build_rows(
                 row[abbr] = "—"
                 continue
             use_g, use_c = (g, cat) if group not in ("", "all") else (bg, bc)
-            if mid not in metrics_for(use_g, use_c):
+            if mid not in metrics_for(use_g, use_c, threshold_overrides):
                 row[abbr] = "—"
                 continue
             band = band_metric(
@@ -604,7 +610,7 @@ def _player_metric_sections(
     sections = []
     for cat in categories_for_group(g):
         metrics = []
-        for mid in metrics_for(g, cat["id"]):
+        for mid in metrics_for(g, cat["id"], threshold_overrides):
             band = band_metric(
                 g,
                 cat["id"],
@@ -1645,7 +1651,7 @@ def refresh_table(
         minutes_required=minutes_required,
         threshold_overrides=thresh,
     )
-    cols = _table_columns(pos, category)
+    cols = _table_columns(pos, category, thresh)
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(
         sort_by,
@@ -1655,7 +1661,7 @@ def refresh_table(
         previous=sort_memory,
     )
     _sort_table_rows(rows, sort_by)
-    header_tips = _header_tooltips(pos, category)
+    header_tips = _header_tooltips(pos, category, thresh)
     marked_set = set(marked or [])
     selected = [i for i, r in enumerate(rows) if r.get("_key") in marked_set]
     page_size_i = int(page_size or 50)
@@ -1699,7 +1705,7 @@ def refresh_table(
                 yaxis_title="Players",
             )
     else:
-        mids = metrics_for(g, category)
+        mids = metrics_for(g, category, thresh)
         if mids and filtered:
             mid = mids[0]
             values = [
@@ -2009,6 +2015,9 @@ def download_csv(
         minutes_required=minutes_required,
         threshold_overrides=settings.get("stats_thresholds"),
     )
-    fieldnames = [c["id"] for c in _table_columns(pos, category)]
+    fieldnames = [
+        c["id"]
+        for c in _table_columns(pos, category, settings.get("stats_thresholds"))
+    ]
     export_rows = [{k: _strip_cell(r.get(k)) for k in fieldnames} for r in table_rows]
     return _csv_payload(fieldnames, export_rows)

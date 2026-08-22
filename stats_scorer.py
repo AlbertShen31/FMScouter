@@ -180,12 +180,23 @@ def default_category_for_group(group: str) -> str:
     return "all"
 
 
-def metrics_for(group: str, category: str) -> list[str]:
+def metrics_for(
+    group: str,
+    category: str,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> list[str]:
     """Metrics for one position group + shared category (GK uses mapped storage keys)."""
     stored = storage_category(group, category)
     if not stored:
         return []
-    block = (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
+    root = (
+        threshold_overrides
+        if isinstance(threshold_overrides, dict) and threshold_overrides
+        else benchmarks()["benchmarks"]
+    )
+    block = (root.get(group) or {}).get(stored) or {}
+    if not block and threshold_overrides:
+        block = (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
     return list(block.keys())
 
 
@@ -550,7 +561,7 @@ def category_average_band(
 ) -> dict[str, Any]:
     """Mean estimated percentile across metrics in one category (missing skipped)."""
     pcts: list[float] = []
-    for mid in metrics_for(group, category):
+    for mid in metrics_for(group, category, threshold_overrides):
         band = band_metric(
             group,
             category,

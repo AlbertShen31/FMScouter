@@ -170,6 +170,88 @@
       "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
+    },
+    "pass_completion": {
+      "label": "Pass Completion",
+      "abbr": "Pass %",
+      "csv": [
+        "Pass Completion Ratio",
+        "Pass Completion %",
+        "Pass Completion Percentage",
+        "Ps C %"
+      ],
+      "higher_is_better": true,
+      "unit": "percent"
+    },
+    "pressures": {
+      "label": "Pressures Completed",
+      "abbr": "Pres C",
+      "csv": [
+        "Pressures Completed per 90",
+        "Pressures Completed",
+        "Pres C/90"
+      ],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "crosses_completed": {
+      "label": "Open-Play Crosses Completed",
+      "abbr": "OP Cr C",
+      "csv": [
+        "Open Play Crosses Completed per 90",
+        "OP Crosses Completed per 90",
+        "Crosses Completed per 90",
+        "OP Cr C/90"
+      ],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "shots_on_target": {
+      "label": "Shots On Target",
+      "abbr": "SOT",
+      "csv": [
+        "Shots On Target per 90",
+        "Shots on Target/90",
+        "SOT/90",
+        "Shots On Target"
+      ],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "sprints": {
+      "label": "Sprints",
+      "abbr": "Spr",
+      "csv": ["Sprints per 90", "Sprints/90", "Sprints"],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
+    },
+    "conversion_rate": {
+      "label": "Conversion Rate",
+      "abbr": "Conv %",
+      "csv": [
+        "Conversion Rate",
+        "Shot Conversion %",
+        "Conversion %",
+        "Shots Conversion %"
+      ],
+      "higher_is_better": true,
+      "unit": "percent"
+    },
+    "headers_won": {
+      "label": "Headers Won",
+      "abbr": "Hdrs W",
+      "csv": [
+        "Headers Won per 90",
+        "Hdrs W/90",
+        "Headers Won"
+      ],
+      "prefer_per90": true,
+      "higher_is_better": true,
+      "unit": "per90"
     }
   },
   "benchmarks": {

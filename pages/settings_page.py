@@ -1,4 +1,4 @@
-"""Settings page: packs, Role scores options, and Player stats thresholds."""
+"""Settings page: packs, Role scores options, and Player stats threshold packs."""
 from __future__ import annotations
 
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
@@ -11,6 +11,7 @@ from stats_scorer import (
     metric_defs,
     percentile_marks,
 )
+import stats_threshold_packs as stp
 import ui_settings as us
 
 register_page(__name__, path="/settings", name="Settings")
@@ -27,6 +28,12 @@ THRESH_GROUPS = (
     ("def", "Defenders"),
     ("mid", "Midfielders"),
     ("fwd", "Forwards"),
+)
+
+SETTINGS_SECTIONS = (
+    ("general", "General"),
+    ("role-scores", "Role scores"),
+    ("player-stats", "Player stats"),
 )
 
 
@@ -86,8 +93,18 @@ def _section_heading(title: str, blurb: str | None = None) -> html.Div:
     return html.Div(children, className="st-section-head")
 
 
+def _section_save_row(save_id: str, status_id: str) -> html.Div:
+    return html.Div(
+        [
+            dmc.Button("Save", id=save_id, className="st-section-save-btn"),
+            html.Div(id=status_id, className="st-status"),
+        ],
+        className="st-section-save-row",
+    )
+
+
 def _category_options(group: str) -> list[dict[str, str]]:
-    block = (benchmarks()["benchmarks"].get(group) or {})
+    block = benchmarks()["benchmarks"].get(group) or {}
     labels = {}
     for domain in ("outfield", "gk"):
         for cat in benchmarks()["categories"].get(domain) or []:
@@ -104,7 +121,6 @@ def _default_thresh_category(group: str) -> str:
 
 
 def _threshold_editor(group: str, category: str, tree: dict) -> html.Div:
-    """Editable cut-points for one position group + category."""
     marks = percentile_marks()
     metrics = ((tree.get(group) or {}).get(category) or {})
     if not metrics:
@@ -116,10 +132,7 @@ def _threshold_editor(group: str, category: str, tree: dict) -> html.Div:
     header = html.Div(
         [
             html.Span("Metric", className="st-thresh-metric-head"),
-            *[
-                html.Span(f"{mark}th", className="st-thresh-cut-head")
-                for mark in marks
-            ],
+            *[html.Span(f"{mark}th", className="st-thresh-cut-head") for mark in marks],
         ],
         className="st-thresh-row st-thresh-header",
     )
@@ -163,24 +176,49 @@ def _threshold_editor(group: str, category: str, tree: dict) -> html.Div:
     return html.Div([header, *rows], className="st-thresh-table")
 
 
-def _form(settings: dict) -> list:
-    bands = settings["bands"]
-    thresh = settings["stats_thresholds"]
-    group0 = "mid"
-    cat0 = _default_thresh_category(group0)
+def _settings_nav(active: str = "general") -> html.Nav:
+    links = []
+    for section_id, label in SETTINGS_SECTIONS:
+        links.append(
+            html.Button(
+                label,
+                id={"type": "st-settings-nav", "section": section_id},
+                className=(
+                    "st-settings-nav-link is-active"
+                    if section_id == active
+                    else "st-settings-nav-link"
+                ),
+                n_clicks=0,
+                type="button",
+            )
+        )
+    return html.Nav(links, className="st-settings-nav", **{"aria-label": "Settings sections"})
+
+
+def _panel(section_id: str, children: list, *, active: bool) -> html.Div:
+    return html.Div(
+        children,
+        id={"type": "st-settings-panel", "section": section_id},
+        className="st-settings-panel is-active" if active else "st-settings-panel",
+        hidden=not active,
+    )
+
+
+def _general_panel(settings: dict) -> list:
     default_note = (
-        "Default uses built-in values until you save changes; those are stored locally "
-        "and can be restored with Reset defaults."
+        "Default uses built-in values until you save Role scores changes; those are stored "
+        "locally and can be restored with Reset defaults."
         if us.is_builtin(settings.get("id"))
-        else "Named packs save to their own files."
+        else "Named Role scores packs save to their own files."
     )
     return [
-        dcc.Store(id="st-thresh-data", data=thresh),
-        dcc.Store(id="st-thresh-revision", data=0),
-        _section_heading("General", "Saved packs apply across the whole app."),
+        _section_heading(
+            "General",
+            "Manage the Role scores settings pack. Player stats percentiles use their own packs.",
+        ),
         dbc.Card(
             [
-                dbc.CardHeader("Saved settings"),
+                dbc.CardHeader("Role scores settings pack"),
                 dbc.CardBody(
                     [
                         html.P(default_note, className="text-muted"),
@@ -212,11 +250,6 @@ def _form(settings: dict) -> list:
                                             className="me-2",
                                         ),
                                         dmc.Button(
-                                            "Save",
-                                            id="st-save",
-                                            className="me-2",
-                                        ),
-                                        dmc.Button(
                                             "Reset defaults",
                                             id="st-reset",
                                             variant="light",
@@ -227,16 +260,22 @@ def _form(settings: dict) -> list:
                             ],
                             className="g-2 align-items-center",
                         ),
-                        html.Div(id="st-status", className="st-status mt-2"),
+                        _section_save_row("st-save-general", "st-status-general"),
                     ]
                 ),
             ],
-            className="mb-4",
+            className="mb-3",
         ),
+    ]
+
+
+def _role_panel(settings: dict) -> list:
+    bands = settings["bands"]
+    return [
         _section_heading(
             "Role scores",
             "Score bands, colors, histogram, set pieces, age menu, and footedness "
-            "(footedness and age are also used on Player stats).",
+            "(age and footedness are also used on Player stats).",
         ),
         dbc.Card(
             [
@@ -270,45 +309,39 @@ def _form(settings: dict) -> list:
                         dbc.Row(
                             [
                                 dbc.Col(
-                                    [
-                                        dmc.NumberInput(
-                                            id="st-band-elite",
-                                            label="Elite ≥",
-                                            min=0,
-                                            max=20,
-                                            step=0.5,
-                                            decimalScale=1,
-                                            value=bands["elite"],
-                                        ),
-                                    ],
+                                    dmc.NumberInput(
+                                        id="st-band-elite",
+                                        label="Elite ≥",
+                                        min=0,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=1,
+                                        value=bands["elite"],
+                                    ),
                                     md=3,
                                 ),
                                 dbc.Col(
-                                    [
-                                        dmc.NumberInput(
-                                            id="st-band-good",
-                                            label="Good ≥",
-                                            min=0,
-                                            max=20,
-                                            step=0.5,
-                                            decimalScale=1,
-                                            value=bands["good"],
-                                        ),
-                                    ],
+                                    dmc.NumberInput(
+                                        id="st-band-good",
+                                        label="Good ≥",
+                                        min=0,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=1,
+                                        value=bands["good"],
+                                    ),
                                     md=3,
                                 ),
                                 dbc.Col(
-                                    [
-                                        dmc.NumberInput(
-                                            id="st-band-ok",
-                                            label="OK ≥",
-                                            min=0,
-                                            max=20,
-                                            step=0.5,
-                                            decimalScale=1,
-                                            value=bands["ok"],
-                                        ),
-                                    ],
+                                    dmc.NumberInput(
+                                        id="st-band-ok",
+                                        label="OK ≥",
+                                        min=0,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=1,
+                                        value=bands["ok"],
+                                    ),
                                     md=3,
                                 ),
                                 dbc.Col(
@@ -346,9 +379,7 @@ def _form(settings: dict) -> list:
                                     id="st-foot-left",
                                     label="Left foot filter",
                                     data=rs.foot_strength_options(),
-                                    value=str(
-                                        settings["foot_thresholds"]["left"]
-                                    ),
+                                    value=str(settings["foot_thresholds"]["left"]),
                                     clearable=False,
                                     searchable=False,
                                 ),
@@ -356,9 +387,7 @@ def _form(settings: dict) -> list:
                                     id="st-foot-both",
                                     label="Both feet filter",
                                     data=rs.foot_strength_options(),
-                                    value=str(
-                                        settings["foot_thresholds"]["both"]
-                                    ),
+                                    value=str(settings["foot_thresholds"]["both"]),
                                     clearable=False,
                                     searchable=False,
                                 ),
@@ -366,9 +395,7 @@ def _form(settings: dict) -> list:
                                     id="st-foot-right",
                                     label="Right foot filter",
                                     data=rs.foot_strength_options(),
-                                    value=str(
-                                        settings["foot_thresholds"]["right"]
-                                    ),
+                                    value=str(settings["foot_thresholds"]["right"]),
                                     clearable=False,
                                     searchable=False,
                                 ),
@@ -390,10 +417,7 @@ def _form(settings: dict) -> list:
                 dbc.CardHeader("Set-piece formulas"),
                 dbc.CardBody(
                     [
-                        html.P(
-                            rs.set_piece_hint(),
-                            className="text-muted",
-                        ),
+                        html.P(rs.set_piece_hint(), className="text-muted"),
                         html.Div(
                             _set_piece_formula_lines(),
                             className="rs-set-piece-formulas st-set-piece-formulas",
@@ -446,15 +470,79 @@ def _form(settings: dict) -> list:
                             ],
                             className="st-color-list",
                         ),
+                        _section_save_row("st-save-role", "st-status-role"),
                     ]
                 ),
             ],
-            className="mb-4",
+            className="mb-3",
         ),
+    ]
+
+
+def _player_panel(thresh_pack: dict) -> list:
+    tree = thresh_pack["thresholds"]
+    group0 = "mid"
+    cat0 = _default_thresh_category(group0)
+    note = (
+        f"{stp.BUILTIN_NAME} is the shipped MustermannFM table. "
+        "Create named packs for alternate cut-points."
+        if stp.is_builtin(thresh_pack.get("id"))
+        else "Named percentile packs save to their own files."
+    )
+    return [
         _section_heading(
             "Player stats",
             "Percentile cut-points for each statistic (20th / 40th / 60th / 80th). "
             "These drive estimated percentiles on the Player stats page.",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Percentile threshold pack"),
+                dbc.CardBody(
+                    [
+                        html.P(note, className="text-muted"),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    dmc.Select(
+                                        id="st-thresh-pack",
+                                        data=stp.pack_options(),
+                                        value=thresh_pack.get("id") or stp.BUILTIN,
+                                        clearable=False,
+                                        searchable=False,
+                                    ),
+                                    md=4,
+                                ),
+                                dbc.Col(
+                                    dmc.TextInput(
+                                        id="st-thresh-new-name",
+                                        placeholder="New pack name",
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dmc.Button(
+                                            "New",
+                                            id="st-thresh-new",
+                                            variant="light",
+                                            className="me-2",
+                                        ),
+                                        dmc.Button(
+                                            "Reset to MustermannFM",
+                                            id="st-thresh-reset",
+                                            variant="light",
+                                        ),
+                                    ],
+                                    md=5,
+                                ),
+                            ],
+                            className="g-2 align-items-center",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
         ),
         dbc.Card(
             [
@@ -463,8 +551,7 @@ def _form(settings: dict) -> list:
                     [
                         html.P(
                             "Pick a position group and category, then edit the four cut-points. "
-                            "Save the pack to apply them on Player stats. "
-                            "Reset defaults restores the MustermannFM built-in tables.",
+                            "Save this section to apply the active pack on Player stats.",
                             className="text-muted",
                         ),
                         html.Div(
@@ -488,48 +575,71 @@ def _form(settings: dict) -> list:
                                     clearable=False,
                                     searchable=False,
                                 ),
-                                dmc.Button(
-                                    "Restore built-in thresholds",
-                                    id="st-thresh-reset",
-                                    variant="light",
-                                    className="st-thresh-reset-btn",
-                                ),
                             ],
                             className="st-thresh-filters",
                         ),
                         html.Div(
                             id="st-thresh-editor",
-                            children=_threshold_editor(group0, cat0, thresh),
+                            children=_threshold_editor(group0, cat0, tree),
                             className="st-thresh-editor mt-3",
                         ),
+                        _section_save_row("st-save-thresh", "st-status-thresh"),
                     ]
                 ),
             ],
-            className="mb-4",
+            className="mb-3",
         ),
     ]
 
 
 def layout():
+    settings = us.load()
+    thresh_pack = stp.load()
     return dbc.Container(
         [
             html.H1("Settings"),
             html.P(
-                "Options are grouped by page. Shared controls sit under the page that uses them most. "
-                "Save named packs to switch between setups.",
+                "Use the side nav to jump between sections. Each section has its own Save. "
+                "Player stats percentiles are separate named packs "
+                f"(built-in: {stp.BUILTIN_NAME}).",
                 className="text-muted",
             ),
-            *_form(us.load()),
+            dcc.Store(id="st-settings-section", data="general"),
+            dcc.Store(id="st-thresh-data", data=thresh_pack["thresholds"]),
+            dcc.Store(id="st-thresh-revision", data=0),
+            html.Div(
+                [
+                    html.Aside(
+                        [
+                            html.Div("Sections", className="st-settings-nav-title"),
+                            _settings_nav("general"),
+                        ],
+                        className="st-settings-sidebar",
+                    ),
+                    html.Div(
+                        [
+                            _panel("general", _general_panel(settings), active=True),
+                            _panel("role-scores", _role_panel(settings), active=False),
+                            _panel(
+                                "player-stats",
+                                _player_panel(thresh_pack),
+                                active=False,
+                            ),
+                        ],
+                        className="st-settings-main",
+                    ),
+                ],
+                className="st-settings-layout",
+            ),
         ],
         className="rs-page st-page",
         fluid=True,
     )
 
 
-def _colors_from_state(color_values) -> dict[str, dict[str, str]]:
+def _colors_from_state(color_values, specs) -> dict[str, dict[str, str]]:
     color_map = {band: {} for band in us.BAND_KEYS}
-    specs = ctx.states_list[-1] if ctx.states_list else []
-    for spec, value in zip(specs, color_values or []):
+    for spec, value in zip(specs or [], color_values or []):
         ident = spec["id"]
         color_map[ident["band"]][ident["part"]] = value
     return color_map
@@ -542,13 +652,9 @@ def _color_values_for(settings: dict, specs) -> list[str]:
     ]
 
 
-def _form_values(settings: dict, specs) -> tuple:
+def _role_form_values(settings: dict, specs) -> tuple:
     feet = settings["foot_thresholds"]
     return (
-        settings,
-        us.pack_options(),
-        settings["id"],
-        False,
         us.format_list(settings["age_tiers"], kind="age"),
         settings["bands"]["elite"],
         settings["bands"]["good"],
@@ -558,8 +664,38 @@ def _form_values(settings: dict, specs) -> tuple:
         str(feet["right"]),
         us.format_list(settings["hist_edges"]),
         _color_values_for(settings, specs),
-        settings["stats_thresholds"],
     )
+
+
+def _refresh_ui_settings(settings: dict) -> dict:
+    """Re-attach the active stats-threshold tree after a pack change."""
+    return us.normalize(settings)
+
+
+@callback(
+    Output("st-settings-section", "data"),
+    Output({"type": "st-settings-nav", "section": ALL}, "className"),
+    Output({"type": "st-settings-panel", "section": ALL}, "hidden"),
+    Output({"type": "st-settings-panel", "section": ALL}, "className"),
+    Input({"type": "st-settings-nav", "section": ALL}, "n_clicks"),
+    State("st-settings-section", "data"),
+    prevent_initial_call=True,
+)
+def switch_settings_section(n_clicks, current):
+    if not ctx.triggered_id or not any(n_clicks or []):
+        return no_update, no_update, no_update, no_update
+    section = ctx.triggered_id.get("section") or current or "general"
+    ids = [sid for sid, _label in SETTINGS_SECTIONS]
+    nav_classes = [
+        "st-settings-nav-link is-active" if sid == section else "st-settings-nav-link"
+        for sid in ids
+    ]
+    hidden = [sid != section for sid in ids]
+    panel_classes = [
+        "st-settings-panel is-active" if sid == section else "st-settings-panel"
+        for sid in ids
+    ]
+    return section, nav_classes, hidden, panel_classes
 
 
 @callback(
@@ -613,7 +749,7 @@ def sync_thresh_categories(group, current):
 def render_thresh_editor(group, category, _revision, tree):
     group = group or "mid"
     category = category or _default_thresh_category(group)
-    tree = us.normalize_stats_thresholds(tree)
+    tree = stp.normalize_thresholds(tree)
     return _threshold_editor(group, category, tree)
 
 
@@ -626,7 +762,7 @@ def render_thresh_editor(group, category, _revision, tree):
 def update_thresh_draft(values, tree):
     if not ctx.inputs_list or not ctx.inputs_list[0]:
         return no_update
-    tree = us.normalize_stats_thresholds(tree)
+    tree = stp.normalize_thresholds(tree)
     changed = False
     for spec, value in zip(ctx.inputs_list[0], values or []):
         ident = spec["id"]
@@ -651,61 +787,8 @@ def update_thresh_draft(values, tree):
     return tree if changed else no_update
 
 
-@callback(
-    Output("st-thresh-data", "data", allow_duplicate=True),
-    Output("st-thresh-revision", "data", allow_duplicate=True),
-    Input("st-thresh-reset", "n_clicks"),
-    State("st-thresh-revision", "data"),
-    prevent_initial_call=True,
-)
-def reset_thresh_builtin(n_clicks, revision):
-    if not n_clicks:
-        return no_update, no_update
-    return us.default_stats_thresholds(), int(revision or 0) + 1
-
-
-@callback(
-    Output("ui-settings", "data"),
-    Output("st-pack", "data"),
-    Output("st-pack", "value"),
-    Output("st-save", "disabled"),
-    Output("st-age-tiers", "value"),
-    Output("st-band-elite", "value"),
-    Output("st-band-good", "value"),
-    Output("st-band-ok", "value"),
-    Output("st-foot-left", "value"),
-    Output("st-foot-both", "value"),
-    Output("st-foot-right", "value"),
-    Output("st-hist-edges", "value"),
-    Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
-    Output("st-thresh-data", "data"),
-    Output("st-thresh-revision", "data"),
-    Output("st-status", "children"),
-    Output("st-new-name", "value"),
-    Input("st-pack", "value"),
-    Input("st-save", "n_clicks"),
-    Input("st-new", "n_clicks"),
-    Input("st-reset", "n_clicks"),
-    State("st-new-name", "value"),
-    State("st-age-tiers", "value"),
-    State("st-band-elite", "value"),
-    State("st-band-good", "value"),
-    State("st-band-ok", "value"),
-    State("st-foot-left", "value"),
-    State("st-foot-both", "value"),
-    State("st-foot-right", "value"),
-    State("st-hist-edges", "value"),
-    State("st-thresh-data", "data"),
-    State("st-thresh-revision", "data"),
-    State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
-    prevent_initial_call=True,
-)
-def handle_settings(
+def _ui_draft_from_state(
     pack_id,
-    save_n,
-    new_n,
-    reset_n,
-    new_name,
     ages,
     elite,
     good,
@@ -714,15 +797,10 @@ def handle_settings(
     foot_both,
     foot_right,
     edges,
-    thresh_data,
-    thresh_revision,
     color_values,
-):
-    triggered = ctx.triggered_id
-    if not triggered:
-        return (no_update,) * 17
-    specs = ctx.states_list[-1] if ctx.states_list else []
-    draft = {
+    color_specs,
+) -> dict:
+    return {
         "id": pack_id,
         "age_tiers": ages,
         "bands": {"elite": elite, "good": good, "ok": ok},
@@ -732,55 +810,243 @@ def handle_settings(
             "right": foot_right,
         },
         "hist_edges": edges,
-        "colors": _colors_from_state(color_values),
-        "stats_thresholds": thresh_data,
+        "colors": _colors_from_state(color_values, color_specs),
     }
-    status = ""
+
+
+@callback(
+    Output("ui-settings", "data"),
+    Output("st-pack", "data"),
+    Output("st-pack", "value"),
+    Output("st-age-tiers", "value"),
+    Output("st-band-elite", "value"),
+    Output("st-band-good", "value"),
+    Output("st-band-ok", "value"),
+    Output("st-foot-left", "value"),
+    Output("st-foot-both", "value"),
+    Output("st-foot-right", "value"),
+    Output("st-hist-edges", "value"),
+    Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    Output("st-status-general", "children"),
+    Output("st-status-role", "children"),
+    Output("st-new-name", "value"),
+    Input("st-pack", "value"),
+    Input("st-new", "n_clicks"),
+    Input("st-reset", "n_clicks"),
+    Input("st-save-general", "n_clicks"),
+    Input("st-save-role", "n_clicks"),
+    State("st-new-name", "value"),
+    State("st-age-tiers", "value"),
+    State("st-band-elite", "value"),
+    State("st-band-good", "value"),
+    State("st-band-ok", "value"),
+    State("st-foot-left", "value"),
+    State("st-foot-both", "value"),
+    State("st-foot-right", "value"),
+    State("st-hist-edges", "value"),
+    State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    prevent_initial_call=True,
+)
+def handle_ui_settings(
+    pack_id,
+    new_n,
+    reset_n,
+    save_general_n,
+    save_role_n,
+    new_name,
+    ages,
+    elite,
+    good,
+    ok,
+    foot_left,
+    foot_both,
+    foot_right,
+    edges,
+    color_values,
+):
+    triggered = ctx.triggered_id
+    if not triggered:
+        return (no_update,) * 15
+    color_specs = ctx.states_list[-1] if ctx.states_list else []
+    draft = _ui_draft_from_state(
+        pack_id,
+        ages,
+        elite,
+        good,
+        ok,
+        foot_left,
+        foot_both,
+        foot_right,
+        edges,
+        color_values,
+        color_specs,
+    )
+    status_general = no_update
+    status_role = no_update
     clear_name = no_update
-    update_pack = True
-    bump_revision = False
+    update_pack_options = True
+
     if triggered == "st-pack":
         settings = us.load(pack_id)
-        status = f"Loaded {settings['name']}."
-        bump_revision = True
+        status_general = f"Loaded {settings['name']}."
     elif triggered == "st-reset":
         if pack_id == us.BUILTIN:
             us.clear_default_overrides()
             settings = us.load(us.BUILTIN)
-            status = "Default restored to built-in values."
+            status_general = "Default restored to built-in values."
         else:
             settings = us.normalize(us.DEFAULTS, pack_id=pack_id, name=None)
             current = us.read_pack(pack_id)
             settings["id"] = current["id"]
             settings["name"] = current["name"]
-            status = "Form reset to built-in defaults. Save to keep them on this pack."
-        update_pack = False
-        bump_revision = True
+            status_general = (
+                "Form reset to built-in defaults. Save Role scores to keep them on this pack."
+            )
+        update_pack_options = False
     elif triggered == "st-new":
         label = str(new_name or "").strip()
         if not label:
-            return (no_update,) * 15 + ("Enter a name to create a new settings file.", no_update)
+            return (
+                (no_update,) * 12
+                + ("Enter a name to create a new settings file.", no_update, no_update)
+            )
         settings = us.create_pack(label, draft)
-        status = f"Created {settings['name']}."
+        status_general = f"Created {settings['name']}."
         clear_name = ""
-        bump_revision = True
-    elif triggered == "st-save":
+    elif triggered == "st-save-general":
+        # Pack metadata / persist current Role scores draft onto the active pack.
         if us.is_builtin(pack_id):
             settings = us.save(draft, pack_id)
-            status = f"Saved {settings['name']} overrides."
-            update_pack = True
+            status_general = f"Saved {settings['name']} overrides."
         else:
             current = us.read_pack(pack_id)
             draft["name"] = current["name"]
             settings = us.save(draft, pack_id)
-            status = f"Saved {settings['name']}."
-            update_pack = False
-        bump_revision = True
+            status_general = f"Saved {settings['name']}."
+            update_pack_options = False
+    elif triggered == "st-save-role":
+        if us.is_builtin(pack_id):
+            settings = us.save(draft, pack_id)
+            status_role = f"Saved Role scores to {settings['name']}."
+        else:
+            current = us.read_pack(pack_id)
+            draft["name"] = current["name"]
+            settings = us.save(draft, pack_id)
+            status_role = f"Saved Role scores to {settings['name']}."
+            update_pack_options = False
     else:
-        return (no_update,) * 17
-    values = list(_form_values(settings, specs))
-    if not update_pack:
-        values[1] = no_update
-        values[2] = no_update
-    revision = int(thresh_revision or 0) + (1 if bump_revision else 0)
-    return (*values, revision, status, clear_name)
+        return (no_update,) * 15
+
+    settings = _refresh_ui_settings(settings)
+    role_values = _role_form_values(settings, color_specs)
+    pack_options = us.pack_options() if update_pack_options else no_update
+    pack_value = settings["id"] if update_pack_options else no_update
+    return (
+        settings,
+        pack_options,
+        pack_value,
+        *role_values,
+        status_general,
+        status_role,
+        clear_name,
+    )
+
+
+@callback(
+    Output("ui-settings", "data", allow_duplicate=True),
+    Output("st-thresh-pack", "data"),
+    Output("st-thresh-pack", "value"),
+    Output("st-thresh-data", "data"),
+    Output("st-thresh-revision", "data"),
+    Output("st-status-thresh", "children"),
+    Output("st-thresh-new-name", "value"),
+    Input("st-thresh-pack", "value"),
+    Input("st-thresh-new", "n_clicks"),
+    Input("st-thresh-reset", "n_clicks"),
+    Input("st-save-thresh", "n_clicks"),
+    State("st-thresh-new-name", "value"),
+    State("st-thresh-data", "data"),
+    State("st-thresh-revision", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def handle_thresh_packs(
+    pack_id,
+    new_n,
+    reset_n,
+    save_n,
+    new_name,
+    thresh_data,
+    revision,
+    ui_settings,
+):
+    triggered = ctx.triggered_id
+    if not triggered:
+        return (no_update,) * 7
+    draft = {"id": pack_id, "thresholds": thresh_data}
+    clear_name = no_update
+    update_options = True
+    bump = True
+
+    if triggered == "st-thresh-pack":
+        pack = stp.load(pack_id)
+        status = f"Loaded {pack['name']}."
+    elif triggered == "st-thresh-reset":
+        if pack_id == stp.BUILTIN:
+            stp.clear_default_overrides()
+            pack = stp.load(stp.BUILTIN)
+            status = f"Restored {stp.BUILTIN_NAME}."
+        else:
+            pack = stp.normalize_pack(
+                {"thresholds": stp.builtin_thresholds()},
+                pack_id=pack_id,
+                name=None,
+            )
+            current = stp.read_pack(pack_id)
+            pack["id"] = current["id"]
+            pack["name"] = current["name"]
+            status = (
+                f"Form reset to {stp.BUILTIN_NAME}. Save this section to keep it on the pack."
+            )
+        update_options = False
+    elif triggered == "st-thresh-new":
+        label = str(new_name or "").strip()
+        if not label:
+            return (
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                "Enter a name to create a new percentile pack.",
+                no_update,
+            )
+        pack = stp.create_pack(label, draft)
+        status = f"Created {pack['name']}."
+        clear_name = ""
+    elif triggered == "st-save-thresh":
+        if stp.is_builtin(pack_id):
+            pack = stp.save(draft, pack_id)
+            status = f"Saved {pack['name']}."
+        else:
+            current = stp.read_pack(pack_id)
+            draft["name"] = current["name"]
+            pack = stp.save(draft, pack_id)
+            status = f"Saved {pack['name']}."
+            update_options = False
+    else:
+        return (no_update,) * 7
+
+    # Refresh ui-settings so Player stats picks up the active tree.
+    settings = us.normalize(ui_settings or {})
+    settings["stats_thresholds"] = pack["thresholds"]
+    settings["stats_threshold_pack_id"] = pack["id"]
+    return (
+        settings,
+        stp.pack_options() if update_options else no_update,
+        pack["id"] if update_options else no_update,
+        pack["thresholds"],
+        int(revision or 0) + (1 if bump else 0),
+        status,
+        clear_name,
+    )
