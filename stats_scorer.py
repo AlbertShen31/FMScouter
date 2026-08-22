@@ -308,6 +308,23 @@ def minutes_color(status: str) -> str:
     }.get(status, "rgb(255, 92, 92)")
 
 
+def has_scorable_minutes(minutes: Any) -> bool:
+    """True when the player has playing time that can support percentile scores."""
+    if minutes is None:
+        return False
+    try:
+        return float(minutes) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def scoring_stats(player: dict[str, Any] | None) -> dict[str, Any]:
+    """Stats used for banding; empty when minutes are missing or zero."""
+    if not player or not has_scorable_minutes(player.get("minutes")):
+        return {}
+    return player.get("stats") or {}
+
+
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
     meta = metric_defs()[metric_id]
     aliases = list(meta.get("csv") or [])
@@ -398,8 +415,9 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
         minutes = parse_number(pick(row, ["Minutes"]))
         group = classify_best_pos(best_pos, position)
         stats: dict[str, float | None] = {}
-        for metric_id in metric_defs():
-            stats[metric_id] = _pick_metric_raw(row, metric_id)
+        if has_scorable_minutes(minutes):
+            for metric_id in metric_defs():
+                stats[metric_id] = _pick_metric_raw(row, metric_id)
         players.append(
             {
                 "name": name,
@@ -602,12 +620,11 @@ def format_stat_export_rows(
                 "Minutes Status": status,
             }
             use_g = "gk" if is_gk_group(g) else g
+            stats = scoring_stats(p)
             for cat in cats:
-                band = category_average_band(use_g, cat["id"], p.get("stats") or {})
+                band = category_average_band(use_g, cat["id"], stats)
                 row[cat["label"]] = band["display"]
-            row["Overall average"] = overall_average_band(
-                use_g, p.get("stats") or {}
-            )["display"]
+            row["Overall average"] = overall_average_band(use_g, stats)["display"]
             rows.append(row)
         return fieldnames, rows
 
@@ -627,6 +644,7 @@ def format_stat_export_rows(
             "Pos Group",
             "Minutes",
             "Minutes Status",
+            "Category average",
         ]
         for mid in metric_ids:
             fieldnames.append(metric_defs()[mid]["abbr"])
@@ -649,12 +667,16 @@ def format_stat_export_rows(
                 "Minutes Status": status,
             }
             use_g = "gk" if is_gk_group(g) else g
+            stats = scoring_stats(p)
+            row["Category average"] = category_average_band(
+                use_g, category, stats
+            )["display"]
             for mid in metric_ids:
                 label = metric_defs()[mid]["abbr"]
                 if mid not in metrics_for(use_g, category):
                     row[label] = "—"
                     continue
-                band = band_metric(use_g, category, mid, (p.get("stats") or {}).get(mid))
+                band = band_metric(use_g, category, mid, stats.get(mid))
                 row[label] = band["display"]
             rows.append(row)
         return fieldnames, rows
@@ -672,6 +694,7 @@ def format_stat_export_rows(
         "Injury",
         "Minutes",
         "Minutes Status",
+        "Category average",
     ]
     for mid in metric_ids:
         fieldnames.append(metric_defs()[mid]["abbr"])
@@ -691,8 +714,12 @@ def format_stat_export_rows(
             "Minutes": p.get("minutes"),
             "Minutes Status": status,
         }
+        stats = scoring_stats(p)
+        row["Category average"] = category_average_band(
+            group, category, stats
+        )["display"]
         for mid in metric_ids:
-            band = band_metric(group, category, mid, (p.get("stats") or {}).get(mid))
+            band = band_metric(group, category, mid, stats.get(mid))
             row[metric_defs()[mid]["abbr"]] = band["display"]
         rows.append(row)
     return fieldnames, rows

@@ -65,17 +65,28 @@ from stats_scorer import (
     passes_minutes_filter,
     percentile_color,
     player_key,
+    scoring_stats,
     view_categories,
 )
 import ui_settings as us
 
 register_page(__name__, path="/stats", name="Player stats")
 
-AVG_PERCENTILE_COLS = ("overall", "defending", "final_third", "possession")
+AVG_PERCENTILE_COLS = (
+    "overall",
+    "category_avg",
+    "defending",
+    "final_third",
+    "possession",
+)
 OVERALL_COL = {
     "id": "overall",
     "label": "Overall average",
     "abbr": "Ovr",
+}
+CATEGORY_AVG_COL = {
+    "id": "category_avg",
+    "abbr": "% AVG",
 }
 
 BLANK_FIG = go.Figure()
@@ -173,16 +184,71 @@ def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
     return (0, number)
 
 
+def _is_percentile_sort_column(column_id: str) -> bool:
+    """Avg percentile cols + metric cells (colored rates / %)."""
+    if not column_id or column_id in TABLE_TEXT_COLS:
+        return False
+    if column_id in ("Feet", "Rec", "Minutes", "Age", "Height"):
+        return False
+    return True
+
+
 def _sort_table_rows(rows: list[dict], sort_by) -> None:
     if not sort_by:
         return
     item = sort_by[0]
     column = item.get("column_id")
     reverse = item.get("direction") == "desc"
+    if _is_percentile_sort_column(column):
+        # Encode direction in the key so missing (—) values always sort last.
+        def pct_key(row, *, _col=column, _desc=reverse):
+            number = _cell_number(row.get(_col))
+            if number != number:  # NaN / blank
+                return (1, 0.0)
+            return (0, -number if _desc else number)
+
+        rows.sort(key=pct_key)
+        return
     rows.sort(
         key=lambda row: _column_sort_key(column, row.get(column), row),
         reverse=reverse,
     )
+
+
+def _default_sort_by(category: str) -> list[dict]:
+    """All → overall desc; single category → that category's avg desc."""
+    column = OVERALL_COL["id"] if category == "all" else CATEGORY_AVG_COL["id"]
+    return [{"column_id": column, "direction": "desc"}]
+
+
+def _effective_sort_by(sort_by, category: str, column_ids: set[str]) -> list[dict]:
+    if sort_by:
+        column = (sort_by[0] or {}).get("column_id")
+        if column in column_ids:
+            return list(sort_by)
+    return _default_sort_by(category)
+
+
+def _coerce_sort_by(
+    sort_by,
+    category: str,
+    column_ids: set[str],
+    *,
+    triggered_id,
+    previous,
+) -> list[dict]:
+    """Keep a sensible sort; map DataTable's desc→clear click to asc on that column."""
+    default = _default_sort_by(category)
+    if triggered_id == "st-category":
+        return default
+    if not sort_by:
+        if triggered_id == "st-table":
+            prev = (previous or [None])[0] or {}
+            col = prev.get("column_id")
+            if col in column_ids:
+                return [{"column_id": col, "direction": "asc"}]
+        return default
+    return _effective_sort_by(sort_by, category, column_ids)
 
 
 def _resolve_category(group: str, category: str) -> tuple[str, str]:
@@ -276,9 +342,9 @@ def _stats_metric_styles() -> list[dict]:
             {
                 "if": {"column_id": col_id},
                 "textAlign": "center",
-                "minWidth": "64px",
-                "width": "72px",
-                "maxWidth": "80px",
+                "minWidth": "72px" if col_id == "category_avg" else "64px",
+                "width": "80px" if col_id == "category_avg" else "72px",
+                "maxWidth": "88px" if col_id == "category_avg" else "80px",
                 "fontVariantNumeric": "tabular-nums",
             }
             for col_id in AVG_PERCENTILE_COLS
@@ -299,9 +365,9 @@ def _avg_header_styles() -> list[dict]:
         {
             "if": {"column_id": col_id},
             "textAlign": "center",
-            "minWidth": "64px",
-            "width": "72px",
-            "maxWidth": "80px",
+            "minWidth": "72px" if col_id == "category_avg" else "64px",
+            "width": "80px" if col_id == "category_avg" else "72px",
+            "maxWidth": "88px" if col_id == "category_avg" else "80px",
             "whiteSpace": "pre-line",
             "overflow": "visible",
             "lineHeight": "1.2",
@@ -314,6 +380,21 @@ def _avg_header_styles() -> list[dict]:
 def _avg_category_columns(group: str) -> list[dict[str, str]]:
     """All-category average columns; Final third shows both outfield + GK names."""
     return labeled_view_categories(group=group, dual_final_third=True)
+
+
+def _single_category_avg_section(group: str, category: str) -> dict[str, str] | None:
+    """Labeled section for the selected category's average column (non-All)."""
+    _g, cat = _resolve_category(group, category)
+    if cat == "all":
+        return None
+    for section in labeled_view_categories(group=group, dual_final_third=True):
+        if section["id"] == cat:
+            return section
+    return {
+        "id": cat,
+        "label": category_label(cat, group=group),
+        "abbr": CATEGORY_AVG_COL["abbr"],
+    }
 
 
 def _avg_header_name(section: dict[str, str]) -> str:
@@ -357,6 +438,15 @@ def _table_columns(group: str, category: str) -> list[dict]:
                 }
             )
         return cols
+    avg_section = _single_category_avg_section(group, cat)
+    if avg_section:
+        cols.append(
+            {
+                "name": CATEGORY_AVG_COL["abbr"],
+                "id": CATEGORY_AVG_COL["id"],
+                "presentation": "markdown",
+            }
+        )
     for mid in metrics_for(g, cat):
         abbr = metric_defs()[mid]["abbr"]
         cols.append({"name": abbr, "id": abbr, "presentation": "markdown"})
@@ -372,6 +462,9 @@ def _header_tooltips(group: str, category: str) -> dict[str, str]:
         for section in _avg_category_columns(group):
             tips[section["id"]] = section["label"]
         return tips
+    avg_section = _single_category_avg_section(group, cat)
+    if avg_section:
+        tips[CATEGORY_AVG_COL["id"]] = f"{avg_section['label']} average"
     for mid in metrics_for(g, cat):
         meta = metric_defs()[mid]
         tips[meta["abbr"]] = meta["label"]
@@ -404,7 +497,7 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
             "_key": player_key(p),
         }
         row["Feet"] = feet_cell(row)
-        stats = p.get("stats") or {}
+        stats = scoring_stats(p)
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
             if bg is None or bc is None:
@@ -426,6 +519,16 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
                 row[col_id] = _percentile_cell(band)
             rows.append(row)
             continue
+        # Single category: avg percentile, then individual metrics.
+        if bg is None or bc is None:
+            row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
+                {"percentile": None, "color": None}
+            )
+        else:
+            use_g, use_c = (g, cat) if group not in ("", "all") else (bg, bc)
+            row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
+                category_average_band(use_g, use_c, stats)
+            )
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
             if bg is None or bc is None:
@@ -470,11 +573,12 @@ def _player_metric_sections(player: dict, eval_group: str | None = None) -> list
     g = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
+    stats = scoring_stats(player)
     sections = []
     for cat in categories_for_group(g):
         metrics = []
         for mid in metrics_for(g, cat["id"]):
-            band = band_metric(g, cat["id"], mid, (player.get("stats") or {}).get(mid))
+            band = band_metric(g, cat["id"], mid, stats.get(mid))
             meta = metric_defs()[mid]
             metrics.append(
                 {
@@ -1070,6 +1174,7 @@ def layout(**_kwargs):
             dcc.Store(id="st-category", data="all"),
             dcc.Store(id="st-foot", data=""),
             dcc.Store(id="st-marked", data=[]),
+            dcc.Store(id="st-sort-memory", data=None),
             dcc.Store(id="st-player-key", data=None),
             dcc.Store(id="st-player-view", data="bars", storage_type="local"),
             dcc.Store(id="st-player-group", data="mid"),
@@ -1442,6 +1547,8 @@ def apply_age_settings(settings, age):
     Output("st-table", "style_data_conditional"),
     Output("st-table", "page_size"),
     Output("st-table", "selected_rows"),
+    Output("st-table", "sort_by"),
+    Output("st-sort-memory", "data"),
     Output("st-table-caption", "children"),
     Output("st-clear-marks", "disabled"),
     Output("st-marked-csv-btn", "disabled"),
@@ -1460,6 +1567,7 @@ def apply_age_settings(settings, age):
     Input("st-table", "sort_by"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
+    State("st-sort-memory", "data"),
 )
 def refresh_table(
     parsed,
@@ -1475,6 +1583,7 @@ def refresh_table(
     sort_by,
     settings,
     theme,
+    sort_memory,
 ):
     players = (parsed or {}).get("players") or []
     pos = pos or "all"
@@ -1495,8 +1604,16 @@ def refresh_table(
     rows = _build_rows(
         filtered, group=pos, category=category, minutes_required=minutes_required
     )
-    _sort_table_rows(rows, sort_by)
     cols = _table_columns(pos, category)
+    col_ids = {c["id"] for c in cols}
+    sort_by = _coerce_sort_by(
+        sort_by,
+        category,
+        col_ids,
+        triggered_id=ctx.triggered_id,
+        previous=sort_memory,
+    )
+    _sort_table_rows(rows, sort_by)
     header_tips = _header_tooltips(pos, category)
     marked_set = set(marked or [])
     selected = [i for i, r in enumerate(rows) if r.get("_key") in marked_set]
@@ -1518,7 +1635,7 @@ def refresh_table(
                 if bg is None or bc is None:
                     continue
                 use_g = g if pos not in ("", "all") else bg
-                band = category_average_band(use_g, first["id"], p.get("stats") or {})
+                band = category_average_band(use_g, first["id"], scoring_stats(p))
                 if band.get("percentile") is not None:
                     values.append(float(band["percentile"]))
         if values and first:
@@ -1542,7 +1659,7 @@ def refresh_table(
             values = [
                 float(v)
                 for p in filtered
-                if (v := (p.get("stats") or {}).get(mid)) is not None
+                if (v := scoring_stats(p).get(mid)) is not None
             ]
             if values:
                 fig = go.Figure(
@@ -1579,6 +1696,8 @@ def refresh_table(
         style_data,
         page_size_i,
         selected,
+        sort_by,
+        sort_by,
         caption,
         not bool(marked_set),
         not bool(marked_set),
