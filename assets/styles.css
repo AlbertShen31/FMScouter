@@ -4017,15 +4017,110 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="Age"] {
-    min-width: 52px !important;
-    width: 56px !important;
-    max-width: 64px !important;
+    min-width: 72px !important;
+    width: 76px !important;
+    max-width: 88px !important;
+    text-align: center !important;
+    overflow: visible !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
+#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
     text-align: center !important;
 }
 
-#st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]),
-#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) {
+#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .dash-cell-value,
+#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) p,
+#st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) span {
     text-align: center !important;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]) .column-header-name {
+    text-align: center !important;
+    width: 100%;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
+    min-width: 68px !important;
+    width: 72px !important;
+    max-width: 84px !important;
+    text-align: center !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Rec"] {
+    min-width: 56px !important;
+    width: 60px !important;
+    max-width: 72px !important;
+    text-align: center !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Injury"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] {
+    min-width: 88px !important;
+    max-width: 160px !important;
+    text-align: left !important;
+}
+
+/* Uniform All-category percentile columns; wrap headers without clipping words. */
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="defending"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="final_third"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="possession"] {
+    min-width: 118px !important;
+    width: 124px !important;
+    max-width: 132px !important;
+    text-align: center !important;
+    overflow: visible !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"] {
+    white-space: pre-line !important;
+    line-height: 1.2 !important;
+    height: auto !important;
+    min-height: 52px !important;
+    vertical-align: middle !important;
+    padding-left: 10px !important;
+    padding-right: 14px !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"] .column-header-name,
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"] .column-header-name,
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"] .column-header-name {
+    white-space: pre-line !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: break-word !important;
+    word-break: normal !important;
+    line-height: 1.2 !important;
+    display: block !important;
+    max-width: 100%;
+}
+
+#st-table .dash-spreadsheet-inner td[data-dash-column="defending"] .st-pct-cell,
+#st-table .dash-spreadsheet-inner td[data-dash-column="final_third"] .st-pct-cell,
+#st-table .dash-spreadsheet-inner td[data-dash-column="possession"] .st-pct-cell {
+    display: inline-block;
+    font-weight: 750;
+    letter-spacing: 0.01em;
+}
+
+#st-table .dash-spreadsheet-inner td .st-pct-cell.is-missing {
+    color: var(--app-muted);
+    font-weight: 500;
 }
 
 .st-filter-stack {
@@ -4083,13 +4178,15 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 }
 
 .st-minutes-fields .mantine-Select-root {
-    flex: 1 1 auto;
+    flex: 0 1 9.75rem;
+    max-width: 9.75rem;
     min-width: 0;
 }
 
 .st-minutes-fields .mantine-NumberInput-root {
-    flex: 0 0 5.75rem;
-    width: 5.75rem;
+    flex: 1 1 auto;
+    min-width: 7rem;
+    width: auto;
 }
 
 .st-page .rs-hist-toggle {

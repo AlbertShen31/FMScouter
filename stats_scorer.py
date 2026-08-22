@@ -146,8 +146,7 @@ def categories_for_group(group: str) -> list[dict[str, str]]:
 
 
 def default_category_for_group(group: str) -> str:
-    cats = view_categories()
-    return cats[0]["id"] if cats else "defending"
+    return "all"
 
 
 def metrics_for(group: str, category: str) -> list[str]:
@@ -499,8 +498,13 @@ def format_stat_export_rows(
         fieldnames = [
             "Name",
             "Age",
-            "Club",
+            "Height",
             "Position",
+            "Left Foot",
+            "Right Foot",
+            "Club",
+            "Rec",
+            "Injury",
             "Pos Group",
             "Minutes",
             "Minutes Status",
@@ -516,8 +520,13 @@ def format_stat_export_rows(
             row = {
                 "Name": p["name"],
                 "Age": p.get("age"),
-                "Club": p.get("club"),
+                "Height": p.get("height") or "-",
                 "Position": p.get("position"),
+                "Left Foot": p.get("left_foot") or "-",
+                "Right Foot": p.get("right_foot") or "-",
+                "Club": p.get("club"),
+                "Rec": p.get("rec") or "-",
+                "Injury": p.get("injury") or "-",
                 "Pos Group": g,
                 "Minutes": p.get("minutes"),
                 "Minutes Status": status,
@@ -535,8 +544,13 @@ def format_stat_export_rows(
         fieldnames = [
             "Name",
             "Age",
-            "Club",
+            "Height",
             "Position",
+            "Left Foot",
+            "Right Foot",
+            "Club",
+            "Rec",
+            "Injury",
             "Pos Group",
             "Minutes",
             "Minutes Status",
@@ -550,8 +564,13 @@ def format_stat_export_rows(
             row = {
                 "Name": p["name"],
                 "Age": p.get("age"),
-                "Club": p.get("club"),
+                "Height": p.get("height") or "-",
                 "Position": p.get("position"),
+                "Left Foot": p.get("left_foot") or "-",
+                "Right Foot": p.get("right_foot") or "-",
+                "Club": p.get("club"),
+                "Rec": p.get("rec") or "-",
+                "Injury": p.get("injury") or "-",
                 "Pos Group": g,
                 "Minutes": p.get("minutes"),
                 "Minutes Status": status,
@@ -568,7 +587,19 @@ def format_stat_export_rows(
         return fieldnames, rows
 
     metric_ids = metrics_for(group, category)
-    fieldnames = ["Name", "Age", "Club", "Position", "Minutes", "Minutes Status"]
+    fieldnames = [
+        "Name",
+        "Age",
+        "Height",
+        "Position",
+        "Left Foot",
+        "Right Foot",
+        "Club",
+        "Rec",
+        "Injury",
+        "Minutes",
+        "Minutes Status",
+    ]
     for mid in metric_ids:
         fieldnames.append(metric_defs()[mid]["abbr"])
     rows = []
@@ -577,8 +608,13 @@ def format_stat_export_rows(
         row = {
             "Name": p["name"],
             "Age": p.get("age"),
-            "Club": p.get("club"),
+            "Height": p.get("height") or "-",
             "Position": p.get("position"),
+            "Left Foot": p.get("left_foot") or "-",
+            "Right Foot": p.get("right_foot") or "-",
+            "Club": p.get("club"),
+            "Rec": p.get("rec") or "-",
+            "Injury": p.get("injury") or "-",
             "Minutes": p.get("minutes"),
             "Minutes Status": status,
         }
