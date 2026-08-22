@@ -734,9 +734,9 @@ body {
 
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
 #rs-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    min-width: 92px !important;
-    width: 96px !important;
-    max-width: 110px !important;
+    min-width: 52px !important;
+    width: 56px !important;
+    max-width: 64px !important;
     text-align: center !important;
 }
 
@@ -4050,9 +4050,9 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    min-width: 92px !important;
-    width: 96px !important;
-    max-width: 110px !important;
+    min-width: 52px !important;
+    width: 56px !important;
+    max-width: 64px !important;
     text-align: center !important;
 }
 
@@ -4199,5 +4199,41 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 
 .st-page .rs-hist-toggle {
     min-width: 14rem;
+}
+
+/* DataTable header tooltips — default Dash uses light bg; force readable theme colors. */
+.dash-tooltip {
+    border: 1px solid var(--app-line) !important;
+    border-radius: 8px !important;
+    z-index: 2000 !important;
+}
+
+.dash-tooltip .dash-table-tooltip {
+    background-color: var(--app-elev) !important;
+    color: var(--app-text) !important;
+    border-radius: 7px;
+    max-width: 280px !important;
+    min-width: 0 !important;
+    padding: 8px 12px !important;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.dash-tooltip[data-attr-anchor="top"]:after {
+    border-bottom-color: var(--app-elev) !important;
+}
+
+.dash-tooltip[data-attr-anchor="top"]:before {
+    border-bottom-color: var(--app-line) !important;
+}
+
+.dash-tooltip[data-attr-anchor="bottom"]:after {
+    border-top-color: var(--app-elev) !important;
+}
+
+.dash-tooltip[data-attr-anchor="bottom"]:before {
+    border-top-color: var(--app-line) !important;
 }
 

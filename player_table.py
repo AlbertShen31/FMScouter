@@ -14,6 +14,15 @@ IDENTITY_TEXT_COLS = frozenset(
 )
 IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Injury")
 
+# Short table headers → full tooltip label (column id stays the key).
+IDENTITY_HEADER_ABBR = {
+    "Height": "Ht",
+}
+IDENTITY_HEADER_TOOLTIPS = {
+    "Height": "Height",
+    "Minutes": "Minutes",
+}
+
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
 _REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
 
@@ -32,6 +41,21 @@ PAGE_SIZE_OPTIONS = ("25", "50", "100")
 
 def is_dark_theme(theme: str | None) -> bool:
     return (theme or "dark") != "light"
+
+
+def identity_header_name(column_id: str) -> str:
+    """Display name for identity columns (abbreviations when configured)."""
+    return IDENTITY_HEADER_ABBR.get(column_id, column_id)
+
+
+def identity_header_tooltips(*column_ids: str) -> dict[str, str]:
+    """tooltip_header entries for abbreviated identity columns present in `column_ids`."""
+    tips: dict[str, str] = {}
+    wanted = set(column_ids) if column_ids else set(IDENTITY_HEADER_TOOLTIPS)
+    for col_id, label in IDENTITY_HEADER_TOOLTIPS.items():
+        if col_id in wanted:
+            tips[col_id] = label
+    return tips
 
 
 def foot_color(level: FootStrength | None) -> str:
@@ -412,9 +436,9 @@ def identity_data_styles(
             "if": {"column_id": "Height"},
             "color": plain,
             "textAlign": "center",
-            "minWidth": "92px",
-            "width": "96px",
-            "maxWidth": "110px",
+            "minWidth": "52px",
+            "width": "56px",
+            "maxWidth": "64px",
         },
         {
             "if": {"column_id": "Injury"},
@@ -485,6 +509,7 @@ def player_data_table(
     style_header_conditional_rules: list[dict] | None = None,
     style_data_conditional_rules: list[dict] | None = None,
     style_table_props: dict | None = None,
+    tooltip_header: dict | None = None,
     shell_class_name: str = "rs-table-shell",
 ) -> html.Div:
     """Reusable DataTable shell. IDs: `{prefix}-table` and `{prefix}-table-shell`."""
@@ -504,6 +529,9 @@ def player_data_table(
             filter_action="none",
             fill_width=True,
             markdown_options={"html": True},
+            tooltip_header=tooltip_header or {},
+            tooltip_delay=0,
+            tooltip_duration=None,
             style_table=style_table_props if style_table_props is not None else style_table(),
             css=css if css is not None else table_css(),
             style_cell=style_cell_props if style_cell_props is not None else style_cell(),

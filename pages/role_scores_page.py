@@ -65,6 +65,8 @@ from player_table import (
     feet_cell,
     feet_sort_key,
     identity_data_styles,
+    identity_header_name,
+    identity_header_tooltips,
     is_dark_theme,
     player_data_table,
     rec_sort_key,
@@ -1439,7 +1441,7 @@ def _strip_phase_suffix(label: str) -> str:
 def _column_display_name(col_id: str) -> str:
     """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM; set pieces as COR/AER/…"""
     if col_id in TABLE_TEXT_COLS:
-        return col_id
+        return identity_header_name(col_id)
     piece = set_piece_header(col_id)
     if piece != col_id:
         return piece
@@ -1449,6 +1451,58 @@ def _column_display_name(col_id: str) -> str:
             return col_id
         return f"{_strip_phase_suffix(ip)}+\n{_strip_phase_suffix(oop)}"
     return _strip_phase_suffix(col_id)
+
+
+_ROLE_COLUMN_FULL_NAMES: dict[str, str] | None = None
+
+
+def _role_column_full_names() -> dict[str, str]:
+    """Map score column id → full role name with phase."""
+    global _ROLE_COLUMN_FULL_NAMES
+    if _ROLE_COLUMN_FULL_NAMES is None:
+        import config.role_weights.fm26_role_weight_config as pc
+
+        names: dict[str, str] = {}
+        for role_id in pc.all_positions:
+            meta = role_meta(role_id)
+            phase = meta.get("phase") or ""
+            names[meta["column"]] = (
+                f"{meta['name']} ({phase})" if phase else meta["name"]
+            )
+        _ROLE_COLUMN_FULL_NAMES = names
+    return _ROLE_COLUMN_FULL_NAMES
+
+
+def _column_full_name(col_id: str, *, combos=None) -> str | None:
+    """Human-readable name for abbreviated score / set-piece headers."""
+    if col_id in TABLE_TEXT_COLS:
+        return None
+    for profile in SET_PIECE_PROFILES:
+        if profile.get("score") == col_id:
+            label = profile.get("label") or col_id
+            detail = profile.get("detail")
+            return f"{label} · {detail}" if detail else label
+    if _is_hybrid_column(col_id):
+        for item in normalize_combos(combos):
+            meta = combo_meta(item["ip"], item["oop"])
+            if meta["column"] == col_id:
+                return meta["name"]
+        ip, _, oop = col_id.partition("+")
+        names = _role_column_full_names()
+        left = names.get(ip) or _strip_phase_suffix(ip)
+        right = names.get(oop) or _strip_phase_suffix(oop)
+        return f"{left} + {right}"
+    return _role_column_full_names().get(col_id)
+
+
+def _header_tooltips(col_ids: list[str], *, combos=None) -> dict[str, str]:
+    """tooltip_header map for abbreviated identity + score columns."""
+    tips = identity_header_tooltips(*col_ids)
+    for col in col_ids:
+        full = _column_full_name(col, combos=combos)
+        if full:
+            tips[col] = full
+    return tips
 
 
 def _column_tone_map() -> dict[str, str]:
@@ -2670,6 +2724,7 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
     Output("rs-depth-wrap", "hidden"),
     Output("rs-table", "data"),
     Output("rs-table", "columns"),
+    Output("rs-table", "tooltip_header"),
     Output("rs-table", "style_data_conditional"),
     Output("rs-table", "style_header_conditional"),
     Output("rs-table", "css"),
@@ -2746,6 +2801,7 @@ def render_shortlist(
             True,
             [],
             empty_cols,
+            {},
             empty_style,
             empty_header,
             empty_css,
@@ -2778,6 +2834,7 @@ def render_shortlist(
             not cards,
             [],
             empty_cols,
+            {},
             empty_style,
             empty_header,
             empty_css,
@@ -2852,6 +2909,7 @@ def render_shortlist(
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)
+    header_tips = _header_tooltips(table_cols, combos=combos)
     table_rows = []
     for row in filtered:
         item = {
@@ -2925,6 +2983,7 @@ def render_shortlist(
         not cards,
         table_rows,
         columns,
+        header_tips,
         _score_styles(score_cols, settings, theme),
         _score_header_styles(score_cols, theme),
         _table_css(score_cols, theme),

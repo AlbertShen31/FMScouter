@@ -28,6 +28,8 @@ from player_table import (
     feet_cell,
     feet_sort_key,
     identity_data_styles,
+    identity_header_name,
+    identity_header_tooltips,
     player_data_table,
     rec_sort_key,
     style_cell,
@@ -372,7 +374,7 @@ def _table_columns(group: str, category: str) -> list[dict]:
     cols = [
         {"name": "Name", "id": "Name"},
         {"name": "Age", "id": "Age"},
-        {"name": "Height", "id": "Height"},
+        {"name": identity_header_name("Height"), "id": "Height"},
         {"name": "Position", "id": "Position"},
         {"name": "Feet", "id": "Feet", "presentation": "markdown"},
         {"name": "Club", "id": "Club"},
@@ -394,6 +396,20 @@ def _table_columns(group: str, category: str) -> list[dict]:
         abbr = metric_defs()[mid]["abbr"]
         cols.append({"name": abbr, "id": abbr, "presentation": "markdown"})
     return cols
+
+
+def _header_tooltips(group: str, category: str) -> dict[str, str]:
+    """Full names for abbreviated Mins / Ht / percentile / metric headers."""
+    g, cat = _resolve_category(group, category)
+    tips = identity_header_tooltips("Height", "Minutes")
+    if cat == "all":
+        for section in _avg_category_columns(group):
+            tips[section["id"]] = section["label"]
+        return tips
+    for mid in metrics_for(g, cat):
+        meta = metric_defs()[mid]
+        tips[meta["abbr"]] = meta["label"]
+    return tips
 
 
 def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
@@ -1390,6 +1406,7 @@ def apply_age_settings(settings, age):
     Output("st-foot-bar", "children"),
     Output("st-table", "columns"),
     Output("st-table", "data"),
+    Output("st-table", "tooltip_header"),
     Output("st-table", "style_data_conditional"),
     Output("st-table", "page_size"),
     Output("st-table", "selected_rows"),
@@ -1448,6 +1465,7 @@ def refresh_table(
     )
     _sort_table_rows(rows, sort_by)
     cols = _table_columns(pos, category)
+    header_tips = _header_tooltips(pos, category)
     marked_set = set(marked or [])
     selected = [i for i, r in enumerate(rows) if r.get("_key") in marked_set]
     page_size_i = int(page_size or 50)
@@ -1521,6 +1539,7 @@ def refresh_table(
         _foot_bar(foot_filter, settings["foot_thresholds"]),
         cols,
         rows,
+        header_tips,
         style_data,
         page_size_i,
         selected,
