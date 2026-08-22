@@ -4248,6 +4248,101 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     font-weight: 700;
 }
 
+.rs-role-fit-section {
+    margin-top: 0.15rem;
+}
+
+.rs-role-fit-block + .rs-role-fit-block {
+    margin-top: 0.65rem;
+}
+
+.rs-role-fit-subtitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--app-muted);
+    margin-bottom: 0.35rem;
+}
+
+.rs-role-fit-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.rs-role-fit-row {
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem 0.65rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--app-head) 80%, transparent);
+    border: 1px solid var(--app-line);
+}
+
+.rs-role-fit-phase {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.rs-role-fit-phase.is-ip {
+    color: #3dff88;
+}
+
+.rs-role-fit-phase.is-oop {
+    color: #ff6b6b;
+}
+
+html[data-theme="light"] .rs-role-fit-phase.is-ip,
+body[data-theme="light"] .rs-role-fit-phase.is-ip {
+    color: #0d9f4f;
+}
+
+html[data-theme="light"] .rs-role-fit-phase.is-oop,
+body[data-theme="light"] .rs-role-fit-phase.is-oop {
+    color: #c62828;
+}
+
+.rs-role-fit-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--app-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rs-role-fit-score {
+    min-width: 2.6rem;
+    text-align: center;
+    border-radius: 5px;
+    padding: 0.1rem 0.4rem;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+}
+
+.rs-role-fit-score.rs-band-elite {
+    background: var(--band-elite-bg);
+    color: var(--band-elite-fg);
+}
+
+.rs-role-fit-score.rs-band-good {
+    background: var(--band-good-bg);
+    color: var(--band-good-fg);
+}
+
+.rs-role-fit-score.rs-band-ok {
+    background: var(--band-ok-bg);
+    color: var(--band-ok-fg);
+}
+
+.rs-role-fit-score.rs-band-poor {
+    background: var(--band-poor-bg);
+    color: var(--band-poor-fg);
+}
+
 .rs-player-attrs-title {
     font-size: 13px;
     font-weight: 800;

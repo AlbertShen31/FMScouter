@@ -53,6 +53,7 @@ from scoring.role_scorer import (
     planned_squad_csv,
     planned_squad_export_rows,
     planned_squad_fieldnames,
+    player_role_highlights,
     player_row_key,
     role_meta,
     role_options,
@@ -319,6 +320,91 @@ def _player_attributes(player: dict, bands: dict) -> html.Div:
     )
 
 
+def _role_highlight_row(phase: str, pick: dict | None, bands: dict) -> html.Div | None:
+    if not pick:
+        return None
+    band = score_band(float(pick["score"]), **bands)
+    return html.Div(
+        [
+            html.Span(phase, className=f"rs-role-fit-phase is-{phase.lower()}"),
+            html.Span(
+                pick.get("compact") or pick.get("name") or pick.get("code") or "—",
+                className="rs-role-fit-name",
+                title=pick.get("column") or "",
+            ),
+            html.Span(
+                f"{float(pick['score']):.2f}",
+                className=f"rs-role-fit-score rs-band-{band}",
+            ),
+        ],
+        className="rs-role-fit-row",
+    )
+
+
+def _player_role_fit_section(player: dict, settings=None) -> html.Div | None:
+    """Best IP/OOP roles for Best Pos, plus best IP/OOP in other available positions."""
+    settings = us.normalize(settings)
+    bands = settings["bands"]
+    highlights = player_role_highlights(
+        player,
+        tier_weights=us.tier_weights(settings),
+    )
+    blocks = []
+    in_best_rows = [
+        row
+        for row in (
+            _role_highlight_row("IP", highlights["in_best"].get("IP"), bands),
+            _role_highlight_row("OOP", highlights["in_best"].get("OOP"), bands),
+        )
+        if row is not None
+    ]
+    if in_best_rows:
+        best_label = highlights.get("best_group_label") or "Best position"
+        best_pos = (player.get("best_pos") or "").strip()
+        subtitle = best_label
+        if best_pos and best_pos != "-":
+            subtitle = f"{best_label} · {best_pos}"
+        blocks.append(
+            html.Div(
+                [
+                    html.Div(subtitle, className="rs-role-fit-subtitle"),
+                    html.Div(in_best_rows, className="rs-role-fit-rows"),
+                ],
+                className="rs-role-fit-block",
+            )
+        )
+    other_rows = [
+        row
+        for row in (
+            _role_highlight_row("IP", highlights["other"].get("IP"), bands),
+            _role_highlight_row("OOP", highlights["other"].get("OOP"), bands),
+        )
+        if row is not None
+    ]
+    if other_rows:
+        blocks.append(
+            html.Div(
+                [
+                    html.Div(
+                        "Other available positions",
+                        className="rs-role-fit-subtitle",
+                    ),
+                    html.Div(other_rows, className="rs-role-fit-rows"),
+                ],
+                className="rs-role-fit-block",
+            )
+        )
+    if not blocks:
+        return None
+    return html.Div(
+        [
+            html.Div("Role fit", className="rs-player-id-section-title"),
+            *blocks,
+        ],
+        className="rs-player-id-section rs-role-fit-section",
+    )
+
+
 def _player_detail_card(
     player: dict,
     settings=None,
@@ -331,6 +417,7 @@ def _player_detail_card(
         id_prefix="rs",
         position_eligible=position_eligible,
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
+        after_identity=_player_role_fit_section(player, settings),
         bottom=_player_attributes(player, settings["bands"]),
     )
 
@@ -1998,6 +2085,7 @@ def reveal_workflow(parsed, payload):
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
     State("rs-hybrids-only", "checked"),
+    State("rs-config", "value"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
 )
@@ -2010,6 +2098,7 @@ def open_player_modal(
     payload,
     focus_role,
     hybrids_only,
+    pack_id,
     settings,
 ):
     if ctx.triggered_id == "rs-player-modal":
@@ -2044,6 +2133,8 @@ def open_player_modal(
             ),
             None,
         )
+    if pack_id:
+        rc.load_pack(pack_id)
     view_roles = _hybrid_only_roles(
         _resolved_view_roles(payload, focus_role),
         (payload or {}).get("combos"),

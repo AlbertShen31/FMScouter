@@ -613,6 +613,176 @@ def player_pos_groups(positions: list[dict[str, str]]) -> list[str]:
     return [card for card, *_ in POS_CARDS[1:] if matches_pos_card(positions, card)]
 
 
+def best_pos_group(best_pos: str | None) -> str | None:
+    """Map FM Best Pos text (e.g. ``AM (R)``, ``D (C)``) to a primary role group."""
+    text = (best_pos or "").strip()
+    if not text or text == "-":
+        return None
+    items = parse_positions(text)
+    if not items:
+        return None
+    item = items[0]
+    pos, area = item["position"], item["area"]
+    if pos == "GK":
+        return "gk"
+    if pos == "D":
+        if "L" in area or "R" in area:
+            return "fb"
+        if "C" in area:
+            return "cb"
+    if pos == "WB":
+        return "wb"
+    if pos == "DM":
+        return "dm"
+    if pos == "M":
+        if "L" in area or "R" in area:
+            return "wm"
+        if "C" in area:
+            return "cm"
+    if pos == "AM":
+        if "L" in area or "R" in area:
+            return "w"
+        if "C" in area:
+            return "am"
+    if pos == "ST":
+        return "st"
+    for group, _label, _roles in GROUP_DEFS:
+        if is_eligible(items, group):
+            return group
+    return None
+
+
+def group_label(group_id: str | None) -> str:
+    if not group_id:
+        return ""
+    for gid, label, _roles in GROUP_DEFS:
+        if gid == group_id:
+            return label
+    return (group_id or "").upper()
+
+
+def score_player_role(
+    player: dict[str, Any],
+    role_id: str,
+    *,
+    tier_weights: dict[str, float] | None = None,
+) -> float | None:
+    """Score one player for one role using current pack weights."""
+    cfg = pc.all_positions.get(role_id)
+    if not cfg:
+        return None
+    weights = _resolve_tier_weights(tier_weights) if tier_weights else None
+    if weights:
+        key_w = weights["key"]
+        pref_w = weights["preferred"]
+        useful_w = weights["useful"]
+        divisor = (
+            key_w * len(cfg.get("key_attrs") or [])
+            + pref_w * len(cfg.get("preferred_attrs") or [])
+            + useful_w * len(cfg.get("useful_attrs") or [])
+        )
+    else:
+        key_w = cfg["key_weight"]
+        pref_w = cfg["preferred_weight"]
+        useful_w = cfg["useful_weight"]
+        divisor = cfg["divisor"]
+    return float(
+        calculate_score(
+            player.get("attrs") or {},
+            cfg["key_attrs"],
+            cfg["preferred_attrs"],
+            cfg["useful_attrs"],
+            key_w,
+            pref_w,
+            useful_w,
+            divisor,
+        )
+    )
+
+
+def _phase_bucket(role_id: str) -> str | None:
+    """IP or OOP (keeper IP_GK / OOP_GK count as IP / OOP)."""
+    cfg = pc.all_positions.get(role_id) or {}
+    tone = phase_tone(cfg.get("phase", ""))
+    if tone in ("ip", "oop"):
+        return tone.upper()
+    return None
+
+
+def player_role_highlights(
+    player: dict[str, Any],
+    *,
+    tier_weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Best IP/OOP roles in Best Pos group, and best IP/OOP in other available groups.
+
+    Returns::
+
+        {
+          "best_group": "cb",
+          "best_group_label": "Centre-backs",
+          "in_best": {"IP": {...}|None, "OOP": {...}|None},
+          "other": {"IP": {...}|None, "OOP": {...}|None},
+        }
+
+    Each pick is ``{role_id, name, code, column, score, group_abbr, compact}``.
+    """
+    positions = player.get("positions") or []
+    best_group = best_pos_group(player.get("best_pos"))
+    empty = {"IP": None, "OOP": None}
+    result = {
+        "best_group": best_group,
+        "best_group_label": group_label(best_group),
+        "in_best": dict(empty),
+        "other": dict(empty),
+    }
+    if not positions and not best_group:
+        return result
+
+    best_in = {"IP": None, "OOP": None}
+    best_other = {"IP": None, "OOP": None}
+
+    for role_id in iter_roles():
+        groups = role_groups(role_id)
+        if not groups:
+            continue
+        eligible = any(is_eligible(positions, group) for group in groups)
+        in_best = bool(best_group and best_group in groups)
+        # Score roles for Best Pos even if the Position string omits that slot.
+        if not eligible and not in_best:
+            continue
+
+        phase = _phase_bucket(role_id)
+        if not phase:
+            continue
+        score = score_player_role(player, role_id, tier_weights=tier_weights)
+        if score is None:
+            continue
+        meta = role_meta(role_id)
+        pick = {
+            "role_id": role_id,
+            "name": meta["name"],
+            "code": meta["code"],
+            "column": meta["column"],
+            "score": round(float(score), 2),
+            "group_abbr": meta["group_abbr"],
+            "compact": meta["compact"],
+            "phase": phase,
+        }
+        if in_best:
+            current = best_in[phase]
+            if current is None or pick["score"] > current["score"]:
+                best_in[phase] = pick
+        if eligible and (not best_group or best_group not in groups):
+            current = best_other[phase]
+            if current is None or pick["score"] > current["score"]:
+                best_other[phase] = pick
+
+    result["in_best"] = best_in
+    result["other"] = best_other
+    return result
+
+
 def _code_uses(code: str) -> int:
     return sum(1 for cfg in pc.all_positions.values() if cfg.get("role_code") == code)
 
