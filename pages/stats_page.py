@@ -25,6 +25,7 @@ import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
 from pack_picker import pack_picker_bar, section_card_header
+from division_tiers import classify_division
 from player_filters import player_filters, player_filters_host
 from player_modal import player_detail_body, player_modal
 from player_table import (
@@ -598,6 +599,8 @@ def _table_columns(
 
 def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
     """Build shortlist identity cells for one stats player row."""
+    from division_tiers import apply_division_tier
+
     left = player.get("left_foot") or ""
     right = player.get("right_foot") or ""
     foot_row = {"Left Foot": left, "Right Foot": right}
@@ -615,7 +618,10 @@ def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
     }
-    row: dict = {}
+    row: dict = {
+        "Division": _display_blank(player.get("division")),
+        "Nation": _display_blank(player.get("nation")),
+    }
     for col in identity_cols:
         getter = getters.get(col)
         if getter is not None:
@@ -623,6 +629,7 @@ def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
     if "Feet" in identity_cols:
         row["Left Foot"] = left
         row["Right Foot"] = right
+    apply_division_tier(row)
     return row
 
 
@@ -1335,6 +1342,26 @@ def _player_modal_body(
     )
 
 
+DIVISION_TIER_OPTIONS = [
+    {"label": "All", "value": "all"},
+    {"label": "Professional", "value": "pro"},
+    {"label": "Top tier", "value": "top"},
+]
+
+
+def _passes_division_tier(player: dict, division_tier: str | None) -> bool:
+    """``pro`` keeps top + professional; ``top`` keeps top flight only."""
+    mode = (division_tier or "all").strip().lower()
+    if mode in ("", "all"):
+        return True
+    tier = classify_division(player.get("division"), player.get("nation"))
+    if mode == "top":
+        return tier == "top"
+    if mode == "pro":
+        return tier in ("top", "pro")
+    return True
+
+
 def _filter_players(
     players,
     *,
@@ -1345,12 +1372,15 @@ def _filter_players(
     minutes_required,
     foot,
     foot_thresholds,
+    division_tier="all",
 ):
     q = (search or "").strip().casefold()
     max_age = 99 if max_age is None else int(max_age)
     out = []
     for p in players:
         if not _player_matches_pos_filter(p, pos):
+            continue
+        if not _passes_division_tier(p, division_tier):
             continue
         if q:
             blob = " ".join(
@@ -1499,6 +1529,35 @@ def layout(**_kwargs):
                                                     ),
                                                 ],
                                                 className="rs-filter-age",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Division",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            *_help_icon(
+                                                                "All leagues, professional only "
+                                                                "(top tier + lower pro), or top "
+                                                                "tier alone. Division cells: "
+                                                                "green = top, yellow = pro, "
+                                                                "red = semi-pro / amateur.",
+                                                                "st-help-division",
+                                                            ),
+                                                        ],
+                                                        className="rs-field-label-row",
+                                                    ),
+                                                    dmc.Select(
+                                                        id="st-division-tier",
+                                                        data=DIVISION_TIER_OPTIONS,
+                                                        value="all",
+                                                        clearable=False,
+                                                        searchable=False,
+                                                    ),
+                                                ],
+                                                className="rs-filter-age rs-filter-division",
                                             ),
                                             html.Div(
                                                 [
@@ -1842,6 +1901,7 @@ def sync_st_controls_from_settings(settings):
     Input("st-minutes-match", "value"),
     Input("st-minutes-required", "value"),
     Input("st-foot", "data"),
+    Input("st-division-tier", "value"),
     Input("st-page-size", "value"),
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
@@ -1858,6 +1918,7 @@ def refresh_table(
     minutes_match,
     minutes_required,
     foot,
+    division_tier,
     page_size,
     marked,
     sort_by,
@@ -1885,6 +1946,7 @@ def refresh_table(
         minutes_required=minutes_required,
         foot=foot or "",
         foot_thresholds=settings["foot_thresholds"],
+        division_tier=division_tier or "all",
     )
     rows = _build_rows(
         filtered,
@@ -1909,6 +1971,7 @@ def refresh_table(
     table_rows = []
     for row in rows:
         item = {col: row.get(col, "—") for col in col_ids}
+        item["DivisionTier"] = row.get("DivisionTier") or ""
         key = str(row.get("_key") or "").strip()
         if key:
             item["id"] = key  # DataTable row id (stable across refreshes)
@@ -2260,6 +2323,7 @@ def _csv_payload(fieldnames, rows) -> dict:
     State("st-minutes-match", "value"),
     State("st-minutes-required", "value"),
     State("st-foot", "data"),
+    State("st-division-tier", "value"),
     State("st-marked", "data"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
@@ -2275,6 +2339,7 @@ def download_csv(
     minutes_match,
     minutes_required,
     foot,
+    division_tier,
     marked,
     settings,
 ):
@@ -2298,6 +2363,7 @@ def download_csv(
         minutes_required=minutes_required,
         foot=foot or "",
         foot_thresholds=settings["foot_thresholds"],
+        division_tier=division_tier or "all",
     )
     if ctx.triggered_id == "st-marked-csv-btn":
         marked_set = set(marked or [])

@@ -13,6 +13,7 @@ from typing import Any
 
 import config.fm26_role_weight_config as pc
 import role_config
+from division_tiers import apply_division_tier
 from phases import phase_is_gk, phase_label, phase_matches, phase_tone, pretty_role_name
 from utils import calculate_score
 
@@ -1125,6 +1126,7 @@ def score_players(
             "Squad": player["squad"] or "-",
             "PosGroups": player.get("pos_groups") or [],
         }
+        apply_division_tier(row)
         apply_set_piece_scores(
             row,
             player.get("attrs") or {},

@@ -25,7 +25,7 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 | `config/role_weights/packs/` | Named JSON weight packs. |
 | `config/formations/` | Formation domain: `active.json`, `packs/`. |
 | `config/settings/` | UI settings domain: `active.json`, `default-overrides.json`, `packs/`. |
-| `role_scorer.py` | Parse CSV, eligibility, scoring, player POS cards. |
+| `division_tiers.py` | Map FM Division (+ Based In) to top / pro / amateur for Division cell colors. |
 | `role_config.py` | Packs, live overlays, saved-group migration. |
 | `phases.py` | IP / OOP / GK badges and GK detection. |
 | `utils.py` | Weighted-average formula. |

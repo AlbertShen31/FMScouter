@@ -4495,9 +4495,10 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 
 .st-page .rs-shortlist-filters-row {
     grid-template-columns:
-        minmax(180px, 1.4fr)
-        minmax(96px, 0.45fr)
-        minmax(280px, 1.3fr);
+        minmax(160px, 1.2fr)
+        minmax(96px, 0.4fr)
+        minmax(120px, 0.55fr)
+        minmax(260px, 1.2fr);
 }
 
 .st-filter-minutes {

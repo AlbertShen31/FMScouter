@@ -2902,6 +2902,7 @@ def render_shortlist(
             for key in table_cols
         }
         item["PosEligible"] = row.get("_PosEligible") or "no"
+        item["DivisionTier"] = row.get("DivisionTier") or ""
         table_rows.append(item)
     page_keys = [player_row_key(row) for row in table_rows]
     selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]

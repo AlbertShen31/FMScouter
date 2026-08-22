@@ -37,6 +37,7 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Minutes": "Minutes",
     "Best Pos": "Best position",
     "Inf": "Information / status",
+    "Division": "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur",
 }
 
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
@@ -439,6 +440,13 @@ def identity_data_styles(
             "color": plain,
         },
         {
+            "if": {"column_id": "Division"},
+            "textAlign": "left",
+            "minWidth": "110px",
+            "maxWidth": "200px",
+            "fontWeight": "600",
+        },
+        {
             "if": {"column_id": "Feet"},
             "textAlign": "center",
             "padding": "8px 10px",
@@ -522,8 +530,31 @@ def identity_data_styles(
             ]
         )
     rules.extend(rec_highlight_styles(theme))
+    rules.extend(division_highlight_styles(theme))
     if extra:
         rules.extend(extra)
+    return rules
+
+
+def division_highlight_styles(theme: str | None = None) -> list[dict]:
+    """Color Division: top (green), pro (yellow), semi-pro/amateur (red)."""
+    from division_tiers import division_tier_colors
+
+    colors = division_tier_colors(theme)
+    rules = []
+    for tier, (bg, fg) in colors.items():
+        rules.append(
+            {
+                "if": {
+                    "filter_query": f'{{DivisionTier}} = "{tier}"',
+                    "column_id": "Division",
+                },
+                "backgroundColor": bg,
+                "color": fg,
+                "fontWeight": "700",
+                "borderRadius": "6px",
+            }
+        )
     return rules
 
 
