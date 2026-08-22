@@ -23,6 +23,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
+from player_modal import player_detail_body, player_modal
 from role_scorer import (
     FOOT_STRENGTH_NAMES,
     FootStrength,
@@ -1157,44 +1158,14 @@ def _metrics_pizzas(sections: list[dict], theme: str | None) -> list:
     return blocks
 
 
-def _player_identity(player: dict, minutes_required: float) -> list:
-    status = minutes_status(player.get("minutes"), minutes_required)
-    identity = []
-    for label, key in (
-        ("Age", "age"),
-        ("Height", "height"),
-        ("Club", "club"),
-        ("Division", "division"),
-        ("Nation", "nation"),
-        ("Position", "position"),
-        ("Best pos", "best_pos"),
-        ("Style", "style"),
-        ("Left foot", "left_foot"),
-        ("Right foot", "right_foot"),
-        ("Rec", "rec"),
-        ("Injury", "injury"),
-        ("Minutes", "minutes"),
-    ):
-        val = player.get(key)
-        if val in (None, "", "-"):
-            continue
-        style = {"color": minutes_color(status)} if key == "minutes" else None
-        if key == "injury":
-            style = {"color": "#fbbf24", "fontWeight": "600"}
-        if key == "minutes":
-            text = str(int(val)) if float(val) == int(float(val)) else str(val)
-        else:
-            text = str(val)
-        identity.append(
-            html.Div(
-                [
-                    html.Span(label, className="rs-player-id-label"),
-                    html.Span(text, className="rs-player-id-value", style=style),
-                ],
-                className="rs-player-id-item",
-            )
-        )
-    return identity
+def _format_minutes_identity(value) -> str:
+    if value in (None, "", "-"):
+        return "—"
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return str(int(num)) if num == int(num) else str(num)
 
 
 def _player_modal_body(
@@ -1216,9 +1187,17 @@ def _player_modal_body(
         metrics = _metrics_pizzas(sections, theme)
     else:
         metrics = _metrics_values(sections)
-    return html.Div(
-        [
-            html.Div(_player_identity(player, minutes_required), className="rs-player-identity"),
+    status = minutes_status(player.get("minutes"), minutes_required)
+    return player_detail_body(
+        player,
+        id_prefix="st",
+        extra_identity_fields=[("Minutes", "minutes")],
+        field_styles={
+            "minutes": {"color": minutes_color(status)},
+            "injury": {"color": "#fbbf24", "fontWeight": "600"},
+        },
+        field_formatters={"minutes": _format_minutes_identity},
+        after_identity=[
             html.Div(
                 [
                     html.Div("Evaluate as", className="st-player-switch-label"),
@@ -1233,10 +1212,10 @@ def _player_modal_body(
                 ],
                 className="st-player-switch-block",
             ),
-            html.Div(metrics, className="st-player-metrics"),
         ],
-        className="rs-player-detail",
+        bottom=html.Div(metrics, className="st-player-metrics"),
     )
+
 
 def _filter_players(
     players,
@@ -1647,26 +1626,7 @@ def layout(**_kwargs):
                 id="st-main",
                 hidden=True,
             ),
-            dbc.Modal(
-                [
-                    dbc.ModalHeader(dbc.ModalTitle(id="st-player-modal-title")),
-                    dbc.ModalBody(
-                        id="st-player-modal-body",
-                        className="rs-player-modal-body",
-                    ),
-                    dbc.ModalFooter(
-                        dmc.Button(
-                            "Close",
-                            id="st-player-modal-close",
-                            variant="light",
-                        )
-                    ),
-                ],
-                id="st-player-modal",
-                is_open=False,
-                size="xl",
-                className="rs-player-modal",
-            ),
+            player_modal(prefix="st"),
         ],
         className="rs-page st-page",
     )
