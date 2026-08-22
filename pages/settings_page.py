@@ -1,6 +1,8 @@
 """Settings page: packs, Role scores options, and Player stats threshold packs."""
 from __future__ import annotations
 
+from urllib.parse import parse_qs
+
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
@@ -592,9 +594,11 @@ def _player_panel(thresh_pack: dict) -> list:
     ]
 
 
-def layout():
+def layout(section: str | None = None, **_kwargs):
     settings = us.load()
     thresh_pack = stp.load()
+    allowed = {sid for sid, _label in SETTINGS_SECTIONS}
+    active = section if section in allowed else "general"
     return dbc.Container(
         [
             html.H1("Settings"),
@@ -604,7 +608,8 @@ def layout():
                 f"(built-in: {stp.BUILTIN_NAME}).",
                 className="text-muted",
             ),
-            dcc.Store(id="st-settings-section", data="general"),
+            dcc.Location(id="st-settings-url", refresh=False),
+            dcc.Store(id="st-settings-section", data=active),
             dcc.Store(id="st-thresh-data", data=thresh_pack["thresholds"]),
             dcc.Store(id="st-thresh-revision", data=0),
             html.Div(
@@ -612,18 +617,26 @@ def layout():
                     html.Aside(
                         [
                             html.Div("Sections", className="st-settings-nav-title"),
-                            _settings_nav("general"),
+                            _settings_nav(active),
                         ],
                         className="st-settings-sidebar",
                     ),
                     html.Div(
                         [
-                            _panel("general", _general_panel(settings), active=True),
-                            _panel("role-scores", _role_panel(settings), active=False),
+                            _panel(
+                                "general",
+                                _general_panel(settings),
+                                active=active == "general",
+                            ),
+                            _panel(
+                                "role-scores",
+                                _role_panel(settings),
+                                active=active == "role-scores",
+                            ),
                             _panel(
                                 "player-stats",
                                 _player_panel(thresh_pack),
-                                active=False,
+                                active=active == "player-stats",
                             ),
                         ],
                         className="st-settings-main",
@@ -635,6 +648,27 @@ def layout():
         className="rs-page st-page",
         fluid=True,
     )
+
+
+def _section_from_search(search: str | None) -> str | None:
+    qs = parse_qs((search or "").lstrip("?"))
+    requested = (qs.get("section") or [None])[0]
+    allowed = {sid for sid, _label in SETTINGS_SECTIONS}
+    return requested if requested in allowed else None
+
+
+def _section_view(section: str) -> tuple:
+    ids = [sid for sid, _label in SETTINGS_SECTIONS]
+    nav_classes = [
+        "st-settings-nav-link is-active" if sid == section else "st-settings-nav-link"
+        for sid in ids
+    ]
+    hidden = [sid != section for sid in ids]
+    panel_classes = [
+        "st-settings-panel is-active" if sid == section else "st-settings-panel"
+        for sid in ids
+    ]
+    return section, nav_classes, hidden, panel_classes
 
 
 def _colors_from_state(color_values, specs) -> dict[str, dict[str, str]]:
@@ -677,25 +711,23 @@ def _refresh_ui_settings(settings: dict) -> dict:
     Output({"type": "st-settings-nav", "section": ALL}, "className"),
     Output({"type": "st-settings-panel", "section": ALL}, "hidden"),
     Output({"type": "st-settings-panel", "section": ALL}, "className"),
+    Input("st-settings-url", "search"),
     Input({"type": "st-settings-nav", "section": ALL}, "n_clicks"),
     State("st-settings-section", "data"),
-    prevent_initial_call=True,
 )
-def switch_settings_section(n_clicks, current):
-    if not ctx.triggered_id or not any(n_clicks or []):
-        return no_update, no_update, no_update, no_update
-    section = ctx.triggered_id.get("section") or current or "general"
-    ids = [sid for sid, _label in SETTINGS_SECTIONS]
-    nav_classes = [
-        "st-settings-nav-link is-active" if sid == section else "st-settings-nav-link"
-        for sid in ids
-    ]
-    hidden = [sid != section for sid in ids]
-    panel_classes = [
-        "st-settings-panel is-active" if sid == section else "st-settings-panel"
-        for sid in ids
-    ]
-    return section, nav_classes, hidden, panel_classes
+def switch_settings_section(search, n_clicks, current):
+    triggered = ctx.triggered_id
+    if isinstance(triggered, dict) and triggered.get("type") == "st-settings-nav":
+        if not any(n_clicks or []):
+            return no_update, no_update, no_update, no_update
+        section = triggered.get("section") or current or "general"
+        return _section_view(section)
+    from_url = _section_from_search(search)
+    if from_url:
+        return _section_view(from_url)
+    if triggered == "st-settings-url" or triggered is None:
+        return _section_view(current or "general")
+    return no_update, no_update, no_update, no_update
 
 
 @callback(

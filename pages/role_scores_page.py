@@ -21,6 +21,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
+from pack_picker import pack_picker_bar, section_card_header
 from role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
@@ -860,45 +861,23 @@ def layout():
             [
         dbc.Card(
             [
-                dbc.CardHeader(
-                    [
-                        html.Div(
-                            [
-                                html.Span("2. Scored roles"),
-                                html.Span("Next", className="rs-next-badge"),
-                            ],
-                            className="rs-card-header-title",
+                section_card_header(
+                    "2. Scored roles",
+                    next_badge=True,
+                    trailing=pack_picker_bar(
+                        select_id="rs-config",
+                        label="Scoring weights",
+                        options=rc.pack_options(),
+                        value=rc.active_pack_id(),
+                        edit_href="/role-config",
+                        edit_title="Open the Role configs page to edit and save weights.",
+                        select_title=(
+                            "Scores use this file’s key / preferred / useful weights. "
+                            "Edit and Save a config on the Role configs page."
                         ),
-                        html.Div(
-                            [
-                                html.Span("Scoring weights", className="rs-weights-label"),
-                                html.Div(
-                                    dmc.Select(
-                                        id="rs-config",
-                                        data=rc.pack_options(),
-                                        value=rc.active_pack_id(),
-                                        clearable=False,
-                                        searchable=False,
-                                        size="sm",
-                                    ),
-                                    className="rs-config-dd",
-                                    title=(
-                                        "Scores use this file’s key / preferred / useful weights. "
-                                        "Edit and Save a config on the Role configs page."
-                                    ),
-                                ),
-                                dcc.Link(
-                                    "Edit",
-                                    href="/role-config",
-                                    className="rs-weights-edit",
-                                    title="Open the Role configs page to edit and save weights.",
-                                ),
-                                dcc.Interval(id="rs-config-tick", interval=2500),
-                            ],
-                            className="rs-weights-bar",
-                        ),
-                    ],
-                    className="rs-card-header-row",
+                        select_wrap_class="pack-picker-dd rs-config-dd",
+                        interval_id="rs-config-tick",
+                    ),
                 ),
                 dbc.CardBody(
                     [

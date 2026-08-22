@@ -22,6 +22,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
+from pack_picker import pack_picker_bar, section_card_header
 from player_filters import player_filters, player_filters_host
 from player_modal import player_detail_body, player_modal
 from player_table import (
@@ -69,6 +70,7 @@ from stats_scorer import (
     view_categories,
 )
 import ui_settings as us
+import stats_threshold_packs as stp
 
 register_page(__name__, path="/stats", name="Player stats")
 
@@ -1284,7 +1286,25 @@ def layout(**_kwargs):
                 [
                     dbc.Card(
                         [
-                            dbc.CardHeader("2. Shortlist"),
+                            section_card_header(
+                                "2. Shortlist",
+                                trailing=pack_picker_bar(
+                                    select_id="st-stats-thresh-pack",
+                                    label="Percentiles",
+                                    options=stp.pack_options(),
+                                    value=(
+                                        settings.get("stats_threshold_pack_id")
+                                        or stp.active_id()
+                                    ),
+                                    edit_href="/settings?section=player-stats",
+                                    edit_title=(
+                                        "Open Settings → Player stats to edit percentile packs."
+                                    ),
+                                    select_title=(
+                                        "Benchmark cut-points used for estimated percentiles."
+                                    ),
+                                ),
+                            ),
                             dbc.CardBody(
                                 [
                                     player_filters_host(prefix="st", stacked=True),
@@ -1572,13 +1592,43 @@ def set_foot(n_clicks, current):
 @callback(
     Output("st-age", "data"),
     Output("st-age", "value"),
+    Output("st-stats-thresh-pack", "data"),
+    Output("st-stats-thresh-pack", "value"),
     Input("ui-settings", "data"),
     State("st-age", "value"),
+    State("st-stats-thresh-pack", "value"),
 )
-def apply_age_settings(settings, age):
+def apply_stats_settings(settings, age, thresh_pack_id):
     settings = us.normalize(settings)
     ages = us.age_options(settings)
-    return ages, us.clamp_choice(age, ages, "99")
+    packs = stp.pack_options()
+    allowed = {opt["value"] for opt in packs}
+    active = (
+        settings.get("stats_threshold_pack_id")
+        or thresh_pack_id
+        or stp.active_id()
+    )
+    if active not in allowed:
+        active = stp.BUILTIN if stp.BUILTIN in allowed else next(iter(allowed), stp.BUILTIN)
+    return ages, us.clamp_choice(age, ages, "99"), packs, active
+
+
+@callback(
+    Output("ui-settings", "data", allow_duplicate=True),
+    Input("st-stats-thresh-pack", "value"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def switch_stats_thresh_pack(pack_id, settings):
+    if not pack_id:
+        return no_update
+    settings = us.normalize(settings)
+    if pack_id == settings.get("stats_threshold_pack_id"):
+        return no_update
+    pack = stp.load(pack_id)
+    settings["stats_thresholds"] = pack["thresholds"]
+    settings["stats_threshold_pack_id"] = pack["id"]
+    return settings
 
 
 @callback(
