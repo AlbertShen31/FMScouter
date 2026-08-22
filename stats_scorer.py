@@ -17,6 +17,7 @@ from role_scorer import (
     foot_strength,
     parse_positions,
     pick,
+    player_pos_groups,
     player_row_key,
     sniff_delimiter,
     unique_headers,
@@ -440,6 +441,9 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
             for code in ("Det", "Ldr")
             if code in all_attrs and all_attrs[code]
         }
+        positions = parse_positions(position) + parse_positions(
+            pick(row, IDENTITY["SecPosition"])
+        )
         players.append(
             {
                 "name": name,
@@ -474,10 +478,10 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 **extract_record_fields(row),
                 "minutes": minutes,
                 "pos_group": group,
+                "pos_cards": player_pos_groups(positions),
                 "stats": stats,
                 "attrs": attrs,
-                "positions": parse_positions(position)
-                + parse_positions(pick(row, IDENTITY["SecPosition"])),
+                "positions": positions,
                 "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),
                 "right_foot_n": int(foot_strength(pick(row, IDENTITY["RightFoot"])) or 0),
             }

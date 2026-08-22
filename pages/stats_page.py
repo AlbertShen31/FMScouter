@@ -44,7 +44,9 @@ from player_table import (
     table_css,
 )
 from role_scorer import (
+    POS_CARDS,
     foot_match,
+    player_pos_groups,
     player_row_key,
     to_int,
 )
@@ -75,6 +77,17 @@ import ui_settings as us
 import stats_threshold_packs as stp
 
 register_page(__name__, path="/stats", name="Player stats")
+
+# Role-scores-style position cards → Mustermann threshold group.
+# DEF/FB → def, MID → mid, W/ST → fwd, GK → gk.
+POS_CARD_BENCH = {
+    "GK": "gk",
+    "DEF": "def",
+    "FB": "def",
+    "MID": "mid",
+    "W": "fwd",
+    "ST": "fwd",
+}
 
 AVG_PERCENTILE_COLS = (
     "overall",
@@ -297,13 +310,55 @@ def _coerce_sort_by(
     return _effective_sort_by(sort_by, category, column_ids)
 
 
+def _player_pos_cards(player: dict) -> list[str]:
+    """Role-scores-style position cards (GK / DEF / FB / MID / W / ST)."""
+    cards = player.get("pos_cards")
+    if isinstance(cards, list) and cards:
+        return [str(c) for c in cards]
+    positions = player.get("positions") or []
+    if positions:
+        return player_pos_groups(positions)
+    pg = player.get("pos_group") or "mid"
+    return {
+        "gk": ["GK"],
+        "def": ["DEF"],
+        "mid": ["MID"],
+        "fwd": ["ST", "W"],
+    }.get(pg, ["MID"])
+
+
+def _bench_group_for_filter(pos_filter: str | None) -> str | None:
+    """Benchmark group for a position-card filter; None when All is selected."""
+    key = (pos_filter or "all").strip()
+    if key in ("", "all"):
+        return None
+    if key in ("gk", "def", "mid", "fwd"):
+        return key
+    return POS_CARD_BENCH.get(key) or POS_CARD_BENCH.get(key.upper())
+
+
+def _player_matches_pos_filter(player: dict, pos_filter: str | None) -> bool:
+    key = (pos_filter or "all").strip()
+    if key in ("", "all"):
+        return True
+    if key in ("gk", "def", "mid", "fwd"):
+        return (player.get("pos_group") or "mid") == key
+    return key in _player_pos_cards(player) or key.upper() in _player_pos_cards(player)
+
+
 def _resolve_category(group: str, category: str) -> tuple[str, str]:
     """Pick a valid shared category for the active position filter.
 
     Categories are always Defending / Final third / Possession (plus All).
     Goalkeepers use the mapped GK benchmark blocks under those same ids.
+    Position cards (DEF/FB/MID/W/ST/GK) map onto def/mid/fwd/gk thresholds.
     """
-    g = "gk" if is_gk_group(group) else (group if group in ("def", "mid", "fwd") else "def")
+    bench = _bench_group_for_filter(group)
+    g = bench or "def"
+    if is_gk_group(g):
+        g = "gk"
+    elif g not in ("def", "mid", "fwd"):
+        g = "def"
     cat = canonical_category(category)
     if cat == "all":
         return g, "all"
@@ -314,34 +369,39 @@ def _resolve_category(group: str, category: str) -> tuple[str, str]:
 
 def _band_group_cat(player: dict, view_group: str, view_cat: str) -> tuple[str | None, str | None]:
     """Benchmark group + shared category for one player under the current view."""
-    pg = player.get("pos_group") or "mid"
-    cat = canonical_category(view_cat)
-    if view_group not in ("", "all") and pg != view_group:
+    if not _player_matches_pos_filter(player, view_group):
         return None, None
-    use_g = "gk" if is_gk_group(pg) else pg
+    cat = canonical_category(view_cat)
+    bench = _bench_group_for_filter(view_group)
+    if bench:
+        use_g = bench
+    else:
+        pg = player.get("pos_group") or "mid"
+        use_g = "gk" if is_gk_group(pg) else pg
     return use_g, cat
 
 
 def _pos_groups_for_bar(players: list[dict], active: str) -> list[dict]:
     counts = {"all": len(players)}
-    for key, _label, _css in POS_GROUPS[1:]:
-        counts[key] = sum(1 for p in players if p.get("pos_group") == key)
+    for key, _name, _code, _css in POS_CARDS[1:]:
+        counts[key] = sum(1 for p in players if key in _player_pos_cards(p))
     return [
         {
             "key": key,
-            "label": label,
+            "label": name,
+            "code": code,
             "css": css,
             "count": counts.get(key, 0),
         }
-        for key, label, css in POS_GROUPS
+        for key, name, code, css in POS_CARDS
     ]
 
 
 def _category_items(group: str, active: str) -> tuple[list[dict[str, str]], str]:
-    _g, active = _resolve_category(group, active)
+    g, active = _resolve_category(group, active)
     cats = [
         {"id": "all", "label": "All"},
-        *labeled_view_categories(group=group),
+        *labeled_view_categories(group=g),
     ]
     return cats, active
 
@@ -427,20 +487,24 @@ def _avg_header_styles() -> list[dict]:
 
 def _avg_category_columns(group: str) -> list[dict[str, str]]:
     """All-category average columns; Final third shows both outfield + GK names."""
-    return labeled_view_categories(group=group, dual_final_third=True)
+    bench = _bench_group_for_filter(group)
+    return labeled_view_categories(
+        group=bench,
+        dual_final_third=bench is None,
+    )
 
 
 def _single_category_avg_section(group: str, category: str) -> dict[str, str] | None:
     """Labeled section for the selected category's average column (non-All)."""
-    _g, cat = _resolve_category(group, category)
+    g, cat = _resolve_category(group, category)
     if cat == "all":
         return None
-    for section in labeled_view_categories(group=group, dual_final_third=True):
+    for section in labeled_view_categories(group=g, dual_final_third=False):
         if section["id"] == cat:
             return section
     return {
         "id": cat,
-        "label": category_label(cat, group=group),
+        "label": category_label(cat, group=g),
         "abbr": CATEGORY_AVG_COL["abbr"],
     }
 
@@ -599,10 +663,10 @@ def _build_rows(
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
     )
-    avg_cats = _avg_category_columns(group) if cat == "all" else []
+    avg_cats = _avg_category_columns(g) if cat == "all" else []
     rows = []
     for p in players:
-        if group not in ("", "all") and p.get("pos_group") != group:
+        if not _player_matches_pos_filter(p, group):
             continue
         status = minutes_status(p.get("minutes"), minutes_required)
         mins = p.get("minutes")
@@ -618,7 +682,7 @@ def _build_rows(
                     {"percentile": None, "color": None}
                 )
             else:
-                use_g = g if group not in ("", "all") else bg
+                use_g = g if _bench_group_for_filter(group) else bg
                 row[OVERALL_COL["id"]] = _percentile_cell(
                     overall_average_band(
                         use_g, stats, threshold_overrides=threshold_overrides
@@ -629,7 +693,7 @@ def _build_rows(
                 if bg is None or bc is None:
                     row[col_id] = _percentile_cell({"percentile": None, "color": None})
                     continue
-                use_g = g if group not in ("", "all") else bg
+                use_g = g if _bench_group_for_filter(group) else bg
                 band = category_average_band(
                     use_g,
                     section["id"],
@@ -645,7 +709,7 @@ def _build_rows(
                 {"percentile": None, "color": None}
             )
         else:
-            use_g, use_c = (g, cat) if group not in ("", "all") else (bg, bc)
+            use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
             row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
                 category_average_band(
                     use_g, use_c, stats, threshold_overrides=threshold_overrides
@@ -656,7 +720,7 @@ def _build_rows(
             if bg is None or bc is None:
                 row[abbr] = "—"
                 continue
-            use_g, use_c = (g, cat) if group not in ("", "all") else (bg, bc)
+            use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
             if mid not in metrics_for(use_g, use_c, threshold_overrides):
                 row[abbr] = "—"
                 continue
@@ -1284,7 +1348,7 @@ def _filter_players(
     max_age = 99 if max_age is None else int(max_age)
     out = []
     for p in players:
-        if pos not in ("", "all") and p.get("pos_group") != pos:
+        if not _player_matches_pos_filter(p, pos):
             continue
         if q:
             blob = " ".join(
@@ -1867,7 +1931,7 @@ def refresh_table(
                 bg, bc = _band_group_cat(p, pos, category)
                 if bg is None or bc is None:
                     continue
-                use_g = g if pos not in ("", "all") else bg
+                use_g = g if _bench_group_for_filter(pos) else bg
                 band = category_average_band(
                     use_g,
                     first["id"],

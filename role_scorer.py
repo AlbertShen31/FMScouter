@@ -410,11 +410,11 @@ def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
 POS_CARDS = [
     ("all", "All", "", "all"),
     ("GK", "Goalkeeper", "GK", "gk"),
-    ("DEF", "Defender", "DC / CB", "def"),
+    ("DEF", "Center Back", "CB", "def"),
     ("FB", "Full Back", "FB / WB", "fb"),
-    ("MID", "Midfielder", "DM / CM", "mid"),
+    ("MID", "Midfielder", "DM / CM / AM", "mid"),
     ("W", "Winger", "AML / AMR", "w"),
-    ("ST", "Striker", "ST / CF", "st"),
+    ("ST", "Striker", "ST", "st"),
 ]
 
 POS_CARD_GROUPS = {
