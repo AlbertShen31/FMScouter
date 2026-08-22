@@ -405,8 +405,9 @@ def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
             parts.append(phase)
     return " ".join(parts)
 
-# Player-position filter cards on Role scores. The “Winger” card is AML/AMR
-# players, not the `w` role group and not the Winger (`W`) role.
+# Player-position filter cards. Matching is exact FM positions (see
+# matches_pos_card), not role-group eligibility (is_eligible still allows
+# ST for the `w` role bucket when scoring).
 POS_CARDS = [
     ("all", "All", "", "all"),
     ("GK", "Goalkeeper", "GK", "gk"),
@@ -417,6 +418,8 @@ POS_CARDS = [
     ("ST", "Striker", "ST", "st"),
 ]
 
+# Role groups that feed each card when scoring eligibility — not used for
+# the position-bar filter (that uses matches_pos_card).
 POS_CARD_GROUPS = {
     "GK": ("gk",),
     "DEF": ("cb",),
@@ -572,12 +575,33 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
     return False
 
 
+def matches_pos_card(positions: list[dict[str, str]], card: str) -> bool:
+    """Exact FM position match for a player-position filter card."""
+    for item in positions:
+        pos, area = item["position"], item["area"]
+        if card == "GK" and pos == "GK":
+            return True
+        if card == "DEF" and pos == "D" and "C" in area:
+            return True
+        if card == "FB" and (
+            pos == "WB" or (pos == "D" and ("L" in area or "R" in area))
+        ):
+            return True
+        if card == "MID" and (
+            pos == "DM"
+            or (pos == "M" and "C" in area)
+            or (pos == "AM" and "C" in area)
+        ):
+            return True
+        if card == "W" and pos in ("M", "AM") and ("L" in area or "R" in area):
+            return True
+        if card == "ST" and pos == "ST":
+            return True
+    return False
+
+
 def player_pos_groups(positions: list[dict[str, str]]) -> list[str]:
-    groups = []
-    for card, role_groups in POS_CARD_GROUPS.items():
-        if any(is_eligible(positions, group) for group in role_groups):
-            groups.append(card)
-    return groups
+    return [card for card, *_ in POS_CARDS[1:] if matches_pos_card(positions, card)]
 
 
 def _code_uses(code: str) -> int:

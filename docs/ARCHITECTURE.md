@@ -81,12 +81,17 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 ## Eligibility vs player cards
 
-`is_eligible(positions, group)` tests a parsed FM Position string against one **role group**.
+`is_eligible(positions, group)` tests a parsed FM Position string against one **role group** (whether a player can be scored as eligible for that role).
 
 - `wm`: `M` or `AM` on L/R
 - `w`: `AM` or `M` on L/R, or `ST`
 
-`POS_CARD_GROUPS["W"]` includes both `wm` and `w`, so the AML/AMR player card still covers both wide role buckets.
+Position-bar filters use `matches_pos_card` instead — exact FM positions only:
+
+- Winger: `M` / `AM` on L/R (not ST-only players)
+- Striker: `ST`
+- Midfielder: `DM`, `M (C)`, `AM (C)`
+- and so on for GK / CB / FB
 
 ## Phases
 
