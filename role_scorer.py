@@ -88,59 +88,93 @@ SET_PIECE_PROFILES = (
 )
 
 
-def set_piece_divisor(profile: dict) -> int:
+def _resolve_tier_weights(tier_weights: dict[str, float] | None = None) -> dict[str, float]:
+    if tier_weights:
+        return {
+            "key": float(tier_weights.get("key", pc.KEY_WEIGHT)),
+            "preferred": float(tier_weights.get("preferred", pc.PREFERRED_WEIGHT)),
+            "useful": float(tier_weights.get("useful", pc.USEFUL_WEIGHT)),
+        }
+    return {
+        "key": float(pc.KEY_WEIGHT),
+        "preferred": float(pc.PREFERRED_WEIGHT),
+        "useful": float(pc.USEFUL_WEIGHT),
+    }
+
+
+def _resolve_set_piece_profiles(profiles: list[dict] | None = None) -> list[dict]:
+    if profiles:
+        return list(profiles)
+    return list(SET_PIECE_PROFILES)
+
+
+def set_piece_divisor(
+    profile: dict, tier_weights: dict[str, float] | None = None
+) -> float:
+    weights = _resolve_tier_weights(tier_weights)
     return (
-        pc.KEY_WEIGHT * len(profile["key"])
-        + pc.PREFERRED_WEIGHT * len(profile["preferred"])
-        + pc.USEFUL_WEIGHT * len(profile["useful"])
+        weights["key"] * len(profile.get("key") or ())
+        + weights["preferred"] * len(profile.get("preferred") or ())
+        + weights["useful"] * len(profile.get("useful") or ())
     )
 
 
-def set_piece_formula(profile: dict) -> str:
+def set_piece_formula(
+    profile: dict, tier_weights: dict[str, float] | None = None
+) -> str:
+    weights = _resolve_tier_weights(tier_weights)
     terms = []
     for attr in profile.get("key") or ():
-        terms.append(f"{pc.KEY_WEIGHT:g}×{attr}")
+        terms.append(f"{weights['key']:g}×{attr}")
     for attr in profile.get("preferred") or ():
-        terms.append(f"{pc.PREFERRED_WEIGHT:g}×{attr}")
+        terms.append(f"{weights['preferred']:g}×{attr}")
     for attr in profile.get("useful") or ():
-        if pc.USEFUL_WEIGHT == 1:
+        if weights["useful"] == 1:
             terms.append(attr)
         else:
-            terms.append(f"{pc.USEFUL_WEIGHT:g}×{attr}")
+            terms.append(f"{weights['useful']:g}×{attr}")
     if not terms or not profile.get("score"):
         raw = profile.get("raw") or "?"
         return f"{profile['label']} = {raw} (raw only)"
-    return f"{profile['label']} = ({' + '.join(terms)}) ÷ {set_piece_divisor(profile):g}"
+    return (
+        f"{profile['label']} = ({' + '.join(terms)}) "
+        f"÷ {set_piece_divisor(profile, weights):g}"
+    )
 
 
-def set_piece_hint() -> str:
+def set_piece_hint(tier_weights: dict[str, float] | None = None) -> str:
+    weights = _resolve_tier_weights(tier_weights)
     return (
         "Combined scores use the same "
-        f"{pc.KEY_WEIGHT:g}× key / {pc.PREFERRED_WEIGHT:g}× preferred / "
-        f"{pc.USEFUL_WEIGHT:g}× useful weights as roles. "
+        f"{weights['key']:g}× key / {weights['preferred']:g}× preferred / "
+        f"{weights['useful']:g}× useful weights as roles. "
         "DFK is a shot from the dead ball; IFK is a delivery into the box. "
         "Checked types add their computed score column only."
     )
 
 
-def set_piece_sort_column(piece_id: str) -> str | None:
-    for profile in SET_PIECE_PROFILES:
+def set_piece_sort_column(
+    piece_id: str, profiles: list[dict] | None = None
+) -> str | None:
+    for profile in _resolve_set_piece_profiles(profiles):
         if profile["id"] == piece_id:
             return profile.get("score") or profile.get("raw")
     return None
 
 
-def set_piece_filter_columns(piece_id: str) -> str:
+def set_piece_filter_columns(
+    piece_id: str, profiles: list[dict] | None = None
+) -> str:
     """Column used for min-score filtering on a checked set-piece type."""
-    return set_piece_sort_column(piece_id) or ""
+    return set_piece_sort_column(piece_id, profiles) or ""
 
 
-def set_piece_columns(selected) -> list[str]:
+def set_piece_columns(selected, profiles: list[dict] | None = None) -> list[str]:
     """Computed score columns only for checked set-piece types."""
     chosen = set(selected or [])
     cols = []
     seen: set[str] = set()
-    for profile in SET_PIECE_PROFILES:
+    for profile in _resolve_set_piece_profiles(profiles):
         if profile["id"] not in chosen:
             continue
         score = profile.get("score")
@@ -150,17 +184,24 @@ def set_piece_columns(selected) -> list[str]:
     return cols
 
 
-def set_piece_header(score_col: str) -> str:
+def set_piece_header(score_col: str, profiles: list[dict] | None = None) -> str:
     """Short table header for a set-piece score column (e.g. Corners → COR)."""
-    for profile in SET_PIECE_PROFILES:
+    for profile in _resolve_set_piece_profiles(profiles):
         if profile.get("score") == score_col:
             return profile.get("abbr") or profile.get("label") or score_col
     return score_col
 
 
-def apply_set_piece_scores(row: dict[str, Any], attrs: dict[str, int]) -> None:
+def apply_set_piece_scores(
+    row: dict[str, Any],
+    attrs: dict[str, int],
+    *,
+    tier_weights: dict[str, float] | None = None,
+    profiles: list[dict] | None = None,
+) -> None:
+    weights = _resolve_tier_weights(tier_weights)
     written_raw: set[str] = set()
-    for profile in SET_PIECE_PROFILES:
+    for profile in _resolve_set_piece_profiles(profiles):
         raw = profile.get("raw")
         if raw and raw not in written_raw:
             value = attrs.get(raw)
@@ -169,15 +210,19 @@ def apply_set_piece_scores(row: dict[str, Any], attrs: dict[str, int]) -> None:
         score = profile.get("score")
         if not score:
             continue
+        key_attrs = list(profile.get("key") or ())
+        preferred_attrs = list(profile.get("preferred") or ())
+        useful_attrs = list(profile.get("useful") or ())
+        divisor = set_piece_divisor(profile, weights)
         row[score] = calculate_score(
             attrs,
-            list(profile["key"]),
-            list(profile["preferred"]),
-            list(profile["useful"]),
-            pc.KEY_WEIGHT,
-            pc.PREFERRED_WEIGHT,
-            pc.USEFUL_WEIGHT,
-            set_piece_divisor(profile),
+            key_attrs,
+            preferred_attrs,
+            useful_attrs,
+            weights["key"],
+            weights["preferred"],
+            weights["useful"],
+            divisor,
         )
 
 
@@ -981,8 +1026,13 @@ def score_band(
 
 
 def score_players(
-    players: list[dict[str, Any]], role_ids: list[str]
+    players: list[dict[str, Any]],
+    role_ids: list[str],
+    *,
+    tier_weights: dict[str, float] | None = None,
+    set_piece_profiles: list[dict] | None = None,
 ) -> list[dict[str, Any]]:
+    weights = _resolve_tier_weights(tier_weights) if tier_weights else None
     configs = []
     for role_id in role_ids:
         if role_id not in pc.all_positions:
@@ -1016,19 +1066,38 @@ def score_players(
             "Squad": player["squad"] or "-",
             "PosGroups": player.get("pos_groups") or [],
         }
-        apply_set_piece_scores(row, player.get("attrs") or {})
+        apply_set_piece_scores(
+            row,
+            player.get("attrs") or {},
+            tier_weights=weights,
+            profiles=set_piece_profiles,
+        )
         best_label = ""
         best_score = -1.0
         for role_id, label, cfg, groups in configs:
+            if weights:
+                key_w = weights["key"]
+                pref_w = weights["preferred"]
+                useful_w = weights["useful"]
+                divisor = (
+                    key_w * len(cfg.get("key_attrs") or [])
+                    + pref_w * len(cfg.get("preferred_attrs") or [])
+                    + useful_w * len(cfg.get("useful_attrs") or [])
+                )
+            else:
+                key_w = cfg["key_weight"]
+                pref_w = cfg["preferred_weight"]
+                useful_w = cfg["useful_weight"]
+                divisor = cfg["divisor"]
             score = calculate_score(
                 player["attrs"],
                 cfg["key_attrs"],
                 cfg["preferred_attrs"],
                 cfg["useful_attrs"],
-                cfg["key_weight"],
-                cfg["preferred_weight"],
-                cfg["useful_weight"],
-                cfg["divisor"],
+                key_w,
+                pref_w,
+                useful_w,
+                divisor,
             )
             row[label] = score
             row[f"{label} eligible"] = any(

@@ -54,7 +54,6 @@ from stats_scorer import (
     category_average_band,
     category_label,
     default_category_for_group,
-    default_minutes_required,
     is_gk_group,
     labeled_view_categories,
     metric_defs,
@@ -411,20 +410,17 @@ def _display_blank(value) -> str:
 
 
 def _table_columns(
-    group: str, category: str, threshold_overrides=None
+    group: str, category: str, threshold_overrides=None, settings=None
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
-    cols = [
-        {"name": "Name", "id": "Name"},
-        {"name": "Age", "id": "Age"},
-        {"name": identity_header_name("Height"), "id": "Height"},
-        {"name": "Position", "id": "Position"},
-        {"name": "Feet", "id": "Feet", "presentation": "markdown"},
-        {"name": "Club", "id": "Club"},
-        {"name": "Rec", "id": "Rec"},
-        {"name": "Injury", "id": "Injury"},
-        {"name": "Mins", "id": "Minutes", "presentation": "markdown"},
-    ]
+    settings = us.normalize(settings)
+    cols = []
+    for col in us.shortlist_columns(settings):
+        spec = {"name": identity_header_name(col), "id": col}
+        if col == "Feet":
+            spec["presentation"] = "markdown"
+        cols.append(spec)
+    cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     if cat == "all":
         cols.append(
             {
@@ -484,7 +480,16 @@ def _build_rows(
     category,
     minutes_required,
     threshold_overrides=None,
+    settings=None,
 ) -> list[dict]:
+    settings = us.normalize(settings)
+    identity_cols = us.shortlist_columns(settings)
+    identity_src = {
+        "Division": "division",
+        "Nation": "nation",
+        "Inf": "inf",
+        "Best Pos": "best_pos",
+    }
     g, cat = _resolve_category(group, category)
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
@@ -511,6 +516,9 @@ def _build_rows(
             "Minutes": _colored_cell(mins_text, minutes_color(status)),
             "_key": player_key(p),
         }
+        for col, src in identity_src.items():
+            if col in identity_cols:
+                row[col] = _display_blank(p.get(src))
         row["Feet"] = feet_cell(row)
         stats = scoring_stats(p)
         bg, bc = _band_group_cat(p, group, cat)
@@ -1123,7 +1131,9 @@ def _player_modal_body(
     eval_group: str | None = None,
     theme: str | None = "dark",
     threshold_overrides=None,
+    settings=None,
 ) -> html.Div:
+    settings = us.normalize(settings)
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
@@ -1142,6 +1152,7 @@ def _player_modal_body(
         player,
         id_prefix="st",
         extra_identity_fields=[("Minutes", "minutes")],
+        modal_extra_fields=settings.get("modal_extra_fields") if settings else None,
         field_styles={
             "minutes": {"color": minutes_color(status)},
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
@@ -1209,7 +1220,7 @@ def _filter_players(
 
 def layout(**_kwargs):
     settings = us.load()
-    mins_req = default_minutes_required()
+    mins_req = us.default_minutes_required(settings)
     foot_thresholds = settings["foot_thresholds"]
     return html.Div(
         [
@@ -1389,7 +1400,8 @@ def layout(**_kwargs):
                                     ),
                                     player_data_table(
                                         prefix="st",
-                                        columns=_table_columns("all", "all"),
+                                        columns=_table_columns("all", "all", settings=settings),
+                                        page_size=us.page_size(settings),
                                         style_cell_props=style_cell(text_align="center"),
                                         style_cell_conditional_rules=style_cell_conditional(),
                                         style_header_props=style_header(),
@@ -1403,6 +1415,7 @@ def layout(**_kwargs):
                                     table_caption_row(
                                         prefix="st",
                                         clear_button_id="st-clear-marks",
+                                        settings=settings,
                                     ),
                                     html.Div(
                                         [
@@ -1680,7 +1693,11 @@ def refresh_table(
     players = (parsed or {}).get("players") or []
     pos = pos or "all"
     settings = us.normalize(settings)
-    minutes_required = float(minutes_required or default_minutes_required())
+    minutes_required = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
     g, category = _resolve_category(pos, category or "")
     thresh = settings.get("stats_thresholds")
 
@@ -1700,8 +1717,9 @@ def refresh_table(
         category=category,
         minutes_required=minutes_required,
         threshold_overrides=thresh,
+        settings=settings,
     )
-    cols = _table_columns(pos, category, thresh)
+    cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(
         sort_by,
@@ -1887,9 +1905,14 @@ def open_player(
     view = _normalize_player_view(view)
     if not player:
         return True, "Player", html.Div("Player not found."), None, "mid"
-    minutes_required = float(minutes_required or default_minutes_required())
+    settings = us.normalize(settings)
+    minutes_required = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
-    thresh = us.normalize(settings).get("stats_thresholds")
+    thresh = settings.get("stats_thresholds")
     return (
         True,
         player.get("name"),
@@ -1900,6 +1923,7 @@ def open_player(
             eval_group=eval_group,
             theme=theme,
             threshold_overrides=thresh,
+            settings=settings,
         ),
         key,
         eval_group,
@@ -1944,16 +1968,22 @@ def switch_player_view(
     player = _lookup_modal_player(parsed, player_key_value)
     if not player:
         return view, html.Div("Player not found.")
-    thresh = us.normalize(settings).get("stats_thresholds")
+    settings = us.normalize(settings)
+    thresh = settings.get("stats_thresholds")
     return (
         view,
         _player_modal_body(
             player,
-            float(minutes_required or default_minutes_required()),
+            float(
+                minutes_required
+                if minutes_required is not None
+                else us.default_minutes_required(settings)
+            ),
             view=view,
             eval_group=eval_group,
             theme=theme,
             threshold_overrides=thresh,
+            settings=settings,
         ),
     )
 
@@ -1985,16 +2015,22 @@ def switch_player_group(
         return no_update, no_update
     if group == current:
         return no_update, no_update
-    thresh = us.normalize(settings).get("stats_thresholds")
+    settings = us.normalize(settings)
+    thresh = settings.get("stats_thresholds")
     return (
         group,
         _player_modal_body(
             player,
-            float(minutes_required or default_minutes_required()),
+            float(
+                minutes_required
+                if minutes_required is not None
+                else us.default_minutes_required(settings)
+            ),
             view=_normalize_player_view(view),
             eval_group=group,
             theme=theme,
             threshold_overrides=thresh,
+            settings=settings,
         ),
     )
 
@@ -2042,7 +2078,11 @@ def download_csv(
     if not players:
         return no_update
     settings = us.normalize(settings)
-    minutes_required = float(minutes_required or default_minutes_required())
+    minutes_required = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
     pos = pos or "all"
     _g, category = _resolve_category(pos, category or "")
     filtered = _filter_players(
@@ -2064,10 +2104,13 @@ def download_csv(
         category=category,
         minutes_required=minutes_required,
         threshold_overrides=settings.get("stats_thresholds"),
+        settings=settings,
     )
     fieldnames = [
         c["id"]
-        for c in _table_columns(pos, category, settings.get("stats_thresholds"))
+        for c in _table_columns(
+            pos, category, settings.get("stats_thresholds"), settings=settings
+        )
     ]
     export_rows = [{k: _strip_cell(r.get(k)) for k in fieldnames} for r in table_rows]
     return _csv_payload(fieldnames, export_rows)

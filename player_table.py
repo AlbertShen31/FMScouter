@@ -10,17 +10,33 @@ import dash_mantine_components as dmc
 from role_scorer import FOOT_STRENGTH_NAMES, FootStrength, foot_strength
 
 IDENTITY_TEXT_COLS = frozenset(
-    {"Name", "Age", "Height", "Position", "Feet", "Club", "Rec", "Injury"}
+    {
+        "Name",
+        "Age",
+        "Height",
+        "Position",
+        "Feet",
+        "Club",
+        "Rec",
+        "Injury",
+        "Division",
+        "Nation",
+        "Inf",
+        "Best Pos",
+    }
 )
-IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Injury")
+IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Injury", "Division", "Nation", "Inf")
 
 # Short table headers → full tooltip label (column id stays the key).
 IDENTITY_HEADER_ABBR = {
     "Height": "Ht",
+    "Best Pos": "BP",
 }
 IDENTITY_HEADER_TOOLTIPS = {
     "Height": "Height",
     "Minutes": "Minutes",
+    "Best Pos": "Best position",
+    "Inf": "Information / status",
 }
 
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
@@ -37,6 +53,23 @@ FOOT_STRENGTH_COLORS = {
 _FOOT_UNKNOWN = "#64748b"
 
 PAGE_SIZE_OPTIONS = ("25", "50", "100")
+
+
+def page_size_select_data(settings=None) -> list[dict[str, str]]:
+    import ui_settings as us
+
+    options = us.page_size_options(settings) if settings is not None else list(PAGE_SIZE_OPTIONS)
+    if not options:
+        options = list(PAGE_SIZE_OPTIONS)
+    return [{"label": size, "value": size} for size in options]
+
+
+def default_page_size_value(settings=None) -> str:
+    import ui_settings as us
+
+    if settings is None:
+        return "50"
+    return str(us.page_size(settings))
 
 
 def is_dark_theme(theme: str | None) -> bool:
@@ -560,6 +593,7 @@ def table_caption_row(
     prefix: str,
     clear_button_id: str,
     clear_label: str = "Clear marked rows",
+    settings=None,
 ) -> html.Div:
     """Caption + rows-per-page + clear-marks row used under both tables."""
     return html.Div(
@@ -572,11 +606,8 @@ def table_caption_row(
                             html.Label("Rows per page", className="rs-field-label"),
                             dmc.Select(
                                 id=f"{prefix}-page-size",
-                                data=[
-                                    {"label": size, "value": size}
-                                    for size in PAGE_SIZE_OPTIONS
-                                ],
-                                value="50",
+                                data=page_size_select_data(settings),
+                                value=default_page_size_value(settings),
                                 clearable=False,
                                 searchable=False,
                             ),

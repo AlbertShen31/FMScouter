@@ -42,6 +42,30 @@ WORKING = "working"
 
 TIER_CYCLE = ("none", "key", "preferred", "useful")
 NEXT_TIER = {"none": "key", "key": "preferred", "preferred": "useful", "useful": "none"}
+
+
+def tier_weight_map(settings=None) -> dict:
+    """Current key/preferred/useful multipliers (from UI settings when available)."""
+    try:
+        import ui_settings as us
+
+        weights = us.tier_weights(settings)
+        return {
+            "none": 0,
+            "key": weights["key"],
+            "preferred": weights["preferred"],
+            "useful": weights["useful"],
+        }
+    except Exception:
+        return {
+            "none": 0,
+            "key": pc.KEY_WEIGHT,
+            "preferred": pc.PREFERRED_WEIGHT,
+            "useful": pc.USEFUL_WEIGHT,
+        }
+
+
+# Backward-compatible default snapshot; prefer tier_weight_map() for live settings.
 TIER_WEIGHT = {
     "none": 0,
     "key": pc.KEY_WEIGHT,
@@ -164,27 +188,33 @@ def _overlay_attr_lists(overlay: dict) -> tuple[list[str], list[str], list[str]]
     )
 
 
-def recompute_divisor(cfg: dict) -> int:
+def recompute_divisor(cfg: dict, settings=None) -> float:
     key_attrs, preferred_attrs, useful_attrs = _attr_lists(cfg)
+    weights = tier_weight_map(settings)
     return (
-        pc.KEY_WEIGHT * len(key_attrs)
-        + pc.PREFERRED_WEIGHT * len(preferred_attrs)
-        + pc.USEFUL_WEIGHT * len(useful_attrs)
+        weights["key"] * len(key_attrs)
+        + weights["preferred"] * len(preferred_attrs)
+        + weights["useful"] * len(useful_attrs)
     )
 
 
 def _apply_lists(
-    cfg: dict, key_attrs: list[str], preferred_attrs: list[str], useful_attrs: list[str]
+    cfg: dict,
+    key_attrs: list[str],
+    preferred_attrs: list[str],
+    useful_attrs: list[str],
+    settings=None,
 ) -> None:
+    weights = tier_weight_map(settings)
     cfg["key_attrs"] = list(key_attrs)
     cfg["preferred_attrs"] = list(preferred_attrs)
     cfg["useful_attrs"] = list(useful_attrs)
-    cfg["key_weight"] = pc.KEY_WEIGHT
-    cfg["preferred_weight"] = pc.PREFERRED_WEIGHT
-    cfg["useful_weight"] = pc.USEFUL_WEIGHT
+    cfg["key_weight"] = weights["key"]
+    cfg["preferred_weight"] = weights["preferred"]
+    cfg["useful_weight"] = weights["useful"]
     for old in ("green_attrs", "blue_attrs", "green_weight", "blue_weight"):
         cfg.pop(old, None)
-    cfg["divisor"] = recompute_divisor(cfg)
+    cfg["divisor"] = recompute_divisor(cfg, settings)
 
 
 def _restore_defaults() -> None:

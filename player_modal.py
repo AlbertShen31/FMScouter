@@ -12,7 +12,8 @@ import dash_bootstrap_components as dbc
 
 from personality_ranges import attr_help, estimate_hidden_ranges, range_color
 
-# Shown on the player modal. Parsed CSV fields listed here are hidden for now.
+# Shown on the player modal. Parsed CSV fields listed here are hidden for now
+# unless the user enables them via Settings → modal_extra_fields.
 PLAYER_IDENTITY_HIDDEN = frozenset(
     {
         "world_reputation",
@@ -22,6 +23,15 @@ PLAYER_IDENTITY_HIDDEN = frozenset(
         "personality",
         "media_handling",
     }
+)
+
+MODAL_EXTRA_FIELD_DEFS = (
+    ("Ability", "ability"),
+    ("Potential", "potential"),
+    ("World reputation", "world_reputation"),
+    ("Squad", "squad"),
+    ("Personality", "personality"),
+    ("Media handling", "media_handling"),
 )
 
 PLAYER_IDENTITY_SECTIONS = [
@@ -82,6 +92,13 @@ def identity_value_present(value) -> bool:
     return text not in ("", "-")
 
 
+def is_identity_hidden(key: str, modal_extra_fields: Sequence[str] | None = None) -> bool:
+    """Hide default-hidden keys unless the user opted them in via settings."""
+    if key not in PLAYER_IDENTITY_HIDDEN:
+        return False
+    return key not in set(modal_extra_fields or ())
+
+
 def player_identity_item(
     label: str,
     key: str,
@@ -90,8 +107,11 @@ def player_identity_item(
     position_eligible: str | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    modal_extra_fields: Sequence[str] | None = None,
 ) -> html.Div | None:
-    if key in PLAYER_IDENTITY_HIDDEN or not identity_value_present(player.get(key)):
+    if is_identity_hidden(key, modal_extra_fields) or not identity_value_present(
+        player.get(key)
+    ):
         return None
     value_class = "rs-player-id-value"
     tip = None
@@ -127,13 +147,19 @@ def player_identity_sections(
     extra_identity_fields: Sequence[tuple[str, str]] | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    modal_extra_fields: Sequence[str] | None = None,
 ) -> list:
     """Build identity + international section nodes (no personality)."""
     sections_spec = list(PLAYER_IDENTITY_SECTIONS)
-    if extra_identity_fields:
+    enabled_extra = set(modal_extra_fields or ())
+    modal_fields = [
+        (label, key) for label, key in MODAL_EXTRA_FIELD_DEFS if key in enabled_extra
+    ]
+    extras = list(extra_identity_fields or ()) + modal_fields
+    if extras:
         # Append extras to the primary (untitled) identity row.
         title0, rows0 = sections_spec[0]
-        primary = list(rows0[0]) + list(extra_identity_fields)
+        primary = list(rows0[0]) + list(extras)
         sections_spec[0] = (title0, [primary, *rows0[1:]])
 
     sections = []
@@ -150,6 +176,7 @@ def player_identity_sections(
                         position_eligible=position_eligible,
                         field_styles=field_styles,
                         field_formatters=field_formatters,
+                        modal_extra_fields=modal_extra_fields,
                     )
                     for label, key in fields
                 )
@@ -284,6 +311,7 @@ def player_detail_body(
     extra_identity_fields: Sequence[tuple[str, str]] | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    modal_extra_fields: Sequence[str] | None = None,
     after_identity=None,
     bottom=None,
 ) -> html.Div:
@@ -295,6 +323,7 @@ def player_detail_body(
             extra_identity_fields=extra_identity_fields,
             field_styles=field_styles,
             field_formatters=field_formatters,
+            modal_extra_fields=modal_extra_fields,
         ),
         player_personality_section(player, id_prefix=id_prefix),
     ]

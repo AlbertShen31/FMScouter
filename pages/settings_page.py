@@ -7,6 +7,7 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+import role_config as rc
 import role_scorer as rs
 from stats_scorer import (
     benchmarks,
@@ -38,21 +39,110 @@ SETTINGS_SECTIONS = (
     ("player-stats", "Player stats"),
 )
 
+SHORTLIST_OPTIONS = [
+    {"label": col, "value": col} for col in us.ALLOWED_SHORTLIST_COLUMNS
+]
 
-def _set_piece_formula_lines() -> list:
-    lines = []
-    for profile in rs.SET_PIECE_PROFILES:
-        lines.append(
+MODAL_EXTRA_OPTIONS = [
+    {"label": label, "value": key} for key, label in us.MODAL_EXTRA_FIELD_OPTIONS
+]
+
+
+def _set_piece_attr_options() -> list[dict[str, str]]:
+    return [
+        {"value": code, "label": f"{code} — {label}"}
+        for code, label in sorted(rc.ATTR_LABELS.items(), key=lambda item: item[0])
+    ]
+
+
+def _set_piece_editor(settings: dict) -> html.Div:
+    profiles = us.set_piece_profiles(settings)
+    weights = us.tier_weights(settings)
+    options = _set_piece_attr_options()
+    rows = []
+    for profile in profiles:
+        pid = profile["id"]
+        rows.append(
             html.Div(
                 [
-                    html.Span(profile["label"], className="rs-set-piece-name"),
-                    html.Span(profile.get("detail") or "", className="rs-set-piece-detail"),
-                    html.Span(rs.set_piece_formula(profile), className="rs-set-piece-formula"),
+                    html.Div(
+                        [
+                            html.Span(profile["label"], className="rs-set-piece-name"),
+                            html.Span(
+                                profile.get("detail") or "",
+                                className="rs-set-piece-detail",
+                            ),
+                        ],
+                        className="st-sp-head",
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dmc.MultiSelect(
+                                    id={"type": "st-sp-key", "profile": pid},
+                                    label="Key",
+                                    data=options,
+                                    value=list(profile.get("key") or []),
+                                    searchable=True,
+                                    clearable=True,
+                                ),
+                                md=4,
+                            ),
+                            dbc.Col(
+                                dmc.MultiSelect(
+                                    id={"type": "st-sp-preferred", "profile": pid},
+                                    label="Preferred",
+                                    data=options,
+                                    value=list(profile.get("preferred") or []),
+                                    searchable=True,
+                                    clearable=True,
+                                ),
+                                md=4,
+                            ),
+                            dbc.Col(
+                                dmc.MultiSelect(
+                                    id={"type": "st-sp-useful", "profile": pid},
+                                    label="Useful",
+                                    data=options,
+                                    value=list(profile.get("useful") or []),
+                                    searchable=True,
+                                    clearable=True,
+                                ),
+                                md=4,
+                            ),
+                        ],
+                        className="g-2",
+                    ),
+                    html.Div(
+                        id={"type": "st-sp-formula", "profile": pid},
+                        children=rs.set_piece_formula(profile, weights),
+                        className="rs-set-piece-formula",
+                    ),
                 ],
-                className="rs-set-piece-line",
+                className="st-sp-profile",
             )
         )
-    return lines
+    return html.Div(rows, className="rs-set-piece-formulas st-set-piece-formulas")
+
+
+def _badge_color_row(tier: str, label: str, color: str) -> html.Div:
+    return html.Div(
+        [
+            html.Div(label, className="st-color-name"),
+            html.Span(
+                className="st-color-swatch",
+                style={"backgroundColor": color},
+            ),
+            dmc.TextInput(
+                id={"type": "st-badge-color", "tier": tier},
+                value=color,
+                debounce=500,
+                className="st-color-text",
+                placeholder="#rrggbb",
+            ),
+        ],
+        className="st-color-row st-badge-color-row",
+    )
 
 
 def _color_row(band: str, label: str, colors: dict) -> html.Div:
@@ -216,7 +306,7 @@ def _general_panel(settings: dict) -> list:
     return [
         _section_heading(
             "General",
-            "Manage the Role scores settings pack. Player stats percentiles use their own packs.",
+            "Manage the Role scores settings pack, theme, table paging, and player detail modal.",
         ),
         dbc.Card(
             [
@@ -262,6 +352,92 @@ def _general_panel(settings: dict) -> list:
                             ],
                             className="g-2 align-items-center",
                         ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Appearance & tables"),
+                dbc.CardBody(
+                    [
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    dmc.Select(
+                                        id="st-preferred-theme",
+                                        label="Preferred theme",
+                                        data=[
+                                            {"label": "Dark", "value": "dark"},
+                                            {"label": "Light", "value": "light"},
+                                        ],
+                                        value=settings.get("preferred_theme") or "dark",
+                                        clearable=False,
+                                        searchable=False,
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    dmc.Select(
+                                        id="st-page-size-default",
+                                        label="Default rows per page",
+                                        data=[
+                                            {"label": str(opt), "value": str(opt)}
+                                            for opt in settings.get("page_size_options")
+                                            or us.DEFAULTS["page_size_options"]
+                                        ],
+                                        value=str(settings.get("page_size") or 50),
+                                        clearable=False,
+                                        searchable=False,
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    dmc.TextInput(
+                                        id="st-page-size-options",
+                                        label="Page size options",
+                                        value=us.format_page_size_options(settings),
+                                        debounce=500,
+                                        placeholder="25, 50, 100",
+                                    ),
+                                    md=6,
+                                ),
+                            ],
+                            className="g-3",
+                        ),
+                        html.Small(
+                            "Preferred theme applies on Save (and when loading a pack). "
+                            "Page size options are comma-separated; the default must be one of them.",
+                            className="text-muted d-block mt-2",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Player detail modal"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Optional identity fields hidden by default. Checked fields appear "
+                            "in the player modal on Role scores and Player stats.",
+                            className="text-muted",
+                        ),
+                        dmc.CheckboxGroup(
+                            id="st-modal-extra",
+                            value=list(settings.get("modal_extra_fields") or []),
+                            children=[
+                                dmc.Checkbox(
+                                    label=opt["label"],
+                                    value=opt["value"],
+                                )
+                                for opt in MODAL_EXTRA_OPTIONS
+                            ],
+                            className="st-modal-extra-checks",
+                        ),
                         _section_save_row("st-save-general", "st-status-general"),
                     ]
                 ),
@@ -273,10 +449,14 @@ def _general_panel(settings: dict) -> list:
 
 def _role_panel(settings: dict) -> list:
     bands = settings["bands"]
+    tier_w = settings["tier_weights"]
+    hybrid_w = settings["hybrid_weights"]
+    badge = settings["tier_badge_colors"]
     return [
         _section_heading(
             "Role scores",
-            "Score bands, colors, histogram, set pieces, age menu, and footedness "
+            "Score bands, colors, histogram, set pieces, age menu, footedness, "
+            "tier weights, and shortlist columns "
             "(age and footedness are also used on Player stats).",
         ),
         dbc.Card(
@@ -367,6 +547,86 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
+                dbc.CardHeader("Scoring weights"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Tier multipliers for role and set-piece scores. "
+                            "Hybrid weights combine IP and OOP part scores.",
+                            className="text-muted",
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-tier-key",
+                                        label="Key ×",
+                                        min=0.1,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=2,
+                                        value=tier_w["key"],
+                                    ),
+                                    md=2,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-tier-preferred",
+                                        label="Preferred ×",
+                                        min=0.1,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=2,
+                                        value=tier_w["preferred"],
+                                    ),
+                                    md=2,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-tier-useful",
+                                        label="Useful ×",
+                                        min=0.1,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=2,
+                                        value=tier_w["useful"],
+                                    ),
+                                    md=2,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-hybrid-ip",
+                                        label="Hybrid IP ×",
+                                        min=0.1,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=2,
+                                        value=hybrid_w["ip"],
+                                    ),
+                                    md=2,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-hybrid-oop",
+                                        label="Hybrid OOP ×",
+                                        min=0.1,
+                                        max=20,
+                                        step=0.5,
+                                        decimalScale=2,
+                                        value=hybrid_w["oop"],
+                                    ),
+                                    md=2,
+                                ),
+                            ],
+                            className="g-3",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
                 dbc.CardHeader("Footedness"),
                 dbc.CardBody(
                     [
@@ -419,10 +679,40 @@ def _role_panel(settings: dict) -> list:
                 dbc.CardHeader("Set-piece formulas"),
                 dbc.CardBody(
                     [
-                        html.P(rs.set_piece_hint(), className="text-muted"),
-                        html.Div(
-                            _set_piece_formula_lines(),
-                            className="rs-set-piece-formulas st-set-piece-formulas",
+                        html.P(
+                            id="st-set-piece-hint",
+                            children=rs.set_piece_hint(tier_w),
+                            className="text-muted",
+                        ),
+                        html.P(
+                            "Edit key / preferred / useful attributes per type. "
+                            "Preview uses the scoring weights above.",
+                            className="text-muted",
+                        ),
+                        _set_piece_editor(settings),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Shortlist columns"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Identity columns on Role scores (and matching columns on Player stats). "
+                            "Name is always included.",
+                            className="text-muted",
+                        ),
+                        dmc.CheckboxGroup(
+                            id="st-shortlist-cols",
+                            value=us.shortlist_columns(settings),
+                            children=[
+                                dmc.Checkbox(label=opt["label"], value=opt["value"])
+                                for opt in SHORTLIST_OPTIONS
+                            ],
+                            className="st-shortlist-checks",
                         ),
                     ]
                 ),
@@ -472,6 +762,30 @@ def _role_panel(settings: dict) -> list:
                             ],
                             className="st-color-list",
                         ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Role config badge colors"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Colors for key / preferred / useful on the Role configs page "
+                            "(CSS variables --rc-key, --rc-green, --rc-blue). "
+                            "The same values apply in dark and light themes — pick colors that work for both.",
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            [
+                                _badge_color_row("key", "Key", badge["key"]),
+                                _badge_color_row("preferred", "Preferred", badge["preferred"]),
+                                _badge_color_row("useful", "Useful", badge["useful"]),
+                            ],
+                            className="st-color-list",
+                        ),
                         _section_save_row("st-save-role", "st-status-role"),
                     ]
                 ),
@@ -481,7 +795,8 @@ def _role_panel(settings: dict) -> list:
     ]
 
 
-def _player_panel(thresh_pack: dict) -> list:
+def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
+    settings = us.normalize(settings)
     tree = thresh_pack["thresholds"]
     group0 = "mid"
     cat0 = _default_thresh_category(group0)
@@ -496,6 +811,29 @@ def _player_panel(thresh_pack: dict) -> list:
             "Player stats",
             "Percentile cut-points for each statistic (20th / 40th / 60th / 80th). "
             "These drive estimated percentiles on the Player stats page.",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Minutes requirement"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Default minutes used to seed the Player stats minutes filter. "
+                            "Saved when you Save this section (percentile pack card below).",
+                            className="text-muted",
+                        ),
+                        dmc.NumberInput(
+                            id="st-default-minutes",
+                            label="Default minutes required",
+                            value=settings.get("default_minutes_required"),
+                            min=0,
+                            max=20000,
+                            step=90,
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
         ),
         dbc.Card(
             [
@@ -635,7 +973,7 @@ def layout(section: str | None = None, **_kwargs):
                             ),
                             _panel(
                                 "player-stats",
-                                _player_panel(thresh_pack),
+                                _player_panel(thresh_pack, settings),
                                 active=active == "player-stats",
                             ),
                         ],
@@ -686,8 +1024,60 @@ def _color_values_for(settings: dict, specs) -> list[str]:
     ]
 
 
-def _role_form_values(settings: dict, specs) -> tuple:
+def _badge_colors_from_state(values, specs) -> dict[str, str]:
+    out = {}
+    for spec, value in zip(specs or [], values or []):
+        tier = spec["id"]["tier"]
+        out[tier] = value
+    return out
+
+
+def _badge_values_for(settings: dict, specs) -> list[str]:
+    colors = settings["tier_badge_colors"]
+    return [colors[spec["id"]["tier"]] for spec in specs]
+
+
+def _set_piece_lists_from_state(values, specs) -> dict[str, list]:
+    out: dict[str, list] = {}
+    for spec, value in zip(specs or [], values or []):
+        out[spec["id"]["profile"]] = list(value or [])
+    return out
+
+
+def _set_piece_profiles_from_state(key_map, pref_map, useful_map) -> list[dict]:
+    profiles = []
+    for builtin in rs.SET_PIECE_PROFILES:
+        pid = builtin["id"]
+        profiles.append(
+            {
+                "id": pid,
+                "key": key_map.get(pid, list(builtin.get("key") or [])),
+                "preferred": pref_map.get(pid, list(builtin.get("preferred") or [])),
+                "useful": useful_map.get(pid, list(builtin.get("useful") or [])),
+            }
+        )
+    return us.normalize_set_piece_profiles(profiles)
+
+
+def _sp_values_for(settings: dict, specs, tier: str) -> list:
+    profiles = {p["id"]: p for p in us.set_piece_profiles(settings)}
+    return [list(profiles.get(spec["id"]["profile"], {}).get(tier) or []) for spec in specs]
+
+
+def _role_form_values(
+    settings: dict,
+    color_specs,
+    badge_specs,
+    sp_key_specs,
+    sp_pref_specs,
+    sp_useful_specs,
+) -> tuple:
     feet = settings["foot_thresholds"]
+    tw = settings["tier_weights"]
+    hw = settings["hybrid_weights"]
+    page_opts = [
+        {"label": opt, "value": opt} for opt in us.page_size_options(settings)
+    ]
     return (
         us.format_list(settings["age_tiers"], kind="age"),
         settings["bands"]["elite"],
@@ -697,7 +1087,23 @@ def _role_form_values(settings: dict, specs) -> tuple:
         str(feet["both"]),
         str(feet["right"]),
         us.format_list(settings["hist_edges"]),
-        _color_values_for(settings, specs),
+        _color_values_for(settings, color_specs),
+        tw["key"],
+        tw["preferred"],
+        tw["useful"],
+        hw["ip"],
+        hw["oop"],
+        us.shortlist_columns(settings),
+        _badge_values_for(settings, badge_specs),
+        _sp_values_for(settings, sp_key_specs, "key"),
+        _sp_values_for(settings, sp_pref_specs, "preferred"),
+        _sp_values_for(settings, sp_useful_specs, "useful"),
+        settings["preferred_theme"],
+        page_opts,
+        str(settings["page_size"]),
+        us.format_page_size_options(settings),
+        list(settings["modal_extra_fields"]),
+        settings["default_minutes_required"],
     )
 
 
@@ -754,6 +1160,53 @@ def preview_poor(ok):
 )
 def preview_foot(left, both, right):
     return rs.foot_filter_help({"left": left, "both": both, "right": right})
+
+
+@callback(
+    Output("st-page-size-default", "data"),
+    Output("st-page-size-default", "value", allow_duplicate=True),
+    Input("st-page-size-options", "value"),
+    State("st-page-size-default", "value"),
+    prevent_initial_call=True,
+)
+def sync_page_size_choices(options_text, current):
+    opts = us.normalize_page_size_options(options_text)
+    data = [{"label": str(opt), "value": str(opt)} for opt in opts]
+    value = str(us.normalize_page_size(current, opts))
+    return data, value
+
+
+@callback(
+    Output("st-set-piece-hint", "children"),
+    Output({"type": "st-sp-formula", "profile": ALL}, "children"),
+    Input("st-tier-key", "value"),
+    Input("st-tier-preferred", "value"),
+    Input("st-tier-useful", "value"),
+    Input({"type": "st-sp-key", "profile": ALL}, "value"),
+    Input({"type": "st-sp-preferred", "profile": ALL}, "value"),
+    Input({"type": "st-sp-useful", "profile": ALL}, "value"),
+)
+def preview_set_piece_formulas(key_w, pref_w, useful_w, keys, prefs, usefuls):
+    weights = us.normalize_tier_weights(
+        {"key": key_w, "preferred": pref_w, "useful": useful_w}
+    )
+    key_specs = ctx.inputs_list[3] if len(ctx.inputs_list) > 3 else []
+    pref_specs = ctx.inputs_list[4] if len(ctx.inputs_list) > 4 else []
+    useful_specs = ctx.inputs_list[5] if len(ctx.inputs_list) > 5 else []
+    key_map = _set_piece_lists_from_state(keys, key_specs)
+    pref_map = _set_piece_lists_from_state(prefs, pref_specs)
+    useful_map = _set_piece_lists_from_state(usefuls, useful_specs)
+    profiles = _set_piece_profiles_from_state(key_map, pref_map, useful_map) or [
+        dict(p) for p in rs.SET_PIECE_PROFILES
+    ]
+    formula_specs = ctx.outputs_list[1] if len(ctx.outputs_list) > 1 else []
+    by_id = {p["id"]: p for p in profiles}
+    fallback = dict(rs.SET_PIECE_PROFILES[0])
+    lines = [
+        rs.set_piece_formula(by_id.get(spec["id"]["profile"]) or fallback, weights)
+        for spec in formula_specs
+    ]
+    return rs.set_piece_hint(weights), lines
 
 
 @callback(
@@ -831,7 +1284,29 @@ def _ui_draft_from_state(
     edges,
     color_values,
     color_specs,
+    tier_key,
+    tier_preferred,
+    tier_useful,
+    hybrid_ip,
+    hybrid_oop,
+    shortlist_cols,
+    badge_values,
+    badge_specs,
+    sp_keys,
+    sp_key_specs,
+    sp_prefs,
+    sp_pref_specs,
+    sp_usefuls,
+    sp_useful_specs,
+    preferred_theme,
+    page_size_default,
+    page_size_options,
+    modal_extra,
+    default_minutes,
 ) -> dict:
+    key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
+    pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
+    useful_map = _set_piece_lists_from_state(sp_usefuls, sp_useful_specs)
     return {
         "id": pack_id,
         "age_tiers": ages,
@@ -843,6 +1318,20 @@ def _ui_draft_from_state(
         },
         "hist_edges": edges,
         "colors": _colors_from_state(color_values, color_specs),
+        "tier_weights": {
+            "key": tier_key,
+            "preferred": tier_preferred,
+            "useful": tier_useful,
+        },
+        "hybrid_weights": {"ip": hybrid_ip, "oop": hybrid_oop},
+        "shortlist_columns": shortlist_cols,
+        "tier_badge_colors": _badge_colors_from_state(badge_values, badge_specs),
+        "set_piece_profiles": _set_piece_profiles_from_state(key_map, pref_map, useful_map),
+        "preferred_theme": preferred_theme,
+        "page_size": page_size_default,
+        "page_size_options": page_size_options,
+        "modal_extra_fields": modal_extra,
+        "default_minutes_required": default_minutes,
     }
 
 
@@ -859,6 +1348,23 @@ def _ui_draft_from_state(
     Output("st-foot-right", "value"),
     Output("st-hist-edges", "value"),
     Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    Output("st-tier-key", "value"),
+    Output("st-tier-preferred", "value"),
+    Output("st-tier-useful", "value"),
+    Output("st-hybrid-ip", "value"),
+    Output("st-hybrid-oop", "value"),
+    Output("st-shortlist-cols", "value"),
+    Output({"type": "st-badge-color", "tier": ALL}, "value"),
+    Output({"type": "st-sp-key", "profile": ALL}, "value"),
+    Output({"type": "st-sp-preferred", "profile": ALL}, "value"),
+    Output({"type": "st-sp-useful", "profile": ALL}, "value"),
+    Output("st-preferred-theme", "value"),
+    Output("st-page-size-default", "data", allow_duplicate=True),
+    Output("st-page-size-default", "value"),
+    Output("st-page-size-options", "value"),
+    Output("st-modal-extra", "value"),
+    Output("st-default-minutes", "value"),
+    Output("theme", "data", allow_duplicate=True),
     Output("st-status-general", "children"),
     Output("st-status-role", "children"),
     Output("st-new-name", "value"),
@@ -877,6 +1383,21 @@ def _ui_draft_from_state(
     State("st-foot-right", "value"),
     State("st-hist-edges", "value"),
     State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    State("st-tier-key", "value"),
+    State("st-tier-preferred", "value"),
+    State("st-tier-useful", "value"),
+    State("st-hybrid-ip", "value"),
+    State("st-hybrid-oop", "value"),
+    State("st-shortlist-cols", "value"),
+    State({"type": "st-badge-color", "tier": ALL}, "value"),
+    State({"type": "st-sp-key", "profile": ALL}, "value"),
+    State({"type": "st-sp-preferred", "profile": ALL}, "value"),
+    State({"type": "st-sp-useful", "profile": ALL}, "value"),
+    State("st-preferred-theme", "value"),
+    State("st-page-size-default", "value"),
+    State("st-page-size-options", "value"),
+    State("st-modal-extra", "value"),
+    State("st-default-minutes", "value"),
     prevent_initial_call=True,
 )
 def handle_ui_settings(
@@ -895,11 +1416,34 @@ def handle_ui_settings(
     foot_right,
     edges,
     color_values,
+    tier_key,
+    tier_preferred,
+    tier_useful,
+    hybrid_ip,
+    hybrid_oop,
+    shortlist_cols,
+    badge_values,
+    sp_keys,
+    sp_prefs,
+    sp_usefuls,
+    preferred_theme,
+    page_size_default,
+    page_size_options,
+    modal_extra,
+    default_minutes,
 ):
     triggered = ctx.triggered_id
+    n_out = 32
     if not triggered:
-        return (no_update,) * 15
-    color_specs = ctx.states_list[-1] if ctx.states_list else []
+        return (no_update,) * n_out
+
+    states = ctx.states_list or []
+    color_specs = states[9] if len(states) > 9 else []
+    badge_specs = states[16] if len(states) > 16 else []
+    sp_key_specs = states[17] if len(states) > 17 else []
+    sp_pref_specs = states[18] if len(states) > 18 else []
+    sp_useful_specs = states[19] if len(states) > 19 else []
+
     draft = _ui_draft_from_state(
         pack_id,
         ages,
@@ -912,15 +1456,36 @@ def handle_ui_settings(
         edges,
         color_values,
         color_specs,
+        tier_key,
+        tier_preferred,
+        tier_useful,
+        hybrid_ip,
+        hybrid_oop,
+        shortlist_cols,
+        badge_values,
+        badge_specs,
+        sp_keys,
+        sp_key_specs,
+        sp_prefs,
+        sp_pref_specs,
+        sp_usefuls,
+        sp_useful_specs,
+        preferred_theme,
+        page_size_default,
+        page_size_options,
+        modal_extra,
+        default_minutes,
     )
     status_general = no_update
     status_role = no_update
     clear_name = no_update
     update_pack_options = True
+    sync_theme = False
 
     if triggered == "st-pack":
         settings = us.load(pack_id)
         status_general = f"Loaded {settings['name']}."
+        sync_theme = True
     elif triggered == "st-reset":
         if pack_id == us.BUILTIN:
             us.clear_default_overrides()
@@ -935,18 +1500,19 @@ def handle_ui_settings(
                 "Form reset to built-in defaults. Save Role scores to keep them on this pack."
             )
         update_pack_options = False
+        sync_theme = True
     elif triggered == "st-new":
         label = str(new_name or "").strip()
         if not label:
             return (
-                (no_update,) * 12
+                (no_update,) * 29
                 + ("Enter a name to create a new settings file.", no_update, no_update)
             )
         settings = us.create_pack(label, draft)
         status_general = f"Created {settings['name']}."
         clear_name = ""
+        sync_theme = True
     elif triggered == "st-save-general":
-        # Pack metadata / persist current Role scores draft onto the active pack.
         if us.is_builtin(pack_id):
             settings = us.save(draft, pack_id)
             status_general = f"Saved {settings['name']} overrides."
@@ -956,6 +1522,7 @@ def handle_ui_settings(
             settings = us.save(draft, pack_id)
             status_general = f"Saved {settings['name']}."
             update_pack_options = False
+        sync_theme = True
     elif triggered == "st-save-role":
         if us.is_builtin(pack_id):
             settings = us.save(draft, pack_id)
@@ -967,17 +1534,26 @@ def handle_ui_settings(
             status_role = f"Saved Role scores to {settings['name']}."
             update_pack_options = False
     else:
-        return (no_update,) * 15
+        return (no_update,) * n_out
 
     settings = _refresh_ui_settings(settings)
-    role_values = _role_form_values(settings, color_specs)
+    role_values = _role_form_values(
+        settings,
+        color_specs,
+        badge_specs,
+        sp_key_specs,
+        sp_pref_specs,
+        sp_useful_specs,
+    )
     pack_options = us.pack_options() if update_pack_options else no_update
     pack_value = settings["id"] if update_pack_options else no_update
+    theme_value = settings["preferred_theme"] if sync_theme else no_update
     return (
         settings,
         pack_options,
         pack_value,
         *role_values,
+        theme_value,
         status_general,
         status_role,
         clear_name,
@@ -992,6 +1568,7 @@ def handle_ui_settings(
     Output("st-thresh-revision", "data"),
     Output("st-status-thresh", "children"),
     Output("st-thresh-new-name", "value"),
+    Output("st-default-minutes", "value", allow_duplicate=True),
     Input("st-thresh-pack", "value"),
     Input("st-thresh-new", "n_clicks"),
     Input("st-thresh-reset", "n_clicks"),
@@ -1000,6 +1577,7 @@ def handle_ui_settings(
     State("st-thresh-data", "data"),
     State("st-thresh-revision", "data"),
     State("ui-settings", "data"),
+    State("st-default-minutes", "value"),
     prevent_initial_call=True,
 )
 def handle_thresh_packs(
@@ -1011,14 +1589,16 @@ def handle_thresh_packs(
     thresh_data,
     revision,
     ui_settings,
+    default_minutes,
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return (no_update,) * 7
+        return (no_update,) * 8
     draft = {"id": pack_id, "thresholds": thresh_data}
     clear_name = no_update
     update_options = True
     bump = True
+    minutes_out = no_update
 
     if triggered == "st-thresh-pack":
         pack = stp.load(pack_id)
@@ -1052,6 +1632,7 @@ def handle_thresh_packs(
                 no_update,
                 "Enter a name to create a new percentile pack.",
                 no_update,
+                no_update,
             )
         pack = stp.create_pack(label, draft)
         status = f"Created {pack['name']}."
@@ -1067,12 +1648,21 @@ def handle_thresh_packs(
             status = f"Saved {pack['name']}."
             update_options = False
     else:
-        return (no_update,) * 7
+        return (no_update,) * 8
 
-    # Refresh ui-settings so Player stats picks up the active tree.
+    # Refresh ui-settings so Player stats picks up the active tree + minutes default.
     settings = us.normalize(ui_settings or {})
     settings["stats_thresholds"] = pack["thresholds"]
     settings["stats_threshold_pack_id"] = pack["id"]
+    if triggered == "st-save-thresh":
+        settings["default_minutes_required"] = us.normalize_default_minutes_required(
+            default_minutes
+        )
+        # Persist minutes on the active Role scores settings pack.
+        settings = us.save(settings, settings.get("id"))
+        minutes_out = settings["default_minutes_required"]
+        status = f"{status} Minutes default saved."
+    settings = _refresh_ui_settings(settings)
     return (
         settings,
         stp.pack_options() if update_options else no_update,
@@ -1081,4 +1671,5 @@ def handle_thresh_packs(
         int(revision or 0) + (1 if bump else 0),
         status,
         clear_name,
+        minutes_out,
     )

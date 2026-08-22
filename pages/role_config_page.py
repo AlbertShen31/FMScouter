@@ -14,18 +14,25 @@ register_page(__name__, path="/role-config", name="Role configs")
 rc.ensure_loaded()
 
 DEFAULT_ROLE = "Sweeper_Keeper_OOP_GK"
-TIER_HINT = {
-    "none": "Off",
-    "key": "Key ×5",
-    "preferred": "Preferred ×3",
-    "useful": "Useful ×1",
-}
-PAINT_OPTIONS = (
-    ("none", "Off"),
-    ("key", "Key ×5"),
-    ("preferred", "Preferred ×3"),
-    ("useful", "Useful ×1"),
-)
+
+
+def _tier_hints(settings=None) -> dict[str, str]:
+    weights = rc.tier_weight_map(settings)
+    return {
+        "none": "Off",
+        "key": f"Key ×{weights['key']:g}",
+        "preferred": f"Preferred ×{weights['preferred']:g}",
+        "useful": f"Useful ×{weights['useful']:g}",
+    }
+
+
+def _paint_options(settings=None) -> tuple[tuple[str, str], ...]:
+    hints = _tier_hints(settings)
+    return tuple((tier, hints[tier]) for tier in ("none", "key", "preferred", "useful"))
+
+
+TIER_HINT = _tier_hints()
+PAINT_OPTIONS = _paint_options()
 
 
 def _all_roles() -> list[tuple[str, dict]]:
@@ -156,6 +163,12 @@ def _identity(role_id: str) -> html.Div:
     preferred_n = len(cfg.get("preferred_attrs") or [])
     useful_n = len(cfg.get("useful_attrs") or [])
     dirty = rc.is_modified(role_id)
+    weights = rc.tier_weight_map()
+    divisor = (
+        weights["key"] * key_n
+        + weights["preferred"] * preferred_n
+        + weights["useful"] * useful_n
+    )
     return html.Div(
         [
             html.Div(meta["name"], className="rc-role-name"),
@@ -213,10 +226,19 @@ def _identity(role_id: str) -> html.Div:
                     _info_row("Code", meta["code"]),
                     _info_row("Phase", meta["phase"] or "—"),
                     _info_row("Group", meta.get("group_label") or "—"),
-                    _info_row("Key attrs", _badge(f"{key_n} × {rc.TIER_WEIGHT['key']}", "key")),
-                    _info_row("Preferred attrs", _badge(f"{preferred_n} × {rc.TIER_WEIGHT['preferred']}", "preferred")),
-                    _info_row("Useful attrs", _badge(f"{useful_n} × {rc.TIER_WEIGHT['useful']}", "useful")),
-                    _info_row("Divisor", cfg.get("divisor") or 0),
+                    _info_row(
+                        "Key attrs",
+                        _badge(f"{key_n} × {weights['key']:g}", "key"),
+                    ),
+                    _info_row(
+                        "Preferred attrs",
+                        _badge(f"{preferred_n} × {weights['preferred']:g}", "preferred"),
+                    ),
+                    _info_row(
+                        "Useful attrs",
+                        _badge(f"{useful_n} × {weights['useful']:g}", "useful"),
+                    ),
+                    _info_row("Divisor", divisor),
                 ],
                 className="rc-info-list",
             ),
@@ -248,7 +270,10 @@ def _identity(role_id: str) -> html.Div:
             html.Div("Useful", className="rc-section-kicker"),
             _attr_pills(cfg, "useful"),
             html.Div(
-                "score = (5×key + 3×preferred + 1×useful) / divisor",
+                (
+                    f"score = ({weights['key']:g}×key + {weights['preferred']:g}×preferred "
+                    f"+ {weights['useful']:g}×useful) / divisor"
+                ),
                 className="rc-formula",
             ),
         ],
@@ -265,20 +290,21 @@ def _paint_buttons(active: str) -> list:
             className="rc-legend " + tier + (" active" if active == tier else ""),
             title=f"Click attributes to set them to {label}",
         )
-        for tier, label in PAINT_OPTIONS
+        for tier, label in _paint_options()
     ]
 
 
 def _attr_row(attr: str, label: str, cfg: dict) -> html.Button:
     tier = rc.attr_tier(cfg, attr)
-    weight = rc.TIER_WEIGHT[tier]
-    display = "—" if tier == "none" else str(weight)
+    weight = rc.tier_weight_map()[tier]
+    display = "—" if tier == "none" else f"{weight:g}"
+    hints = _tier_hints()
     return attr_row(
         label,
         display,
         value_class=tier,
         row_class=f"is-{tier}" if tier != "none" else "",
-        title=f"Set to {TIER_HINT.get(tier, tier)}",
+        title=f"Set to {hints.get(tier, tier)}",
         attr_id=attr,
     )
 
@@ -300,7 +326,7 @@ def _attributes(role_id: str, paint: str = "key") -> html.Div:
                 className="rc-attrs-header",
             ),
             html.Div(
-                f"Assigning {TIER_HINT[paint]}. Click a type once, then click attributes to apply it.",
+                f"Assigning {_tier_hints()[paint]}. Click a type once, then click attributes to apply it.",
                 className="rc-attrs-note",
             ),
             attr_grid(columns),

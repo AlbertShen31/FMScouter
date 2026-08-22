@@ -192,10 +192,20 @@ def _hist_figure(rows: list[dict], view_roles: list[str], bins: list, theme) -> 
 BLANK_FIG = _blank_fig("dark")
 
 HYBRID_HELP = (
-    f"Hybrid score = ({COMBO_IP_WEIGHT:g}× in possession + {COMBO_OOP_WEIGHT:g}× out of possession) "
-    f"÷ {COMBO_IP_WEIGHT + COMBO_OOP_WEIGHT:g}. Both part scores stay in the table. "
+    "Hybrid score = (IP weight × in possession + OOP weight × out of possession) "
+    "÷ total. Both part scores stay in the table. "
     "A player is eligible if they can play either part."
 )
+
+
+def _hybrid_help(settings=None) -> str:
+    weights = us.hybrid_weights(settings)
+    total = weights["ip"] + weights["oop"]
+    return (
+        f"Hybrid score = ({weights['ip']:g}× in possession + {weights['oop']:g}× out of possession) "
+        f"÷ {total:g}. Both part scores stay in the table. "
+        "A player is eligible if they can play either part."
+    )
 
 ROLE_MODE_DATA = [
     {"label": "Single roles", "value": "single"},
@@ -317,6 +327,7 @@ def _player_detail_card(
         player,
         id_prefix="rs",
         position_eligible=position_eligible,
+        modal_extra_fields=settings.get("modal_extra_fields"),
         bottom=_player_attributes(player, settings["bands"]),
     )
 
@@ -451,14 +462,19 @@ def _colored_group_abbr(abbr: str, *, css: str = "rs-pill-groups"):
 
 
 def _set_piece_panel(settings=None) -> html.Details:
+    weights = us.tier_weights(settings)
+    profiles = us.set_piece_profiles(settings)
     lines = []
-    for profile in SET_PIECE_PROFILES:
+    for profile in profiles:
         lines.append(
             html.Div(
                 [
                     html.Span(profile["label"], className="rs-set-piece-name"),
                     html.Span(profile.get("detail") or "", className="rs-set-piece-detail"),
-                    html.Span(set_piece_formula(profile), className="rs-set-piece-formula"),
+                    html.Span(
+                        set_piece_formula(profile, weights),
+                        className="rs-set-piece-formula",
+                    ),
                 ],
                 className="rs-set-piece-line",
             )
@@ -551,7 +567,7 @@ def _set_piece_panel(settings=None) -> html.Details:
                             html.Summary(
                                 "Formulas & descriptions",
                                 className="rs-set-piece-formulas-toggle",
-                                title=set_piece_hint(),
+                                title=set_piece_hint(us.tier_weights(settings)),
                             ),
                             html.Div(lines, className="rs-set-piece-formulas"),
                         ],
@@ -589,7 +605,7 @@ def _role_pills(role_ids: list[str]) -> list:
     return pills
 
 
-def _hybrid_roles_panel() -> html.Div:
+def _hybrid_roles_panel(settings=None) -> html.Div:
     return html.Div(
         [
             html.Div(
@@ -597,7 +613,7 @@ def _hybrid_roles_panel() -> html.Div:
                     _field_label(
                         "Hybrid roles",
                         primary=True,
-                        tip=HYBRID_HELP,
+                        tip=_hybrid_help(settings),
                         help_id="rs-help-hybrid",
                     ),
                     html.Div(
@@ -649,7 +665,8 @@ def _hybrid_roles_panel() -> html.Div:
     )
 
 
-def _combo_pills(combos: list[dict] | None) -> list:
+def _combo_pills(combos: list[dict] | None, settings=None) -> list:
+    weights = us.hybrid_weights(settings)
     pills = []
     for item in normalize_combos(combos):
         meta = combo_meta(item["ip"], item["oop"])
@@ -663,7 +680,9 @@ def _combo_pills(combos: list[dict] | None) -> list:
                 ],
                 id={"type": "rs-combo-pill", "combo": meta["id"]},
                 n_clicks=0,
-                title=f"{meta['name']} · {COMBO_IP_WEIGHT:g}× IP + {COMBO_OOP_WEIGHT:g}× OOP",
+                title=(
+                    f"{meta['name']} · {weights['ip']:g}× IP + {weights['oop']:g}× OOP"
+                ),
                 className="rs-role-pill combo",
             )
         )
@@ -992,7 +1011,7 @@ def layout():
                                     className="rs-role-mode-panel",
                                     hidden=True,
                                 ),
-                                _hybrid_roles_panel(),
+                                _hybrid_roles_panel(settings),
                                 html.Div(
                                     [
                                         _field_label(
@@ -1212,6 +1231,7 @@ def layout():
                                 ),
                                 player_data_table(
                                     prefix="rs",
+                                    page_size=us.page_size(settings),
                                     style_cell_props=style_cell(text_align="right"),
                                     style_cell_conditional_rules=style_cell_conditional(),
                                     style_header_props=style_header(),
@@ -1231,6 +1251,7 @@ def layout():
                         table_caption_row(
                             prefix="rs",
                             clear_button_id="rs-squad-clear-btn",
+                            settings=settings,
                         ),
                         html.Div(
                             [
@@ -2353,9 +2374,10 @@ def render_pills(role_ids):
 @callback(
     Output("rs-combo-pills", "children"),
     Input("rs-combos", "data"),
+    Input("ui-settings", "data"),
 )
-def render_combo_pills(combos):
-    return _combo_pills(combos)
+def render_combo_pills(combos, settings):
+    return _combo_pills(combos, settings)
 
 
 @callback(
@@ -2624,14 +2646,19 @@ def load_formation(formation_id, phase, group, current_combos):
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
     Input("rs-config", "value"),
+    Input("ui-settings", "data"),
     State("rs-focus-role", "data"),
     prevent_initial_call="initial_duplicate",
 )
-def rescore(parsed, role_ids, combos, pack_id, current_focus):
+def rescore(parsed, role_ids, combos, pack_id, settings, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
         return None, no_update, no_update
+    settings = us.normalize(settings)
+    tier_w = us.tier_weights(settings)
+    hybrid_w = us.hybrid_weights(settings)
+    profiles = us.set_piece_profiles(settings)
     combos = normalize_combos(combos)
     role_ids = _as_list(role_ids)
     needed = list(role_ids)
@@ -2641,7 +2668,17 @@ def rescore(parsed, role_ids, combos, pack_id, current_focus):
                 needed.append(role_id)
     if not needed:
         return None, no_update, no_update
-    rows = apply_combos(score_players(parsed["players"], needed), combos)
+    rows = apply_combos(
+        score_players(
+            parsed["players"],
+            needed,
+            tier_weights=tier_w,
+            set_piece_profiles=profiles,
+        ),
+        combos,
+        ip_weight=hybrid_w["ip"],
+        oop_weight=hybrid_w["oop"],
+    )
     labels = combo_score_labels(needed, combos)
     selected = _focus_roles(current_focus)
     kept = [role for role in selected if role in labels]
@@ -2848,14 +2885,14 @@ def render_shortlist(
     table_role_cols = _table_role_columns(view_roles, combos, hybrids_only)
     fig = _hist_figure(filtered, view_roles, bins, theme) if hist_open else no_update
 
-    piece_cols = set_piece_columns(set_pieces)
+    piece_cols = set_piece_columns(set_pieces, us.set_piece_profiles(settings))
     chosen = set(chosen_pieces)
     score_cols = [
         profile["score"]
-        for profile in SET_PIECE_PROFILES
+        for profile in us.set_piece_profiles(settings)
         if profile["id"] in chosen and profile.get("score")
     ] + table_role_cols
-    table_cols = ["Name", "Age", "Height", "Position", "Feet", "Club", "Rec", "Injury"]
+    table_cols = list(us.shortlist_columns(settings))
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)

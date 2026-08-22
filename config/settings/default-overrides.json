@@ -43,5 +43,135 @@
       "fg": "#b91c1c",
       "bar": "#ef4444"
     }
+  },
+  "tier_weights": {
+    "key": 5.0,
+    "preferred": 3.0,
+    "useful": 1.0
+  },
+  "hybrid_weights": {
+    "ip": 2.0,
+    "oop": 1.0
+  },
+  "set_piece_profiles": [
+    {
+      "id": "corners",
+      "label": "Corners",
+      "abbr": "COR",
+      "detail": "taker",
+      "raw": "Cor",
+      "score": "Corners",
+      "key": [
+        "Cor"
+      ],
+      "preferred": [
+        "Cro",
+        "Tec"
+      ],
+      "useful": []
+    },
+    {
+      "id": "dfk",
+      "label": "DFK",
+      "abbr": "DFK",
+      "detail": "direct \u2014 shooting chance",
+      "raw": "Fre",
+      "score": "DFK",
+      "key": [
+        "Fre"
+      ],
+      "preferred": [
+        "Tec",
+        "Lon"
+      ],
+      "useful": []
+    },
+    {
+      "id": "ifk",
+      "label": "IFK",
+      "abbr": "IFK",
+      "detail": "indirect \u2014 crossing chance",
+      "raw": "Fre",
+      "score": "IFK",
+      "key": [
+        "Fre"
+      ],
+      "preferred": [
+        "Cro",
+        "Tec"
+      ],
+      "useful": [
+        "Pas"
+      ]
+    },
+    {
+      "id": "throws",
+      "label": "Long throws",
+      "abbr": "LTH",
+      "detail": "taker",
+      "raw": "LTh",
+      "score": "Throws",
+      "key": [
+        "LTh"
+      ],
+      "preferred": [],
+      "useful": []
+    },
+    {
+      "id": "pens",
+      "label": "Penalties",
+      "abbr": "PEN",
+      "detail": "spot kicks",
+      "raw": "Pen",
+      "score": "Pens",
+      "key": [
+        "Pen"
+      ],
+      "preferred": [
+        "Fin",
+        "Cmp"
+      ],
+      "useful": []
+    },
+    {
+      "id": "aerial",
+      "label": "Aerial threat",
+      "abbr": "AER",
+      "detail": "in the box",
+      "raw": null,
+      "score": "Aerial",
+      "key": [
+        "Jum",
+        "Hea"
+      ],
+      "preferred": [
+        "Str"
+      ],
+      "useful": []
+    }
+  ],
+  "shortlist_columns": [
+    "Name",
+    "Age",
+    "Height",
+    "Position",
+    "Feet",
+    "Club",
+    "Rec",
+    "Injury"
+  ],
+  "default_minutes_required": 900,
+  "page_size": 25,
+  "page_size_options": [
+    25,
+    50,
+    100
+  ],
+  "preferred_theme": "dark",
+  "modal_extra_fields": [],
+  "tier_badge_colors": {
+    "key": "#3dff88",
+    "preferred": "#c6e35b",
+    "useful": "#5cadff"
   }
 }

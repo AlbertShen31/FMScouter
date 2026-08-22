@@ -26,6 +26,61 @@ BUILTIN = "default"
 
 BAND_KEYS = ("elite", "good", "ok", "poor")
 COLOR_PARTS = ("bg", "fg", "bar")
+TIER_KEYS = ("key", "preferred", "useful")
+HYBRID_KEYS = ("ip", "oop")
+TIER_BADGE_KEYS = ("key", "preferred", "useful")
+
+ALLOWED_SHORTLIST_COLUMNS = (
+    "Name",
+    "Age",
+    "Height",
+    "Position",
+    "Feet",
+    "Club",
+    "Rec",
+    "Injury",
+    "Division",
+    "Nation",
+    "Inf",
+    "Best Pos",
+)
+
+ALLOWED_MODAL_EXTRA_FIELDS = (
+    "world_reputation",
+    "ability",
+    "potential",
+    "squad",
+    "personality",
+    "media_handling",
+)
+
+MODAL_EXTRA_FIELD_OPTIONS = (
+    ("ability", "Ability"),
+    ("potential", "Potential"),
+    ("world_reputation", "World reputation"),
+    ("squad", "Squad"),
+    ("personality", "Personality"),
+    ("media_handling", "Media handling"),
+)
+
+# Persisted keys shared by default-overrides and named packs (exclude id/name for overrides).
+PACK_DATA_KEYS = (
+    "age_tiers",
+    "bands",
+    "foot_thresholds",
+    "hist_edges",
+    "colors",
+    "tier_weights",
+    "hybrid_weights",
+    "set_piece_profiles",
+    "shortlist_columns",
+    "default_minutes_required",
+    "page_size",
+    "page_size_options",
+    "preferred_theme",
+    "modal_extra_fields",
+    "tier_badge_colors",
+)
 
 DEFAULTS: dict[str, Any] = {
     "id": BUILTIN,
@@ -40,6 +95,29 @@ DEFAULTS: dict[str, Any] = {
         "good": {"bg": "#dbeafe", "fg": "#1d4ed8", "bar": "#3b82f6"},
         "ok": {"bg": "#fef3c7", "fg": "#b45309", "bar": "#f59e0b"},
         "poor": {"bg": "#fee2e2", "fg": "#b91c1c", "bar": "#ef4444"},
+    },
+    "tier_weights": {"key": 5.0, "preferred": 3.0, "useful": 1.0},
+    "hybrid_weights": {"ip": 2.0, "oop": 1.0},
+    "set_piece_profiles": None,
+    "shortlist_columns": [
+        "Name",
+        "Age",
+        "Height",
+        "Position",
+        "Feet",
+        "Club",
+        "Rec",
+        "Injury",
+    ],
+    "default_minutes_required": 900,
+    "page_size": 50,
+    "page_size_options": [25, 50, 100],
+    "preferred_theme": "dark",
+    "modal_extra_fields": [],
+    "tier_badge_colors": {
+        "key": "#3dff88",
+        "preferred": "#c6e35b",
+        "useful": "#5cadff",
     },
 }
 
@@ -193,6 +271,173 @@ def normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
     return {"elite": elite, "good": good, "ok": max(0.0, ok)}
 
 
+def normalize_tier_weight(value, default) -> float:
+    number = _as_float(value, float(default))
+    if number <= 0:
+        number = float(default)
+    return round(number * 1000) / 1000
+
+
+def normalize_tier_weights(raw=None) -> dict[str, float]:
+    src = raw if isinstance(raw, dict) else {}
+    defaults = DEFAULTS["tier_weights"]
+    return {
+        key: normalize_tier_weight(src.get(key), defaults[key]) for key in TIER_KEYS
+    }
+
+
+def normalize_hybrid_weights(raw=None) -> dict[str, float]:
+    src = raw if isinstance(raw, dict) else {}
+    defaults = DEFAULTS["hybrid_weights"]
+    return {
+        key: normalize_tier_weight(src.get(key), defaults[key]) for key in HYBRID_KEYS
+    }
+
+
+def _normalize_attr_list(raw) -> list[str]:
+    if isinstance(raw, str):
+        parts = [part.strip() for part in raw.replace(";", ",").split(",")]
+        return [part for part in parts if part]
+    if isinstance(raw, (list, tuple)):
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in raw:
+            code = str(item or "").strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            out.append(code)
+        return out
+    return []
+
+
+def normalize_set_piece_profiles(raw) -> list[dict[str, Any]] | None:
+    """Merge user edits with builtin profiles by id.
+
+    When unset/invalid, returns None (caller should treat as builtin).
+    When set, returns a full list with builtin label/abbr/score/raw/detail
+    and editable key/preferred/useful attr lists.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return None
+    import role_scorer as rs
+
+    by_id = {
+        str(item.get("id") or ""): item
+        for item in raw
+        if isinstance(item, dict) and item.get("id")
+    }
+    if not by_id:
+        return None
+    merged: list[dict[str, Any]] = []
+    for builtin in rs.SET_PIECE_PROFILES:
+        profile_id = builtin["id"]
+        overlay = by_id.get(profile_id) or {}
+        merged.append(
+            {
+                "id": profile_id,
+                "label": builtin["label"],
+                "abbr": builtin.get("abbr"),
+                "detail": builtin.get("detail"),
+                "raw": builtin.get("raw"),
+                "score": builtin.get("score"),
+                "key": _normalize_attr_list(
+                    overlay["key"] if "key" in overlay else builtin["key"]
+                ),
+                "preferred": _normalize_attr_list(
+                    overlay["preferred"]
+                    if "preferred" in overlay
+                    else builtin["preferred"]
+                ),
+                "useful": _normalize_attr_list(
+                    overlay["useful"] if "useful" in overlay else builtin["useful"]
+                ),
+            }
+        )
+    return merged
+
+
+def normalize_shortlist_columns(raw=None) -> list[str]:
+    allowed = set(ALLOWED_SHORTLIST_COLUMNS)
+    defaults = list(DEFAULTS["shortlist_columns"])
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.replace(";", ",").split(",")]
+    if not isinstance(raw, (list, tuple)):
+        return list(defaults)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        col = str(item or "").strip()
+        if col not in allowed or col in seen:
+            continue
+        seen.add(col)
+        out.append(col)
+    if "Name" not in seen:
+        out.insert(0, "Name")
+    return out or list(defaults)
+
+
+def normalize_page_size_options(raw=None) -> list[int]:
+    defaults = list(DEFAULTS["page_size_options"])
+    values = parse_number_list(raw if raw is not None else defaults, integer=True)
+    options = sorted({int(v) for v in values if 1 <= v <= 500})
+    return options or defaults
+
+
+def normalize_page_size(value, options: list[int] | None = None) -> int:
+    opts = options or list(DEFAULTS["page_size_options"])
+    default = int(DEFAULTS["page_size"])
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        number = default
+    if number in opts:
+        return number
+    if opts:
+        return min(opts, key=lambda opt: abs(opt - number))
+    return default
+
+
+def normalize_preferred_theme(value) -> str:
+    text = str(value or "").strip().lower()
+    return "light" if text == "light" else "dark"
+
+
+def normalize_modal_extra_fields(raw=None) -> list[str]:
+    allowed = set(ALLOWED_MODAL_EXTRA_FIELDS)
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.replace(";", ",").split(",")]
+    if not isinstance(raw, (list, tuple)):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        key = str(item or "").strip()
+        if key not in allowed or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def normalize_tier_badge_colors(raw=None) -> dict[str, str]:
+    src = raw if isinstance(raw, dict) else {}
+    defaults = DEFAULTS["tier_badge_colors"]
+    return {
+        key: _hex_color(src.get(key), defaults[key]) for key in TIER_BADGE_KEYS
+    }
+
+
+def normalize_default_minutes_required(value) -> int:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        number = int(DEFAULTS["default_minutes_required"])
+    return max(0, min(20000, number))
+
+
 def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) -> dict[str, Any]:
     raw = raw or {}
     ages = parse_number_list(raw.get("age_tiers", DEFAULTS["age_tiers"]), integer=True)
@@ -214,6 +459,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
             part: _hex_color(src.get(part), fallback[part]) for part in COLOR_PARTS
         }
 
+    page_opts = normalize_page_size_options(raw.get("page_size_options"))
     pack_id = pack_id or raw.get("id") or BUILTIN
     label = name if name is not None else raw.get("name") or (
         "Default" if pack_id == BUILTIN else pack_id
@@ -228,6 +474,18 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "foot_thresholds": normalize_foot_thresholds(raw),
         "hist_edges": edges,
         "colors": colors,
+        "tier_weights": normalize_tier_weights(raw.get("tier_weights")),
+        "hybrid_weights": normalize_hybrid_weights(raw.get("hybrid_weights")),
+        "set_piece_profiles": normalize_set_piece_profiles(raw.get("set_piece_profiles")),
+        "shortlist_columns": normalize_shortlist_columns(raw.get("shortlist_columns")),
+        "default_minutes_required": normalize_default_minutes_required(
+            raw.get("default_minutes_required")
+        ),
+        "page_size": normalize_page_size(raw.get("page_size"), page_opts),
+        "page_size_options": page_opts,
+        "preferred_theme": normalize_preferred_theme(raw.get("preferred_theme")),
+        "modal_extra_fields": normalize_modal_extra_fields(raw.get("modal_extra_fields")),
+        "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
         # Resolved from the separate stats-threshold pack domain (not stored here).
         "stats_thresholds": stp.load_tree(),
         "stats_threshold_pack_id": stp.active_id(),
@@ -276,6 +534,14 @@ def _set_active(pack_id: str) -> None:
     _write_json(ACTIVE_PATH, {"id": pack_id})
 
 
+def _pack_payload(settings: dict[str, Any]) -> dict[str, Any]:
+    payload = {key: settings[key] for key in PACK_DATA_KEYS}
+    # Persist null explicitly so packs can reset to builtin formulas.
+    if payload.get("set_piece_profiles") is None:
+        payload["set_piece_profiles"] = None
+    return payload
+
+
 def _default_settings() -> dict[str, Any]:
     base = copy.deepcopy(DEFAULTS)
     overrides = _read_json(DEFAULT_OVERRIDES_PATH)
@@ -298,6 +564,29 @@ def _default_settings() -> dict[str, Any]:
             band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
             for band in BAND_KEYS
         }
+    if overrides.get("tier_weights"):
+        merged["tier_weights"] = {
+            **base["tier_weights"],
+            **(overrides.get("tier_weights") or {}),
+        }
+    if overrides.get("hybrid_weights"):
+        merged["hybrid_weights"] = {
+            **base["hybrid_weights"],
+            **(overrides.get("hybrid_weights") or {}),
+        }
+    if overrides.get("tier_badge_colors"):
+        merged["tier_badge_colors"] = {
+            **base["tier_badge_colors"],
+            **(overrides.get("tier_badge_colors") or {}),
+        }
+    if "set_piece_profiles" in overrides:
+        merged["set_piece_profiles"] = overrides.get("set_piece_profiles")
+    if overrides.get("shortlist_columns") is not None:
+        merged["shortlist_columns"] = overrides.get("shortlist_columns")
+    if overrides.get("modal_extra_fields") is not None:
+        merged["modal_extra_fields"] = overrides.get("modal_extra_fields")
+    if overrides.get("page_size_options") is not None:
+        merged["page_size_options"] = overrides.get("page_size_options")
     return normalize(merged, pack_id=BUILTIN, name="Default")
 
 
@@ -354,31 +643,12 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
         settings = normalize(raw, pack_id=BUILTIN, name="Default")
         settings["id"] = BUILTIN
         settings["name"] = "Default"
-        payload = {
-            "age_tiers": settings["age_tiers"],
-            "bands": settings["bands"],
-            "foot_thresholds": settings["foot_thresholds"],
-            "hist_edges": settings["hist_edges"],
-            "colors": settings["colors"],
-        }
-        _write_json(DEFAULT_OVERRIDES_PATH, payload)
+        _write_json(DEFAULT_OVERRIDES_PATH, _pack_payload(settings))
         _set_active(BUILTIN)
         return settings
     settings = normalize(raw, pack_id=current, name=raw.get("name"))
     settings["id"] = current
-    # Named packs should not embed the separate stats-threshold domain.
-    to_write = {
-        key: settings[key]
-        for key in (
-            "id",
-            "name",
-            "age_tiers",
-            "bands",
-            "foot_thresholds",
-            "hist_edges",
-            "colors",
-        )
-    }
+    to_write = {"id": settings["id"], "name": settings["name"], **_pack_payload(settings)}
     _write_json(_pack_path(current), to_write)
     _set_active(current)
     return settings
@@ -390,18 +660,7 @@ def create_pack(name: str, raw) -> dict[str, Any]:
     settings = normalize(raw, pack_id=pack_id, name=label)
     settings["id"] = pack_id
     settings["name"] = label
-    to_write = {
-        key: settings[key]
-        for key in (
-            "id",
-            "name",
-            "age_tiers",
-            "bands",
-            "foot_thresholds",
-            "hist_edges",
-            "colors",
-        )
-    }
+    to_write = {"id": settings["id"], "name": settings["name"], **_pack_payload(settings)}
     _write_json(_pack_path(pack_id), to_write)
     _set_active(pack_id)
     return settings
@@ -464,4 +723,60 @@ def css_vars(settings=None) -> dict[str, str]:
         vars_[f"--band-{band}-bg"] = colors["bg"]
         vars_[f"--band-{band}-fg"] = colors["fg"]
         vars_[f"--band-{band}-bar"] = colors["bar"]
+    badge = settings["tier_badge_colors"]
+    vars_["--rc-key"] = badge["key"]
+    vars_["--rc-green"] = badge["preferred"]
+    vars_["--rc-blue"] = badge["useful"]
     return vars_
+
+
+def tier_weights(settings=None) -> dict[str, float]:
+    return copy.deepcopy(normalize(settings)["tier_weights"])
+
+
+def hybrid_weights(settings=None) -> dict[str, float]:
+    return copy.deepcopy(normalize(settings)["hybrid_weights"])
+
+
+def set_piece_profiles(settings=None) -> list[dict[str, Any]]:
+    """Resolved profiles (deep copy). Falls back to builtin when unset/invalid."""
+    settings = normalize(settings)
+    profiles = settings.get("set_piece_profiles")
+    if profiles:
+        return copy.deepcopy(profiles)
+    import role_scorer as rs
+
+    return copy.deepcopy(list(rs.SET_PIECE_PROFILES))
+
+
+def shortlist_columns(settings=None) -> list[str]:
+    return list(normalize(settings)["shortlist_columns"])
+
+
+def page_size(settings=None) -> int:
+    return int(normalize(settings)["page_size"])
+
+
+def page_size_options(settings=None) -> list[str]:
+    return [str(opt) for opt in normalize(settings)["page_size_options"]]
+
+
+def default_minutes_required(settings=None) -> int:
+    """Minutes threshold from UI settings (defaults to 900)."""
+    return int(normalize(settings)["default_minutes_required"])
+
+
+def modal_extra_fields(settings=None) -> list[str]:
+    return list(normalize(settings)["modal_extra_fields"])
+
+
+def tier_badge_colors(settings=None) -> dict[str, str]:
+    return copy.deepcopy(normalize(settings)["tier_badge_colors"])
+
+
+def preferred_theme(settings=None) -> str:
+    return normalize(settings)["preferred_theme"]
+
+
+def format_page_size_options(settings=None) -> str:
+    return ", ".join(page_size_options(settings))

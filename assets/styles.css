@@ -31,6 +31,9 @@
     --band-poor-bg: #fee2e2;
     --band-poor-fg: #b91c1c;
     --band-poor-bar: #ef4444;
+    --rc-key: #3dff88;
+    --rc-green: #c6e35b;
+    --rc-blue: #5cadff;
 }
 
 html[data-theme="light"],
@@ -2327,9 +2330,6 @@ body:has(.rc-page) .navbar {
     --rc-inset: var(--app-inset);
     --rc-hover: var(--app-hover);
     --rc-active: var(--app-active);
-    --rc-key: #3dff88;
-    --rc-green: #c6e35b;
-    --rc-blue: #5cadff;
     font-family: Inter, Segoe UI, system-ui, sans-serif;
     background: var(--rc-bg);
     color: var(--rc-text);
@@ -2339,13 +2339,6 @@ body:has(.rc-page) .navbar {
     margin-right: auto;
     padding: 18px 20px 32px;
     -webkit-font-smoothing: antialiased;
-}
-
-html[data-theme="light"] .rc-page,
-body[data-theme="light"] .rc-page {
-    --rc-key: #16a34a;
-    --rc-green: #65a30d;
-    --rc-blue: #2563eb;
 }
 
 .rc-page button,
