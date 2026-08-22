@@ -132,6 +132,7 @@ register_upload_callbacks(
     parse_fn=parse_stats_export,
     pack_store=True,
     reveal_ids=["st-main"],
+    pulse_ids=["st-main"],
     bad_file_message="Upload a Moneyball statistics CSV export.",
     decode_strict=True,
     catch_exceptions=True,
@@ -1695,6 +1696,7 @@ def sync_st_controls_from_settings(settings):
     Output("st-table", "tooltip_header"),
     Output("st-table", "style_data_conditional"),
     Output("st-table", "page_size"),
+    Output("st-table", "page_current"),
     Output("st-table", "selected_row_ids"),
     Output("st-table", "sort_by"),
     Output("st-sort-memory", "data"),
@@ -1704,6 +1706,7 @@ def sync_st_controls_from_settings(settings):
     Output("st-marked-preview", "children"),
     Output("st-hist", "figure"),
     Input("st-parsed", "data"),
+    Input("st-data-rev", "data"),
     Input("st-pos", "data"),
     Input("st-category", "data"),
     Input("st-search", "value"),
@@ -1721,6 +1724,7 @@ def sync_st_controls_from_settings(settings):
 )
 def refresh_table(
     parsed,
+    data_rev,
     pos,
     category,
     search,
@@ -1859,10 +1863,17 @@ def refresh_table(
         else "No players marked yet."
     )
     foot_filter = foot or ""
+    triggered = {
+        (t.get("prop_id") or "").split(".")[0]
+        for t in (ctx.triggered or [])
+        if t.get("prop_id")
+    }
     # Updating `data` resets DataTable selection and re-fires selected_rows as [],
-    # which clears marks. When only marks changed, leave the row data alone.
-    if ctx.triggered_id == "st-marked":
+    # which clears marks. When *only* marks changed, leave the row data alone.
+    # If parsed/data-rev also fired (replace/upload), always rebuild the shortlist.
+    if triggered == {"st-marked"}:
         return (
+            no_update,
             no_update,
             no_update,
             no_update,
@@ -1878,6 +1889,7 @@ def refresh_table(
             preview,
             no_update,
         )
+    reset_page = bool(triggered & {"st-parsed", "st-data-rev"})
     return (
         _filters_bar(
             players,
@@ -1891,6 +1903,7 @@ def refresh_table(
         header_tips,
         style_data,
         page_size_i,
+        0 if reset_page else no_update,
         selected_ids,
         sort_by,
         sort_by,

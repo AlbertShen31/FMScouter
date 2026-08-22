@@ -26,7 +26,18 @@ import zlib
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import (
+    ALL,
+    Input,
+    Output,
+    State,
+    callback,
+    clientside_callback,
+    ctx,
+    dcc,
+    html,
+    no_update,
+)
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
@@ -108,10 +119,16 @@ def parsed_players(data) -> list:
     return list((unpacked or {}).get("players") or [])
 
 
-def upload_status_bar(count: int, filename: str) -> list:
+def upload_status_bar(count: int, filename: str, *, replaced: bool = False) -> list:
+    if replaced:
+        lead = html.Span("Replaced", className="rs-upload-replaced")
+        count_label = f"{count:,} players"
+    else:
+        lead = html.Span("✓", className="rs-upload-ok")
+        count_label = f"{count:,} players loaded"
     return [
-        html.Span("✓", className="rs-upload-ok"),
-        html.Span(f"{count:,} players loaded", className="rs-upload-count"),
+        lead,
+        html.Span(count_label, className="rs-upload-count"),
         html.Span("·", className="rs-upload-sep"),
         html.Span(filename, className="rs-upload-name", title=filename),
         html.Span("·", className="rs-upload-sep"),
@@ -141,6 +158,8 @@ def upload_card(
     if upload_label is None:
         upload_label = html.Div(["Drag a CSV here, or ", html.A("browse")])
     body_children: list = [
+        dcc.Store(id=f"{prefix}-data-rev", data={"n": 0, "replaced": False}),
+        html.Div(id=f"{prefix}-pulse-token", hidden=True),
         html.Div(
             dcc.Upload(
                 id=f"{prefix}-upload",
@@ -156,12 +175,16 @@ def upload_card(
                 html.Div(
                     dcc.Upload(
                         id=f"{prefix}-upload-replace",
-                        children=html.Span("Replace", className="rs-upload-replace"),
-                        className="rs-upload-replace-wrap",
+                        children=html.Span(
+                            "Replace file",
+                            className="rs-upload-replace",
+                        ),
+                        className="rs-upload-replace-btn",
                         multiple=False,
                     ),
                     id=f"{prefix}-upload-replace-wrap",
                     hidden=True,
+                    title="Choose a different CSV to refresh the shortlist",
                 ),
             ],
             className="rs-upload-status-row",
@@ -240,6 +263,7 @@ def register_upload_callbacks(
     parse_fn: ParseFn,
     pack_store: bool = False,
     reveal_ids: Sequence[str] | None = None,
+    pulse_ids: Sequence[str] | None = None,
     bad_file_message: str = "Upload a CSV export from Football Manager.",
     decode_strict: bool = False,
     catch_exceptions: bool = False,
@@ -249,35 +273,41 @@ def register_upload_callbacks(
     When ``reveal_ids`` is set (e.g. ``["st-main"]``), those components' ``hidden``
     become False on success and True on error. Leave empty for pages that use a
     separate workflow gate (Role scores).
+
+    ``pulse_ids`` are DOM ids flashed when a file is replaced so the shortlist
+    refresh is obvious.
     """
     reveal_ids = list(reveal_ids or [])
+    pulse_ids = list(pulse_ids or [])
     parsed_id = f"{prefix}-parsed"
-
     outputs = [
         Output(parsed_id, "data"),
         Output(f"{prefix}-upload-status", "children"),
         Output(f"{prefix}-upload-wrap", "hidden"),
         Output(f"{prefix}-upload-replace-wrap", "hidden"),
+        Output(f"{prefix}-data-rev", "data"),
     ]
     outputs.extend(Output(rid, "hidden") for rid in reveal_ids)
+    n_base = 5
 
     def _fail(message: str):
-        row = [None, upload_error(message), False, True]
+        row = [None, upload_error(message), False, True, no_update]
         row.extend([True] * len(reveal_ids))
         return tuple(row)
 
-    def _ok(store_data, count: int, filename: str):
+    def _ok(store_data, count: int, filename: str, rev: dict, *, replaced: bool):
         row = [
             store_data,
-            upload_status_bar(count, filename),
+            upload_status_bar(count, filename, replaced=replaced),
             True,
             False,
+            rev,
         ]
         row.extend([False] * len(reveal_ids))
         return tuple(row)
 
     def _noop():
-        return tuple([no_update] * (4 + len(reveal_ids)))
+        return tuple([no_update] * (n_base + len(reveal_ids)))
 
     @callback(
         *outputs,
@@ -285,10 +315,12 @@ def register_upload_callbacks(
         Input(f"{prefix}-upload-replace", "contents"),
         State(f"{prefix}-upload", "filename"),
         State(f"{prefix}-upload-replace", "filename"),
+        State(f"{prefix}-data-rev", "data"),
         prevent_initial_call=True,
     )
-    def _on_upload(upload_contents, replace_contents, upload_name, replace_name):
-        if ctx.triggered_id == f"{prefix}-upload-replace":
+    def _on_upload(upload_contents, replace_contents, upload_name, replace_name, rev):
+        replaced = ctx.triggered_id == f"{prefix}-upload-replace"
+        if replaced:
             contents = replace_contents
             name = replace_name or "upload.csv"
         elif ctx.triggered_id == f"{prefix}-upload":
@@ -307,8 +339,19 @@ def register_upload_callbacks(
             if not catch_exceptions and not isinstance(exc, ValueError):
                 raise
             return _fail(str(exc))
-        store = pack_parsed(players, name) if pack_store else {"filename": name, "players": players}
-        return _ok(store, len(players), name)
+        prev_n = 0
+        if isinstance(rev, dict):
+            prev_n = int(rev.get("n") or 0)
+        elif rev:
+            prev_n = int(rev)
+        new_rev = {"n": prev_n + 1, "replaced": replaced}
+        if pack_store:
+            store = pack_parsed(players, name)
+            # Force Store clients to treat each upload as new data.
+            store["rev"] = new_rev["n"]
+        else:
+            store = {"filename": name, "players": players, "rev": new_rev["n"]}
+        return _ok(store, len(players), name, new_rev, replaced=replaced)
 
     restore_outputs = [
         Output(f"{prefix}-upload-status", "children", allow_duplicate=True),
@@ -321,11 +364,16 @@ def register_upload_callbacks(
 
     @callback(
         *restore_outputs,
-        Input(parsed_id, "data"),
         Input(f"{prefix}-hydrate-tick", "n_intervals"),
+        State(parsed_id, "data"),
         prevent_initial_call="initial_duplicate",
     )
-    def _restore_upload_ui(parsed, _tick):
+    def _restore_upload_ui(_tick, parsed):
+        """Restore upload chrome from session on page load only.
+
+        Do not also Input ``parsed`` — that races the upload callback and can
+        clobber the Replaced status (and confuse shortlist refresh timing).
+        """
         data = unpack_parsed(parsed) if pack_store else parsed
         if not data or not data.get("players"):
             return tuple([no_update] * (3 + len(reveal_ids)))
@@ -333,6 +381,34 @@ def register_upload_callbacks(
         row = [upload_status_bar(len(data["players"]), filename), True, False]
         row.extend([False] * len(reveal_ids))
         return tuple(row)
+
+    if pulse_ids:
+        targets_js = ", ".join(f'"{tid}"' for tid in pulse_ids)
+        clientside_callback(
+            f"""
+            function(rev) {{
+                if (!rev || !rev.n || !rev.replaced) {{
+                    return window.dash_clientside.no_update;
+                }}
+                const status = document.getElementById("{prefix}-upload-status");
+                if (status) {{
+                    status.classList.remove("rs-upload-status-flash");
+                    void status.offsetWidth;
+                    status.classList.add("rs-upload-status-flash");
+                }}
+                [{targets_js}].forEach(function(id) {{
+                    const el = document.getElementById(id);
+                    if (!el || el.hidden) return;
+                    el.classList.remove("rs-data-flash");
+                    void el.offsetWidth;
+                    el.classList.add("rs-data-flash");
+                }});
+                return String(rev.n);
+            }}
+            """,
+            Output(f"{prefix}-pulse-token", "children"),
+            Input(f"{prefix}-data-rev", "data"),
+        )
 
 
 def register_pos_foot_callbacks(
@@ -436,9 +512,12 @@ def register_marks_callbacks(
         @callback(
             Output(marked_store, "data", allow_duplicate=True),
             Input(parsed_id, "data"),
+            State(marked_store, "data"),
             prevent_initial_call=True,
         )
-        def _clear_marks_on_upload(_parsed):
+        def _clear_marks_on_upload(_parsed, marked):
+            if not as_list(marked):
+                return no_update
             return []
 
 

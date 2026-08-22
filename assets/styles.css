@@ -415,26 +415,34 @@ body {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px 8px;
+    gap: 8px 10px;
     min-height: 0;
 }
 
 .rs-upload-status-row .rs-upload-status {
-    display: contents;
-}
-
-.rs-upload-replace-wrap {
-    display: inline;
-}
-
-.rs-upload-replace-wrap[hidden] {
-    display: none !important;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
 }
 
 .rs-upload-ok {
     color: var(--app-accent);
     font-weight: 700;
     font-size: 13px;
+}
+
+.rs-upload-replaced {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--app-accent) 45%, var(--app-line));
 }
 
 .rs-upload-count,
@@ -461,28 +469,82 @@ body {
     color: var(--app-faint);
 }
 
-.rs-upload-replace-wrap {
-    display: inline;
-}
-
 .rs-upload-replace-wrap[hidden] {
     display: none !important;
 }
 
-.rs-upload-replace {
-    color: var(--app-accent);
-    font-weight: 600;
+.rs-upload-replace-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--app-accent) 50%, var(--app-line));
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-head));
     cursor: pointer;
-    font-size: 13px;
+    line-height: 1;
 }
 
-.rs-upload-replace-wrap:hover .rs-upload-replace {
-    text-decoration: underline;
+.rs-upload-replace-btn .rs-upload-replace {
+    display: inline-block;
+    padding: 5px 10px;
+    color: var(--app-accent);
+    font-weight: 650;
+    font-size: 12px;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+.rs-upload-replace-btn:hover {
+    border-color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 20%, var(--app-hover));
+}
+
+.rs-upload-replace-btn:hover .rs-upload-replace {
+    color: var(--app-text);
+    text-decoration: none;
 }
 
 .rs-upload-error {
     font-size: 13px;
     color: var(--app-danger);
+}
+
+@keyframes rs-upload-status-flash {
+    0% {
+        filter: brightness(1);
+    }
+    30% {
+        filter: brightness(1.35);
+    }
+    100% {
+        filter: brightness(1);
+    }
+}
+
+.rs-upload-status-flash {
+    animation: rs-upload-status-flash 0.65s ease;
+}
+
+@keyframes rs-data-flash {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-accent) 0%, transparent);
+        background-color: transparent;
+    }
+    18% {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent) 55%, transparent);
+        background-color: color-mix(in srgb, var(--app-accent) 8%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--app-accent) 0%, transparent);
+        background-color: transparent;
+    }
+}
+
+.rs-data-flash {
+    animation: rs-data-flash 0.85s ease;
+    border-radius: 8px;
 }
 
 .rs-export-subhead-row {
@@ -4575,4 +4637,5 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 .dash-tooltip[data-attr-anchor="bottom"]:before {
     border-top-color: var(--app-line) !important;
 }
+
 

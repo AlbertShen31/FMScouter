@@ -99,6 +99,7 @@ register_upload_callbacks(
     parse_fn=parse_export,
     pack_store=False,
     reveal_ids=[],
+    pulse_ids=["rs-results-wrap"],
     bad_file_message="Upload the CSV from FM Player Export, not the HTML file.",
 )
 register_pos_foot_callbacks(
@@ -2983,3 +2984,4 @@ def download_csv(n_clicks, payload, focus_role, hybrids_only):
     name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
     text = scored_csv(payload["rows"], role_labels)
     return dict(content=text, filename=f"{name}_role_scores.csv")
+
