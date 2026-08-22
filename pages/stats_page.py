@@ -1,12 +1,9 @@
 """Player statistics page: Moneyball stats CSV vs MustermannFM benchmarks."""
 from __future__ import annotations
 
-import base64
 import csv
 import io
-import json
 import re
-import zlib
 
 from dash import (
     ALL,
@@ -26,7 +23,7 @@ import plotly.graph_objects as go
 
 from pack_picker import pack_picker_bar, section_card_header
 from division_tiers import classify_division
-from player_filters import player_filters, player_filters_host
+from player_filters import help_icon, player_filters, player_filters_host
 from player_modal import player_detail_body, player_modal
 from player_table import (
     IDENTITY_TEXT_COLS,
@@ -50,6 +47,18 @@ from role_scorer import (
     player_pos_groups,
     player_row_key,
     to_int,
+)
+from scouting_shell import (
+    clicked,
+    hist_block,
+    parsed_players,
+    pattern_matching_stubs,
+    register_hist_toggle,
+    register_marks_callbacks,
+    register_pos_foot_callbacks,
+    register_upload_callbacks,
+    unpack_parsed,
+    upload_card,
 )
 from stats_scorer import (
     POS_GROUPS,
@@ -118,73 +127,34 @@ BLANK_FIG.update_layout(
     height=240,
 )
 
+register_upload_callbacks(
+    "st",
+    parse_fn=parse_stats_export,
+    pack_store=True,
+    reveal_ids=["st-main"],
+    bad_file_message="Upload a Moneyball statistics CSV export.",
+    decode_strict=True,
+    catch_exceptions=True,
+)
+register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
+register_marks_callbacks(
+    "st",
+    marked_store="st-marked",
+    clear_button="st-clear-marks",
+)
+register_hist_toggle("st", use_open_store=False)
+
 
 def _help_icon(tip: str, help_id: str) -> list:
-    return [
-        html.Span("ⓘ", id=help_id, className="rs-help", role="img", **{"aria-label": "Help"}),
-        dbc.Tooltip(tip, target=help_id, placement="top", class_name="rs-help-tooltip"),
-    ]
-
-
-def _upload_status(count: int, filename: str) -> list:
-    return [
-        html.Span("✓", className="rs-upload-ok"),
-        html.Span(f"{count:,} players loaded", className="rs-upload-count"),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(filename, className="rs-upload-name", title=filename),
-        html.Span("·", className="rs-upload-sep"),
-    ]
-
-
-def _upload_error(message: str) -> html.Div:
-    return html.Div(message, className="rs-upload-error")
-
-
-def _decode_upload(contents: str) -> str:
-    _ctype, _, payload = contents.partition(",")
-    return base64.b64decode(payload).decode("utf-8-sig", errors="replace")
-
-
-def _pack_parsed(players: list, filename: str) -> dict:
-    """Compress parsed players for sessionStorage (large combined exports)."""
-    raw = json.dumps(
-        {"players": players, "filename": filename},
-        separators=(",", ":"),
-        default=str,
-    ).encode("utf-8")
-    blob = base64.b64encode(zlib.compress(raw, 6)).decode("ascii")
-    return {
-        "v": 1,
-        "encoding": "zlib+b64",
-        "filename": filename,
-        "n": len(players),
-        "payload": blob,
-    }
-
-
-def _unpack_parsed(data) -> dict | None:
-    """Return ``{players, filename}`` from a packed or legacy session store."""
-    if not data:
-        return None
-    if isinstance(data.get("players"), list):
-        return data
-    blob = data.get("payload")
-    if not blob:
-        return None
-    try:
-        raw = zlib.decompress(base64.b64decode(blob))
-        packed = json.loads(raw.decode("utf-8"))
-    except (OSError, ValueError, json.JSONDecodeError, TypeError):
-        return None
-    if not isinstance(packed, dict) or not isinstance(packed.get("players"), list):
-        return None
-    packed.setdefault("filename", data.get("filename") or "export.csv")
-    return packed
+    return help_icon(tip, help_id)
 
 
 def _parsed_players(data) -> list:
-    unpacked = _unpack_parsed(data)
-    return list((unpacked or {}).get("players") or [])
+    return parsed_players(data)
+
+
+def _unpack_parsed(data) -> dict | None:
+    return unpack_parsed(data)
 
 
 def _colored_cell(text: str, color: str | None) -> str:
@@ -432,7 +402,7 @@ def _filters_bar(
 
 
 def _clicked(n_clicks) -> bool:
-    return bool(n_clicks) and any(n_clicks)
+    return clicked(n_clicks)
 
 
 def _stats_metric_styles() -> list[dict]:
@@ -1420,64 +1390,26 @@ def layout(**_kwargs):
             dcc.Store(id="st-player-view", data="bars", storage_type="local"),
             dcc.Store(id="st-player-group", data="mid"),
             dcc.Download(id="st-download"),
-            html.Div(
+            pattern_matching_stubs(
+                "st",
                 [
-                    html.Button(id={"type": "st-pos", "key": "_"}, n_clicks=0),
-                    html.Button(id={"type": "st-cat", "key": "_"}, n_clicks=0),
-                    html.Button(id={"type": "st-foot", "foot": "_"}, n_clicks=0),
-                    html.Button(id={"type": "st-player-view", "view": "_"}, n_clicks=0),
-                    html.Button(id={"type": "st-player-group", "group": "_"}, n_clicks=0),
+                    {"type": "pos", "key": "_"},
+                    {"type": "cat", "key": "_"},
+                    {"type": "foot", "foot": "_"},
+                    {"type": "player-view", "view": "_"},
+                    {"type": "player-group", "group": "_"},
                 ],
-                hidden=True,
-            ),            dbc.Card(
-                [
-                    dbc.CardHeader("1. Upload statistics export"),
-                    dbc.CardBody(
-                        [
-                            html.Div(
-                                dcc.Upload(
-                                    id="st-upload",
-                                    children=html.Div(
-                                        [
-                                            "Drag and drop or ",
-                                            html.A("select a Moneyball stats CSV"),
-                                        ]
-                                    ),
-                                    className="rs-upload",
-                                    multiple=False,
-                                ),
-                                id="st-upload-wrap",
-                            ),
-                            html.Div(
-                                [
-                                    html.Div(
-                                        id="st-upload-status",
-                                        className="rs-upload-status",
-                                    ),
-                                    html.Div(
-                                        dcc.Upload(
-                                            id="st-upload-replace",
-                                            children=html.Span(
-                                                "Replace",
-                                                className="rs-upload-replace",
-                                            ),
-                                            className="rs-upload-replace-wrap",
-                                            multiple=False,
-                                        ),
-                                        id="st-upload-replace-wrap",
-                                        hidden=True,
-                                    ),
-                                ],
-                                className="rs-upload-status-row",
-                            ),
-                            html.P(
-                                f"Use the statistics Moneyball export. Benchmarks: {benchmarks()['name']}.",
-                                className="text-muted small mb-0 mt-2",
-                            ),
-                        ]
-                    ),
-                ],
-                className="mb-3 rs-section-card",
+            ),
+            upload_card(
+                "st",
+                "1. Upload statistics export",
+                upload_label=html.Div(
+                    ["Drag and drop or ", html.A("select a Moneyball stats CSV")]
+                ),
+                hint=html.P(
+                    f"Use the statistics Moneyball export. Benchmarks: {benchmarks()['name']}.",
+                    className="text-muted small mb-0 mt-2",
+                ),
             ),
             html.Div(
                 [
@@ -1633,30 +1565,7 @@ def layout(**_kwargs):
                                         clear_button_id="st-clear-marks",
                                         settings=settings,
                                     ),
-                                    html.Div(
-                                        [
-                                            dmc.Button(
-                                                "Show score distribution",
-                                                id="st-hist-toggle",
-                                                n_clicks=0,
-                                                variant="light",
-                                                className="rs-hist-toggle",
-                                            ),
-                                            html.Div(
-                                                dcc.Graph(
-                                                    id="st-hist",
-                                                    figure=BLANK_FIG,
-                                                    config={"displayModeBar": False},
-                                                    responsive=True,
-                                                    style={"width": "100%", "height": "240px"},
-                                                ),
-                                                id="st-hist-wrap",
-                                                className="rs-hist-wrap",
-                                                hidden=True,
-                                            ),
-                                        ],
-                                        className="rs-hist-block",
-                                    ),
+                                    hist_block("st", blank_figure=BLANK_FIG),
                                 ]
                             ),
                         ],
@@ -1698,89 +1607,6 @@ def layout(**_kwargs):
 
 
 @callback(
-    Output("st-parsed", "data"),
-    Output("st-upload-status", "children"),
-    Output("st-upload-wrap", "hidden"),
-    Output("st-upload-replace-wrap", "hidden"),
-    Output("st-main", "hidden"),
-    Input("st-upload", "contents"),
-    Input("st-upload-replace", "contents"),
-    State("st-upload", "filename"),
-    State("st-upload-replace", "filename"),
-    prevent_initial_call=True,
-)
-def on_upload(upload_contents, replace_contents, upload_name, replace_name):
-    if ctx.triggered_id == "st-upload-replace":
-        contents = replace_contents
-        name = replace_name or "upload.csv"
-    elif ctx.triggered_id == "st-upload":
-        contents = upload_contents
-        name = upload_name or "upload.csv"
-    else:
-        contents = replace_contents or upload_contents
-        name = (replace_name or upload_name) or "upload.csv"
-    if not contents:
-        return no_update, no_update, no_update, no_update, no_update
-    if not name.lower().endswith(".csv"):
-        return (
-            None,
-            _upload_error("Upload a Moneyball statistics CSV export."),
-            False,
-            True,
-            True,
-        )
-    try:
-        players = parse_stats_export(_decode_upload(contents))
-    except Exception as exc:
-        return None, _upload_error(str(exc)), False, True, True
-    return (
-        _pack_parsed(players, name),
-        _upload_status(len(players), name),
-        True,
-        False,
-        False,
-    )
-
-
-@callback(
-    Output("st-upload-status", "children", allow_duplicate=True),
-    Output("st-upload-wrap", "hidden", allow_duplicate=True),
-    Output("st-upload-replace-wrap", "hidden", allow_duplicate=True),
-    Output("st-main", "hidden", allow_duplicate=True),
-    Input("st-parsed", "data"),
-    Input("st-hydrate-tick", "n_intervals"),
-    prevent_initial_call="initial_duplicate",
-)
-def restore_upload_ui(parsed, _tick):
-    """Re-show upload status when session-stored CSV survives page navigation."""
-    unpacked = _unpack_parsed(parsed)
-    if not unpacked or not unpacked.get("players"):
-        return no_update, no_update, no_update, no_update
-    filename = unpacked.get("filename") or "export.csv"
-    return (
-        _upload_status(len(unpacked["players"]), filename),
-        True,
-        False,
-        False,
-    )
-
-
-@callback(
-    Output("st-pos", "data"),
-    Input({"type": "st-pos", "key": ALL}, "n_clicks"),
-    State("st-pos", "data"),
-    prevent_initial_call=True,
-)
-def set_pos(n_clicks, current):
-    if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update
-    key = ctx.triggered_id.get("key")
-    if key == "_":
-        return no_update
-    return key or current or "all"
-
-
-@callback(
     Output("st-category", "data"),
     Input({"type": "st-cat", "key": ALL}, "n_clicks"),
     Input("st-pos", "data"),
@@ -1801,22 +1627,6 @@ def set_category(n_clicks, pos, current):
         return no_update
     _g, cat = _resolve_category(pos or "all", key)
     return cat
-
-
-@callback(
-    Output("st-foot", "data"),
-    Input({"type": "st-foot", "foot": ALL}, "n_clicks"),
-    State("st-foot", "data"),
-    prevent_initial_call=True,
-)
-def set_foot(n_clicks, current):
-    if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update
-    chosen = ctx.triggered_id.get("foot")
-    if chosen == "_":
-        return no_update
-    # Off by default; click the active foot again to clear.
-    return "" if current == chosen else chosen
 
 
 @callback(
@@ -2090,53 +1900,6 @@ def refresh_table(
         preview,
         fig,
     )
-
-
-@callback(
-    Output("st-hist-wrap", "hidden"),
-    Output("st-hist-toggle", "children"),
-    Input("st-hist-toggle", "n_clicks"),
-    State("st-hist-wrap", "hidden"),
-)
-def toggle_hist(n, hidden):
-    if not n:
-        return True, "Show score distribution"
-    opened = bool(hidden)
-    return (not opened), (
-        "Hide score distribution" if opened else "Show score distribution"
-    )
-
-
-@callback(
-    Output("st-marked", "data", allow_duplicate=True),
-    Input("st-clear-marks", "n_clicks"),
-    prevent_initial_call=True,
-)
-def clear_marks(_n):
-    return []
-
-
-@callback(
-    Output("st-marked", "data", allow_duplicate=True),
-    Input("st-table", "selected_row_ids"),
-    State("st-table", "data"),
-    State("st-marked", "data"),
-    prevent_initial_call=True,
-)
-def sync_marks(selected_ids, table_data, marked):
-    table_data = table_data or []
-    keys_on_page = [
-        str(row.get("id") or _row_mark_key(row) or "").strip() for row in table_data
-    ]
-    keys_on_page = [key for key in keys_on_page if key]
-    marked_set = set(marked or [])
-    expected = {key for key in keys_on_page if key in marked_set}
-    selected = {str(key) for key in (selected_ids or []) if key}
-    if selected == expected:
-        return no_update
-    marked_set -= set(keys_on_page)
-    marked_set |= selected
-    return sorted(marked_set)
 
 
 @callback(

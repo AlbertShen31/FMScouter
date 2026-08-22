@@ -14,10 +14,12 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 
 | Path | Role |
 | --- | --- |
-| `app.py` | Dash shell and nav (Role scores, Role configs, Formations, Settings). |
+| `app.py` | Dash shell and nav (Role scores, Player stats, Role configs, Formations, Settings). |
 | `pages/role_scores_page.py` | Upload CSV, pick roles, filter, export. |
+| `pages/stats_page.py` | Moneyball stats CSV vs Mustermann benchmarks; Division tier filter. |
 | `pages/formations_page.py` | Save named lineups of up to 11 hybrid roles. |
 | `pages/settings_page.py` | Score bands, age tiers, footedness, histogram, colors. |
+| `scouting_shell.py` | Shared upload / pos-foot / marks / hist layout + callback registrars for Role scores and Player stats. |
 | `formations.py` | Formation packs, validation, combo export. |
 | `config/paths.py` | Canonical directories for role weights, formations, and settings. |
 | `config/role_weights/` | Role weight domain: factory Python, `active.json`, `packs/`. |
@@ -30,6 +32,17 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 | `phases.py` | IP / OOP / GK badges and GK detection. |
 | `utils.py` | Weighted-average formula. |
 | `fm26_player_scoring_system_v2_0.html` | Historical HTML scorer the Python weights were ported from. Not used at runtime. |
+
+### Scouting shell
+
+`scouting_shell.py` owns the shared plumbing between Role scores (`rs-*`) and Player stats (`st-*`):
+
+- **Upload** — decode CSV, parse via a page-supplied function, write `{prefix}-parsed` (plain `{players, filename}` or zlib-packed).
+- **Pos / foot** — pattern-matching card toggles into filter stores.
+- **Marks** — DataTable `selected_row_ids` synced to a marked-keys store (stable row `id` / `_key`).
+- **Hist** — show/hide score-distribution wrap.
+
+Domain scoring, columns, and workflow gates stay page-local: Role scores still gates results until roles are scored; Stats reveals the shortlist on upload (`reveal_ids=["st-main"]`). Division tier filtering stays on Stats only.
 
 ### Config layout
 

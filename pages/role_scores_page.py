@@ -1,7 +1,6 @@
 """Role scores page: upload an FM attribute CSV, pick roles, filter, export."""
 from __future__ import annotations
 
-import base64
 import re
 from dash import (
     ALL,
@@ -22,6 +21,18 @@ import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
 from pack_picker import pack_picker_bar, section_card_header
+from player_filters import help_icon, player_filters
+from scouting_shell import (
+    as_list,
+    clicked,
+    hist_block,
+    pattern_matching_stubs,
+    register_hist_toggle,
+    register_marks_callbacks,
+    register_pos_foot_callbacks,
+    register_upload_callbacks,
+    upload_card,
+)
 from role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
@@ -56,7 +67,6 @@ from role_scorer import (
     set_piece_hint,
     set_piece_sort_column,
 )
-from player_filters import player_filters
 from player_modal import player_detail_body, player_modal
 from player_table import (
     IDENTITY_LEFT_COLS,
@@ -83,6 +93,27 @@ import role_config as rc
 import ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
+
+register_upload_callbacks(
+    "rs",
+    parse_fn=parse_export,
+    pack_store=False,
+    reveal_ids=[],
+    bad_file_message="Upload the CSV from FM Player Export, not the HTML file.",
+)
+register_pos_foot_callbacks(
+    "rs",
+    pos_store="rs-pos-filter",
+    foot_store="rs-foot-filter",
+    pos_id_attr="pos",
+)
+register_marks_callbacks(
+    "rs",
+    marked_store="rs-squad-marked",
+    clear_button="rs-squad-clear-btn",
+)
+register_hist_toggle("rs", use_open_store=True)
+
 
 PERSIST_DEFAULTS = {
     "roles": [],
@@ -214,21 +245,7 @@ ROLE_MODE_DATA = [
 
 
 def _help_icon(tip: str, help_id: str) -> list:
-    return [
-        html.Span(
-            "ⓘ",
-            id=help_id,
-            className="rs-help",
-            role="img",
-            **{"aria-label": "Help"},
-        ),
-        dbc.Tooltip(
-            tip,
-            target=help_id,
-            placement="top",
-            class_name="rs-help-tooltip",
-        ),
-    ]
+    return help_icon(tip, help_id)
 
 
 def _field_label(
@@ -243,20 +260,6 @@ def _field_label(
     if tip:
         parts.extend(_help_icon(tip, help_id or f"rs-help-{text.lower().replace(' ', '-')}"))
     return html.Div(parts, className="rs-field-label-row")
-
-
-def _upload_status_bar(count: int, filename: str) -> list:
-    return [
-        html.Span("✓", className="rs-upload-ok"),
-        html.Span(f"{count:,} players loaded", className="rs-upload-count"),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(filename, className="rs-upload-name", title=filename),
-        html.Span("·", className="rs-upload-sep"),
-    ]
-
-
-def _upload_error(message: str) -> html.Div:
-    return html.Div(message, className="rs-upload-error")
 
 
 def _find_parsed_player(parsed, name: str, club: str) -> dict | None:
@@ -820,60 +823,22 @@ def layout():
         dcc.Store(id="rs-role-mode-prev", data=None),
         dcc.Interval(id="rs-hydrate-tick", interval=50, max_intervals=1),
         player_modal(prefix="rs"),
-        html.Div(
+        pattern_matching_stubs(
+            "rs",
             [
-                html.Button(id={"type": "rs-pos", "pos": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-foot", "foot": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-depth", "role": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-pill", "role": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-group", "group": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-combo-pill", "combo": "_"}, n_clicks=0),
-                html.Button(id={"type": "rs-clear-roles", "loc": "_"}, n_clicks=0),
+                {"type": "pos", "pos": "_"},
+                {"type": "foot", "foot": "_"},
+                {"type": "depth", "role": "_"},
+                {"type": "pill", "role": "_"},
+                {"type": "group", "group": "_"},
+                {"type": "combo-pill", "combo": "_"},
+                {"type": "clear-roles", "loc": "_"},
             ],
-            hidden=True,
         ),
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
-        dbc.Card(
-            [
-                dbc.CardHeader("1. Upload export"),
-                dbc.CardBody(
-                    [
-                        html.Div(
-                            dcc.Upload(
-                                id="rs-upload",
-                                children=html.Div(
-                                    ["Drag a CSV here, or ", html.A("browse")]
-                                ),
-                                className="rs-upload",
-                                multiple=False,
-                            ),
-                            id="rs-upload-wrap",
-                        ),
-                        html.Div(
-                            [
-                                html.Div(id="rs-upload-status", className="rs-upload-status"),
-                                html.Div(
-                                    dcc.Upload(
-                                        id="rs-upload-replace",
-                                        children=html.Span(
-                                            "Replace", className="rs-upload-replace"
-                                        ),
-                                        className="rs-upload-replace-wrap",
-                                        multiple=False,
-                                    ),
-                                    id="rs-upload-replace-wrap",
-                                    hidden=True,
-                                ),
-                            ],
-                            className="rs-upload-status-row",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3 rs-section-card",
-        ),
+        upload_card("rs", "1. Upload export"),
         html.Div(
             [
         dbc.Card(
@@ -1251,37 +1216,13 @@ def layout():
                             clear_button_id="rs-squad-clear-btn",
                             settings=settings,
                         ),
-                        html.Div(
-                            [
-                                dmc.Button(
-                                    "Show score distribution",
-                                    id="rs-hist-toggle",
-                                    n_clicks=0,
-                                    variant="light",
-                                    className="rs-hist-toggle",
-                                    buttonProps={
-                                        "title": (
-                                            "Score band on the horizontal axis; player count on "
-                                            "the vertical axis. One series per displayed role."
-                                        ),
-                                    },
-                                ),
-                                html.Div(
-                                    [
-                                        dcc.Graph(
-                                            id="rs-hist",
-                                            figure=BLANK_FIG,
-                                            config={"displayModeBar": False},
-                                            responsive=True,
-                                            style={"width": "100%", "height": "240px"},
-                                        ),
-                                    ],
-                                    id="rs-hist-wrap",
-                                    className="rs-hist-wrap",
-                                    hidden=True,
-                                ),
-                            ],
-                            className="rs-hist-block",
+                        hist_block(
+                            "rs",
+                            blank_figure=BLANK_FIG,
+                            toggle_title=(
+                                "Score band on the horizontal axis; player count on "
+                                "the vertical axis. One series per displayed role."
+                            ),
                         ),
                     ]
                 ),
@@ -1334,27 +1275,12 @@ def layout():
 )
 
 
-def _decode_upload(contents: str) -> str:
-    _header, _, payload = contents.partition(",")
-    raw = base64.b64decode(payload)
-    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="replace")
-
-
 def _labels(role_ids: list[str]) -> list[str]:
     return [role_meta(role_id)["column"] for role_id in role_ids]
 
 
 def _as_list(value) -> list:
-    if not value:
-        return []
-    if isinstance(value, str):
-        return [value]
-    return list(value)
+    return as_list(value)
 
 
 def _cell_number(value) -> float:
@@ -1633,7 +1559,7 @@ def _table_page_state(columns: list[dict], prev_sig: str | None) -> tuple[int | 
 
 
 def _clicked(n_clicks) -> bool:
-    return bool(n_clicks) and any(n_clicks)
+    return clicked(n_clicks)
 
 
 MIN_SCORE_MODES = {
@@ -1879,69 +1805,6 @@ def _depth_panel(
         _depth_card_from_stats(stats, focus_roles, bands)
         for stats in _DEPTH_STATS_CACHE["stats"]
     ]
-
-
-@callback(
-    Output("rs-parsed", "data"),
-    Output("rs-upload-status", "children"),
-    Output("rs-upload-wrap", "hidden"),
-    Output("rs-upload-replace-wrap", "hidden"),
-    Input("rs-upload", "contents"),
-    Input("rs-upload-replace", "contents"),
-    State("rs-upload", "filename"),
-    State("rs-upload-replace", "filename"),
-    prevent_initial_call=True,
-)
-def parse_uploaded(upload_contents, replace_contents, upload_name, replace_name):
-    # Prefer the control that fired — initial upload contents stay set after Replace.
-    if ctx.triggered_id == "rs-upload-replace":
-        contents = replace_contents
-        name = replace_name or "upload.csv"
-    elif ctx.triggered_id == "rs-upload":
-        contents = upload_contents
-        name = upload_name or "upload.csv"
-    else:
-        contents = replace_contents or upload_contents
-        name = (replace_name or upload_name) or "upload.csv"
-    if not contents:
-        return no_update, no_update, no_update, no_update
-    if not name.lower().endswith(".csv"):
-        return (
-            None,
-            _upload_error("Upload the CSV from FM Player Export, not the HTML file."),
-            False,
-            True,
-        )
-    try:
-        players = parse_export(_decode_upload(contents))
-    except ValueError as exc:
-        return None, _upload_error(str(exc)), False, True
-    return (
-        {"filename": name, "players": players},
-        _upload_status_bar(len(players), name),
-        True,
-        False,
-    )
-
-
-@callback(
-    Output("rs-upload-status", "children", allow_duplicate=True),
-    Output("rs-upload-wrap", "hidden", allow_duplicate=True),
-    Output("rs-upload-replace-wrap", "hidden", allow_duplicate=True),
-    Input("rs-parsed", "data"),
-    Input("rs-hydrate-tick", "n_intervals"),
-    prevent_initial_call="initial_duplicate",
-)
-def restore_upload_ui(parsed, _tick):
-    """Re-show upload status when session-stored CSV survives page navigation."""
-    if not parsed or not parsed.get("players"):
-        return no_update, no_update, no_update
-    filename = parsed.get("filename") or "export.csv"
-    return (
-        _upload_status_bar(len(parsed["players"]), filename),
-        True,
-        False,
-    )
 
 
 @callback(
@@ -2203,23 +2066,6 @@ def open_player_modal(
             position_eligible=position_eligible,
         ),
         None,
-    )
-
-
-@callback(
-    Output("rs-hist-open", "data"),
-    Output("rs-hist-wrap", "hidden"),
-    Output("rs-hist-toggle", "children"),
-    Input("rs-hist-toggle", "n_clicks"),
-    State("rs-hist-open", "data"),
-    prevent_initial_call=True,
-)
-def toggle_score_distribution(_clicks, opened):
-    opened = not bool(opened)
-    return (
-        opened,
-        not opened,
-        "Hide score distribution" if opened else "Show score distribution",
     )
 
 
@@ -2488,35 +2334,6 @@ def clear_roles(n_clicks):
 
 
 @callback(
-    Output("rs-pos-filter", "data"),
-    Input({"type": "rs-pos", "pos": ALL}, "n_clicks"),
-    prevent_initial_call=True,
-)
-def set_pos_filter(n_clicks):
-    if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update
-    pos = ctx.triggered_id["pos"]
-    if pos == "_":
-        return no_update
-    return pos
-
-
-@callback(
-    Output("rs-foot-filter", "data"),
-    Input({"type": "rs-foot", "foot": ALL}, "n_clicks"),
-    State("rs-foot-filter", "data"),
-    prevent_initial_call=True,
-)
-def set_foot_filter(n_clicks, current):
-    if not ctx.triggered_id or not _clicked(n_clicks):
-        return no_update
-    chosen = ctx.triggered_id["foot"]
-    if chosen == "_":
-        return no_update
-    return "" if current == chosen else chosen
-
-
-@callback(
     Output("rs-age", "data"),
     Output("rs-age", "value"),
     Output("rs-band-legend", "children"),
@@ -2716,7 +2533,7 @@ def rescore(parsed, role_ids, combos, pack_id, settings, current_focus):
     Output("rs-table", "style_table"),
     Output("rs-table", "page_size"),
     Output("rs-table", "page_current"),
-    Output("rs-table", "selected_rows"),
+    Output("rs-table", "selected_row_ids"),
     Output("rs-table-cols-sig", "data"),
     Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
@@ -2903,9 +2720,13 @@ def render_shortlist(
         }
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["DivisionTier"] = row.get("DivisionTier") or ""
+        key = player_row_key(row)
+        if key:
+            item["id"] = key
+            item["_key"] = key
         table_rows.append(item)
-    page_keys = [player_row_key(row) for row in table_rows]
-    selected_rows = [i for i, key in enumerate(page_keys) if key in marked_keys]
+    page_keys = [str(row.get("id") or "").strip() for row in table_rows]
+    selected_rows = [key for key in page_keys if key in marked_keys]
     extras = []
     if pos_filter != "all":
         extras.append(pos_filter)
@@ -3072,50 +2893,6 @@ def _squad_preview_panel(
 )
 def toggle_clear_marks_btn(marked):
     return not _as_list(marked)
-
-
-@callback(
-    Output("rs-squad-marked", "data", allow_duplicate=True),
-    Input("rs-squad-clear-btn", "n_clicks"),
-    prevent_initial_call=True,
-)
-def clear_squad_marks(n_clicks):
-    if not n_clicks:
-        return no_update
-    return []
-
-
-@callback(
-    Output("rs-squad-marked", "data", allow_duplicate=True),
-    Input("rs-table", "selected_rows"),
-    State("rs-table", "data"),
-    State("rs-squad-marked", "data"),
-    prevent_initial_call=True,
-)
-def sync_squad_marks(selected_rows, table_data, marked):
-    table_data = table_data or []
-    marked_set = set(_as_list(marked))
-    keys_on_page = [player_row_key(row) for row in table_data]
-    expected = {i for i, key in enumerate(keys_on_page) if key in marked_set}
-    actual = set(selected_rows or [])
-    if actual == expected:
-        return no_update
-    marked_set -= set(keys_on_page)
-    for index in selected_rows or []:
-        if 0 <= index < len(keys_on_page):
-            key = keys_on_page[index]
-            if key:
-                marked_set.add(key)
-    return sorted(marked_set)
-
-
-@callback(
-    Output("rs-squad-marked", "data", allow_duplicate=True),
-    Input("rs-parsed", "data"),
-    prevent_initial_call=True,
-)
-def clear_squad_marks_on_upload(_parsed):
-    return []
 
 
 @callback(
