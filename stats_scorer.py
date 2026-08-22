@@ -509,6 +509,29 @@ def category_average_band(
     }
 
 
+def overall_average_band(group: str, stats: dict[str, Any] | None) -> dict[str, Any]:
+    """Mean of the three category average percentiles (missing categories skipped)."""
+    pcts: list[float] = []
+    for cat in view_categories():
+        band = category_average_band(group, cat["id"], stats)
+        if band.get("percentile") is not None:
+            pcts.append(float(band["percentile"]))
+    if not pcts:
+        return {
+            "value": None,
+            "display": "—",
+            "percentile": None,
+            "color": None,
+        }
+    avg = sum(pcts) / len(pcts)
+    return {
+        "value": avg,
+        "display": f"{avg:.0f}",
+        "percentile": avg,
+        "color": percentile_color(avg),
+    }
+
+
 def player_key(player: dict) -> str:
     return player_row_key({"Name": player.get("name"), "Club": player.get("club")})
 
@@ -557,6 +580,7 @@ def format_stat_export_rows(
         ]
         for cat in cats:
             fieldnames.append(cat["label"])
+        fieldnames.append("Overall average")
         rows = []
         for p in players:
             g = p.get("pos_group") or "mid"
@@ -581,6 +605,9 @@ def format_stat_export_rows(
             for cat in cats:
                 band = category_average_band(use_g, cat["id"], p.get("stats") or {})
                 row[cat["label"]] = band["display"]
+            row["Overall average"] = overall_average_band(
+                use_g, p.get("stats") or {}
+            )["display"]
             rows.append(row)
         return fieldnames, rows
 

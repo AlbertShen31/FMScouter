@@ -22,6 +22,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
+from player_filters import player_filters, player_filters_host
 from player_modal import player_detail_body, player_modal
 from player_table import (
     IDENTITY_TEXT_COLS,
@@ -40,8 +41,6 @@ from player_table import (
     table_css,
 )
 from role_scorer import (
-    foot_filter_help,
-    foot_filter_hints,
     foot_match,
     to_int,
 )
@@ -61,14 +60,23 @@ from stats_scorer import (
     metrics_for,
     minutes_color,
     minutes_status,
+    overall_average_band,
     parse_stats_export,
     passes_minutes_filter,
+    percentile_color,
     player_key,
     view_categories,
 )
 import ui_settings as us
 
 register_page(__name__, path="/stats", name="Player stats")
+
+AVG_PERCENTILE_COLS = ("overall", "defending", "final_third", "possession")
+OVERALL_COL = {
+    "id": "overall",
+    "label": "Overall average",
+    "abbr": "Ovr",
+}
 
 BLANK_FIG = go.Figure()
 BLANK_FIG.update_layout(
@@ -202,104 +210,54 @@ def _band_group_cat(player: dict, view_group: str, view_cat: str) -> tuple[str |
     return use_g, cat
 
 
-def _pos_bar(players: list[dict], active: str) -> html.Div:
+def _pos_groups_for_bar(players: list[dict], active: str) -> list[dict]:
     counts = {"all": len(players)}
     for key, _label, _css in POS_GROUPS[1:]:
         counts[key] = sum(1 for p in players if p.get("pos_group") == key)
-    cards = []
-    for key, label, css in POS_GROUPS:
-        class_name = f"rs-pos-card {css}" + (" active" if active == key else "")
-        cards.append(
-            html.Button(
-                [
-                    html.Span(label, className="rs-pos-name"),
-                    html.Span(str(counts.get(key, 0)), className="rs-pos-count"),
-                ],
-                id={"type": "st-pos", "key": key},
-                n_clicks=0,
-                className=class_name,
-            )
-        )
-    return html.Div(
-        [html.Div(cards, className="rs-pos-cards")],
-        className="rs-pos-bar",
-    )
+    return [
+        {
+            "key": key,
+            "label": label,
+            "css": css,
+            "count": counts.get(key, 0),
+        }
+        for key, label, css in POS_GROUPS
+    ]
 
 
-def _category_tabs(group: str, active: str) -> html.Div:
+def _category_items(group: str, active: str) -> tuple[list[dict[str, str]], str]:
     _g, active = _resolve_category(group, active)
     cats = [
         {"id": "all", "label": "All"},
         *labeled_view_categories(group=group),
     ]
-    cards = [
-        html.Button(
-            html.Span(cat["label"], className="rs-pos-name"),
-            id={"type": "st-cat", "key": cat["id"]},
-            n_clicks=0,
-            className="rs-pos-card" + (" active" if cat["id"] == active else ""),
-        )
-        for cat in cats
-    ]
-    return html.Div(
-        [
-            html.Div(
-                [
-                    html.Div(
-                        html.Span("Category"),
-                        className="rs-foot-label",
-                    ),
-                    html.Div(cards, className="rs-pos-cards"),
-                ],
-                className="rs-pos-utils",
-            )
-        ],
-        className="rs-pos-bar st-cat-bar",
+    return cats, active
+
+
+def _filters_bar(
+    players: list[dict],
+    *,
+    pos: str,
+    category: str,
+    foot: str,
+    foot_thresholds,
+):
+    cats, category = _category_items(pos, category)
+    return player_filters(
+        prefix="st",
+        pos_groups=_pos_groups_for_bar(players, pos),
+        active_pos=pos or "all",
+        active_foot=foot or "",
+        foot_thresholds=foot_thresholds,
+        categories=cats,
+        active_category=category,
+        pos_id_attr="key",
+        foot_inline=False,
     )
 
 
 def _clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
-
-
-def _foot_bar(active: str, foot_thresholds) -> html.Div:
-    hints = foot_filter_hints(foot_thresholds)
-    foot_btns = []
-    for key, label in (
-        ("foot-L", "Left Foot"),
-        ("foot-B", "Both Feet"),
-        ("foot-R", "Right Foot"),
-    ):
-        foot_btns.append(
-            html.Button(
-                label,
-                id={"type": "st-foot", "foot": key},
-                n_clicks=0,
-                title=hints.get(key, ""),
-                className="rs-foot-btn" + (" active" if active == key else ""),
-            )
-        )
-    return html.Div(
-        [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Span("Footedness"),
-                            *_help_icon(
-                                foot_filter_help(foot_thresholds),
-                                "st-help-foot",
-                            ),
-                        ],
-                        className="rs-foot-label",
-                    ),
-                    html.Div(foot_btns, className="rs-foot-btns"),
-                ],
-                className="rs-pos-utils",
-            )
-        ],
-        className="rs-pos-bar st-foot-bar",
-    )
 
 
 def _stats_metric_styles() -> list[dict]:
@@ -323,7 +281,7 @@ def _stats_metric_styles() -> list[dict]:
                 "maxWidth": "80px",
                 "fontVariantNumeric": "tabular-nums",
             }
-            for col_id in ("defending", "final_third", "possession")
+            for col_id in AVG_PERCENTILE_COLS
         ],
     ]
 
@@ -349,7 +307,7 @@ def _avg_header_styles() -> list[dict]:
             "lineHeight": "1.2",
             "padding": "10px 8px",
         }
-        for col_id in ("defending", "final_third", "possession")
+        for col_id in AVG_PERCENTILE_COLS
     ]
 
 
@@ -383,6 +341,13 @@ def _table_columns(group: str, category: str) -> list[dict]:
         {"name": "Mins", "id": "Minutes", "presentation": "markdown"},
     ]
     if cat == "all":
+        cols.append(
+            {
+                "name": OVERALL_COL["abbr"],
+                "id": OVERALL_COL["id"],
+                "presentation": "markdown",
+            }
+        )
         for section in _avg_category_columns(group):
             cols.append(
                 {
@@ -403,6 +368,7 @@ def _header_tooltips(group: str, category: str) -> dict[str, str]:
     g, cat = _resolve_category(group, category)
     tips = identity_header_tooltips("Height", "Minutes")
     if cat == "all":
+        tips[OVERALL_COL["id"]] = OVERALL_COL["label"]
         for section in _avg_category_columns(group):
             tips[section["id"]] = section["label"]
         return tips
@@ -441,6 +407,15 @@ def _build_rows(players, *, group, category, minutes_required) -> list[dict]:
         stats = p.get("stats") or {}
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
+            if bg is None or bc is None:
+                row[OVERALL_COL["id"]] = _percentile_cell(
+                    {"percentile": None, "color": None}
+                )
+            else:
+                use_g = g if group not in ("", "all") else bg
+                row[OVERALL_COL["id"]] = _percentile_cell(
+                    overall_average_band(use_g, stats)
+                )
             for section in avg_cats:
                 col_id = section["id"]
                 if bg is None or bc is None:
@@ -512,8 +487,42 @@ def _player_metric_sections(player: dict, eval_group: str | None = None) -> list
                     "missing": band.get("percentile") is None,
                 }
             )
-        sections.append({"id": cat["id"], "label": cat["label"], "metrics": metrics})
+        pcts = [
+            float(m["percentile"])
+            for m in metrics
+            if m.get("percentile") is not None
+        ]
+        avg = sum(pcts) / len(pcts) if pcts else None
+        sections.append(
+            {
+                "id": cat["id"],
+                "label": cat["label"],
+                "metrics": metrics,
+                "avg_percentile": avg,
+                "avg_color": percentile_color(avg) if avg is not None else None,
+            }
+        )
     return sections
+
+
+def _section_title(cat: dict) -> html.Div:
+    """Category heading with average percentile badge when available."""
+    avg = cat.get("avg_percentile")
+    children: list = [html.Span(cat["label"], className="st-section-title-text")]
+    if avg is None:
+        children.append(
+            html.Span("Avg —", className="st-section-avg is-missing")
+        )
+    else:
+        children.append(
+            html.Span(
+                f"Avg ~{avg:.0f}th",
+                className="st-section-avg",
+                style={"color": cat.get("avg_color")} if cat.get("avg_color") else None,
+                title=f"Average estimated percentile across metrics in {cat['label']}",
+            )
+        )
+    return html.Div(children, className="rs-player-id-section-title st-section-title")
 
 
 def _seg_switcher(
@@ -596,7 +605,7 @@ def _metrics_values(sections: list[dict]) -> list:
         blocks.append(
             html.Div(
                 [
-                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    _section_title(cat),
                     html.Div(items, className="rs-player-identity"),
                 ],
                 className="rs-player-id-section",
@@ -874,7 +883,7 @@ def _metrics_bars(sections: list[dict], theme: str | None) -> list:
         blocks.append(
             html.Div(
                 [
-                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    _section_title(cat),
                     dcc.Graph(
                         figure=_bars_figure(cat["metrics"], theme),
                         config=PLAYER_CHART_CONFIG,
@@ -895,7 +904,7 @@ def _metrics_pizzas(sections: list[dict], theme: str | None) -> list:
         blocks.append(
             html.Div(
                 [
-                    html.Div(cat["label"], className="rs-player-id-section-title"),
+                    _section_title(cat),
                     html.Div(
                         [
                             dcc.Graph(
@@ -925,6 +934,40 @@ def _format_minutes_identity(value) -> str:
     except (TypeError, ValueError):
         return str(value)
     return str(int(num)) if num == int(num) else str(num)
+
+
+def _overall_avg_banner(sections: list[dict]) -> html.Div:
+    """Modal summary: mean of the three category average percentiles."""
+    pcts = [
+        float(cat["avg_percentile"])
+        for cat in sections
+        if cat.get("avg_percentile") is not None
+    ]
+    if not pcts:
+        return html.Div(
+            [
+                html.Span("Overall", className="st-overall-label"),
+                html.Span("Avg —", className="st-section-avg is-missing"),
+            ],
+            className="st-overall-avg",
+        )
+    avg = sum(pcts) / len(pcts)
+    color = percentile_color(avg)
+    return html.Div(
+        [
+            html.Span("Overall", className="st-overall-label"),
+            html.Span(
+                f"Avg ~{avg:.0f}th",
+                className="st-section-avg",
+                style={"color": color} if color else None,
+                title=(
+                    "Average of Defending, Final third / Goalkeeping, "
+                    "and Possession category averages"
+                ),
+            ),
+        ],
+        className="st-overall-avg",
+    )
 
 
 def _player_modal_body(
@@ -971,6 +1014,7 @@ def _player_modal_body(
                 ],
                 className="st-player-switch-block",
             ),
+            _overall_avg_banner(sections),
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
     )
@@ -1096,17 +1140,7 @@ def layout(**_kwargs):
                             dbc.CardHeader("2. Shortlist"),
                             dbc.CardBody(
                                 [
-                                    html.Div(
-                                        [
-                                            html.Div(id="st-pos-bar"),
-                                            html.Div(id="st-cat-tabs"),
-                                            html.Div(
-                                                _foot_bar("", foot_thresholds),
-                                                id="st-foot-bar",
-                                            ),
-                                        ],
-                                        className="st-filter-stack",
-                                    ),
+                                    player_filters_host(prefix="st", stacked=True),
                                     html.Div(
                                         [
                                             html.Div(
@@ -1401,9 +1435,7 @@ def apply_age_settings(settings, age):
 
 
 @callback(
-    Output("st-pos-bar", "children"),
-    Output("st-cat-tabs", "children"),
-    Output("st-foot-bar", "children"),
+    Output("st-filters", "children"),
     Output("st-table", "columns"),
     Output("st-table", "data"),
     Output("st-table", "tooltip_header"),
@@ -1534,9 +1566,13 @@ def refresh_table(
     )
     foot_filter = foot or ""
     return (
-        _pos_bar(players, pos),
-        _category_tabs(pos, category),
-        _foot_bar(foot_filter, settings["foot_thresholds"]),
+        _filters_bar(
+            players,
+            pos=pos,
+            category=category,
+            foot=foot_filter,
+            foot_thresholds=settings["foot_thresholds"],
+        ),
         cols,
         rows,
         header_tips,

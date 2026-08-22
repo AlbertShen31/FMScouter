@@ -33,8 +33,6 @@ from role_scorer import (
     combo_meta,
     combo_score_labels,
     expand_view_role_columns,
-    foot_filter_help,
-    foot_filter_hints,
     foot_match,
     group_abbr_tone,
     normalize_combos,
@@ -58,6 +56,7 @@ from role_scorer import (
     set_piece_sort_column,
 )
 from canvas_export import build_canvas
+from player_filters import player_filters
 from player_modal import player_detail_body, player_modal
 from player_table import (
     IDENTITY_LEFT_COLS,
@@ -1724,52 +1723,24 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> 
     counts = {"all": len(rows)}
     for key, _name, _code, _css in POS_CARDS[1:]:
         counts[key] = sum(1 for row in rows if key in (row.get("PosGroups") or []))
-    cards = []
-    for key, name, code, css in POS_CARDS:
-        count = counts.get(key, 0)
-        class_name = f"rs-pos-card {css}" + (" active" if active == key else "")
-        children = [html.Span(name, className="rs-pos-name")]
-        if code:
-            children.append(html.Span(code, className="rs-pos-code"))
-        children.append(html.Span(str(count), className="rs-pos-count"))
-        cards.append(
-            html.Button(
-                children,
-                id={"type": "rs-pos", "pos": key},
-                n_clicks=0,
-                className=class_name,
-            )
-        )
-    hints = foot_filter_hints(foot_thresholds)
-    foot_btns = []
-    for key, label in (("foot-L", "Left Foot"), ("foot-B", "Both Feet"), ("foot-R", "Right Foot")):
-        foot_btns.append(
-            html.Button(
-                label,
-                id={"type": "rs-foot", "foot": key},
-                n_clicks=0,
-                title=hints.get(key, ""),
-                className="rs-foot-btn" + (" active" if foot == key else ""),
-            )
-        )
-    return html.Div(
-        [
-            html.Div(cards, className="rs-pos-cards"),
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Span("Footedness"),
-                            *_help_icon(foot_filter_help(foot_thresholds), "rs-help-footedness"),
-                        ],
-                        className="rs-foot-label",
-                    ),
-                    html.Div(foot_btns, className="rs-foot-btns"),
-                ],
-                className="rs-pos-utils",
-            ),
-        ],
-        className="rs-pos-bar",
+    groups = [
+        {
+            "key": key,
+            "label": name,
+            "code": code,
+            "css": css,
+            "count": counts.get(key, 0),
+        }
+        for key, name, code, css in POS_CARDS
+    ]
+    return player_filters(
+        prefix="rs",
+        pos_groups=groups,
+        active_pos=active,
+        active_foot=foot or "",
+        foot_thresholds=foot_thresholds,
+        pos_id_attr="pos",
+        foot_inline=True,
     )
 
 

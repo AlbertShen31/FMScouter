@@ -3545,6 +3545,57 @@ body[data-theme="light"] .st-player-seg-btn {
     color: #cbd5e1;
 }
 
+.st-player-metrics .st-section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.st-player-metrics .st-section-title-text {
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    font-weight: 650;
+}
+
+.st-player-metrics .st-section-avg {
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+}
+
+.st-player-metrics .st-section-avg.is-missing {
+    color: var(--app-faint);
+    font-weight: 600;
+}
+
+.st-overall-avg {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    margin: 0.15rem 0 0.35rem;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--app-elev) 88%, transparent);
+}
+
+.st-overall-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+}
+
+.st-overall-avg .st-section-avg {
+    font-size: 15px;
+}
+
 html[data-theme="light"] .st-player-metrics .rs-player-id-section-title,
 body[data-theme="light"] .st-player-metrics .rs-player-id-section-title {
     color: #64748b;
@@ -4071,7 +4122,9 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     text-align: left !important;
 }
 
-/* Uniform All-category percentile columns (abbr headers: Def / F3 / Poss). */
+/* Uniform All-category percentile columns (abbr headers: Ovr / Def / F3 / Poss). */
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="overall"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="defending"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
@@ -4085,6 +4138,11 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     overflow: visible !important;
 }
 
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="overall"] {
+    font-weight: 750;
+}
+
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Minutes"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="Minutes"] {
     min-width: 64px !important;
@@ -4093,6 +4151,7 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     text-align: center !important;
 }
 
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"] {
@@ -4105,6 +4164,7 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     padding-right: 10px !important;
 }
 
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"] .column-header-name,
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"] .column-header-name,
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"] .column-header-name,
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"] .column-header-name {
@@ -4118,6 +4178,7 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     max-width: 100%;
 }
 
+#st-table .dash-spreadsheet-inner td[data-dash-column="overall"] .st-pct-cell,
 #st-table .dash-spreadsheet-inner td[data-dash-column="defending"] .st-pct-cell,
 #st-table .dash-spreadsheet-inner td[data-dash-column="final_third"] .st-pct-cell,
 #st-table .dash-spreadsheet-inner td[data-dash-column="possession"] .st-pct-cell {
