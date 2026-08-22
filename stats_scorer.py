@@ -124,16 +124,46 @@ def category_label(
     return outfield.get(cat, cat or "")
 
 
+def category_abbr(
+    category: str | None,
+    *,
+    group: str | None = None,
+    dual_final_third: bool = False,
+) -> str:
+    """Short table header for a shared category id."""
+    cat = canonical_category(category)
+    outfield = {c["id"]: (c.get("abbr") or c["label"]) for c in view_categories()}
+    if cat == "all":
+        return "All"
+    if cat == "final_third":
+        gk_abbr = next(
+            (
+                c.get("abbr") or c["label"]
+                for c in benchmarks()["categories"]["gk"]
+                if c["id"] == "goalkeeping"
+            ),
+            "GK",
+        )
+        if dual_final_third:
+            return f"{outfield.get('final_third', 'F3')} / {gk_abbr}"
+        if is_gk_group(group):
+            return gk_abbr
+    return outfield.get(cat, cat or "")
+
+
 def labeled_view_categories(
     *,
     group: str | None = None,
     dual_final_third: bool = False,
 ) -> list[dict[str, str]]:
-    """view_categories() with context-aware display labels."""
+    """view_categories() with context-aware display labels and abbreviations."""
     return [
         {
             "id": cat["id"],
             "label": category_label(
+                cat["id"], group=group, dual_final_third=dual_final_third
+            ),
+            "abbr": category_abbr(
                 cat["id"], group=group, dual_final_third=dual_final_third
             ),
         }

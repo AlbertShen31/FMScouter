@@ -13,14 +13,14 @@
   },
   "categories": {
     "gk": [
-      {"id": "goalkeeping", "label": "Goalkeeping"},
-      {"id": "gk_possession", "label": "Possession"},
-      {"id": "gk_def", "label": "Def"}
+      {"id": "goalkeeping", "label": "Goalkeeping", "abbr": "GK"},
+      {"id": "gk_possession", "label": "Possession", "abbr": "Poss"},
+      {"id": "gk_def", "label": "Def", "abbr": "Def"}
     ],
     "outfield": [
-      {"id": "defending", "label": "Defending"},
-      {"id": "final_third", "label": "Final third"},
-      {"id": "possession", "label": "Possession"}
+      {"id": "defending", "label": "Defending", "abbr": "Def"},
+      {"id": "final_third", "label": "Final third", "abbr": "F3"},
+      {"id": "possession", "label": "Possession", "abbr": "Poss"}
     ]
   },
   "metrics": {

@@ -734,9 +734,9 @@ body {
 
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
 #rs-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    min-width: 68px !important;
-    width: 72px !important;
-    max-width: 84px !important;
+    min-width: 92px !important;
+    width: 96px !important;
+    max-width: 110px !important;
     text-align: center !important;
 }
 
@@ -4050,9 +4050,9 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    min-width: 68px !important;
-    width: 72px !important;
-    max-width: 84px !important;
+    min-width: 92px !important;
+    width: 96px !important;
+    max-width: 110px !important;
     text-align: center !important;
 }
 
@@ -4071,18 +4071,26 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     text-align: left !important;
 }
 
-/* Uniform All-category percentile columns; wrap headers without clipping words. */
+/* Uniform All-category percentile columns (abbr headers: Def / F3 / Poss). */
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="defending"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="final_third"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="possession"] {
-    min-width: 118px !important;
-    width: 124px !important;
-    max-width: 132px !important;
+    min-width: 64px !important;
+    width: 72px !important;
+    max-width: 80px !important;
     text-align: center !important;
     overflow: visible !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Minutes"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Minutes"] {
+    min-width: 64px !important;
+    width: 68px !important;
+    max-width: 76px !important;
+    text-align: center !important;
 }
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
@@ -4091,10 +4099,10 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     white-space: pre-line !important;
     line-height: 1.2 !important;
     height: auto !important;
-    min-height: 52px !important;
+    min-height: 46px !important;
     vertical-align: middle !important;
-    padding-left: 10px !important;
-    padding-right: 14px !important;
+    padding-left: 6px !important;
+    padding-right: 10px !important;
 }
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"] .column-header-name,
@@ -4177,15 +4185,15 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     min-width: 0;
 }
 
-.st-minutes-fields .mantine-Select-root {
-    flex: 0 1 9.75rem;
-    max-width: 9.75rem;
+.st-minutes-fields .mantine-NumberInput-root {
+    flex: 0 1 7.5rem;
+    max-width: 7.5rem;
     min-width: 0;
 }
 
-.st-minutes-fields .mantine-NumberInput-root {
+.st-minutes-fields .mantine-Select-root {
     flex: 1 1 auto;
-    min-width: 7rem;
+    min-width: 9.5rem;
     width: auto;
 }
 
