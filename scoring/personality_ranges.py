@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-DATA_PATH = Path(__file__).resolve().parent / "config" / "personality_ranges.json"
+DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "personality_ranges.json"
 
 HIDDEN_ATTRS = (
     "Ambition",

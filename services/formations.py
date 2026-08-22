@@ -10,10 +10,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from phases import phase_tone
+from scoring.phases import phase_tone
 import config.fm26_role_weight_config as pc
 from config.paths import FORMATIONS_ACTIVE_PATH, FORMATIONS_PACKS_DIR
-from role_scorer import normalize_combos
+from scoring.role_scorer import normalize_combos
 
 PACKS_DIR = FORMATIONS_PACKS_DIR
 ACTIVE_PATH = FORMATIONS_ACTIVE_PATH

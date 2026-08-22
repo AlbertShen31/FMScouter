@@ -5,8 +5,8 @@ from dash import ALL, Input, Output, State, callback, ctx, html, no_update, regi
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
-import formations as fm
-from role_scorer import combo_meta, role_options
+import services.formations as fm
+from scoring.role_scorer import combo_meta, role_options
 
 register_page(__name__, path="/formations", name="Formations")
 

@@ -3,8 +3,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 from dash import Input, Output, State, callback, dcc, html
 
-import ui_settings
-
+import services.ui_settings as ui_settings
 # Mantine components require React 18 (useId); Dash 2.x defaults to React 16.
 dash._dash_renderer._set_react_version("18.2.0")
 

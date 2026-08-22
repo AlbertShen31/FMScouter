@@ -4,6 +4,8 @@ Based on the python evaluation script created by https://www.youtube.com/@squirr
 
 How the scorer, role groups, packs, and naming are wired: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+Code layout: `pages/` (routes), `components/` (shared UI), `scoring/` (parse/score), `services/` (packs/settings), `config/` (data).
+
 ## Role scores
 
 FM26 roles, with each role tagged IP, OOP, or GK.

@@ -4,10 +4,10 @@ from __future__ import annotations
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_mantine_components as dmc
 
-import role_config as rc
-from attr_columns import attr_grid, attr_group_columns, attr_row
-from role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
-from phases import phase_matches, pretty_role_name
+import services.role_config as rc
+from components.attr_columns import attr_grid, attr_group_columns, attr_row
+from scoring.role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
+from scoring.phases import phase_matches, pretty_role_name
 
 register_page(__name__, path="/role-config", name="Role configs")
 

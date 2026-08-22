@@ -40,7 +40,7 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def builtin_thresholds() -> dict[str, Any]:
     """MustermannFM cut-points from the shipped benchmarks file."""
-    from stats_scorer import benchmarks
+    from scoring.stats_scorer import benchmarks
 
     return copy.deepcopy(benchmarks()["benchmarks"])
 
@@ -66,7 +66,7 @@ def normalize_thresholds(raw=None) -> dict[str, Any]:
     Extra metrics present in the pack (and defined in ``metric_defs``) are kept
     so packs like FM Stag can introduce additional statistics.
     """
-    from stats_scorer import metric_defs
+    from scoring.stats_scorer import metric_defs
 
     base = builtin_thresholds()
     if not isinstance(raw, dict) or not raw:

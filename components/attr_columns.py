@@ -7,7 +7,7 @@ from typing import Any
 
 from dash import html
 
-import role_config as rc
+import services.role_config as rc
 
 RowBuilder = Callable[[str, str], Any]
 

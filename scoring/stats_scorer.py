@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from role_scorer import (
+from scoring.role_scorer import (
     IDENTITY,
     extract_attrs,
     extract_record_fields,
@@ -23,7 +23,7 @@ from role_scorer import (
     unique_headers,
 )
 
-DATA_PATH = Path(__file__).resolve().parent / "config" / "stats_benchmarks.json"
+DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "stats_benchmarks.json"
 
 # PDF / FM-style graduated colors (percentile 0 → 100).
 _COLOR_RED = (255, 92, 92)

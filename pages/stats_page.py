@@ -21,11 +21,11 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
-from pack_picker import pack_picker_bar, section_card_header
-from division_tiers import classify_division
-from player_filters import help_icon, player_filters, player_filters_host
-from player_modal import player_detail_body, player_modal
-from player_table import (
+from components.pack_picker import pack_picker_bar, section_card_header
+from scoring.division_tiers import classify_division
+from components.player_filters import help_icon, player_filters, player_filters_host
+from components.player_modal import player_detail_body, player_modal
+from components.player_table import (
     IDENTITY_TEXT_COLS,
     feet_cell,
     feet_sort_key,
@@ -41,14 +41,14 @@ from player_table import (
     table_caption_row,
     table_css,
 )
-from role_scorer import (
+from scoring.role_scorer import (
     POS_CARDS,
     foot_match,
     player_pos_groups,
     player_row_key,
     to_int,
 )
-from scouting_shell import (
+from components.scouting_shell import (
     clicked,
     hist_block,
     parsed_players,
@@ -60,7 +60,7 @@ from scouting_shell import (
     unpack_parsed,
     upload_card,
 )
-from stats_scorer import (
+from scoring.stats_scorer import (
     POS_GROUPS,
     band_metric,
     benchmarks,
@@ -83,8 +83,8 @@ from stats_scorer import (
     scoring_stats,
     view_categories,
 )
-import ui_settings as us
-import stats_threshold_packs as stp
+import services.ui_settings as us
+import services.stats_threshold_packs as stp
 
 register_page(__name__, path="/stats", name="Player stats")
 
@@ -570,7 +570,7 @@ def _table_columns(
 
 def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
     """Build shortlist identity cells for one stats player row."""
-    from division_tiers import apply_division_tier
+    from scoring.division_tiers import apply_division_tier
 
     left = player.get("left_foot") or ""
     right = player.get("right_foot") or ""
@@ -1679,7 +1679,7 @@ def switch_stats_thresh_pack(pack_id, settings):
     Input("ui-settings", "data"),
 )
 def sync_st_controls_from_settings(settings):
-    from player_table import default_page_size_value, page_size_select_data
+    from components.player_table import default_page_size_value, page_size_select_data
 
     settings = us.normalize(settings)
     return (

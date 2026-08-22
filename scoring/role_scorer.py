@@ -12,10 +12,10 @@ from enum import IntEnum
 from typing import Any
 
 import config.fm26_role_weight_config as pc
-import role_config
-from division_tiers import apply_division_tier
-from phases import phase_is_gk, phase_label, phase_matches, phase_tone, pretty_role_name
-from utils import calculate_score
+import services.role_config as role_config
+from scoring.division_tiers import apply_division_tier
+from scoring.phases import phase_is_gk, phase_label, phase_matches, phase_tone, pretty_role_name
+from scoring.utils import calculate_score
 
 role_config.ensure_loaded()
 

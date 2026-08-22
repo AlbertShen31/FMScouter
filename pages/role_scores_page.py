@@ -20,9 +20,9 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
-from pack_picker import pack_picker_bar, section_card_header
-from player_filters import help_icon, player_filters
-from scouting_shell import (
+from components.pack_picker import pack_picker_bar, section_card_header
+from components.player_filters import help_icon, player_filters
+from components.scouting_shell import (
     as_list,
     clicked,
     hist_block,
@@ -33,7 +33,7 @@ from scouting_shell import (
     register_upload_callbacks,
     upload_card,
 )
-from role_scorer import (
+from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
     GROUP_DEFS,
@@ -67,8 +67,8 @@ from role_scorer import (
     set_piece_hint,
     set_piece_sort_column,
 )
-from player_modal import player_detail_body, player_modal
-from player_table import (
+from components.player_modal import player_detail_body, player_modal
+from components.player_table import (
     IDENTITY_LEFT_COLS,
     IDENTITY_TEXT_COLS,
     feet_cell,
@@ -87,10 +87,10 @@ from player_table import (
     table_caption_row,
     table_css,
 )
-from attr_columns import attr_grid, attr_group_columns, attr_row
-import formations as fm
-import role_config as rc
-import ui_settings as us
+from components.attr_columns import attr_grid, attr_group_columns, attr_row
+import services.formations as fm
+import services.role_config as rc
+import services.ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
 
@@ -2448,7 +2448,7 @@ def load_formation(formation_id, phase, group, current_combos):
     Input("ui-settings", "data"),
 )
 def sync_rs_page_size_from_settings(settings):
-    from player_table import default_page_size_value, page_size_select_data
+    from components.player_table import default_page_size_value, page_size_select_data
 
     settings = us.normalize(settings)
     return page_size_select_data(settings), default_page_size_value(settings)

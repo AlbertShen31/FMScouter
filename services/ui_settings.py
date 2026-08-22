@@ -314,19 +314,19 @@ def _hex_color(value, default: str) -> str:
 
 def default_stats_thresholds() -> dict[str, Any]:
     """Active MustermannFM / pack cut-points (compat helper)."""
-    import stats_threshold_packs as stp
+    import services.stats_threshold_packs as stp
 
     return stp.builtin_thresholds()
 
 
 def normalize_stats_thresholds(raw=None) -> dict[str, Any]:
-    import stats_threshold_packs as stp
+    import services.stats_threshold_packs as stp
 
     return stp.normalize_thresholds(raw)
 
 
 def stats_thresholds_differ(tree: dict[str, Any] | None) -> bool:
-    import stats_threshold_packs as stp
+    import services.stats_threshold_packs as stp
 
     return stp.thresholds_differ(tree)
 
@@ -408,7 +408,7 @@ def normalize_set_piece_profiles(raw) -> list[dict[str, Any]] | None:
         return None
     if not isinstance(raw, (list, tuple)) or not raw:
         return None
-    import role_scorer as rs
+    import scoring.role_scorer as rs
 
     by_id = {
         str(item.get("id") or ""): item
@@ -555,7 +555,7 @@ def shortlist_columns_for(page: str, settings=None) -> list[str]:
 
 
 def _modal_field_catalog() -> list[tuple[str, str, str]]:
-    from player_modal import iter_modal_field_defs
+    from components.player_modal import iter_modal_field_defs
 
     return iter_modal_field_defs()
 
@@ -576,7 +576,7 @@ def normalize_modal_identity_fields(raw=None, *, legacy_extra=None) -> dict[str,
         return defaults
 
     if isinstance(raw, dict) and "order" in raw:
-        from player_modal import STAR_ATTRIBUTES_BROKEN
+        from components.player_modal import STAR_ATTRIBUTES_BROKEN
 
         order: list[str] = []
         seen: set[str] = set()
@@ -607,7 +607,7 @@ def modal_identity_scope_values(cfg: dict[str, Any]) -> list[str]:
 
 def modal_identity_fields_for(page: str, settings=None) -> list[tuple[str, str, str]]:
     """(label, key, section) rows for the player modal on one page."""
-    from player_modal import STAR_ATTRIBUTES_BROKEN
+    from components.player_modal import STAR_ATTRIBUTES_BROKEN
 
     cfg = normalize(settings)["modal_identity_fields"]
     page_key = "role_scores" if page == "role_scores" else "player_stats"
@@ -712,7 +712,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     label = name if name is not None else raw.get("name") or (
         "Default" if pack_id == BUILTIN else pack_id
     )
-    import stats_threshold_packs as stp
+    import services.stats_threshold_packs as stp
 
     return {
         "id": pack_id,
@@ -988,7 +988,7 @@ def set_piece_profiles(settings=None) -> list[dict[str, Any]]:
     profiles = settings.get("set_piece_profiles")
     if profiles:
         return copy.deepcopy(profiles)
-    import role_scorer as rs
+    import scoring.role_scorer as rs
 
     return copy.deepcopy(list(rs.SET_PIECE_PROFILES))
 

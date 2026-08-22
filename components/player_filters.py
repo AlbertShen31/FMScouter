@@ -7,7 +7,7 @@ from typing import Any
 from dash import html
 import dash_bootstrap_components as dbc
 
-from role_scorer import foot_filter_help, foot_filter_hints
+from scoring.role_scorer import foot_filter_help, foot_filter_hints
 
 FOOT_OPTIONS = (
     ("foot-L", "Left Foot"),

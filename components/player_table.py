@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dash import dash_table, html
 import dash_mantine_components as dmc
 
-from role_scorer import FOOT_STRENGTH_NAMES, FootStrength, foot_strength
+from scoring.role_scorer import FOOT_STRENGTH_NAMES, FootStrength, foot_strength
 
 IDENTITY_TEXT_COLS = frozenset(
     {
@@ -57,7 +57,7 @@ PAGE_SIZE_OPTIONS = ("25", "50", "100")
 
 
 def page_size_select_data(settings=None) -> list[dict[str, str]]:
-    import ui_settings as us
+    import services.ui_settings as us
 
     options = us.page_size_options(settings) if settings is not None else list(PAGE_SIZE_OPTIONS)
     if not options:
@@ -66,7 +66,7 @@ def page_size_select_data(settings=None) -> list[dict[str, str]]:
 
 
 def default_page_size_value(settings=None) -> str:
-    import ui_settings as us
+    import services.ui_settings as us
 
     if settings is None:
         return "50"
@@ -538,7 +538,7 @@ def identity_data_styles(
 
 def division_highlight_styles(theme: str | None = None) -> list[dict]:
     """Color Division: top (green), pro (yellow), semi-pro/amateur (red)."""
-    from division_tiers import division_tier_colors
+    from scoring.division_tiers import division_tier_colors
 
     colors = division_tier_colors(theme)
     rules = []

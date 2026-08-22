@@ -30,7 +30,7 @@ from config.paths import (
     ROLE_WEIGHTS_DIR,
     ROLE_WEIGHTS_PACKS_DIR,
 )
-from phases import phase_is_gk
+from scoring.phases import phase_is_gk
 
 PACKS_DIR = ROLE_WEIGHTS_PACKS_DIR
 ACTIVE_PATH = ROLE_WEIGHTS_ACTIVE_PATH
@@ -47,7 +47,7 @@ NEXT_TIER = {"none": "key", "key": "preferred", "preferred": "useful", "useful":
 def tier_weight_map(settings=None) -> dict:
     """Current key/preferred/useful multipliers (from UI settings when available)."""
     try:
-        import ui_settings as us
+        import services.ui_settings as us
 
         weights = us.tier_weights(settings)
         return {

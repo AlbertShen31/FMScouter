@@ -7,15 +7,15 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
-import role_config as rc
-import role_scorer as rs
-from stats_scorer import (
+import services.role_config as rc
+import scoring.role_scorer as rs
+from scoring.stats_scorer import (
     benchmarks,
     metric_defs,
     percentile_marks,
 )
-import stats_threshold_packs as stp
-import ui_settings as us
+import services.stats_threshold_packs as stp
+import services.ui_settings as us
 
 register_page(__name__, path="/settings", name="Settings")
 

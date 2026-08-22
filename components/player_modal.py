@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dash import html
 import dash_bootstrap_components as dbc
 
-from personality_ranges import attr_help, estimate_hidden_ranges, range_color
+from scoring.personality_ranges import attr_help, estimate_hidden_ranges, range_color
 
 # FM26 Moneyball export: star ratings are unreliable — never show in the UI.
 STAR_ATTRIBUTES_BROKEN = frozenset({"ability", "potential", "world_reputation"})

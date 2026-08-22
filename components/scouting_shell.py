@@ -41,7 +41,7 @@ from dash import (
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
-from player_filters import help_icon
+from components.player_filters import help_icon
 
 ParseFn = Callable[[str], list]
 RowKeyFn = Callable[[dict], str]
