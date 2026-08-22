@@ -59,7 +59,9 @@ These collide in everyday FM language. Keep them separate:
 
 1. **Role group `wm` — Wide midfielders.** Home of Wide Midfielder, **Winger (`W`)**, Half-Space Winger, Inside Winger, and the other wide-mid roles. Dict: `wm_positions`.
 2. **Role group `w` — Wingers.** Home of Wide Forward and Inside Forward. Dict: `w_positions`.
-3. **Player filter card “Winger” (AML / AMR)** on Role scores. That card is about where the *player* can play, not which role group a *role* belongs to. It matches both `wm` and `w`. CSS class `.rs-pos-card.w` is this card.
+3. **Player filter cards** on Role scores / Stats:
+   - **Wide Midfielders** (`WM`, ML / MR) — CSS `.rs-pos-card.wm`
+   - **Winger** (`W`, AML / AMR) — CSS `.rs-pos-card.w`
 
 Inside Winger is `wm` plus `w`. Inside Forward is **only** `w`. Role `Winger_IP` is **only** `wm` (plus `w` via `groups`).
 
@@ -83,16 +85,18 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 `is_eligible(positions, group)` tests a parsed FM Position string against one **role group** (whether a player can be scored as eligible for that role).
 
-- `wm`: `M` or `AM` on L/R
-- `w`: `AM` or `M` on L/R, or `ST`
+- `wm`: `M` on L/R (ML / MR)
+- `w`: `AM` on L/R (AML / AMR), or `ST`
 
-Position-bar filters use `matches_pos_card` instead — exact FM positions only:
+Position-bar filters use `matches_pos_card` — exact FM positions only:
 
-- Winger: `M` / `AM` on L/R (not ST-only players)
-- Striker: `ST`
 - Midfielder: `DM`, `M (C)`, `AM (C)`
+- Wide Midfielders: `M` on L/R
+- Winger: `AM` on L/R
+- Striker: `ST`
 - and so on for GK / CB / FB
 
+On the Stats page, the Wide Midfielders card uses the same Mustermann **midfielder** thresholds as Midfielder (`POS_CARD_BENCH["WM"] = "mid"`). Winger stays on forward thresholds.
 ## Phases
 
 Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK for filters and attribute sheets. Display badges show **IP** or **OOP**, never the raw keeper-phase token. UI monograms show the base role code (`CF`); score columns use `column_label()` when the same code appears in both phases (`CF-IP`, `CF-OOP`).

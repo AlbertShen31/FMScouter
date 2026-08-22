@@ -414,18 +414,20 @@ POS_CARDS = [
     ("DEF", "Center Back", "CB", "def"),
     ("FB", "Full Back", "FB / WB", "fb"),
     ("MID", "Midfielder", "DM / CM / AM", "mid"),
+    ("WM", "Wide Midfielders", "ML / MR", "wm"),
     ("W", "Winger", "AML / AMR", "w"),
     ("ST", "Striker", "ST", "st"),
 ]
 
-# Role groups that feed each card when scoring eligibility — not used for
-# the position-bar filter (that uses matches_pos_card).
+# Role groups aligned with each card (documentation / tooling). Position-bar
+# filters use matches_pos_card, not this map.
 POS_CARD_GROUPS = {
     "GK": ("gk",),
     "DEF": ("cb",),
     "FB": ("fb", "wb"),
     "MID": ("dm", "cm", "am"),
-    "W": ("wm", "w"),
+    "WM": ("wm",),
+    "W": ("w",),
     "ST": ("st",),
 }
 
@@ -437,7 +439,7 @@ GROUP_ABBR_TONE = {
     "DM": "mid",
     "CM": "mid",
     "AM": "mid",
-    "WM": "w",
+    "WM": "wm",
     "W": "w",
     "ST": "st",
 }
@@ -562,12 +564,12 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
             (pos == "AM" and "C" in area) or (pos == "M" and "C" in area)
         ):
             return True
-        if group == "wm" and pos in ("M", "AM") and ("L" in area or "R" in area):
+        # Wide midfielders: ML / MR only.
+        if group == "wm" and pos == "M" and ("L" in area or "R" in area):
             return True
+        # Wingers: AML / AMR (ST still counts for role eligibility).
         if group == "w" and (
-            (pos == "AM" and ("L" in area or "R" in area))
-            or (pos == "M" and ("L" in area or "R" in area))
-            or pos == "ST"
+            (pos == "AM" and ("L" in area or "R" in area)) or pos == "ST"
         ):
             return True
         if group == "st" and pos == "ST":
@@ -593,7 +595,9 @@ def matches_pos_card(positions: list[dict[str, str]], card: str) -> bool:
             or (pos == "AM" and "C" in area)
         ):
             return True
-        if card == "W" and pos in ("M", "AM") and ("L" in area or "R" in area):
+        if card == "WM" and pos == "M" and ("L" in area or "R" in area):
+            return True
+        if card == "W" and pos == "AM" and ("L" in area or "R" in area):
             return True
         if card == "ST" and pos == "ST":
             return True
