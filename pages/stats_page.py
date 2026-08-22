@@ -4,7 +4,9 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import json
 import re
+import zlib
 
 from dash import (
     ALL,
@@ -125,6 +127,48 @@ def _upload_error(message: str) -> html.Div:
 def _decode_upload(contents: str) -> str:
     _ctype, _, payload = contents.partition(",")
     return base64.b64decode(payload).decode("utf-8-sig", errors="replace")
+
+
+def _pack_parsed(players: list, filename: str) -> dict:
+    """Compress parsed players for sessionStorage (large combined exports)."""
+    raw = json.dumps(
+        {"players": players, "filename": filename},
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    blob = base64.b64encode(zlib.compress(raw, 6)).decode("ascii")
+    return {
+        "v": 1,
+        "encoding": "zlib+b64",
+        "filename": filename,
+        "n": len(players),
+        "payload": blob,
+    }
+
+
+def _unpack_parsed(data) -> dict | None:
+    """Return ``{players, filename}`` from a packed or legacy session store."""
+    if not data:
+        return None
+    if isinstance(data.get("players"), list):
+        return data
+    blob = data.get("payload")
+    if not blob:
+        return None
+    try:
+        raw = zlib.decompress(base64.b64decode(blob))
+        packed = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(packed, dict) or not isinstance(packed.get("players"), list):
+        return None
+    packed.setdefault("filename", data.get("filename") or "export.csv")
+    return packed
+
+
+def _parsed_players(data) -> list:
+    unpacked = _unpack_parsed(data)
+    return list((unpacked or {}).get("players") or [])
 
 
 def _colored_cell(text: str, color: str | None) -> str:
@@ -1565,7 +1609,7 @@ def on_upload(upload_contents, replace_contents, upload_name, replace_name):
     except Exception as exc:
         return None, _upload_error(str(exc)), False, True, True
     return (
-        {"players": players, "filename": name},
+        _pack_parsed(players, name),
         _upload_status(len(players), name),
         True,
         False,
@@ -1584,11 +1628,12 @@ def on_upload(upload_contents, replace_contents, upload_name, replace_name):
 )
 def restore_upload_ui(parsed, _tick):
     """Re-show upload status when session-stored CSV survives page navigation."""
-    if not parsed or not parsed.get("players"):
+    unpacked = _unpack_parsed(parsed)
+    if not unpacked or not unpacked.get("players"):
         return no_update, no_update, no_update, no_update
-    filename = parsed.get("filename") or "export.csv"
+    filename = unpacked.get("filename") or "export.csv"
     return (
-        _upload_status(len(parsed["players"]), filename),
+        _upload_status(len(unpacked["players"]), filename),
         True,
         False,
         False,
@@ -1754,7 +1799,7 @@ def refresh_table(
     theme,
     sort_memory,
 ):
-    players = (parsed or {}).get("players") or []
+    players = _parsed_players(parsed)
     pos = pos or "all"
     settings = us.normalize(settings)
     minutes_required = float(
@@ -1970,7 +2015,7 @@ def open_player(
     if idx is None or idx >= len(rows):
         return no_update, no_update, no_update, no_update, no_update
     key = _row_mark_key(rows[idx])
-    players = (parsed or {}).get("players") or []
+    players = _parsed_players(parsed)
     player = next((p for p in players if player_key(p) == key), None)
     view = _normalize_player_view(view)
     if not player:
@@ -2001,7 +2046,7 @@ def open_player(
 
 
 def _lookup_modal_player(parsed, player_key_value):
-    players = (parsed or {}).get("players") or []
+    players = _parsed_players(parsed)
     return next((p for p in players if player_key(p) == player_key_value), None)
 
 
@@ -2144,7 +2189,7 @@ def download_csv(
     marked,
     settings,
 ):
-    players = (parsed or {}).get("players") or []
+    players = _parsed_players(parsed)
     if not players:
         return no_update
     settings = us.normalize(settings)

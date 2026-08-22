@@ -426,10 +426,20 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
         position = pick(row, IDENTITY["Position"])
         minutes = parse_number(pick(row, ["Minutes"]))
         group = classify_best_pos(best_pos, position)
-        stats: dict[str, float | None] = {}
+        stats: dict[str, float] = {}
         if has_scorable_minutes(minutes):
             for metric_id in metric_defs():
-                stats[metric_id] = _pick_metric_raw(row, metric_id)
+                value = _pick_metric_raw(row, metric_id)
+                if value is not None:
+                    stats[metric_id] = value
+        # Combined Moneyball exports include full attribute sheets; keep only
+        # Determination / Leadership for the personality estimate (session size).
+        all_attrs = extract_attrs(row)
+        attrs = {
+            code: all_attrs[code]
+            for code in ("Det", "Ldr")
+            if code in all_attrs and all_attrs[code]
+        }
         players.append(
             {
                 "name": name,
@@ -443,9 +453,6 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "style": pick(row, IDENTITY["Style"]),
                 "personality": pick(row, IDENTITY.get("Personality", ["Personality"])),
                 "media_handling": pick(row, IDENTITY.get("MediaHandling", ["Media Handling"])),
-                "world_reputation": pick(row, IDENTITY["WorldReputation"]),
-                "ability": pick(row, IDENTITY["Ability"]),
-                "potential": pick(row, IDENTITY["Potential"]),
                 "height": pick(row, IDENTITY["Height"]).strip('"'),
                 "left_foot": pick(row, IDENTITY["LeftFoot"]),
                 "right_foot": pick(row, IDENTITY["RightFoot"]),
@@ -468,7 +475,7 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "minutes": minutes,
                 "pos_group": group,
                 "stats": stats,
-                "attrs": extract_attrs(row),
+                "attrs": attrs,
                 "positions": parse_positions(position)
                 + parse_positions(pick(row, IDENTITY["SecPosition"])),
                 "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),
