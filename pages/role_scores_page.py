@@ -56,7 +56,6 @@ from role_scorer import (
     set_piece_hint,
     set_piece_sort_column,
 )
-from canvas_export import build_canvas
 from player_filters import player_filters
 from player_modal import player_detail_body, player_modal
 from player_table import (
@@ -834,7 +833,6 @@ def layout():
             hidden=True,
         ),
         dcc.Download(id="rs-download-csv"),
-        dcc.Download(id="rs-download-canvas"),
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
         dbc.Card(
@@ -1299,18 +1297,6 @@ def layout():
                             "Download scored CSV",
                             id="rs-csv-btn",
                             className="me-2",
-                        ),
-                        dmc.Button(
-                            "Download Cursor canvas (.tsx)",
-                            id="rs-canvas-btn",
-                            variant="light",
-                            className="me-2",
-                            buttonProps={
-                                "title": (
-                                    "Opens beside chat in Cursor. Save to your workspace canvases "
-                                    "folder, or open the file directly."
-                                ),
-                            },
                         ),
                         html.Hr(className="my-3"),
                         html.Div(
@@ -3219,32 +3205,3 @@ def download_csv(n_clicks, payload, focus_role, hybrids_only):
     name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
     text = scored_csv(payload["rows"], role_labels)
     return dict(content=text, filename=f"{name}_role_scores.csv")
-
-
-@callback(
-    Output("rs-download-canvas", "data"),
-    Input("rs-canvas-btn", "n_clicks"),
-    State("rs-rows", "data"),
-    State("rs-focus-role", "data"),
-    State("ui-settings", "data"),
-    State("rs-hybrids-only", "checked"),
-    prevent_initial_call=True,
-)
-def download_canvas(n_clicks, payload, focus_role, settings, hybrids_only):
-    if not n_clicks or not payload or not payload.get("rows"):
-        return no_update
-    hybrids_only = bool(hybrids_only)
-    combos = normalize_combos(payload.get("combos"))
-    view_roles = _hybrid_only_roles(
-        _resolved_view_roles(payload, focus_role), combos, hybrids_only
-    )
-    if not view_roles:
-        return no_update
-    role_labels = _table_role_columns(view_roles, combos, hybrids_only)
-    text = build_canvas(
-        payload["rows"],
-        role_labels,
-        payload.get("filename") or "FM export",
-        settings,
-    )
-    return dict(content=text, filename="fm26-role-scores.canvas.tsx")

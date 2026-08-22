@@ -29,7 +29,6 @@ Attribute tiers: **Key** ×5 (neon green), **Preferred** ×3 (yellow-green), **U
 | `role_config.py` | Packs, live overlays, saved-group migration. |
 | `phases.py` | IP / OOP / GK badges and GK detection. |
 | `utils.py` | Weighted-average formula. |
-| `canvas_export.py` | Cursor canvas export from scored rows. |
 | `fm26_player_scoring_system_v2_0.html` | Historical HTML scorer the Python weights were ported from. Not used at runtime. |
 
 ### Config layout

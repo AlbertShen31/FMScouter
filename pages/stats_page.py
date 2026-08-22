@@ -43,6 +43,7 @@ from player_table import (
 )
 from role_scorer import (
     foot_match,
+    player_row_key,
     to_int,
 )
 from stats_scorer import (
@@ -358,7 +359,9 @@ def _table_css() -> list[dict]:
 
 
 def _table_base_styles(theme: str | None = None) -> list[dict]:
-    return identity_data_styles(theme, extra=_stats_metric_styles())
+    return identity_data_styles(
+        theme, extra=_stats_metric_styles() + _KEY_COLUMN_HIDE
+    )
 
 
 def _avg_header_styles() -> list[dict]:
@@ -409,6 +412,34 @@ def _display_blank(value) -> str:
     return text if text and text not in ("-", "—") else "-"
 
 
+def _row_mark_key(row: dict) -> str:
+    """Stable player id for row selection (matches stats ``player_key``)."""
+    key = str(row.get("_key") or "").strip()
+    if key:
+        return key
+    club = str(row.get("Club") or "").strip()
+    if club in ("—", "-"):
+        club = ""
+    return player_row_key({"Name": row.get("Name"), "Club": club})
+
+
+def _hidden_key_column() -> dict:
+    return {"name": "", "id": "_key"}
+
+
+_KEY_COLUMN_HIDE = [
+    {
+        "if": {"column_id": "_key"},
+        "display": "none",
+        "width": "0px",
+        "minWidth": "0px",
+        "maxWidth": "0px",
+        "padding": "0",
+        "border": "none",
+    },
+]
+
+
 def _table_columns(
     group: str, category: str, threshold_overrides=None, settings=None
 ) -> list[dict]:
@@ -437,6 +468,7 @@ def _table_columns(
                     "presentation": "markdown",
                 }
             )
+        cols.append(_hidden_key_column())
         return cols
     avg_section = _single_category_avg_section(group, cat)
     if avg_section:
@@ -450,6 +482,7 @@ def _table_columns(
     for mid in metrics_for(g, cat, threshold_overrides):
         abbr = metric_defs()[mid]["abbr"]
         cols.append({"name": abbr, "id": abbr, "presentation": "markdown"})
+    cols.append(_hidden_key_column())
     return cols
 
 
@@ -1416,10 +1449,11 @@ def layout(**_kwargs):
                                         columns=_table_columns("all", "all", settings=settings),
                                         page_size=us.page_size(settings),
                                         style_cell_props=style_cell(text_align="center"),
-                                        style_cell_conditional_rules=style_cell_conditional(),
+                                        style_cell_conditional_rules=style_cell_conditional()
+                                        + _KEY_COLUMN_HIDE,
                                         style_header_props=style_header(),
                                         style_header_conditional_rules=style_header_conditional(
-                                            extra=_avg_header_styles()
+                                            extra=_avg_header_styles() + _KEY_COLUMN_HIDE
                                         ),
                                         style_data_conditional_rules=_table_base_styles("dark"),
                                         css=_table_css(),
@@ -1761,9 +1795,13 @@ def refresh_table(
     _sort_table_rows(rows, sort_by)
     header_tips = _header_tooltips(pos, category, thresh, settings=settings)
     col_ids = [c["id"] for c in cols]
-    table_rows = [{col: row.get(col, "—") for col in col_ids} | {"_key": row["_key"]} for row in rows]
+    table_rows = [{col: row.get(col, "—") for col in col_ids} for row in rows]
     marked_set = set(marked or [])
-    selected = [i for i, r in enumerate(table_rows) if r.get("_key") in marked_set]
+    selected = [
+        i
+        for i, row in enumerate(table_rows)
+        if _row_mark_key(row) in marked_set
+    ]
     page_size_i = int(page_size or 50)
     style_data = _table_base_styles(theme)
 
@@ -1891,13 +1929,13 @@ def clear_marks(_n):
 )
 def sync_marks(selected_rows, table_data, marked):
     table_data = table_data or []
-    keys_on_page = [r.get("_key") for r in table_data if r.get("_key")]
+    keys_on_page = [_row_mark_key(r) for r in table_data]
     marked_set = set(marked or [])
     expected = {i for i, key in enumerate(keys_on_page) if key in marked_set}
     selected = set(selected_rows or [])
     if selected == expected:
         return no_update
-    marked_set -= set(keys_on_page)
+    marked_set -= {key for key in keys_on_page if key}
     for i in selected:
         if 0 <= i < len(keys_on_page) and keys_on_page[i]:
             marked_set.add(keys_on_page[i])
@@ -1931,7 +1969,7 @@ def open_player(
     idx = active_cell.get("row")
     if idx is None or idx >= len(rows):
         return no_update, no_update, no_update, no_update, no_update
-    key = rows[idx].get("_key")
+    key = _row_mark_key(rows[idx])
     players = (parsed or {}).get("players") or []
     player = next((p for p in players if player_key(p) == key), None)
     view = _normalize_player_view(view)
