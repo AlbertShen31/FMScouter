@@ -90,13 +90,14 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 Position-bar filters use `matches_pos_card` — exact FM positions only:
 
-- Midfielder: `DM`, `M (C)`, `AM (C)`
+- Defensive Midfield: `DM`, `M (C)`
+- Attacking Midfield: `M (C)`, `AM (C)` (CM appears on both midfield cards)
 - Wide Midfielders: `M` on L/R
 - Winger: `AM` on L/R
 - Striker: `ST`
 - and so on for GK / CB / FB
 
-On the Stats page, the Wide Midfielders card uses the same Mustermann **midfielder** thresholds as Midfielder (`POS_CARD_BENCH["WM"] = "mid"`). Winger stays on forward thresholds.
+On the Stats page, Defensive Midfield, Attacking Midfield, and Wide Midfielders all use Mustermann **midfielder** thresholds (`POS_CARD_BENCH` → `mid`). Winger stays on forward thresholds.
 ## Phases
 
 Roles are tagged IP, OOP, GK, IP_GK, or OOP_GK. Keeper IP/OOP variants still count as GK for filters and attribute sheets. Display badges show **IP** or **OOP**, never the raw keeper-phase token. UI monograms show the base role code (`CF`); score columns use `column_label()` when the same code appears in both phases (`CF-IP`, `CF-OOP`).

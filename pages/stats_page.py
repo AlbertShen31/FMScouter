@@ -79,12 +79,13 @@ import stats_threshold_packs as stp
 register_page(__name__, path="/stats", name="Player stats")
 
 # Role-scores-style position cards → Mustermann threshold group.
-# DEF/FB → def, MID/WM → mid, W/ST → fwd, GK → gk.
+# DEF/FB → def, DM/AM/WM → mid, W/ST → fwd, GK → gk.
 POS_CARD_BENCH = {
     "GK": "gk",
     "DEF": "def",
     "FB": "def",
-    "MID": "mid",
+    "DM": "mid",
+    "AM": "mid",
     "WM": "mid",
     "W": "fwd",
     "ST": "fwd",
@@ -312,7 +313,7 @@ def _coerce_sort_by(
 
 
 def _player_pos_cards(player: dict) -> list[str]:
-    """Role-scores-style position cards (GK / DEF / FB / MID / WM / W / ST)."""
+    """Role-scores-style position cards (GK / DEF / FB / DM / AM / WM / W / ST)."""
     cards = player.get("pos_cards")
     if isinstance(cards, list) and cards:
         return [str(c) for c in cards]
@@ -323,9 +324,9 @@ def _player_pos_cards(player: dict) -> list[str]:
     return {
         "gk": ["GK"],
         "def": ["DEF"],
-        "mid": ["MID", "WM"],
+        "mid": ["DM", "AM", "WM"],
         "fwd": ["ST", "W"],
-    }.get(pg, ["MID"])
+    }.get(pg, ["DM", "AM"])
 
 
 def _bench_group_for_filter(pos_filter: str | None) -> str | None:
@@ -352,7 +353,7 @@ def _resolve_category(group: str, category: str) -> tuple[str, str]:
 
     Categories are always Defending / Final third / Possession (plus All).
     Goalkeepers use the mapped GK benchmark blocks under those same ids.
-    Position cards (DEF/FB/MID/WM/W/ST/GK) map onto def/mid/fwd/gk thresholds.
+    Position cards (DEF/FB/DM/AM/WM/W/ST/GK) map onto def/mid/fwd/gk thresholds.
     """
     bench = _bench_group_for_filter(group)
     g = bench or "def"

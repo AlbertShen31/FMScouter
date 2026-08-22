@@ -1337,6 +1337,10 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-depth-code.fb { color: #ea580c; }
 .rs-pill-groups.mid,
 .rs-depth-code.mid { color: #2563eb; }
+.rs-pill-groups.dm,
+.rs-depth-code.dm { color: #2563eb; }
+.rs-pill-groups.am,
+.rs-depth-code.am { color: #6366f1; }
 .rs-pill-groups.wm,
 .rs-depth-code.wm { color: #0891b2; }
 .rs-pill-groups.w,
@@ -1970,6 +1974,8 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-pos-card.gk.active { border-bottom-color: #fbbf24; }
 .rs-pos-card.def.active { border-bottom-color: #f87171; }
 .rs-pos-card.fb.active { border-bottom-color: #fb923c; }
+.rs-pos-card.dm.active { border-bottom-color: #3b82f6; }
+.rs-pos-card.am.active { border-bottom-color: #818cf8; }
 .rs-pos-card.mid.active { border-bottom-color: #60a5fa; }
 .rs-pos-card.wm.active { border-bottom-color: #22d3ee; }
 .rs-pos-card.w.active { border-bottom-color: #4ade80; }
@@ -1981,6 +1987,8 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-pos-card.gk .rs-pos-count { color: #d97706; }
 .rs-pos-card.def .rs-pos-count { color: #ef4444; }
 .rs-pos-card.fb .rs-pos-count { color: #ea580c; }
+.rs-pos-card.dm .rs-pos-count { color: #2563eb; }
+.rs-pos-card.am .rs-pos-count { color: #6366f1; }
 .rs-pos-card.mid .rs-pos-count { color: #2563eb; }
 .rs-pos-card.wm .rs-pos-count { color: #0891b2; }
 .rs-pos-card.w .rs-pos-count { color: #16a34a; }
