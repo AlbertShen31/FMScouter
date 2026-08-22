@@ -3233,6 +3233,105 @@ body:has(.rc-page) .navbar {
     display: none !important;
 }
 
+.st-shortlist-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.st-shortlist-table th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--app-muted);
+    text-align: left;
+    padding: 8px 12px 8px 0;
+    border-bottom: 1px solid var(--app-line);
+}
+
+.st-shortlist-table td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid var(--app-line);
+    vertical-align: middle;
+}
+
+.st-shortlist-col-name {
+    width: 120px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.st-shortlist-row.is-fixed td {
+    color: var(--app-muted);
+}
+
+.st-shortlist-scope {
+    min-width: 280px;
+}
+
+.st-shortlist-scope .mantine-SegmentedControl-label {
+    font-size: 11px;
+    padding: 0 6px;
+}
+
+.st-field-scope-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.st-field-scope-table th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--app-muted);
+    text-align: left;
+    padding: 8px 12px 8px 0;
+    border-bottom: 1px solid var(--app-line);
+}
+
+.st-field-scope-table td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid var(--app-line);
+    vertical-align: middle;
+}
+
+.st-field-order-cell {
+    width: 56px;
+    white-space: nowrap;
+}
+
+.st-field-order-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.st-field-order-btn {
+    line-height: 1;
+}
+
+.st-field-name-cell {
+    width: 140px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.st-field-scope-row.is-fixed td {
+    color: var(--app-muted);
+}
+
+.st-field-scope-control {
+    min-width: 280px;
+}
+
+.st-field-scope-control .mantine-SegmentedControl-label {
+    font-size: 11px;
+    padding: 0 6px;
+}
+
 .st-section-save-row {
     display: flex;
     align-items: center;

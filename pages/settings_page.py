@@ -39,15 +39,6 @@ SETTINGS_SECTIONS = (
     ("player-stats", "Player stats"),
 )
 
-SHORTLIST_OPTIONS = [
-    {"label": col, "value": col} for col in us.ALLOWED_SHORTLIST_COLUMNS
-]
-
-MODAL_EXTRA_OPTIONS = [
-    {"label": label, "value": key} for key, label in us.MODAL_EXTRA_FIELD_OPTIONS
-]
-
-
 def _set_piece_attr_options() -> list[dict[str, str]]:
     return [
         {"value": code, "label": f"{code} — {label}"}
@@ -411,33 +402,6 @@ def _general_panel(settings: dict) -> list:
                             "Page size options are comma-separated; the default must be one of them.",
                             className="text-muted d-block mt-2",
                         ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
-                dbc.CardHeader("Player detail modal"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Optional identity fields hidden by default. Checked fields appear "
-                            "in the player modal on Role scores and Player stats.",
-                            className="text-muted",
-                        ),
-                        dmc.CheckboxGroup(
-                            id="st-modal-extra",
-                            value=list(settings.get("modal_extra_fields") or []),
-                            children=[
-                                dmc.Checkbox(
-                                    label=opt["label"],
-                                    value=opt["value"],
-                                )
-                                for opt in MODAL_EXTRA_OPTIONS
-                            ],
-                            className="st-modal-extra-checks",
-                        ),
                         _section_save_row("st-save-general", "st-status-general"),
                     ]
                 ),
@@ -456,8 +420,7 @@ def _role_panel(settings: dict) -> list:
         _section_heading(
             "Role scores",
             "Score bands, colors, histogram, set pieces, age menu, footedness, "
-            "tier weights, and shortlist columns "
-            "(age and footedness are also used on Player stats).",
+            "and tier weights (age and footedness are also used on Player stats).",
         ),
         dbc.Card(
             [
@@ -690,30 +653,6 @@ def _role_panel(settings: dict) -> list:
                             className="text-muted",
                         ),
                         _set_piece_editor(settings),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
-                dbc.CardHeader("Shortlist columns"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Identity columns on Role scores (and matching columns on Player stats). "
-                            "Name is always included.",
-                            className="text-muted",
-                        ),
-                        dmc.CheckboxGroup(
-                            id="st-shortlist-cols",
-                            value=us.shortlist_columns(settings),
-                            children=[
-                                dmc.Checkbox(label=opt["label"], value=opt["value"])
-                                for opt in SHORTLIST_OPTIONS
-                            ],
-                            className="st-shortlist-checks",
-                        ),
                     ]
                 ),
             ],
@@ -1093,7 +1032,6 @@ def _role_form_values(
         tw["useful"],
         hw["ip"],
         hw["oop"],
-        us.shortlist_columns(settings),
         _badge_values_for(settings, badge_specs),
         _sp_values_for(settings, sp_key_specs, "key"),
         _sp_values_for(settings, sp_pref_specs, "preferred"),
@@ -1102,7 +1040,6 @@ def _role_form_values(
         page_opts,
         str(settings["page_size"]),
         us.format_page_size_options(settings),
-        list(settings["modal_extra_fields"]),
         settings["default_minutes_required"],
     )
 
@@ -1289,7 +1226,6 @@ def _ui_draft_from_state(
     tier_useful,
     hybrid_ip,
     hybrid_oop,
-    shortlist_cols,
     badge_values,
     badge_specs,
     sp_keys,
@@ -1301,7 +1237,6 @@ def _ui_draft_from_state(
     preferred_theme,
     page_size_default,
     page_size_options,
-    modal_extra,
     default_minutes,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
@@ -1324,13 +1259,11 @@ def _ui_draft_from_state(
             "useful": tier_useful,
         },
         "hybrid_weights": {"ip": hybrid_ip, "oop": hybrid_oop},
-        "shortlist_columns": shortlist_cols,
         "tier_badge_colors": _badge_colors_from_state(badge_values, badge_specs),
         "set_piece_profiles": _set_piece_profiles_from_state(key_map, pref_map, useful_map),
         "preferred_theme": preferred_theme,
         "page_size": page_size_default,
         "page_size_options": page_size_options,
-        "modal_extra_fields": modal_extra,
         "default_minutes_required": default_minutes,
     }
 
@@ -1353,7 +1286,6 @@ def _ui_draft_from_state(
     Output("st-tier-useful", "value"),
     Output("st-hybrid-ip", "value"),
     Output("st-hybrid-oop", "value"),
-    Output("st-shortlist-cols", "value"),
     Output({"type": "st-badge-color", "tier": ALL}, "value"),
     Output({"type": "st-sp-key", "profile": ALL}, "value"),
     Output({"type": "st-sp-preferred", "profile": ALL}, "value"),
@@ -1362,7 +1294,6 @@ def _ui_draft_from_state(
     Output("st-page-size-default", "data", allow_duplicate=True),
     Output("st-page-size-default", "value"),
     Output("st-page-size-options", "value"),
-    Output("st-modal-extra", "value"),
     Output("st-default-minutes", "value"),
     Output("theme", "data", allow_duplicate=True),
     Output("st-status-general", "children"),
@@ -1388,7 +1319,6 @@ def _ui_draft_from_state(
     State("st-tier-useful", "value"),
     State("st-hybrid-ip", "value"),
     State("st-hybrid-oop", "value"),
-    State("st-shortlist-cols", "value"),
     State({"type": "st-badge-color", "tier": ALL}, "value"),
     State({"type": "st-sp-key", "profile": ALL}, "value"),
     State({"type": "st-sp-preferred", "profile": ALL}, "value"),
@@ -1396,7 +1326,6 @@ def _ui_draft_from_state(
     State("st-preferred-theme", "value"),
     State("st-page-size-default", "value"),
     State("st-page-size-options", "value"),
-    State("st-modal-extra", "value"),
     State("st-default-minutes", "value"),
     prevent_initial_call=True,
 )
@@ -1421,7 +1350,6 @@ def handle_ui_settings(
     tier_useful,
     hybrid_ip,
     hybrid_oop,
-    shortlist_cols,
     badge_values,
     sp_keys,
     sp_prefs,
@@ -1429,20 +1357,19 @@ def handle_ui_settings(
     preferred_theme,
     page_size_default,
     page_size_options,
-    modal_extra,
     default_minutes,
 ):
     triggered = ctx.triggered_id
-    n_out = 32
+    n_out = 30
     if not triggered:
         return (no_update,) * n_out
 
     states = ctx.states_list or []
     color_specs = states[9] if len(states) > 9 else []
-    badge_specs = states[16] if len(states) > 16 else []
-    sp_key_specs = states[17] if len(states) > 17 else []
-    sp_pref_specs = states[18] if len(states) > 18 else []
-    sp_useful_specs = states[19] if len(states) > 19 else []
+    badge_specs = states[15] if len(states) > 15 else []
+    sp_key_specs = states[16] if len(states) > 16 else []
+    sp_pref_specs = states[17] if len(states) > 17 else []
+    sp_useful_specs = states[18] if len(states) > 18 else []
 
     draft = _ui_draft_from_state(
         pack_id,
@@ -1461,7 +1388,6 @@ def handle_ui_settings(
         tier_useful,
         hybrid_ip,
         hybrid_oop,
-        shortlist_cols,
         badge_values,
         badge_specs,
         sp_keys,
@@ -1473,7 +1399,6 @@ def handle_ui_settings(
         preferred_theme,
         page_size_default,
         page_size_options,
-        modal_extra,
         default_minutes,
     )
     status_general = no_update
@@ -1505,7 +1430,7 @@ def handle_ui_settings(
         label = str(new_name or "").strip()
         if not label:
             return (
-                (no_update,) * 29
+                (no_update,) * 27
                 + ("Enter a name to create a new settings file.", no_update, no_update)
             )
         settings = us.create_pack(label, draft)

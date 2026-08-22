@@ -92,12 +92,83 @@ def identity_value_present(value) -> bool:
     return text not in ("", "-")
 
 
-def is_identity_hidden(key: str, modal_extra_fields: Sequence[str] | None = None) -> bool:
-    """Hide default-hidden keys unless the user opted them in via settings."""
-    if key not in PLAYER_IDENTITY_HIDDEN:
-        return False
-    return key not in set(modal_extra_fields or ())
+def iter_modal_field_defs() -> list[tuple[str, str, str]]:
+    """All configurable modal fields as (label, key, section)."""
+    out: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for title, rows in PLAYER_IDENTITY_SECTIONS:
+        section = "international" if title else "identity"
+        for row in rows:
+            for label, key in row:
+                if key not in seen:
+                    out.append((label, key, section))
+                    seen.add(key)
+    for label, key in MODAL_EXTRA_FIELD_DEFS:
+        if key not in seen:
+            out.append((label, key, "identity"))
+            seen.add(key)
+    return out
 
+
+def player_identity_sections(
+    player: dict,
+    *,
+    position_eligible: str | None = None,
+    fields: Sequence[tuple[str, str, str]] | None = None,
+    extra_identity_fields: Sequence[tuple[str, str]] | None = None,
+    field_styles: Mapping[str, dict] | None = None,
+    field_formatters: Mapping[str, FieldFormatter] | None = None,
+) -> list:
+    """Build identity + international section nodes (no personality)."""
+    configured = list(fields or [])
+    if extra_identity_fields:
+        configured.extend(
+            (label, key, "identity") for label, key in extra_identity_fields
+        )
+    if not configured:
+        return []
+
+    by_section: dict[str | None, list[tuple[str, str]]] = {}
+    section_titles = {"identity": None, "international": "International & youth"}
+    for label, key, section in configured:
+        title = section_titles.get(section, section)
+        by_section.setdefault(title, []).append((label, key))
+
+    sections = []
+    for title in (None, "International & youth"):
+        if title not in by_section:
+            continue
+        items = [
+            item
+            for item in (
+                player_identity_item(
+                    label,
+                    key,
+                    player,
+                    position_eligible=position_eligible,
+                    field_styles=field_styles,
+                    field_formatters=field_formatters,
+                )
+                for label, key in by_section[title]
+            )
+            if item is not None
+        ]
+        if not items:
+            continue
+        row = html.Div(items, className="rs-player-identity")
+        if title:
+            sections.append(
+                html.Div(
+                    [
+                        html.Div(title, className="rs-player-id-section-title"),
+                        row,
+                    ],
+                    className="rs-player-id-section",
+                )
+            )
+        else:
+            sections.append(row)
+    return sections
 
 def player_identity_item(
     label: str,
@@ -107,11 +178,8 @@ def player_identity_item(
     position_eligible: str | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
-    modal_extra_fields: Sequence[str] | None = None,
 ) -> html.Div | None:
-    if is_identity_hidden(key, modal_extra_fields) or not identity_value_present(
-        player.get(key)
-    ):
+    if not identity_value_present(player.get(key)):
         return None
     value_class = "rs-player-id-value"
     tip = None
@@ -138,67 +206,6 @@ def player_identity_item(
         ],
         className="rs-player-id-item",
     )
-
-
-def player_identity_sections(
-    player: dict,
-    *,
-    position_eligible: str | None = None,
-    extra_identity_fields: Sequence[tuple[str, str]] | None = None,
-    field_styles: Mapping[str, dict] | None = None,
-    field_formatters: Mapping[str, FieldFormatter] | None = None,
-    modal_extra_fields: Sequence[str] | None = None,
-) -> list:
-    """Build identity + international section nodes (no personality)."""
-    sections_spec = list(PLAYER_IDENTITY_SECTIONS)
-    enabled_extra = set(modal_extra_fields or ())
-    modal_fields = [
-        (label, key) for label, key in MODAL_EXTRA_FIELD_DEFS if key in enabled_extra
-    ]
-    extras = list(extra_identity_fields or ()) + modal_fields
-    if extras:
-        # Append extras to the primary (untitled) identity row.
-        title0, rows0 = sections_spec[0]
-        primary = list(rows0[0]) + list(extras)
-        sections_spec[0] = (title0, [primary, *rows0[1:]])
-
-    sections = []
-    for title, rows in sections_spec:
-        row_blocks = []
-        for fields in rows:
-            items = [
-                item
-                for item in (
-                    player_identity_item(
-                        label,
-                        key,
-                        player,
-                        position_eligible=position_eligible,
-                        field_styles=field_styles,
-                        field_formatters=field_formatters,
-                        modal_extra_fields=modal_extra_fields,
-                    )
-                    for label, key in fields
-                )
-                if item is not None
-            ]
-            if items:
-                row_blocks.append(html.Div(items, className="rs-player-identity"))
-        if not row_blocks:
-            continue
-        if title:
-            sections.append(
-                html.Div(
-                    [
-                        html.Div(title, className="rs-player-id-section-title"),
-                        *row_blocks,
-                    ],
-                    className="rs-player-id-section",
-                )
-            )
-        else:
-            sections.extend(row_blocks)
-    return sections
 
 
 def player_personality_section(
@@ -308,10 +315,10 @@ def player_detail_body(
     *,
     id_prefix: str = "rs",
     position_eligible: str | None = None,
+    modal_fields: Sequence[tuple[str, str, str]] | None = None,
     extra_identity_fields: Sequence[tuple[str, str]] | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
-    modal_extra_fields: Sequence[str] | None = None,
     after_identity=None,
     bottom=None,
 ) -> html.Div:
@@ -320,10 +327,10 @@ def player_detail_body(
         *player_identity_sections(
             player,
             position_eligible=position_eligible,
+            fields=modal_fields,
             extra_identity_fields=extra_identity_fields,
             field_styles=field_styles,
             field_formatters=field_formatters,
-            modal_extra_fields=modal_extra_fields,
         ),
         player_personality_section(player, id_prefix=id_prefix),
     ]

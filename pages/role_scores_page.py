@@ -327,7 +327,7 @@ def _player_detail_card(
         player,
         id_prefix="rs",
         position_eligible=position_eligible,
-        modal_extra_fields=settings.get("modal_extra_fields"),
+        modal_fields=us.modal_identity_fields_for("role_scores", settings),
         bottom=_player_attributes(player, settings["bands"]),
     )
 
@@ -2639,6 +2639,18 @@ def load_formation(formation_id, phase, group, current_combos):
 
 
 @callback(
+    Output("rs-page-size", "data"),
+    Output("rs-page-size", "value"),
+    Input("ui-settings", "data"),
+)
+def sync_rs_page_size_from_settings(settings):
+    from player_table import default_page_size_value, page_size_select_data
+
+    settings = us.normalize(settings)
+    return page_size_select_data(settings), default_page_size_value(settings)
+
+
+@callback(
     Output("rs-rows", "data"),
     Output("rs-focus-role", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
@@ -2892,7 +2904,7 @@ def render_shortlist(
         for profile in us.set_piece_profiles(settings)
         if profile["id"] in chosen and profile.get("score")
     ] + table_role_cols
-    table_cols = list(us.shortlist_columns(settings))
+    table_cols = list(us.shortlist_columns_for("role_scores", settings))
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     columns = _table_columns(table_cols)

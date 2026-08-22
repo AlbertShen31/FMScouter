@@ -415,7 +415,7 @@ def _table_columns(
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
     cols = []
-    for col in us.shortlist_columns(settings):
+    for col in us.shortlist_columns_for("player_stats", settings):
         spec = {"name": identity_header_name(col), "id": col}
         if col == "Feet":
             spec["presentation"] = "markdown"
@@ -453,12 +453,46 @@ def _table_columns(
     return cols
 
 
+def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
+    """Build shortlist identity cells for one stats player row."""
+    left = player.get("left_foot") or ""
+    right = player.get("right_foot") or ""
+    foot_row = {"Left Foot": left, "Right Foot": right}
+    getters = {
+        "Name": lambda: player.get("name") or "",
+        "Age": lambda: player.get("age") or "—",
+        "Height": lambda: _display_blank(player.get("height")),
+        "Position": lambda: player.get("position") or "—",
+        "Club": lambda: player.get("club") or "—",
+        "Rec": lambda: _display_blank(player.get("rec")),
+        "Injury": lambda: _display_blank(player.get("injury")),
+        "Division": lambda: _display_blank(player.get("division")),
+        "Nation": lambda: _display_blank(player.get("nation")),
+        "Inf": lambda: _display_blank(player.get("inf")),
+        "Best Pos": lambda: _display_blank(player.get("best_pos")),
+        "Feet": lambda: feet_cell(foot_row),
+    }
+    row: dict = {}
+    for col in identity_cols:
+        getter = getters.get(col)
+        if getter is not None:
+            row[col] = getter()
+    if "Feet" in identity_cols:
+        row["Left Foot"] = left
+        row["Right Foot"] = right
+    return row
+
+
 def _header_tooltips(
-    group: str, category: str, threshold_overrides=None
+    group: str,
+    category: str,
+    threshold_overrides=None,
+    settings=None,
 ) -> dict[str, str]:
     """Full names for abbreviated Mins / Ht / percentile / metric headers."""
     g, cat = _resolve_category(group, category)
-    tips = identity_header_tooltips("Height", "Minutes")
+    identity_cols = us.shortlist_columns_for("player_stats", settings)
+    tips = identity_header_tooltips(*identity_cols, "Minutes")
     if cat == "all":
         tips[OVERALL_COL["id"]] = OVERALL_COL["label"]
         for section in _avg_category_columns(group):
@@ -483,13 +517,7 @@ def _build_rows(
     settings=None,
 ) -> list[dict]:
     settings = us.normalize(settings)
-    identity_cols = us.shortlist_columns(settings)
-    identity_src = {
-        "Division": "division",
-        "Nation": "nation",
-        "Inf": "inf",
-        "Best Pos": "best_pos",
-    }
+    identity_cols = us.shortlist_columns_for("player_stats", settings)
     g, cat = _resolve_category(group, category)
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
@@ -502,24 +530,9 @@ def _build_rows(
         status = minutes_status(p.get("minutes"), minutes_required)
         mins = p.get("minutes")
         mins_text = "—" if mins is None else f"{mins:.0f}"
-        name = p.get("name") or ""
-        row = {
-            "Name": name,
-            "Age": p.get("age") or "—",
-            "Height": _display_blank(p.get("height")),
-            "Position": p.get("position") or "—",
-            "Left Foot": p.get("left_foot") or "",
-            "Right Foot": p.get("right_foot") or "",
-            "Club": p.get("club") or "—",
-            "Rec": _display_blank(p.get("rec")),
-            "Injury": _display_blank(p.get("injury")),
-            "Minutes": _colored_cell(mins_text, minutes_color(status)),
-            "_key": player_key(p),
-        }
-        for col, src in identity_src.items():
-            if col in identity_cols:
-                row[col] = _display_blank(p.get(src))
-        row["Feet"] = feet_cell(row)
+        row = _identity_cells(p, identity_cols)
+        row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
+        row["_key"] = player_key(p)
         stats = scoring_stats(p)
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
@@ -1152,7 +1165,7 @@ def _player_modal_body(
         player,
         id_prefix="st",
         extra_identity_fields=[("Minutes", "minutes")],
-        modal_extra_fields=settings.get("modal_extra_fields") if settings else None,
+        modal_fields=us.modal_identity_fields_for("player_stats", settings) if settings else None,
         field_styles={
             "minutes": {"color": minutes_color(status)},
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
@@ -1645,6 +1658,23 @@ def switch_stats_thresh_pack(pack_id, settings):
 
 
 @callback(
+    Output("st-page-size", "data"),
+    Output("st-page-size", "value"),
+    Output("st-minutes-required", "value"),
+    Input("ui-settings", "data"),
+)
+def sync_st_controls_from_settings(settings):
+    from player_table import default_page_size_value, page_size_select_data
+
+    settings = us.normalize(settings)
+    return (
+        page_size_select_data(settings),
+        default_page_size_value(settings),
+        us.default_minutes_required(settings),
+    )
+
+
+@callback(
     Output("st-filters", "children"),
     Output("st-table", "columns"),
     Output("st-table", "data"),
@@ -1729,9 +1759,11 @@ def refresh_table(
         previous=sort_memory,
     )
     _sort_table_rows(rows, sort_by)
-    header_tips = _header_tooltips(pos, category, thresh)
+    header_tips = _header_tooltips(pos, category, thresh, settings=settings)
+    col_ids = [c["id"] for c in cols]
+    table_rows = [{col: row.get(col, "—") for col in col_ids} | {"_key": row["_key"]} for row in rows]
     marked_set = set(marked or [])
-    selected = [i for i, r in enumerate(rows) if r.get("_key") in marked_set]
+    selected = [i for i, r in enumerate(table_rows) if r.get("_key") in marked_set]
     page_size_i = int(page_size or 50)
     style_data = _table_base_styles(theme)
 
@@ -1811,7 +1843,7 @@ def refresh_table(
             foot_thresholds=settings["foot_thresholds"],
         ),
         cols,
-        rows,
+        table_rows,
         header_tips,
         style_data,
         page_size_i,

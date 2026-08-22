@@ -160,28 +160,5 @@ def sync_mantine_theme(theme):
     return "light" if theme == "light" else "dark"
 
 
-@callback(
-    Output("rs-page-size", "data"),
-    Output("st-page-size", "data"),
-    Input("ui-settings", "data"),
-)
-def sync_table_page_size_options(settings):
-    """Refresh rows-per-page choices when settings options change (keep current value)."""
-    from player_table import page_size_select_data
-
-    settings = ui_settings.normalize(settings)
-    data = page_size_select_data(settings)
-    return data, data
-
-
-@callback(
-    Output("st-minutes-required", "value", allow_duplicate=True),
-    Input("ui-settings", "data"),
-    prevent_initial_call=True,
-)
-def sync_minutes_required(settings):
-    return ui_settings.default_minutes_required(settings)
-
-
 if __name__ == "__main__":
     app.run_server(debug=True)

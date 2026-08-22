@@ -150,16 +150,6 @@
       "useful": []
     }
   ],
-  "shortlist_columns": [
-    "Name",
-    "Age",
-    "Height",
-    "Position",
-    "Feet",
-    "Club",
-    "Rec",
-    "Injury"
-  ],
   "default_minutes_required": 900,
   "page_size": 25,
   "page_size_options": [
@@ -168,7 +158,6 @@
     100
   ],
   "preferred_theme": "dark",
-  "modal_extra_fields": [],
   "tier_badge_colors": {
     "key": "#3dff88",
     "preferred": "#c6e35b",

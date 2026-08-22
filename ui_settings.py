@@ -63,6 +63,106 @@ MODAL_EXTRA_FIELD_OPTIONS = (
     ("media_handling", "Media handling"),
 )
 
+FIELD_SCOPE_VALUES = frozenset({"both", "role_scores", "player_stats", "off"})
+
+SHORTLIST_ASSIGNABLE = [col for col in ALLOWED_SHORTLIST_COLUMNS if col != "Name"]
+
+DEFAULT_SHORTLIST_ORDER = [
+    "Age",
+    "Height",
+    "Position",
+    "Feet",
+    "Club",
+    "Division",
+    "Rec",
+    "Injury",
+    "Nation",
+    "Inf",
+    "Best Pos",
+]
+
+DEFAULT_SHORTLIST_SCOPES = {
+    "Age": "both",
+    "Height": "both",
+    "Position": "both",
+    "Feet": "both",
+    "Club": "both",
+    "Rec": "both",
+    "Injury": "both",
+    "Division": "player_stats",
+    "Nation": "off",
+    "Inf": "off",
+    "Best Pos": "off",
+}
+
+DEFAULT_MODAL_IDENTITY_ORDER = [
+    "age",
+    "club",
+    "division",
+    "nation",
+    "position",
+    "best_pos",
+    "best_role",
+    "style",
+    "height",
+    "left_foot",
+    "right_foot",
+    "rec",
+    "inf",
+    "injury",
+    "national_team",
+    "int_apps",
+    "int_gls",
+    "int_assists",
+    "int_goals_conceded",
+    "yth_apps",
+    "yth_gls",
+    "int_apps_season",
+    "avg_rating_int",
+    "last_5_int",
+    "form_int",
+    "ability",
+    "potential",
+    "world_reputation",
+    "squad",
+    "personality",
+    "media_handling",
+]
+
+DEFAULT_MODAL_IDENTITY_SCOPES = {
+    "age": "both",
+    "club": "both",
+    "division": "both",
+    "nation": "both",
+    "position": "both",
+    "best_pos": "both",
+    "best_role": "both",
+    "style": "both",
+    "height": "both",
+    "left_foot": "both",
+    "right_foot": "both",
+    "rec": "both",
+    "inf": "both",
+    "injury": "both",
+    "national_team": "both",
+    "int_apps": "both",
+    "int_gls": "both",
+    "int_assists": "both",
+    "int_goals_conceded": "both",
+    "yth_apps": "both",
+    "yth_gls": "both",
+    "int_apps_season": "both",
+    "avg_rating_int": "both",
+    "last_5_int": "both",
+    "form_int": "both",
+    "ability": "off",
+    "potential": "off",
+    "world_reputation": "off",
+    "squad": "off",
+    "personality": "off",
+    "media_handling": "off",
+}
+
 # Persisted keys shared by default-overrides and named packs (exclude id/name for overrides).
 PACK_DATA_KEYS = (
     "age_tiers",
@@ -73,12 +173,10 @@ PACK_DATA_KEYS = (
     "tier_weights",
     "hybrid_weights",
     "set_piece_profiles",
-    "shortlist_columns",
     "default_minutes_required",
     "page_size",
     "page_size_options",
     "preferred_theme",
-    "modal_extra_fields",
     "tier_badge_colors",
 )
 
@@ -99,21 +197,18 @@ DEFAULTS: dict[str, Any] = {
     "tier_weights": {"key": 5.0, "preferred": 3.0, "useful": 1.0},
     "hybrid_weights": {"ip": 2.0, "oop": 1.0},
     "set_piece_profiles": None,
-    "shortlist_columns": [
-        "Name",
-        "Age",
-        "Height",
-        "Position",
-        "Feet",
-        "Club",
-        "Rec",
-        "Injury",
-    ],
+    "shortlist_columns": {
+        "order": list(DEFAULT_SHORTLIST_ORDER),
+        "scopes": dict(DEFAULT_SHORTLIST_SCOPES),
+    },
     "default_minutes_required": 900,
     "page_size": 50,
     "page_size_options": [25, 50, 100],
     "preferred_theme": "dark",
-    "modal_extra_fields": [],
+    "modal_identity_fields": {
+        "order": list(DEFAULT_MODAL_IDENTITY_ORDER),
+        "scopes": dict(DEFAULT_MODAL_IDENTITY_SCOPES),
+    },
     "tier_badge_colors": {
         "key": "#3dff88",
         "preferred": "#c6e35b",
@@ -359,13 +454,11 @@ def normalize_set_piece_profiles(raw) -> list[dict[str, Any]] | None:
     return merged
 
 
-def normalize_shortlist_columns(raw=None) -> list[str]:
-    allowed = set(ALLOWED_SHORTLIST_COLUMNS)
-    defaults = list(DEFAULTS["shortlist_columns"])
+def _normalize_column_list(raw, *, allowed: set[str]) -> list[str]:
     if isinstance(raw, str):
         raw = [part.strip() for part in raw.replace(";", ",").split(",")]
     if not isinstance(raw, (list, tuple)):
-        return list(defaults)
+        return []
     out: list[str] = []
     seen: set[str] = set()
     for item in raw:
@@ -374,9 +467,165 @@ def normalize_shortlist_columns(raw=None) -> list[str]:
             continue
         seen.add(col)
         out.append(col)
-    if "Name" not in seen:
-        out.insert(0, "Name")
-    return out or list(defaults)
+    return out
+
+
+def _normalize_scope(value) -> str:
+    text = str(value or "off").strip()
+    return text if text in FIELD_SCOPE_VALUES else "off"
+
+
+def _shortlist_buckets_to_order_scopes(
+    both: list[str], role_scores: list[str], player_stats: list[str]
+) -> dict[str, Any]:
+    order: list[str] = []
+    scopes: dict[str, str] = dict(DEFAULT_SHORTLIST_SCOPES)
+    for col in both:
+        if col == "Name":
+            continue
+        if col not in order:
+            order.append(col)
+        scopes[col] = "both"
+    for col in role_scores:
+        if col == "Name" or col in scopes and scopes[col] == "both":
+            continue
+        if col not in order:
+            order.append(col)
+        scopes[col] = "role_scores"
+    for col in player_stats:
+        if col == "Name" or scopes.get(col) == "both":
+            continue
+        if col not in order:
+            order.append(col)
+        if scopes.get(col) != "role_scores":
+            scopes[col] = "player_stats"
+    for col in SHORTLIST_ASSIGNABLE:
+        if col not in order:
+            order.append(col)
+    return {"order": order, "scopes": scopes}
+
+
+def normalize_shortlist_columns(raw=None) -> dict[str, Any]:
+    """Ordered shortlist config: {order: [...], scopes: {col: both|role_scores|player_stats|off}}."""
+    defaults = copy.deepcopy(DEFAULTS["shortlist_columns"])
+
+    if isinstance(raw, (list, tuple)):
+        cols = _normalize_column_list(raw, allowed=set(ALLOWED_SHORTLIST_COLUMNS))
+        both = [col for col in cols if col != "Name"]
+        return _shortlist_buckets_to_order_scopes(both, [], [])
+
+    if isinstance(raw, dict) and "order" in raw:
+        order = _normalize_column_list(
+            raw.get("order"), allowed=set(SHORTLIST_ASSIGNABLE)
+        )
+        scopes = dict(defaults["scopes"])
+        for col, scope in (raw.get("scopes") or {}).items():
+            if col in SHORTLIST_ASSIGNABLE:
+                scopes[col] = _normalize_scope(scope)
+        for col in SHORTLIST_ASSIGNABLE:
+            if col not in order:
+                order.append(col)
+        return {"order": order, "scopes": scopes}
+
+    if isinstance(raw, dict) and (
+        "both" in raw or "role_scores" in raw or "player_stats" in raw
+    ):
+        return _shortlist_buckets_to_order_scopes(
+            list(raw.get("both") or []),
+            list(raw.get("role_scores") or []),
+            list(raw.get("player_stats") or []),
+        )
+
+    return copy.deepcopy(defaults)
+
+
+def shortlist_column_scope(col: str, cfg: dict[str, Any]) -> str:
+    if col == "Name":
+        return "both"
+    return _normalize_scope((cfg.get("scopes") or {}).get(col))
+
+
+def shortlist_scope_values(cfg: dict[str, Any]) -> list[str]:
+    order = list(cfg.get("order") or DEFAULT_SHORTLIST_ORDER)
+    scopes = cfg.get("scopes") or {}
+    return [_normalize_scope(scopes.get(col)) for col in order]
+
+
+def shortlist_columns_for(page: str, settings=None) -> list[str]:
+    """Ordered identity columns for role_scores or player_stats shortlist tables."""
+    cfg = normalize(settings)["shortlist_columns"]
+    page_key = "role_scores" if page == "role_scores" else "player_stats"
+    out = ["Name"]
+    for col in cfg.get("order") or []:
+        scope = shortlist_column_scope(col, cfg)
+        if scope == "both" or scope == page_key:
+            out.append(col)
+    return out or ["Name"]
+
+
+def _modal_field_catalog() -> list[tuple[str, str, str]]:
+    from player_modal import iter_modal_field_defs
+
+    return iter_modal_field_defs()
+
+
+def _default_modal_identity_fields(extra_enabled=None) -> dict[str, Any]:
+    del extra_enabled
+    return {
+        "order": list(DEFAULT_MODAL_IDENTITY_ORDER),
+        "scopes": dict(DEFAULT_MODAL_IDENTITY_SCOPES),
+    }
+
+
+def normalize_modal_identity_fields(raw=None, *, legacy_extra=None) -> dict[str, Any]:
+    defaults = _default_modal_identity_fields(extra_enabled=legacy_extra)
+    allowed = {key for _label, key, _section in _modal_field_catalog()}
+
+    if raw is None:
+        return defaults
+
+    if isinstance(raw, dict) and "order" in raw:
+        order: list[str] = []
+        seen: set[str] = set()
+        for key in raw.get("order") or []:
+            text = str(key)
+            if text in allowed and text not in seen:
+                order.append(text)
+                seen.add(text)
+        scopes = dict(defaults["scopes"])
+        for key, scope in (raw.get("scopes") or {}).items():
+            if str(key) in allowed:
+                scopes[str(key)] = _normalize_scope(scope)
+        for _label, key, _section in _modal_field_catalog():
+            if key not in order:
+                order.append(key)
+        return {"order": order, "scopes": scopes}
+
+    return defaults
+
+
+def modal_identity_scope_values(cfg: dict[str, Any]) -> list[str]:
+    order = list(cfg.get("order") or [])
+    scopes = cfg.get("scopes") or {}
+    return [_normalize_scope(scopes.get(key)) for key in order]
+
+
+def modal_identity_fields_for(page: str, settings=None) -> list[tuple[str, str, str]]:
+    """(label, key, section) rows for the player modal on one page."""
+    cfg = normalize(settings)["modal_identity_fields"]
+    page_key = "role_scores" if page == "role_scores" else "player_stats"
+    labels = {key: label for label, key, section in _modal_field_catalog()}
+    sections = {key: section for label, key, section in _modal_field_catalog()}
+    out: list[tuple[str, str, str]] = []
+    for key in cfg.get("order") or []:
+        scope = _normalize_scope((cfg.get("scopes") or {}).get(key))
+        if scope in ("off",):
+            continue
+        if scope != "both" and scope != page_key:
+            continue
+        out.append((labels.get(key, key), key, sections.get(key, "identity")))
+    return out
+
 
 
 def normalize_page_size_options(raw=None) -> list[int]:
@@ -477,14 +726,14 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "tier_weights": normalize_tier_weights(raw.get("tier_weights")),
         "hybrid_weights": normalize_hybrid_weights(raw.get("hybrid_weights")),
         "set_piece_profiles": normalize_set_piece_profiles(raw.get("set_piece_profiles")),
-        "shortlist_columns": normalize_shortlist_columns(raw.get("shortlist_columns")),
+        "shortlist_columns": normalize_shortlist_columns(),
         "default_minutes_required": normalize_default_minutes_required(
             raw.get("default_minutes_required")
         ),
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
         "page_size_options": page_opts,
         "preferred_theme": normalize_preferred_theme(raw.get("preferred_theme")),
-        "modal_extra_fields": normalize_modal_extra_fields(raw.get("modal_extra_fields")),
+        "modal_identity_fields": normalize_modal_identity_fields(),
         "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
         # Resolved from the separate stats-threshold pack domain (not stored here).
         "stats_thresholds": stp.load_tree(),
@@ -581,10 +830,6 @@ def _default_settings() -> dict[str, Any]:
         }
     if "set_piece_profiles" in overrides:
         merged["set_piece_profiles"] = overrides.get("set_piece_profiles")
-    if overrides.get("shortlist_columns") is not None:
-        merged["shortlist_columns"] = overrides.get("shortlist_columns")
-    if overrides.get("modal_extra_fields") is not None:
-        merged["modal_extra_fields"] = overrides.get("modal_extra_fields")
     if overrides.get("page_size_options") is not None:
         merged["page_size_options"] = overrides.get("page_size_options")
     return normalize(merged, pack_id=BUILTIN, name="Default")
@@ -750,7 +995,8 @@ def set_piece_profiles(settings=None) -> list[dict[str, Any]]:
 
 
 def shortlist_columns(settings=None) -> list[str]:
-    return list(normalize(settings)["shortlist_columns"])
+    """Role scores shortlist columns (backward-compatible alias)."""
+    return shortlist_columns_for("role_scores", settings)
 
 
 def page_size(settings=None) -> int:
@@ -766,8 +1012,18 @@ def default_minutes_required(settings=None) -> int:
     return int(normalize(settings)["default_minutes_required"])
 
 
+def modal_identity_fields(settings=None) -> dict[str, Any]:
+    return copy.deepcopy(normalize(settings)["modal_identity_fields"])
+
+
 def modal_extra_fields(settings=None) -> list[str]:
-    return list(normalize(settings)["modal_extra_fields"])
+    """Legacy helper: keys enabled on both pages."""
+    cfg = normalize(settings)["modal_identity_fields"]
+    return [
+        key
+        for key in cfg.get("order") or []
+        if _normalize_scope((cfg.get("scopes") or {}).get(key)) == "both"
+    ]
 
 
 def tier_badge_colors(settings=None) -> dict[str, str]:
