@@ -263,12 +263,12 @@ def _upload_slot(
                         color="red",
                         disabled=True,
                         className="rs-lib-clear",
-                        buttonProps={
-                            "title": (
-                                "Remove current and historical exports "
-                                "(manual upload or saved file) from this page’s cache"
-                            )
-                        },
+                                buttonProps={
+                                    "title": (
+                                        "Remove this side’s export "
+                                        "(manual upload or saved file) from the page cache"
+                                    )
+                                },
                     ),
                 ],
                 className="rs-upload-status-row",
@@ -337,7 +337,7 @@ def upload_card(
                 html.P(
                     [
                         "Selecting a saved file loads that slot. Clear removes "
-                        "both exports from this page’s cache. Manage files on ",
+                        "only that side’s export from the page cache. Manage files on ",
                         html.A("Uploads", href="/uploads"),
                         ".",
                     ],
@@ -616,123 +616,94 @@ def register_library_select_callbacks(
     if include_historical:
         _wire_load("hist")
 
-    # Clear (either button) wipes current + historical session stores, upload
-    # component contents (manual files), and status UI.
-    clear_inputs = [Input(f"{prefix}-lib-clear", "n_clicks")]
-    clear_outputs = [
-        Output(f"{prefix}-parsed", "data", allow_duplicate=True),
-        Output(f"{prefix}-upload-status", "children", allow_duplicate=True),
-        Output(f"{prefix}-upload-wrap", "hidden", allow_duplicate=True),
-        Output(f"{prefix}-upload-replace-wrap", "hidden", allow_duplicate=True),
-        Output(f"{prefix}-lib-select", "value", allow_duplicate=True),
-        Output(f"{prefix}-upload", "contents", allow_duplicate=True),
-        Output(f"{prefix}-upload-replace", "contents", allow_duplicate=True),
-        Output(f"{prefix}-upload", "filename", allow_duplicate=True),
-        Output(f"{prefix}-upload-replace", "filename", allow_duplicate=True),
-        Output(f"{prefix}-data-rev", "data", allow_duplicate=True),
-    ]
-    clear_outputs.extend(
-        Output(rid, "hidden", allow_duplicate=True) for rid in reveal_ids
-    )
-    if include_historical:
-        clear_inputs.append(Input(f"{prefix}-lib-clear-hist", "n_clicks"))
-        clear_outputs.extend(
-            [
-                Output(f"{prefix}-parsed-historical", "data", allow_duplicate=True),
-                Output(f"{prefix}-upload-hist-status", "children", allow_duplicate=True),
-                Output(f"{prefix}-upload-hist-wrap", "hidden", allow_duplicate=True),
-                Output(
-                    f"{prefix}-upload-hist-replace-wrap",
-                    "hidden",
-                    allow_duplicate=True,
-                ),
-                Output(f"{prefix}-lib-select-hist", "value", allow_duplicate=True),
-                Output(f"{prefix}-upload-hist", "contents", allow_duplicate=True),
-                Output(f"{prefix}-upload-hist-replace", "contents", allow_duplicate=True),
-                Output(f"{prefix}-upload-hist", "filename", allow_duplicate=True),
-                Output(
-                    f"{prefix}-upload-hist-replace",
-                    "filename",
-                    allow_duplicate=True,
-                ),
-            ]
-        )
+    def _wire_clear(slot: str) -> None:
+        if slot == "current":
+            clear_id = f"{prefix}-lib-clear"
+            parsed_id = f"{prefix}-parsed"
+            status_id = f"{prefix}-upload-status"
+            wrap_id = f"{prefix}-upload-wrap"
+            replace_wrap_id = f"{prefix}-upload-replace-wrap"
+            select_id = f"{prefix}-lib-select"
+            upload_id = f"{prefix}-upload"
+            replace_id = f"{prefix}-upload-replace"
+            track_rev = True
+            slot_reveal = reveal_ids
+        else:
+            clear_id = f"{prefix}-lib-clear-hist"
+            parsed_id = f"{prefix}-parsed-historical"
+            status_id = f"{prefix}-upload-hist-status"
+            wrap_id = f"{prefix}-upload-hist-wrap"
+            replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+            select_id = f"{prefix}-lib-select-hist"
+            upload_id = f"{prefix}-upload-hist"
+            replace_id = f"{prefix}-upload-hist-replace"
+            track_rev = False
+            slot_reveal = []
 
-    @callback(
-        *clear_outputs,
-        *clear_inputs,
-        State(f"{prefix}-data-rev", "data"),
-        prevent_initial_call=True,
-    )
-    def _clear_all_exports(*args):
-        *clicks, rev = args
-        if not any(clicks):
-            return tuple([no_update] * len(clear_outputs))
-        prev_n = 0
-        if isinstance(rev, dict):
-            prev_n = int(rev.get("n") or 0)
-        elif rev:
-            prev_n = int(rev)
-        rev_payload = {"n": prev_n + 1, "replaced": True}
-        # Current slot: store + UI + wipe Upload contents/filename so a manual
-        # file cannot linger and re-fire into the store.
-        row: list = [
-            None,
-            [],
-            False,
-            True,
-            None,
-            None,
-            None,
-            None,
-            None,
-            rev_payload,
+        clear_outputs = [
+            Output(parsed_id, "data", allow_duplicate=True),
+            Output(status_id, "children", allow_duplicate=True),
+            Output(wrap_id, "hidden", allow_duplicate=True),
+            Output(replace_wrap_id, "hidden", allow_duplicate=True),
+            Output(select_id, "value", allow_duplicate=True),
+            Output(upload_id, "contents", allow_duplicate=True),
+            Output(replace_id, "contents", allow_duplicate=True),
+            Output(upload_id, "filename", allow_duplicate=True),
+            Output(replace_id, "filename", allow_duplicate=True),
         ]
-        row.extend([True] * len(reveal_ids))
-        if include_historical:
-            row.extend(
-                [
-                    None,
-                    [],
-                    False,
-                    True,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                ]
+        if track_rev:
+            clear_outputs.append(
+                Output(f"{prefix}-data-rev", "data", allow_duplicate=True)
             )
-        return tuple(row)
-
-    clear_disabled_outputs = [Output(f"{prefix}-lib-clear", "disabled")]
-    clear_disabled_inputs = [
-        Input(f"{prefix}-parsed", "data"),
-        Input(f"{prefix}-upload-status", "children"),
-    ]
-    if include_historical:
-        clear_disabled_outputs.append(
-            Output(f"{prefix}-lib-clear-hist", "disabled")
+        clear_outputs.extend(
+            Output(rid, "hidden", allow_duplicate=True) for rid in slot_reveal
         )
-        clear_disabled_inputs.extend(
-            [
-                Input(f"{prefix}-parsed-historical", "data"),
-                Input(f"{prefix}-upload-hist-status", "children"),
+        n_clear = len(clear_outputs)
+
+        @callback(
+            *clear_outputs,
+            Input(clear_id, "n_clicks"),
+            *([State(f"{prefix}-data-rev", "data")] if track_rev else []),
+            prevent_initial_call=True,
+        )
+        def _clear_slot(n_clicks, rev=None, _n_out=n_clear, _reveal=slot_reveal):
+            if not n_clicks:
+                return tuple([no_update] * _n_out)
+            rev_payload = None
+            if track_rev:
+                prev_n = 0
+                if isinstance(rev, dict):
+                    prev_n = int(rev.get("n") or 0)
+                elif rev:
+                    prev_n = int(rev)
+                rev_payload = {"n": prev_n + 1, "replaced": True}
+            row: list = [
+                None,
+                [],
+                False,
+                True,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
-        )
+            if track_rev:
+                row.append(rev_payload)
+            row.extend([True] * len(_reveal))
+            return tuple(row)
 
-    @callback(
-        *clear_disabled_outputs,
-        *clear_disabled_inputs,
-    )
-    def _sync_clear_enabled(*args):
-        if include_historical:
-            current_parsed, _cur_status, hist_parsed, _hist_status = args
-            has_any = _has_players(current_parsed) or _has_players(hist_parsed)
-            disabled = not has_any
-            return disabled, disabled
-        current_parsed, _cur_status = args
-        return not _has_players(current_parsed)
+        @callback(
+            Output(clear_id, "disabled"),
+            Input(parsed_id, "data"),
+            Input(status_id, "children"),
+        )
+        def _sync_clear_enabled(parsed, _status, _pack=pack_store):
+            return not _has_players(parsed)
+
+    _wire_clear("current")
+    if include_historical:
+        _wire_clear("hist")
 
 
 def _register_upload_slot(

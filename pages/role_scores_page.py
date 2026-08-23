@@ -1796,6 +1796,35 @@ def _score_styles(role_labels: list[str], settings=None, theme: str | None = Non
     return rules
 
 
+_STYLE_CACHE: dict = {}
+
+
+def _cached_table_chrome(
+    score_cols: list[str], settings, theme: str | None
+) -> tuple[list, list, list]:
+    """Reuse style/css objects when score columns + theme + bands are unchanged."""
+    settings = us.normalize(settings)
+    bands = settings["bands"]
+    key = (
+        tuple(score_cols),
+        theme or "dark",
+        bands.get("elite"),
+        bands.get("good"),
+        bands.get("ok"),
+    )
+    cached = _STYLE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    pack = (
+        _score_styles(score_cols, settings, theme),
+        _score_header_styles(score_cols, theme),
+        _table_css(score_cols, theme),
+    )
+    _STYLE_CACHE.clear()
+    _STYLE_CACHE[key] = pack
+    return pack
+
+
 def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> html.Div:
     counts = {"all": len(rows)}
     for key, _name, _code, _css in POS_CARDS[1:]:
@@ -1852,6 +1881,7 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
     active = " active" if column in _focus_roles(focus_roles) else ""
     label = meta.get("short_label") or meta["name"]
     children = [
+        html.Span("Focused", className="rs-depth-focus-badge"),
         html.Div(
             [
                 html.Div(
@@ -1909,14 +1939,13 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
         ),
         html.Div(stats["names"], className="rs-depth-players"),
     ]
-    if active:
-        children.insert(0, html.Span("Focused", className="rs-depth-focus-badge"))
     return html.Button(
         children,
         id={"type": "rs-depth", "role": meta["id"]},
         n_clicks=0,
         className="rs-depth-card" + active,
         title=meta.get("compact") or meta["name"],
+        **{"data-rs-role": column},
     )
 
 
@@ -3041,32 +3070,61 @@ def render_shortlist(
         if no_matches
         else None
     )
-    # Focus/sort clicks should not rebuild the position bar (same counts).
+    # Focus/sort clicks should not rebuild the position bar or remount depth cards.
+    # Card active state is synced clientside from rs-focus-role.
     triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
     focus_sort_only = bool(triggered_props) and triggered_props.issubset(
         {"rs-focus-role.data", "rs-table.sort_by"}
     )
+    sort_only = triggered_props == {"rs-table.sort_by"}
+    same_cols = new_sig == cols_sig
     pos_bar = (
         no_update
         if focus_sort_only
         else _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
     )
+    depth_cards = no_update if focus_sort_only else cards
+    depth_hidden = no_update if focus_sort_only else (not cards)
+    style_data, style_header, table_css_rules = _cached_table_chrome(
+        score_cols, settings, theme
+    )
+    if focus_sort_only and same_cols:
+        # Column set unchanged (typical pure sort) — keep DataTable chrome.
+        out_columns = no_update
+        out_tips = no_update
+        out_style_data = no_update
+        out_style_header = no_update
+        out_css = no_update
+        out_sig = no_update
+        out_page = no_update
+    else:
+        out_columns = columns
+        out_tips = header_tips
+        out_style_data = style_data
+        out_style_header = style_header
+        out_css = table_css_rules
+        out_sig = new_sig
+        out_page = page_current
+    if sort_only and same_cols:
+        # Sorting alone: still refresh row order/selection, skip chrome + depth.
+        depth_cards = no_update
+        depth_hidden = no_update
     return (
         pos_bar,
-        cards,
-        not cards,
+        depth_cards,
+        depth_hidden,
         table_rows,
-        columns,
-        header_tips,
+        out_columns,
+        out_tips,
         tooltip_data,
-        _score_styles(score_cols, settings, theme),
-        _score_header_styles(score_cols, theme),
-        _table_css(score_cols, theme),
+        out_style_data,
+        out_style_header,
+        out_css,
         _table_style_table(len(table_rows), page_size),
         page_size,
-        page_current,
+        out_page,
         selected_rows,
-        new_sig,
+        out_sig,
         fig,
         caption,
         empty_panel,
@@ -3077,7 +3135,30 @@ def render_shortlist(
 
 clientside_callback(
     """
-    function(_data, _columns, _sig) {
+    function(focusRoles) {
+        const focused = new Set(
+            (Array.isArray(focusRoles) ? focusRoles : [])
+                .map(function(r) { return String(r || ""); })
+                .filter(Boolean)
+        );
+        const cards = document.querySelectorAll("#rs-summary .rs-depth-card");
+        cards.forEach(function(card) {
+            const role = card.getAttribute("data-rs-role") || "";
+            const on = role && focused.has(role);
+            card.classList.toggle("active", !!on);
+        });
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("rs-summary", "className"),
+    Input("rs-focus-role", "data"),
+    prevent_initial_call=True,
+)
+
+
+clientside_callback(
+    """
+    function(_sig) {
         requestAnimationFrame(function() {
             window.dispatchEvent(new Event("resize"));
         });
@@ -3085,8 +3166,6 @@ clientside_callback(
     }
     """,
     Output("rs-table-layout-nudge", "children"),
-    Input("rs-table", "data"),
-    Input("rs-table", "columns"),
     Input("rs-table-cols-sig", "data"),
     prevent_initial_call=True,
 )
@@ -3173,16 +3252,25 @@ def toggle_clear_marks_btn(marked):
     Input("rs-hybrids-only", "checked"),
 )
 def render_squad_preview(marked, payload, focus_role, set_pieces, hybrids_only):
+    marked_list = _as_list(marked)
+    triggered = {
+        (t.get("prop_id") or "").split(".")[0]
+        for t in (ctx.triggered or [])
+        if t.get("prop_id")
+    }
+    # Focus-only with nothing marked: skip rebuilding the empty preview panel.
+    if triggered == {"rs-focus-role"} and not marked_list:
+        return no_update, True
     combos = normalize_combos((payload or {}).get("combos"))
     hybrids_only = bool(hybrids_only)
     view_roles = _hybrid_only_roles(
         _resolved_view_roles(payload, focus_role), combos, hybrids_only
     )
     export_rows = []
-    if payload and view_roles and _as_list(marked):
+    if payload and view_roles and marked_list:
         export_rows = planned_squad_export_rows(
             payload.get("rows") or [],
-            _as_list(marked),
+            marked_list,
             view_roles,
             combos,
             _as_list(set_pieces),
