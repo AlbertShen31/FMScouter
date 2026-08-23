@@ -4733,4 +4733,155 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     border-top-color: var(--app-line) !important;
 }
 
+/* Squad finance */
+.sf-page {
+    max-width: 1520px;
+}
 
+.sf-params-row,
+.sf-select-row,
+.sf-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+}
+
+.sf-params-row {
+    margin-bottom: 14px;
+}
+
+.sf-select-row {
+    margin-bottom: 8px;
+}
+
+.sf-field {
+    min-width: 10rem;
+}
+
+.sf-field-grow {
+    flex: 1 1 18rem;
+    min-width: 14rem;
+}
+
+.sf-number {
+    max-width: 10rem;
+}
+
+.sf-hint {
+    color: var(--app-muted);
+    font-size: 0.875rem;
+    margin-top: 4px;
+}
+
+.sf-summary-row {
+    margin-bottom: 14px;
+}
+
+.sf-summary-card {
+    flex: 1 1 10rem;
+    min-width: 9.5rem;
+    padding: 12px 14px;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-elev);
+}
+
+.sf-summary-label {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.sf-summary-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--app-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.sf-summary-value.is-best {
+    color: var(--app-accent);
+}
+
+.sf-summary-value.is-worst {
+    color: var(--app-danger);
+}
+
+.sf-summary-value.is-warn,
+.sf-status-value.is-warn {
+    color: #f59e0b;
+}
+
+.sf-status-value {
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+.sf-number-wide {
+    max-width: 14rem;
+}
+
+.sf-subhead {
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 18px 0 6px;
+}
+
+.sf-sustainability {
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--app-line);
+}
+
+.sf-note {
+    color: var(--app-muted);
+    font-size: 0.875rem;
+    margin-bottom: 12px;
+}
+
+.sf-empty {
+    color: var(--app-muted);
+    padding: 12px 0;
+}
+
+.sf-statement-wrap {
+    overflow-x: auto;
+}
+
+.sf-statement-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.sf-statement-table th,
+.sf-statement-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--app-line);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.sf-statement-table th {
+    color: var(--app-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sf-statement-table td:nth-child(n + 4) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.sf-statement-table th:nth-child(n + 4) {
+    text-align: right;
+}
+
+.sf-money {
+    font-variant-numeric: tabular-nums;
+}

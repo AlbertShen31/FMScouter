@@ -25,8 +25,8 @@ docs/
 
 | Path | Role |
 | --- | --- |
-| `app.py` | Dash shell and nav (Role scores, Player stats, Role configs, Formations, Settings). |
-| `pages/` | Route modules: Role scores, Player stats, Role configs, Formations, Settings. |
+| `app.py` | Dash shell and nav (Role scores, Player stats, Squad finance, Role configs, Formations, Settings). |
+| `pages/` | Route modules: Role scores, Player stats, Squad finance, Role configs, Formations, Settings. |
 | `components/scouting_shell.py` | Shared upload / pos-foot / marks / hist layout + callback registrars. |
 | `components/player_table.py` | Shared DataTable shell, identity styles, Feet/Rec. |
 | `components/player_modal.py` | Shared player detail modal. |
@@ -35,6 +35,7 @@ docs/
 | `components/attr_columns.py` | Attribute grid for Role configs / player profile. |
 | `scoring/role_scorer.py` | Parse attribute CSV, eligibility, role scoring, POS cards. |
 | `scoring/stats_scorer.py` | Parse Moneyball stats CSV, Mustermann percentiles. |
+| `scoring/squad_finance.py` | Parse salary / match-fee CSV; best/worst matchday XVI statement. |
 | `scoring/phases.py` | IP / OOP / GK badges and GK detection. |
 | `scoring/utils.py` | Weighted-average formula. |
 | `scoring/division_tiers.py` | Map FM Division (+ Based In) to top / pro / amateur. |
