@@ -2478,27 +2478,6 @@ body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="
     transform: translateY(-1px);
 }
 
-.rs-depth-focus-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--app-accent);
-    background: color-mix(in srgb, var(--app-accent) 22%, var(--app-card));
-    border: 1px solid color-mix(in srgb, var(--app-accent) 55%, var(--app-line));
-    border-radius: 999px;
-    padding: 2px 8px;
-    line-height: 1.3;
-    display: none;
-}
-
-.rs-depth-card.active .rs-depth-focus-badge {
-    display: inline-block;
-}
-
 .rs-depth-card.active .rs-depth-name {
     color: var(--app-accent);
 }
@@ -2518,23 +2497,24 @@ body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="
 
 .rs-depth-meta {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px 14px;
+    gap: 8px;
     min-width: 0;
 }
 
 .rs-depth-meta .rs-group-abbr {
+    display: inline-flex;
     flex: 1 1 auto;
+    flex-wrap: nowrap;
+    align-items: center;
     min-width: 0;
-    flex-wrap: wrap;
-    row-gap: 2px;
+    overflow: hidden;
 }
 
 .rs-depth-meta .rs-phase-tag {
     flex: 0 0 auto;
-    margin-left: auto;
     white-space: nowrap;
 }
 

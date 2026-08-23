@@ -1509,6 +1509,58 @@ def _column_sort_key(column_id: str, value, row: dict | None = None):
     return (1, "\uffff") if blank else (0, str(value).casefold())
 
 
+
+def _reorder_built_rows(
+    table_rows: list[dict],
+    tooltip_data: list | None,
+    *,
+    raw_by_key: dict[str, dict],
+    sort_by,
+    view_roles: list[str],
+    min_score_mode: str,
+) -> tuple[list[dict], list]:
+    """Reorder already-rendered table rows without rebuilding markdown cells."""
+    tips = list(tooltip_data or [])
+    if len(tips) < len(table_rows):
+        tips.extend({} for _ in range(len(table_rows) - len(tips)))
+    else:
+        tips = tips[: len(table_rows)]
+    paired = list(zip(table_rows, tips))
+
+    def raw_for(display: dict) -> dict:
+        key = str(display.get("id") or display.get("_key") or "").strip()
+        return raw_by_key.get(key) or display
+
+    if sort_by:
+        item = sort_by[0]
+        column = item.get("column_id")
+        reverse = item.get("direction") == "desc"
+        paired.sort(
+            key=lambda pair: _column_sort_key(
+                column,
+                raw_for(pair[0]).get(column),
+                raw_for(pair[0]),
+            ),
+            reverse=reverse,
+        )
+    else:
+        if min_score_mode == "any":
+            paired.sort(
+                key=lambda pair: max(
+                    float(raw_for(pair[0]).get(role) or 0) for role in view_roles
+                ),
+                reverse=True,
+            )
+        else:
+            paired.sort(
+                key=lambda pair: min(
+                    float(raw_for(pair[0]).get(role) or 0) for role in view_roles
+                ),
+                reverse=True,
+            )
+    return [pair[0] for pair in paired], [pair[1] for pair in paired]
+
+
 def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score_mode: str) -> None:
     if sort_by:
         item = sort_by[0]
@@ -1884,7 +1936,6 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
     active = " active" if column in _focus_roles(focus_roles) else ""
     label = meta.get("short_label") or meta["name"]
     children = [
-        html.Span("Focused", className="rs-depth-focus-badge"),
         html.Div(
             [
                 html.Div(
@@ -2823,6 +2874,8 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     Input("ui-settings", "data"),
     Input("rs-hydrated", "data"),
     State("rs-table-cols-sig", "data"),
+    State("rs-table", "data"),
+    State("rs-table", "tooltip_data"),
 )
 def render_shortlist(
     payload,
@@ -2845,10 +2898,65 @@ def render_shortlist(
     settings,
     hydrated,
     cols_sig,
+    table_data,
+    tooltip_data_state,
 ):
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
         return (no_update,) * 20
+
+    # Pure header-sort: reorder already-built markdown rows. Avoids re-filtering and
+    # rebuilding every score/Feet cell (the main sort lag source).
+    triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
+    if (
+        triggered_props == {"rs-table.sort_by"}
+        and table_data
+        and payload
+        and payload.get("rows")
+    ):
+        combos = normalize_combos(payload.get("combos"))
+        view_roles = _hybrid_only_roles(
+            _resolved_view_roles(payload, focus_role),
+            combos,
+            bool(hybrids_only),
+        )
+        if view_roles:
+            mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
+            raw_by_key = {
+                key: row
+                for row in payload["rows"]
+                if (key := player_row_key(row))
+            }
+            new_data, new_tips = _reorder_built_rows(
+                list(table_data),
+                tooltip_data_state,
+                raw_by_key=raw_by_key,
+                sort_by=sort_by,
+                view_roles=view_roles,
+                min_score_mode=mode,
+            )
+            return (
+                no_update,
+                no_update,
+                no_update,
+                new_data,
+                no_update,
+                no_update,
+                new_tips,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+            )
     settings = us.normalize(settings)
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
@@ -3050,14 +3158,6 @@ def render_shortlist(
         f"{focus_note}{hybrid_note}{min_note}{extra}{piece_note}{mark_note}"
         f" · {payload.get('filename')}."
     )
-    cards = _depth_panel(
-        rows,
-        role_ids,
-        _focus_roles(focus_role),
-        bands,
-        combos,
-        hybrids_only=hybrids_only,
-    )
     page_current, new_sig = _table_page_state(columns, cols_sig)
     no_matches = not table_rows
     empty_panel = (
@@ -3075,19 +3175,31 @@ def render_shortlist(
     )
     # Focus/sort clicks should not rebuild the position bar or remount depth cards.
     # Card active state is synced clientside from rs-focus-role.
+    # Pure sort is handled by the early reorder path above; this mainly covers focus+sort.
     triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
     focus_sort_only = bool(triggered_props) and triggered_props.issubset(
         {"rs-focus-role.data", "rs-table.sort_by"}
     )
-    sort_only = triggered_props == {"rs-table.sort_by"}
     same_cols = new_sig == cols_sig
     pos_bar = (
         no_update
         if focus_sort_only
         else _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
     )
-    depth_cards = no_update if focus_sort_only else cards
-    depth_hidden = no_update if focus_sort_only else (not cards)
+    if focus_sort_only:
+        depth_cards = no_update
+        depth_hidden = no_update
+    else:
+        cards = _depth_panel(
+            rows,
+            role_ids,
+            _focus_roles(focus_role),
+            bands,
+            combos,
+            hybrids_only=hybrids_only,
+        )
+        depth_cards = cards
+        depth_hidden = not cards
     style_data, style_header, table_css_rules = _cached_table_chrome(
         score_cols, settings, theme
     )
@@ -3108,10 +3220,6 @@ def render_shortlist(
         out_css = table_css_rules
         out_sig = new_sig
         out_page = page_current
-    if sort_only and same_cols:
-        # Sorting alone: still refresh row order/selection, skip chrome + depth.
-        depth_cards = no_update
-        depth_hidden = no_update
     return (
         pos_bar,
         depth_cards,
