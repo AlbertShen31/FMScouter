@@ -254,7 +254,7 @@ def style_cell_conditional(*, extra: Sequence[dict] | None = None) -> list[dict]
             "minWidth": "44px",
             "width": "48px",
             "maxWidth": "56px",
-            "padding": "6px 4px",
+            "padding": "0",
         },
         {"if": {"column_id": "Club"}, "textAlign": "left"},
     ]
@@ -325,21 +325,6 @@ def _feet_css() -> list[dict]:
             ),
         },
         {
-            "selector": ".rs-injury-cell",
-            "rule": (
-                "display: inline-flex !important; "
-                "align-items: center; justify-content: center; "
-                "width: 100%; line-height: 0; cursor: help; vertical-align: middle;"
-            ),
-        },
-        {
-            "selector": ".rs-injury-icon",
-            "rule": (
-                "display: block !important; color: #fbbf24; "
-                "flex-shrink: 0;"
-            ),
-        },
-        {
             "selector": 'td.dash-cell[data-dash-column="Injury"]',
             "rule": (
                 "position: relative !important; "
@@ -348,29 +333,40 @@ def _feet_css() -> list[dict]:
                 "width: 48px !important; "
                 "max-width: 56px !important; "
                 "vertical-align: middle !important; "
-                "overflow: visible !important;"
-            ),
-        },
-        {
-            "selector": 'td.dash-cell[data-dash-column="Injury"] .dash-cell-value',
-            "rule": (
-                "position: absolute !important; inset: 0 !important; "
-                "width: 100% !important; height: 100% !important; "
-                "margin: 0 !important; padding: 0 !important; "
-                "display: flex !important; align-items: center !important; "
-                "justify-content: center !important; line-height: 0 !important;"
+                "overflow: visible !important; "
+                "padding: 0 !important;"
             ),
         },
         {
             "selector": (
+                'td.dash-cell[data-dash-column="Injury"] .dash-cell-value, '
                 'td.dash-cell[data-dash-column="Injury"] .markdown, '
                 'td.dash-cell[data-dash-column="Injury"] .markdown p'
             ),
             "rule": (
+                "position: absolute !important; inset: 0 !important; "
                 "width: 100% !important; height: 100% !important; "
                 "margin: 0 !important; padding: 0 !important; "
-                "display: flex !important; align-items: center !important; "
-                "justify-content: center !important; line-height: 0 !important;"
+                "line-height: 0 !important; text-align: center !important;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-cell",
+            "rule": (
+                "position: absolute !important; "
+                "top: 50% !important; left: 50% !important; "
+                "transform: translate(-50%, -50%) !important; "
+                "display: flex !important; "
+                "align-items: center !important; justify-content: center !important; "
+                "margin: 0 !important; padding: 0 !important; "
+                "line-height: 0 !important; cursor: help;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-icon",
+            "rule": (
+                "display: block !important; color: #fbbf24; "
+                "flex-shrink: 0;"
             ),
         },
     ]
@@ -592,7 +588,7 @@ def identity_data_styles(
             "minWidth": "44px",
             "width": "48px",
             "maxWidth": "56px",
-            "padding": "6px 4px",
+            "padding": "0",
         },
         {
             "if": {"column_id": "Injury", "filter_query": '{Injury} contains "rs-injury-cell"'},
