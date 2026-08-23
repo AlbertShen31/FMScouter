@@ -383,6 +383,27 @@ def _sustainability_panel(sustain: dict, theme: str | None = None) -> html.Div:
     )
 
 
+def _collapsible(
+    title: str,
+    *body,
+    hint: str | None = None,
+) -> html.Details:
+    """Closed-by-default disclosure block (matches Role scores metrics details)."""
+    copy: list = [html.Span(title, className="sf-details-summary-text")]
+    if hint:
+        copy.append(html.Span(hint, className="sf-details-summary-hint"))
+    return html.Details(
+        [
+            html.Summary(
+                html.Div(copy, className="sf-details-summary-copy"),
+                className="sf-details-summary-row",
+            ),
+            html.Div(list(body), className="sf-details-body"),
+        ],
+        className="sf-details",
+    )
+
+
 def _empty_statement(message: str) -> html.Div:
     return html.Div(message, className="sf-empty")
 
@@ -450,62 +471,69 @@ def layout(**_kwargs):
                                         ],
                                         className="sf-params-row",
                                     ),
-                                    html.Div(
-                                        [
-                                            html.Div(
-                                                [
-                                                    _field_label(
-                                                        f"Starters ({STARTERS})",
-                                                        tip=(
-                                                            "Defaults include the highest-wage "
-                                                            "GK when available. Selection is "
-                                                            "kept in session cache across refresh."
-                                                        ),
-                                                        help_id="sf-help-starters",
-                                                    ),
-                                                    dmc.MultiSelect(
-                                                        id="sf-starters",
-                                                        data=[],
-                                                        value=[],
-                                                        placeholder=(
-                                                            "Select 11 starters (incl. GK)"
-                                                        ),
-                                                        searchable=True,
-                                                        clearable=True,
-                                                        maxValues=STARTERS,
-                                                        className="sf-multiselect",
-                                                    ),
-                                                ],
-                                                className="sf-field sf-field-grow",
-                                            ),
-                                            html.Div(
-                                                [
-                                                    _field_label(
-                                                        f"Substitutes ({SUBS})",
-                                                        tip=(
-                                                            "Bench players charged appearance "
-                                                            "fees for every game. Remaining "
-                                                            "squad players become reserves."
-                                                        ),
-                                                        help_id="sf-help-subs",
-                                                    ),
-                                                    dmc.MultiSelect(
-                                                        id="sf-subs",
-                                                        data=[],
-                                                        value=[],
-                                                        placeholder="Select 5 substitutes",
-                                                        searchable=True,
-                                                        clearable=True,
-                                                        maxValues=SUBS,
-                                                        className="sf-multiselect",
-                                                    ),
-                                                ],
-                                                className="sf-field sf-field-grow",
-                                            ),
-                                        ],
-                                        className="sf-select-row",
-                                    ),
                                     html.Div(id="sf-selection-hint", className="sf-hint"),
+                                    _collapsible(
+                                        "Starters & substitutes",
+                                        html.Div(
+                                            [
+                                                html.Div(
+                                                    [
+                                                        _field_label(
+                                                            f"Starters ({STARTERS})",
+                                                            tip=(
+                                                                "Defaults include the highest-wage "
+                                                                "GK when available. Selection is "
+                                                                "kept in session cache across refresh."
+                                                            ),
+                                                            help_id="sf-help-starters",
+                                                        ),
+                                                        dmc.MultiSelect(
+                                                            id="sf-starters",
+                                                            data=[],
+                                                            value=[],
+                                                            placeholder=(
+                                                                "Select 11 starters (incl. GK)"
+                                                            ),
+                                                            searchable=True,
+                                                            clearable=True,
+                                                            maxValues=STARTERS,
+                                                            className="sf-multiselect",
+                                                        ),
+                                                    ],
+                                                    className="sf-field sf-field-grow",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        _field_label(
+                                                            f"Substitutes ({SUBS})",
+                                                            tip=(
+                                                                "Bench players charged appearance "
+                                                                "fees for every game. Remaining "
+                                                                "squad players become reserves."
+                                                            ),
+                                                            help_id="sf-help-subs",
+                                                        ),
+                                                        dmc.MultiSelect(
+                                                            id="sf-subs",
+                                                            data=[],
+                                                            value=[],
+                                                            placeholder="Select 5 substitutes",
+                                                            searchable=True,
+                                                            clearable=True,
+                                                            maxValues=SUBS,
+                                                            className="sf-multiselect",
+                                                        ),
+                                                    ],
+                                                    className="sf-field sf-field-grow",
+                                                ),
+                                            ],
+                                            className="sf-select-row",
+                                        ),
+                                        hint=(
+                                            f"Pick {STARTERS} starters (incl. GK) and "
+                                            f"{SUBS} substitutes"
+                                        ),
+                                    ),
                                 ]
                             ),
                         ],
@@ -838,7 +866,14 @@ def render_statement(
         ],
         className="sf-note",
     )
-    children: list = [note, _statement_table(statement)]
+    children: list = [
+        note,
+        _collapsible(
+            "Player wage details",
+            _statement_table(statement),
+            hint="Starter, substitute, and reserve lines",
+        ),
+    ]
 
     club_values = [balance, debt, debt_payments, *income_vals, *expense_vals]
     if any(v is not None and v != "" for v in club_values):
