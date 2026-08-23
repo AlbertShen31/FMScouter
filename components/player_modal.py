@@ -66,8 +66,18 @@ FINANCE_MODAL_FIELDS = (
     ("Int cap bonus", "int_cap_bonus"),
     ("Yearly raise", "yearly_salary_raise"),
     ("Promotion raise", "promotion_salary_raise"),
+    ("Top-tier promotion raise", "top_division_promotion_salary_raise"),
     ("Relegation drop", "relegation_salary_drop"),
+    ("Top-tier relegation drop", "top_division_relegation_salary_drop"),
 )
+
+_CLAUSE_RAW_KEYS = {
+    "yearly_salary_raise": "yearly_salary_raise_raw",
+    "promotion_salary_raise": "promotion_salary_raise_raw",
+    "top_division_promotion_salary_raise": "top_division_promotion_salary_raise_raw",
+    "relegation_salary_drop": "relegation_salary_drop_raw",
+    "top_division_relegation_salary_drop": "top_division_relegation_salary_drop_raw",
+}
 
 PLAYER_IDENTITY_SECTIONS = [
     (
@@ -271,7 +281,18 @@ def player_identity_item(
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
 ) -> html.Div | None:
-    if not identity_value_present(player.get(key)):
+    display_key = key
+    raw_key = _CLAUSE_RAW_KEYS.get(key)
+    if raw_key and identity_value_present(player.get(raw_key)):
+        display_key = raw_key
+    elif raw_key:
+        # Resolved finance rows store $ amounts; skip empty clauses.
+        try:
+            if float(player.get(key) or 0) == 0:
+                return None
+        except (TypeError, ValueError):
+            pass
+    if not identity_value_present(player.get(display_key)):
         return None
     value_class = "rs-player-id-value"
     tip = None
@@ -282,7 +303,7 @@ def player_identity_item(
             "no": " is-ineligible",
         }[position_eligible]
         tip = _POS_ELIG_TIPS[position_eligible]
-    raw = player.get(key)
+    raw = player.get(display_key)
     formatter = (field_formatters or {}).get(key)
     text = formatter(raw) if formatter else str(raw or "—")
     style = dict((field_styles or {}).get(key) or {})

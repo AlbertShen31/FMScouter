@@ -4767,6 +4767,33 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     max-width: 10rem;
 }
 
+.sf-switch {
+    margin-top: 2px;
+}
+
+.sf-select {
+    min-width: 12rem;
+    max-width: 16rem;
+}
+
+.sf-select-wide {
+    min-width: 16rem;
+    max-width: 22rem;
+}
+
+.sf-summary-value.has-delta-up {
+    color: var(--app-danger, #ef4444);
+}
+
+.sf-summary-value.has-delta-down {
+    color: var(--app-ok, #22c55e);
+}
+
+.sf-summary-value.is-best.has-delta-up,
+.sf-summary-value.is-best.has-delta-down {
+    color: inherit;
+}
+
 .sf-hint {
     color: var(--app-muted);
     font-size: 0.875rem;
