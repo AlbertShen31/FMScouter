@@ -416,7 +416,7 @@ body {
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 10px;
-    min-height: 0;
+    min-height: 1.75rem;
 }
 
 .rs-upload-status-row .rs-upload-status {
@@ -922,9 +922,16 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
 .rs-upload-dual {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem 1.25rem;
     margin-bottom: 0.25rem;
+    align-items: stretch;
+}
+
+@media (max-width: 720px) {
+    .rs-upload-dual {
+        grid-template-columns: 1fr;
+    }
 }
 
 .rs-upload-slot {
@@ -932,6 +939,12 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0;
+    height: 100%;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-card);
+    box-sizing: border-box;
 }
 
 .rs-upload-slot-title {
@@ -943,10 +956,25 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 }
 
 .rs-upload-slot-note {
-    margin: -0.15rem 0 0.15rem;
+    margin: 0;
+    min-height: 2.4em;
     font-size: 0.8125rem;
     line-height: 1.4;
     color: var(--app-muted);
+}
+
+.rs-upload-drop-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.rs-upload-drop-wrap .rs-upload {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 6.5rem;
 }
 
 .rs-upload-slot-tag {
@@ -5634,17 +5662,20 @@ body[data-theme="light"] .up-elig.yes {
     margin-bottom: 0.35rem;
 }
 .rs-lib-picker {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.15rem;
 }
 .rs-lib-row {
     display: flex;
     gap: 0.5rem;
     align-items: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 .rs-lib-select {
-    flex: 1 1 12rem;
-    min-width: 10rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.rs-lib-clear {
+    flex-shrink: 0;
 }
 .rs-lib-hint {
     margin-top: 0.35rem;
