@@ -291,6 +291,26 @@ def projected_annual_wages(
     ]
 
 
+def player_wage_outlook(
+    row: dict[str, Any],
+    *,
+    years: int = SUSTAINABILITY_YEARS,
+    division_mode: str | None = "none",
+    apply_yearly_raises: bool = False,
+) -> list[float]:
+    """Annual wages for one player over ``years`` seasons on the current contract."""
+    years = max(1, int(years or 1))
+    return [
+        player_wage_for_year(
+            row,
+            year,
+            division_mode=division_mode,
+            apply_yearly_raises=apply_yearly_raises,
+        )
+        for year in range(1, years + 1)
+    ]
+
+
 def promotion_raise_for_mode(
     raises: dict[str, float], mode: str | None
 ) -> float:

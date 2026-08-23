@@ -29,6 +29,7 @@ from scoring.squad_finance import (
     load_squad_finance,
     matchday_statement,
     projected_annual_wages,
+    player_wage_outlook,
     restore_matchday_keys,
     squad_raise_totals,
 )
@@ -366,7 +367,15 @@ def _category_fields(
     return html.Div(fields, className="sf-params-row")
 
 
-def _statement_table(statement: dict) -> html.Div:
+def _statement_table(
+    statement: dict,
+    *,
+    rows_by_key: dict[str, dict] | None = None,
+    division_mode: str | None = "none",
+    apply_yearly_raises: bool = False,
+    outlook_years: int = SUSTAINABILITY_YEARS,
+) -> html.Div:
+    years = max(1, int(outlook_years or SUSTAINABILITY_YEARS))
     header = html.Tr(
         [
             html.Th("Role"),
@@ -376,14 +385,26 @@ def _statement_table(statement: dict) -> html.Div:
             html.Th("FFP (period)"),
             html.Th("Appearance fees"),
             html.Th("Total"),
+            *[html.Th(f"Y{year}") for year in range(1, years + 1)],
         ]
     )
     body = []
+    by_key = rows_by_key or {}
     for line in statement.get("lines") or []:
         role = _ROLE_LABEL.get(line["role"], line["role"])
         name = line["name"]
         if line.get("is_gk"):
             name = f"{name} (GK)"
+        player = by_key.get(line.get("key") or "")
+        if player is None:
+            outlook = [float(line.get("salary_annual") or 0)] * years
+        else:
+            outlook = player_wage_outlook(
+                player,
+                years=years,
+                division_mode=division_mode,
+                apply_yearly_raises=apply_yearly_raises,
+            )
         body.append(
             html.Tr(
                 [
@@ -394,15 +415,25 @@ def _statement_table(statement: dict) -> html.Div:
                     html.Td(_money_cell(line["ffp_period"])),
                     html.Td(_money_cell(line["match_fees"])),
                     html.Td(_money_cell(line["total"])),
+                    *[html.Td(_money_cell(wage)) for wage in outlook],
                 ],
                 className=f"sf-row-{line['role']}",
             )
         )
     return html.Div(
-        html.Table(
-            [html.Thead(header), html.Tbody(body)],
-            className="sf-statement-table",
-        ),
+        [
+            html.P(
+                f"Y1–Y{years} are expected annual salaries if the player stays on "
+                f"this contract under the Wage scenario filters "
+                f"(division change from Y1; yearly rises after each completed year "
+                f"when enabled).",
+                className="sf-note sf-statement-outlook-note",
+            ),
+            html.Table(
+                [html.Thead(header), html.Tbody(body)],
+                className="sf-statement-table",
+            ),
+        ],
         className="sf-statement-wrap",
     )
 
@@ -1119,8 +1150,16 @@ def render_statement(
         note,
         _collapsible(
             "Player wage details",
-            _statement_table(statement),
-            hint="Starter, substitute, and reserve lines (before division change)",
+            _statement_table(
+                statement,
+                rows_by_key={row["key"]: row for row in rows if row.get("key")},
+                division_mode=division_mode,
+                apply_yearly_raises=bool(yearly_raises),
+            ),
+            hint=(
+                f"Period costs plus Y1–Y{SUSTAINABILITY_YEARS} expected annual "
+                "salary under Wage scenario filters"
+            ),
         ),
     ]
 

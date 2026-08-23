@@ -4899,6 +4899,11 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     overflow-x: auto;
 }
 
+.sf-statement-outlook-note {
+    margin: 0 0 10px;
+    max-width: 52rem;
+}
+
 .sf-statement-table {
     width: 100%;
     border-collapse: collapse;
