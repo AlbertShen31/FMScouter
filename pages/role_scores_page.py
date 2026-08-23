@@ -29,6 +29,7 @@ from components.scouting_shell import (
     parsed_historical_players,
     pattern_matching_stubs,
     register_hist_toggle,
+    register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
     register_upload_callbacks,
@@ -106,6 +107,13 @@ register_upload_callbacks(
     reveal_ids=[],
     pulse_ids=["rs-results-wrap"],
     bad_file_message="Upload the CSV from FM Player Export, not the HTML file.",
+)
+register_library_select_callbacks(
+    "rs",
+    parse_fn=parse_export,
+    library_page="role_scores",
+    pack_store=False,
+    reveal_ids=[],
 )
 register_pos_foot_callbacks(
     "rs",
@@ -1021,7 +1029,7 @@ def layout():
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
-        upload_card("rs", "1. Upload export"),
+        upload_card("rs", "1. Upload export", library_page="role_scores"),
         html.Div(
             [
         dbc.Card(

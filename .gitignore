@@ -166,3 +166,11 @@ cython_debug/
 
 #CSV Files
 *.csv
+
+# Local CSV library (keep folder structure)
+data/uploads/*
+!data/uploads/.gitkeep
+!data/uploads/README.md
+data/views/*
+!data/views/.gitkeep
+!data/views/README.md

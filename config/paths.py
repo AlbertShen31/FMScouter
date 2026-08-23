@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 CONFIG_DIR = Path(__file__).resolve().parent
+ROOT_DIR = CONFIG_DIR.parent
 
 ROLE_WEIGHTS_DIR = CONFIG_DIR / "role_weights"
 ROLE_WEIGHTS_PACKS_DIR = ROLE_WEIGHTS_DIR / "packs"
@@ -32,6 +33,12 @@ STATS_THRESHOLDS_DIR = SETTINGS_DIR / "stats_thresholds"
 STATS_THRESHOLDS_PACKS_DIR = STATS_THRESHOLDS_DIR / "packs"
 STATS_THRESHOLDS_ACTIVE_PATH = STATS_THRESHOLDS_DIR / "active.json"
 STATS_THRESHOLDS_DEFAULTS_PATH = STATS_THRESHOLDS_DIR / "default-overrides.json"
+
+# Saved CSV library + FM custom views (user-managed; CSVs gitignored).
+DATA_DIR = ROOT_DIR / "data"
+UPLOADS_DIR = DATA_DIR / "uploads"
+UPLOADS_INDEX_PATH = UPLOADS_DIR / "index.json"
+VIEWS_DIR = DATA_DIR / "views"
 
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"

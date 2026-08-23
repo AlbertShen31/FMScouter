@@ -5591,3 +5591,61 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .cmp-delta-wage-down {
     color: var(--app-ok, #22c55e);
 }
+
+/* Uploads library */
+.up-page .up-files-wrap {
+    overflow-x: auto;
+}
+.up-files-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+.up-files-table th,
+.up-files-table td {
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid var(--app-line);
+    text-align: left;
+    vertical-align: middle;
+}
+.up-files-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--app-muted);
+}
+.up-elig.yes {
+    color: #3dff88;
+    font-weight: 650;
+}
+html[data-theme="light"] .up-elig.yes,
+body[data-theme="light"] .up-elig.yes {
+    color: #15803d;
+}
+.up-elig.no {
+    color: var(--app-muted);
+}
+.up-notes {
+    max-width: 16rem;
+    color: var(--app-muted);
+    font-size: 0.85rem;
+}
+.up-save-row {
+    margin-bottom: 0.35rem;
+}
+.rs-lib-picker {
+    margin-bottom: 0.75rem;
+}
+.rs-lib-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.rs-lib-select {
+    flex: 1 1 12rem;
+    min-width: 10rem;
+}
+.rs-lib-hint {
+    margin-top: 0.35rem;
+}

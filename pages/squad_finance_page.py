@@ -11,6 +11,7 @@ from components.player_filters import help_icon
 from components.scouting_shell import (
     parsed_players,
     parsed_historical_players,
+    register_library_select_callbacks,
     register_upload_callbacks,
     upload_card,
 )
@@ -62,6 +63,14 @@ register_upload_callbacks(
     pulse_ids=["sf-main"],
     bad_file_message="Upload a Moneyball player CSV export.",
     decode_strict=False,
+    catch_exceptions=True,
+)
+register_library_select_callbacks(
+    "sf",
+    parse_fn=load_squad_finance,
+    library_page="squad_finance",
+    pack_store=False,
+    reveal_ids=["sf-main"],
     catch_exceptions=True,
 )
 
@@ -678,6 +687,7 @@ def layout(**_kwargs):
                     className="text-muted small mb-0 mt-2",
                 ),
                 include_data_rev=False,
+                library_page="squad_finance",
             ),
             html.Div(
                 [

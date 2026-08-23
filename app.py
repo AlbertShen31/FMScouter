@@ -4,6 +4,9 @@ import dash_mantine_components as dmc
 from dash import Input, Output, State, callback, dcc, html
 
 import services.ui_settings as ui_settings
+import services.export_library as export_library
+
+export_library.ensure_dirs()
 # Mantine components require React 18 (useId); Dash 2.x defaults to React 16.
 dash._dash_renderer._set_react_version("18.2.0")
 
@@ -93,6 +96,7 @@ app.layout = dmc.MantineProvider(
                     dbc.NavbarBrand("FMScouter", href="/"),
                     dbc.Nav(
                         [
+                            dbc.NavItem(dbc.NavLink("Uploads", href="/uploads")),
                             dbc.NavItem(dbc.NavLink("Role scores", href="/")),
                             dbc.NavItem(dbc.NavLink("Player stats", href="/stats")),
                             dbc.NavItem(dbc.NavLink("Squad finance", href="/squad-finance")),
