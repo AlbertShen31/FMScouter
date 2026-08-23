@@ -4885,3 +4885,41 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .sf-money {
     font-variant-numeric: tabular-nums;
 }
+
+.sf-cat-head {
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin: 16px 0 8px;
+    color: var(--app-text);
+}
+
+.sf-breakdown-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    margin-top: 12px;
+}
+
+.sf-breakdown {
+    min-width: 12rem;
+}
+
+.sf-breakdown-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    margin-bottom: 4px;
+}
+
+.sf-breakdown ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--app-text);
+    font-size: 0.875rem;
+}
+
+.sf-statement-table tr.sf-row-reserve td {
+    color: var(--app-muted);
+}

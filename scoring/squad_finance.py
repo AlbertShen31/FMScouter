@@ -1,7 +1,8 @@
 """Squad wage / match-fee financial statements from Moneyball exports.
 
-Uses annual ``salary`` plus per-match ``appearance_fee`` /
-``unused_sub_fee`` for a fixed matchday of 11 starters + 5 substitutes.
+Uses annual ``salary`` plus per-match ``appearance_fee`` for a fixed
+matchday of 11 starters + 5 substitutes. Remaining players are **reserves**:
+their wages are included, appearance fees are not.
 ``ffp_contribution`` is shown for reference but excluded from totals.
 """
 from __future__ import annotations
@@ -25,6 +26,20 @@ SUBS = 5
 MATCHDAY = STARTERS + SUBS
 DEFAULT_GAMES = 38
 DEFAULT_SEASON_GAMES = 38
+
+# Club P&L category keys (values are absolute currency, not millions).
+INCOME_CATEGORIES = (
+    ("gate", "Gate receipts"),
+    ("sponsors", "Sponsors / commercial"),
+    ("prize", "Prize money"),
+    ("transfers_in", "Transfer fees in"),
+    ("other_income", "Other income"),
+)
+EXPENSE_CATEGORIES = (
+    ("transfers_out", "Transfer fees out"),
+    ("agent_fees", "Agent fees"),
+    ("other_expenses", "Other expenses"),
+)
 
 _MONEY_TOKEN = re.compile(
     r"(?P<num>\d+(?:[.,]\d+)?)\s*(?P<suffix>[kmb])?\b",
@@ -194,6 +209,23 @@ def default_matchday_keys(rows: list[dict[str, Any]]) -> tuple[list[str], list[s
     return [row["key"] for row in starters], [row["key"] for row in subs]
 
 
+def restore_matchday_keys(
+    rows: list[dict[str, Any]],
+    starter_keys: list[str] | None,
+    sub_keys: list[str] | None,
+) -> tuple[list[str], list[str]]:
+    """Keep cached starters/subs when still present; otherwise fall back to defaults."""
+    keys = {row["key"] for row in rows if row.get("key")}
+    starters = [key for key in (starter_keys or []) if key in keys][:STARTERS]
+    starter_set = set(starters)
+    subs = [key for key in (sub_keys or []) if key in keys and key not in starter_set][
+        :SUBS
+    ]
+    if len(starters) == STARTERS and len(subs) == SUBS:
+        return starters, subs
+    return default_matchday_keys(rows)
+
+
 def _index_by_key(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {row["key"]: row for row in rows if row.get("key")}
 
@@ -210,26 +242,38 @@ def _as_float(value: Any) -> float:
 def club_sustainability(
     *,
     balance: float | None,
-    annual_income: float | None,
-    annual_expenses: float | None,
+    income: dict[str, float | None] | None,
+    expenses: dict[str, float | None] | None,
     squad_total: float,
     games: int,
     season_games: int,
 ) -> dict[str, Any]:
-    """Compare opening balance + prorated P&L against squad outlay.
+    """Compare opening balance + categorized, prorated P&L against squad outlay.
 
-    ``annual_expenses`` should be other club costs (not the modeled XVI wages/fees).
+    Income/expense values should already be absolute currency (not millions).
+    Squad wages/fees are passed separately via ``squad_total``.
     """
     games = max(0, int(games or 0))
     season_games = max(1, int(season_games or DEFAULT_SEASON_GAMES))
     share = games / season_games
     bal = _as_float(balance)
-    income_period = _as_float(annual_income) * share
-    expenses_period = _as_float(annual_expenses) * share
+    income = income or {}
+    expenses = expenses or {}
+
+    income_parts = {
+        key: _as_float(income.get(key)) * share for key, _ in INCOME_CATEGORIES
+    }
+    expense_parts = {
+        key: _as_float(expenses.get(key)) * share for key, _ in EXPENSE_CATEGORIES
+    }
+    income_period = sum(income_parts.values())
+    expenses_period = sum(expense_parts.values())
     funds = bal + income_period - expenses_period
     surplus = funds - squad_total
     return {
         "balance": bal,
+        "income_parts": income_parts,
+        "expense_parts": expense_parts,
         "income_period": income_period,
         "expenses_period": expenses_period,
         "funds_available": funds,
@@ -247,34 +291,37 @@ def matchday_statement(
     games: int = DEFAULT_GAMES,
     season_games: int = DEFAULT_SEASON_GAMES,
 ) -> dict[str, Any]:
-    """Build club outlay for 11 starters + 5 subs over ``games`` matches.
+    """Build club outlay for starters + subs + reserves over ``games`` matches.
 
-    Every selected player is assumed to appear in every game (appearance fee).
-    Wages are annual figures prorated by ``games / season_games``.
-    FFP contribution is prorated for display only (not in totals).
+    - Starters and subs: wages + appearance fees (assumed to play every game).
+    - Reserves (everyone else): wages only — no appearance fees.
+    - Wages are annual figures prorated by ``games / season_games``.
+    - FFP contribution is prorated for display only (not in totals).
     """
     games = max(0, int(games or 0))
     season_games = max(1, int(season_games or DEFAULT_SEASON_GAMES))
     by_key = _index_by_key(rows)
 
     starters = [by_key[key] for key in starter_keys if key in by_key][:STARTERS]
-    subs = [by_key[key] for key in sub_keys if key in by_key][:SUBS]
-    squad = starters + subs
+    starter_set = {player["key"] for player in starters}
+    subs = [
+        by_key[key]
+        for key in sub_keys
+        if key in by_key and key not in starter_set
+    ][:SUBS]
+    matchday = starters + subs
+    matchday_keys = {player["key"] for player in matchday}
+    reserves = [row for row in rows if row.get("key") and row["key"] not in matchday_keys]
     share = games / season_games
 
-    wage_annual = sum(player["salary"] for player in squad)
-    wage_period = wage_annual * share
-    ffp_annual = sum(player["ffp_contribution"] for player in squad)
-    ffp_period = ffp_annual * share
-
-    match_fees = sum(player["appearance_fee"] * games for player in squad)
-
-    def player_lines(players: list[dict[str, Any]], *, role: str) -> list[dict[str, Any]]:
+    def player_lines(
+        players: list[dict[str, Any]], *, role: str, charge_fees: bool
+    ) -> list[dict[str, Any]]:
         lines = []
         for player in players:
             wage_share = player["salary"] * share
             ffp_share = player["ffp_contribution"] * share
-            fees = player["appearance_fee"] * games
+            fees = player["appearance_fee"] * games if charge_fees else 0.0
             lines.append(
                 {
                     "role": role,
@@ -294,7 +341,17 @@ def matchday_statement(
             )
         return lines
 
-    lines = player_lines(starters, role="starter") + player_lines(subs, role="sub")
+    lines = (
+        player_lines(starters, role="starter", charge_fees=True)
+        + player_lines(subs, role="sub", charge_fees=True)
+        + player_lines(reserves, role="reserve", charge_fees=False)
+    )
+
+    matchday_wage = sum(player["salary"] for player in matchday) * share
+    reserve_wage = sum(player["salary"] for player in reserves) * share
+    wage_period = matchday_wage + reserve_wage
+    ffp_period = sum(player["ffp_contribution"] for player in rows) * share
+    match_fees = sum(player["appearance_fee"] * games for player in matchday)
     gk_starters = sum(1 for player in starters if player.get("is_gk"))
 
     return {
@@ -302,10 +359,11 @@ def matchday_statement(
         "season_games": season_games,
         "starters": len(starters),
         "subs": len(subs),
+        "reserves": len(reserves),
         "gk_starters": gk_starters,
-        "wage_annual": wage_annual,
+        "matchday_wage_period": matchday_wage,
+        "reserve_wage_period": reserve_wage,
         "wage_period": wage_period,
-        "ffp_annual": ffp_annual,
         "ffp_period": ffp_period,
         "match_fees": match_fees,
         "total": wage_period + match_fees,

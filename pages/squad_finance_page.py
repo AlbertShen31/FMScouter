@@ -1,7 +1,7 @@
 """Squad finance page: Moneyball upload → matchday wage/fee statement."""
 from __future__ import annotations
 
-from dash import Input, Output, State, callback, dcc, html, register_page
+from dash import Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
@@ -15,13 +15,15 @@ from components.scouting_shell import (
 from scoring.squad_finance import (
     DEFAULT_GAMES,
     DEFAULT_SEASON_GAMES,
+    EXPENSE_CATEGORIES,
+    INCOME_CATEGORIES,
     STARTERS,
     SUBS,
     club_sustainability,
-    default_matchday_keys,
     format_money,
     load_squad_finance,
     matchday_statement,
+    restore_matchday_keys,
 )
 
 register_page(__name__, path="/squad-finance", name="Squad finance")
@@ -36,6 +38,15 @@ register_upload_callbacks(
     decode_strict=False,
     catch_exceptions=True,
 )
+
+_ROLE_LABEL = {
+    "starter": "Starter",
+    "sub": "Sub",
+    "reserve": "Reserve",
+}
+
+_INCOME_IDS = [f"sf-income-{key}" for key, _ in INCOME_CATEGORIES]
+_EXPENSE_IDS = [f"sf-expense-{key}" for key, _ in EXPENSE_CATEGORIES]
 
 
 def _help(tip: str, help_id: str) -> list:
@@ -92,7 +103,14 @@ def _status_card(title: str, body: str, *, tone: str = "") -> html.Div:
     )
 
 
-def _money_field(field_id: str, label: str, *, tip: str, help_id: str, placeholder: str = "0") -> html.Div:
+def _money_field(
+    field_id: str,
+    label: str,
+    *,
+    tip: str,
+    help_id: str,
+    placeholder: str = "0",
+) -> html.Div:
     return html.Div(
         [
             _field_label(label, tip=tip, help_id=help_id),
@@ -115,13 +133,31 @@ def _money_field(field_id: str, label: str, *, tip: str, help_id: str, placehold
 
 
 def _millions_to_cash(value) -> float | None:
-    """Club finance inputs are in millions; convert to currency units."""
     if value is None or value == "":
         return None
     try:
         return float(value) * 1_000_000.0
     except (TypeError, ValueError):
         return None
+
+
+def _category_fields(
+    prefix: str,
+    categories: tuple[tuple[str, str], ...],
+    *,
+    tip_suffix: str,
+) -> html.Div:
+    fields = [
+        _money_field(
+            f"{prefix}-{key}",
+            f"{label} ($M)",
+            tip=f"{label} for the season, in millions. {tip_suffix}",
+            help_id=f"sf-help-{prefix}-{key}",
+            placeholder="e.g. 10.5",
+        )
+        for key, label in categories
+    ]
+    return html.Div(fields, className="sf-params-row")
 
 
 def _statement_table(statement: dict) -> html.Div:
@@ -138,7 +174,7 @@ def _statement_table(statement: dict) -> html.Div:
     )
     body = []
     for line in statement.get("lines") or []:
-        role = "Starter" if line["role"] == "starter" else "Sub"
+        role = _ROLE_LABEL.get(line["role"], line["role"])
         name = line["name"]
         if line.get("is_gk"):
             name = f"{name} (GK)"
@@ -152,7 +188,8 @@ def _statement_table(statement: dict) -> html.Div:
                     html.Td(_money_cell(line["ffp_period"])),
                     html.Td(_money_cell(line["match_fees"])),
                     html.Td(_money_cell(line["total"])),
-                ]
+                ],
+                className=f"sf-row-{line['role']}",
             )
         )
     return html.Div(
@@ -172,13 +209,44 @@ def _sustainability_panel(sustain: dict) -> html.Div:
         else "Not sustainable at current figures"
     )
     tone = "best" if ok else "worst"
+    income_bits = [
+        html.Li(f"{label}: {format_money(sustain['income_parts'].get(key, 0))}")
+        for key, label in INCOME_CATEGORIES
+        if sustain["income_parts"].get(key, 0)
+    ]
+    expense_bits = [
+        html.Li(f"{label}: {format_money(sustain['expense_parts'].get(key, 0))}")
+        for key, label in EXPENSE_CATEGORIES
+        if sustain["expense_parts"].get(key, 0)
+    ]
+    breakdown = []
+    if income_bits:
+        breakdown.append(
+            html.Div(
+                [
+                    html.Div("Income (period)", className="sf-breakdown-label"),
+                    html.Ul(income_bits),
+                ],
+                className="sf-breakdown",
+            )
+        )
+    if expense_bits:
+        breakdown.append(
+            html.Div(
+                [
+                    html.Div("Expenses (period)", className="sf-breakdown-label"),
+                    html.Ul(expense_bits),
+                ],
+                className="sf-breakdown",
+            )
+        )
     return html.Div(
         [
             html.H3("Club sustainability", className="sf-subhead"),
             html.P(
-                "Funds available = balance + prorated annual income − prorated other "
-                f"annual expenses (club figures entered in $M, wages prorated by games / "
-                f"{DEFAULT_SEASON_GAMES}). Compared with XVI wages + appearance fees.",
+                "Funds available = balance + prorated category income − prorated "
+                f"category expenses (entered in $M, share = games / {DEFAULT_SEASON_GAMES}). "
+                "Compared with matchday + reserve wages and matchday appearance fees.",
                 className="sf-note",
             ),
             html.Div(
@@ -193,6 +261,7 @@ def _sustainability_panel(sustain: dict) -> html.Div:
                 ],
                 className="sf-summary-row",
             ),
+            html.Div(breakdown, className="sf-breakdown-row") if breakdown else None,
         ],
         className="sf-sustainability",
     )
@@ -206,21 +275,24 @@ def layout(**_kwargs):
     return dbc.Container(
         [
             dcc.Interval(id="sf-hydrate-tick", interval=50, max_intervals=1),
+            dcc.Store(
+                id="sf-selection",
+                data={"starters": [], "subs": []},
+                storage_type="session",
+            ),
             html.H1("Squad finance", className="mt-2 mb-2"),
             html.P(
                 "Upload a Moneyball player export with salary and match fees, pick "
                 f"{STARTERS} starters (including a GK) and {SUBS} substitutes, then set "
-                "how many games to model. Every selected player is assumed to appear in "
-                "every game. Optionally enter club balance / income / expenses in millions "
-                "to check wage sustainability.",
+                "how many games to model. Matchday players include appearance fees; "
+                "everyone else is treated as a reserve (wages only). Optionally enter "
+                "club finances by category in millions.",
                 className="text-muted mb-3",
             ),
             upload_card(
                 "sf",
                 "1. Upload squad export",
-                upload_label=html.Div(
-                    ["Drag a CSV here, or ", html.A("browse")]
-                ),
+                upload_label=html.Div(["Drag a CSV here, or ", html.A("browse")]),
                 hint=html.P(
                     "Uses Salary, Appearance Fee, and FFP Contribution columns. "
                     "FFP is shown for reference and is not included in totals.",
@@ -243,9 +315,8 @@ def layout(**_kwargs):
                                                         tip=(
                                                             "Matches to model. Appearance "
                                                             "fees use this count; wages and "
-                                                            f"optional club P&L are prorated "
-                                                            f"against a {DEFAULT_SEASON_GAMES}-game "
-                                                            "season."
+                                                            "club P&L are prorated against a "
+                                                            f"{DEFAULT_SEASON_GAMES}-game season."
                                                         ),
                                                         help_id="sf-help-games",
                                                     ),
@@ -271,9 +342,9 @@ def layout(**_kwargs):
                                                     _field_label(
                                                         f"Starters ({STARTERS})",
                                                         tip=(
-                                                            "Defaults include the highest-"
-                                                            "wage GK when one is present "
-                                                            "in the export."
+                                                            "Defaults include the highest-wage "
+                                                            "GK when available. Selection is "
+                                                            "kept in session cache across refresh."
                                                         ),
                                                         help_id="sf-help-starters",
                                                     ),
@@ -297,9 +368,9 @@ def layout(**_kwargs):
                                                     _field_label(
                                                         f"Substitutes ({SUBS})",
                                                         tip=(
-                                                            "Bench players are also assumed "
-                                                            "to appear in every game for "
-                                                            "fee planning."
+                                                            "Bench players charged appearance "
+                                                            "fees for every game. Remaining "
+                                                            "squad players become reserves."
                                                         ),
                                                         help_id="sf-help-subs",
                                                     ),
@@ -332,44 +403,32 @@ def layout(**_kwargs):
                                 [
                                     html.P(
                                         f"Enter figures in millions (one decimal, e.g. 25.5). "
-                                        f"Annual income / expenses are prorated by games / "
+                                        f"Category totals are prorated by games / "
                                         f"{DEFAULT_SEASON_GAMES}. Leave blank to skip the "
                                         "sustainability check.",
                                         className="sf-note",
                                     ),
-                                    html.Div(
-                                        [
-                                            _money_field(
-                                                "sf-balance",
-                                                "Current balance ($M)",
-                                                tip="Cash on hand, in millions.",
-                                                help_id="sf-help-balance",
-                                                placeholder="e.g. 25.5",
-                                            ),
-                                            _money_field(
-                                                "sf-income",
-                                                "Annual club income ($M)",
-                                                tip=(
-                                                    "Gate, commercial, prize money, and "
-                                                    "other annual income in millions — "
-                                                    "prorated over the modeled games."
-                                                ),
-                                                help_id="sf-help-income",
-                                                placeholder="e.g. 80.0",
-                                            ),
-                                            _money_field(
-                                                "sf-expenses",
-                                                "Annual other expenses ($M)",
-                                                tip=(
-                                                    "Other annual club costs in millions, "
-                                                    "excluding this XVI’s wages and "
-                                                    "appearance fees."
-                                                ),
-                                                help_id="sf-help-expenses",
-                                                placeholder="e.g. 40.0",
-                                            ),
-                                        ],
-                                        className="sf-params-row",
+                                    _money_field(
+                                        "sf-balance",
+                                        "Current balance ($M)",
+                                        tip="Opening cash on hand, in millions.",
+                                        help_id="sf-help-balance",
+                                        placeholder="e.g. 25.5",
+                                    ),
+                                    html.H4("Income", className="sf-cat-head"),
+                                    _category_fields(
+                                        "sf-income",
+                                        INCOME_CATEGORIES,
+                                        tip_suffix="Prorated over the modeled games.",
+                                    ),
+                                    html.H4("Expenses", className="sf-cat-head"),
+                                    _category_fields(
+                                        "sf-expense",
+                                        EXPENSE_CATEGORIES,
+                                        tip_suffix=(
+                                            "Excludes squad wages and appearance fees "
+                                            "(already modeled above)."
+                                        ),
                                     ),
                                 ]
                             ),
@@ -403,35 +462,78 @@ def layout(**_kwargs):
     Output("sf-subs", "data"),
     Output("sf-starters", "value"),
     Output("sf-subs", "value"),
+    Output("sf-selection", "data"),
     Input("sf-parsed", "data"),
     Input("sf-data-rev", "data"),
+    State("sf-selection", "data"),
 )
-def sync_player_options(parsed, _rev):
+def sync_player_options(parsed, _rev, cached):
     rows = parsed_players(parsed)
     options = _player_options(rows)
-    starters, subs = default_matchday_keys(rows)
-    return options, options, starters, subs
+    cached = cached or {}
+    starters, subs = restore_matchday_keys(
+        rows,
+        cached.get("starters"),
+        cached.get("subs"),
+    )
+    return options, options, starters, subs, {"starters": starters, "subs": subs}
+
+
+@callback(
+    Output("sf-selection", "data", allow_duplicate=True),
+    Input("sf-starters", "value"),
+    Input("sf-subs", "value"),
+    State("sf-selection", "data"),
+    prevent_initial_call=True,
+)
+def persist_selection(starters, subs, cached):
+    if ctx.triggered_id not in {"sf-starters", "sf-subs"}:
+        return no_update
+    return {
+        **(cached or {}),
+        "starters": list(starters or []),
+        "subs": list(subs or []),
+    }
+
+
+_RENDER_INPUTS = [
+    Input("sf-parsed", "data"),
+    Input("sf-starters", "value"),
+    Input("sf-subs", "value"),
+    Input("sf-games", "value"),
+    Input("sf-balance", "value"),
+    *[Input(field_id, "value") for field_id in _INCOME_IDS],
+    *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
+]
 
 
 @callback(
     Output("sf-selection-hint", "children"),
     Output("sf-summary", "children"),
     Output("sf-statement", "children"),
-    Input("sf-parsed", "data"),
-    Input("sf-starters", "value"),
-    Input("sf-subs", "value"),
-    Input("sf-games", "value"),
-    Input("sf-balance", "value"),
-    Input("sf-income", "value"),
-    Input("sf-expenses", "value"),
+    *_RENDER_INPUTS,
 )
-def render_statement(parsed, starters, subs, games, balance, income, expenses):
+def render_statement(parsed, starters, subs, games, balance, *category_values):
     rows = parsed_players(parsed)
     starters = list(starters or [])
     subs = list(subs or [])
     by_key = {row["key"]: row for row in rows if row.get("key")}
     overlap = sorted(set(starters) & set(subs))
     starter_gks = sum(1 for key in starters if by_key.get(key, {}).get("is_gk"))
+
+    n_income = len(_INCOME_IDS)
+    income_vals = list(category_values[:n_income])
+    expense_vals = list(category_values[n_income : n_income + len(_EXPENSE_IDS)])
+    income_map = {
+        key: _millions_to_cash(val)
+        for (key, _), val in zip(INCOME_CATEGORIES, income_vals)
+    }
+    expense_map = {
+        key: _millions_to_cash(val)
+        for (key, _), val in zip(EXPENSE_CATEGORIES, expense_vals)
+    }
+
+    reserve_count = max(0, len(rows) - len(set(starters) | set(subs)))
     hint_bits = [
         f"{len(starters)}/{STARTERS} starters",
         f"{len(subs)}/{SUBS} substitutes",
@@ -440,8 +542,11 @@ def render_statement(parsed, starters, subs, games, balance, income, expenses):
     if overlap:
         hint_bits.append(f"{len(overlap)} listed in both — counted once as starters")
         subs = [key for key in subs if key not in set(starters)]
+        reserve_count = max(0, len(rows) - len(set(starters) | set(subs)))
     if starter_gks < 1 and starters:
         hint_bits.append("add at least one GK to starters")
+    if rows:
+        hint_bits.append(f"{reserve_count} reserves")
     hint = " · ".join(hint_bits)
 
     if not rows:
@@ -465,32 +570,32 @@ def render_statement(parsed, starters, subs, games, balance, income, expenses):
         season_games=DEFAULT_SEASON_GAMES,
     )
     summary = [
+        _summary_card("Matchday wages", statement["matchday_wage_period"]),
         _summary_card(
-            f"Wages ({statement['games']} games)",
-            statement["wage_period"],
+            f"Reserve wages ({statement['reserves']})",
+            statement["reserve_wage_period"],
         ),
-        _summary_card("FFP contribution (period)", statement["ffp_period"]),
         _summary_card("Appearance fees", statement["match_fees"]),
+        _summary_card("FFP (period)", statement["ffp_period"]),
         _summary_card("Total", statement["total"], tone="best"),
     ]
     note = html.P(
         [
-            "Every selected player is assumed to appear in every game "
-            "(appearance fee × games). Wages are annual salary prorated by "
-            f"games / {DEFAULT_SEASON_GAMES}. Totals are wages + appearance fees; "
-            "FFP is shown separately and not added in. "
-            "Goal / assist / clean-sheet bonuses are not included.",
+            "Matchday starters and substitutes are assumed to appear in every game "
+            "(appearance fee × games). Reserves include wages only — no appearance fees. "
+            f"Wages are prorated by games / {DEFAULT_SEASON_GAMES}. "
+            "Totals are all wages + matchday appearance fees; FFP is display-only.",
         ],
         className="sf-note",
     )
     children: list = [note, _statement_table(statement)]
 
-    has_club_inputs = any(v is not None and v != "" for v in (balance, income, expenses))
-    if has_club_inputs:
+    club_values = [balance, *income_vals, *expense_vals]
+    if any(v is not None and v != "" for v in club_values):
         sustain = club_sustainability(
             balance=_millions_to_cash(balance),
-            annual_income=_millions_to_cash(income),
-            annual_expenses=_millions_to_cash(expenses),
+            income=income_map,
+            expenses=expense_map,
             squad_total=statement["total"],
             games=games_n,
             season_games=DEFAULT_SEASON_GAMES,
