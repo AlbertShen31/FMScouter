@@ -79,6 +79,8 @@ from components.player_table import (
     identity_data_styles,
     identity_header_name,
     identity_header_tooltips,
+    injury_cell,
+    injury_tooltip_entry,
     is_dark_theme,
     player_data_table,
     rec_sort_key,
@@ -128,7 +130,98 @@ PERSIST_DEFAULTS = {
     "hybrids_only": False,
     "pos_match": "yes",
     "focus_role": [],
+    "search": "",
+    "max_age": "99",
+    "min_score": None,
+    "min_score_mode": "all",
+    "pos_filter": "all",
+    "foot_filter": "",
+    "phase": "all",
+    "group": "all",
+    "page_size": None,
+    "set_piece_min_score": None,
 }
+
+
+def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bool:
+    p = {**PERSIST_DEFAULTS, **(persist or {})}
+    if (
+        _as_list(p.get("roles"))
+        or normalize_combos(p.get("combos"))
+        or p.get("formation")
+        or _as_list(p.get("set_pieces"))
+        or _as_list(p.get("focus_role"))
+        or p.get("hybrids_only")
+        or _normalize_pos_match(p.get("pos_match")) != "yes"
+        or (p.get("role_mode") or "formations") != "formations"
+    ):
+        return True
+    if (p.get("search") or "").strip():
+        return True
+    if str(p.get("max_age") or "99") != "99":
+        return True
+    settings = us.normalize(settings)
+    ok_floor = settings["bands"]["ok"]
+    min_score = p.get("min_score")
+    if min_score is not None:
+        try:
+            if abs(float(min_score) - float(ok_floor)) > 1e-9:
+                return True
+        except (TypeError, ValueError):
+            return True
+    if (p.get("min_score_mode") or "all") != "all":
+        return True
+    if (p.get("pos_filter") or "all") != "all":
+        return True
+    if p.get("foot_filter"):
+        return True
+    if (p.get("phase") or "all") != "all":
+        return True
+    if (p.get("group") or "all") != "all":
+        return True
+    page_size = p.get("page_size")
+    if page_size is not None:
+        from components.player_table import default_page_size_value
+
+        if str(page_size) != str(default_page_size_value(settings)):
+            return True
+    if p.get("set_piece_min_score") is not None:
+        return True
+    return False
+
+
+def _persist_min_score(value, settings: dict | None = None):
+    """Store None when min score matches the layout default (OK band)."""
+    if value is None or value == "":
+        return None
+    settings = us.normalize(settings)
+    try:
+        if abs(float(value) - float(settings["bands"]["ok"])) <= 1e-9:
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
+def _persist_page_size(value, settings: dict | None = None):
+    """Store None when page size matches the settings default."""
+    if value is None or value == "":
+        return None
+    from components.player_table import default_page_size_value
+
+    settings = us.normalize(settings)
+    if str(value) == str(default_page_size_value(settings)):
+        return None
+    return value
+
+
+def _changed_or_skip(value, default):
+    """Avoid Dash prop updates when restoring an unchanged layout default."""
+    if value is None and default is None:
+        return no_update
+    if value == default:
+        return no_update
+    return value
 
 POS_MATCH_OPTIONS = [
     {"value": "yes", "label": "Full match only (green)"},
@@ -1291,7 +1384,7 @@ def layout():
                                     style_header_conditional_rules=style_header_conditional(),
                                     style_data_conditional_rules=[
                                         {
-                                            "if": {"filter_query": '{Injury} != "-"'},
+                                            "if": {"filter_query": '{Injury} contains "rs-injury-cell"'},
                                             "backgroundColor": "#fff3cd",
                                         }
                                     ],
@@ -1391,7 +1484,7 @@ def _cell_number(value) -> float:
 
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
-TABLE_MARKDOWN_COLS = {"Feet"}
+TABLE_MARKDOWN_COLS = {"Feet", "Injury"}
 
 
 def _column_sort_key(column_id: str, value, row: dict | None = None):
@@ -1881,6 +1974,16 @@ def _depth_panel(
     Input("rs-pos-match", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-focus-role", "data"),
+    Input("rs-search", "value"),
+    Input("rs-age", "value"),
+    Input("rs-min-score", "value"),
+    Input("rs-min-score-mode", "value"),
+    Input("rs-pos-filter", "data"),
+    Input("rs-foot-filter", "data"),
+    Input("rs-phase", "data"),
+    Input("rs-group", "data"),
+    Input("rs-page-size", "value"),
+    Input("rs-set-piece-min-score", "value"),
     State("rs-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -1893,10 +1996,21 @@ def save_page_persist(
     pos_match,
     hybrids_only,
     focus_role,
+    search,
+    max_age,
+    min_score,
+    min_score_mode,
+    pos_filter,
+    foot_filter,
+    phase,
+    group,
+    page_size,
+    set_piece_min_score,
     hydrated,
 ):
     if not hydrated:
         return no_update
+    settings = us.load()
     return {
         "roles": _as_list(roles),
         "combos": normalize_combos(combos),
@@ -1906,6 +2020,16 @@ def save_page_persist(
         "hybrids_only": bool(hybrids_only),
         "pos_match": _normalize_pos_match(pos_match),
         "focus_role": _as_list(focus_role),
+        "search": (search or "").strip(),
+        "max_age": str(max_age or "99"),
+        "min_score": _persist_min_score(min_score, settings),
+        "min_score_mode": min_score_mode or "all",
+        "pos_filter": pos_filter or "all",
+        "foot_filter": foot_filter or "",
+        "phase": phase or "all",
+        "group": group or "all",
+        "page_size": _persist_page_size(page_size, settings),
+        "set_piece_min_score": set_piece_min_score,
     }
 
 
@@ -1946,83 +2070,90 @@ clientside_callback(
     Output("rs-hydrated", "data"),
     Output("rs-role-mode-prev", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
+    Output("rs-search", "value"),
+    Output("rs-age", "value", allow_duplicate=True),
+    Output("rs-min-score", "value"),
+    Output("rs-min-score-mode", "value"),
+    Output("rs-pos-filter", "data", allow_duplicate=True),
+    Output("rs-foot-filter", "data", allow_duplicate=True),
+    Output("rs-phase", "data", allow_duplicate=True),
+    Output("rs-phase-row", "children", allow_duplicate=True),
+    Output("rs-group", "data", allow_duplicate=True),
+    Output("rs-group-row", "children", allow_duplicate=True),
+    Output("rs-page-size", "value", allow_duplicate=True),
+    Output("rs-set-piece-min-score", "value"),
     Input("rs-persist-boot", "data"),
     State("rs-hydrated", "data"),
-    State("rs-phase", "data"),
-    State("rs-group", "data"),
     prevent_initial_call=True,
 )
-def hydrate_page_persist(persist, hydrated, phase, group):
-    if hydrated or persist is None:
+def hydrate_page_persist(persist, hydrated):
+    _skip = (no_update,) * 24
+    if hydrated:
+        return _skip
+    raw = persist or {}
+    persist = {**PERSIST_DEFAULTS, **raw}
+    settings = us.load()
+    if not _persist_has_state(raw, settings):
         return (
+            *(no_update,) * 9,
+            True,
+            persist.get("role_mode") or "formations",
             no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
+            *(no_update,) * 12,
         )
-    persist = {**PERSIST_DEFAULTS, **(persist or {})}
     roles = _as_list(persist.get("roles"))
     combos = normalize_combos(persist.get("combos"))
     mode = persist.get("role_mode") or "formations"
     formation = persist.get("formation") or None
     set_pieces = _as_list(persist.get("set_pieces"))
-    # Prefer pos_match; fall back to legacy eligible bool.
-    if "pos_match" in persist:
+    if "pos_match" in raw:
         pos_match = _normalize_pos_match(persist.get("pos_match"))
     else:
         pos_match = _normalize_pos_match(persist.get("eligible", True))
     hybrids_only = bool(persist.get("hybrids_only", False))
     focus = _as_list(persist.get("focus_role"))
-    keep = list(roles)
-    for item in combos:
-        keep.extend((item["ip"], item["oop"]))
-    options = role_options(phase=phase, group=group, keep=keep) or []
-    has_state = bool(
-        roles
-        or combos
-        or formation
-        or set_pieces
-        or focus
-        or hybrids_only
-        or pos_match != "yes"
-        or mode != "formations"
-    )
-    if not has_state:
-        return (
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            True,
-            mode,
-            no_update,
-        )
+    phase = persist.get("phase") or "all"
+    group = persist.get("group") or "all"
+    search = persist.get("search") or ""
+    max_age = str(persist.get("max_age") or "99")
+    min_score = persist.get("min_score")
+    if min_score is None:
+        min_score_out = no_update
+    else:
+        min_score_out = min_score
+    min_score_mode = persist.get("min_score_mode") or "all"
+    pos_filter = persist.get("pos_filter") or "all"
+    foot_filter = persist.get("foot_filter") or ""
+    page_size = _persist_page_size(persist.get("page_size"), settings)
+    set_piece_min = persist.get("set_piece_min_score")
+    # Skip writing role options here — filter_role_options owns that Output.
+    # Only write controls that differ from layout defaults to avoid cascading
+    # render_shortlist / rescore runs.
     return (
-        roles,
-        options,
-        combos,
-        mode,
-        formation,
-        set_pieces,
-        pos_match,
-        hybrids_only,
-        focus,
+        roles if roles else no_update,
+        no_update,
+        combos if combos else no_update,
+        _changed_or_skip(mode, "formations"),
+        formation if formation else no_update,
+        set_pieces if set_pieces else no_update,
+        _changed_or_skip(pos_match, "yes"),
+        hybrids_only if hybrids_only else no_update,
+        focus if focus else no_update,
         True,
         mode,
-        _sort_by_focus(focus),
+        _sort_by_focus(focus) if focus else no_update,
+        _changed_or_skip(search, ""),
+        _changed_or_skip(max_age, "99"),
+        min_score_out,
+        _changed_or_skip(min_score_mode, "all"),
+        _changed_or_skip(pos_filter, "all"),
+        _changed_or_skip(foot_filter, ""),
+        _changed_or_skip(phase, "all"),
+        _phase_buttons(phase) if phase != "all" else no_update,
+        _changed_or_skip(group, "all"),
+        _group_buttons(group) if group != "all" else no_update,
+        page_size if page_size is not None else no_update,
+        set_piece_min if set_piece_min is not None else no_update,
     )
 
 
@@ -2403,10 +2534,11 @@ def clear_roles(n_clicks):
 
 @callback(
     Output("rs-age", "data"),
-    Output("rs-age", "value"),
+    Output("rs-age", "value", allow_duplicate=True),
     Output("rs-band-legend", "children"),
     Input("ui-settings", "data"),
     State("rs-age", "value"),
+    prevent_initial_call="initial_duplicate",
 )
 def apply_ui_settings(settings, age):
     settings = us.normalize(settings)
@@ -2501,9 +2633,9 @@ def load_formation(formation_id, phase, group, current_combos):
     for item in combos:
         keep.extend((item["ip"], item["oop"]))
     options = role_options(phase=phase, group=group, keep=keep) or []
-    # Hydrate restores formation + combos together; skip resetting focus.
+    # Hydrate restores formation + combos together; skip all writes when unchanged.
     if normalize_combos(current_combos) == normalize_combos(combos):
-        return no_update, no_update, options, "formations", no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     first = _first_combo_column(combos)
     focus = [first] if first else []
     return combos, [], options, "formations", focus, _sort_by_focus(focus)
@@ -2513,12 +2645,15 @@ def load_formation(formation_id, phase, group, current_combos):
     Output("rs-page-size", "data"),
     Output("rs-page-size", "value"),
     Input("ui-settings", "data"),
+    State("rs-page-size", "value"),
 )
-def sync_rs_page_size_from_settings(settings):
+def sync_rs_page_size_from_settings(settings, page_size):
     from components.player_table import default_page_size_value, page_size_select_data
 
     settings = us.normalize(settings)
-    return page_size_select_data(settings), default_page_size_value(settings)
+    data = page_size_select_data(settings)
+    default = default_page_size_value(settings)
+    return data, us.clamp_choice(page_size, data, default)
 
 
 @callback(
@@ -2614,6 +2749,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     Output("rs-table", "data"),
     Output("rs-table", "columns"),
     Output("rs-table", "tooltip_header"),
+    Output("rs-table", "tooltip_data"),
     Output("rs-table", "style_data_conditional"),
     Output("rs-table", "style_header_conditional"),
     Output("rs-table", "css"),
@@ -2645,6 +2781,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     Input("theme", "data"),
     Input("rs-hist-open", "data"),
     Input("ui-settings", "data"),
+    Input("rs-hydrated", "data"),
     State("rs-table-cols-sig", "data"),
 )
 def render_shortlist(
@@ -2666,8 +2803,12 @@ def render_shortlist(
     theme,
     hist_open,
     settings,
+    hydrated,
     cols_sig,
 ):
+    # Wait for persist hydrate so filters are restored before the first table build.
+    if not hydrated:
+        return (no_update,) * 20
     settings = us.normalize(settings)
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
@@ -2693,6 +2834,7 @@ def render_shortlist(
             [],
             empty_cols,
             {},
+            [],
             empty_style,
             empty_header,
             empty_css,
@@ -2726,6 +2868,7 @@ def render_shortlist(
             [],
             empty_cols,
             {},
+            [],
             empty_style,
             empty_header,
             empty_css,
@@ -2802,10 +2945,12 @@ def render_shortlist(
     columns = _table_columns(table_cols)
     header_tips = _header_tooltips(table_cols, combos=combos)
     table_rows = []
+    tooltip_data = []
     for row in filtered:
         row_key = player_row_key(row)
         hist_row = historical_by_key.get(row_key) if compare else None
         item = {}
+        tip_row: dict[str, str] = {}
         for key in table_cols:
             if key in score_cols:
                 raw = row.get(key)
@@ -2824,13 +2969,21 @@ def render_shortlist(
                     else None,
                 )
             else:
-                item[key] = feet_cell(row) if key == "Feet" else row.get(key, "-")
+                if key == "Feet":
+                    item[key] = feet_cell(row)
+                elif key == "Injury":
+                    raw = row.get(key)
+                    item[key] = injury_cell(raw)
+                    tip_row = injury_tooltip_entry(raw)
+                else:
+                    item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["DivisionTier"] = row.get("DivisionTier") or ""
         if row_key:
             item["id"] = row_key
             item["_key"] = row_key
         table_rows.append(item)
+        tooltip_data.append(tip_row)
     page_keys = [str(row.get("id") or "").strip() for row in table_rows]
     selected_rows = [key for key in page_keys if key in marked_keys]
     extras = []
@@ -2897,6 +3050,7 @@ def render_shortlist(
         table_rows,
         columns,
         header_tips,
+        tooltip_data,
         _score_styles(score_cols, settings, theme),
         _score_header_styles(score_cols, theme),
         _table_css(score_cols, theme),

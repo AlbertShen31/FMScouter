@@ -1967,6 +1967,115 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     vertical-align: middle;
 }
 
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Injury"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] {
+    min-width: 44px !important;
+    width: 48px !important;
+    max-width: 56px !important;
+    text-align: center !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] {
+    position: relative !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .dash-cell-value {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 0 !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    cursor: help;
+    vertical-align: middle;
+    line-height: 0;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .markdown,
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .markdown p {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Injury"],
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] {
+    min-width: 44px !important;
+    width: 48px !important;
+    max-width: 56px !important;
+    text-align: center !important;
+}
+
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] {
+    position: relative !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
+}
+
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .dash-cell-value {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 0 !important;
+}
+
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    cursor: help;
+    vertical-align: middle;
+    line-height: 0;
+}
+
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .markdown,
+#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .markdown p {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon {
+    color: #fbbf24;
+}
+
+html[data-theme="light"] .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon,
+body[data-theme="light"] .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon {
+    color: #b45309;
+}
+
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
 .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Name"] {
     position: sticky !important;
@@ -4674,9 +4783,10 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Injury"],
 #st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] {
-    min-width: 88px !important;
-    max-width: 160px !important;
-    text-align: left !important;
+    min-width: 44px !important;
+    width: 48px !important;
+    max-width: 56px !important;
+    text-align: center !important;
 }
 
 /* Uniform All-category percentile columns (abbr headers: Ovr / Def / F3 / Poss). */

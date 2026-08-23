@@ -25,18 +25,20 @@ IDENTITY_TEXT_COLS = frozenset(
         "Best Pos",
     }
 )
-IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Injury", "Division", "Nation", "Inf")
+IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Division", "Nation", "Inf")
 
 # Short table headers → full tooltip label (column id stays the key).
 IDENTITY_HEADER_ABBR = {
     "Height": "Ht",
     "Best Pos": "BP",
+    "Injury": "INJ",
 }
 IDENTITY_HEADER_TOOLTIPS = {
     "Height": "Height",
     "Minutes": "Minutes",
     "Best Pos": "Best position",
     "Inf": "Information / status",
+    "Injury": "Injury",
     "Division": "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur",
 }
 
@@ -133,6 +135,34 @@ def feet_cell(row: dict) -> str:
     )
 
 
+def injury_label(value) -> str:
+    """Normalized injury text, or empty when the player is fit."""
+    text = str(value or "").strip()
+    if not text or text in ("-", "—"):
+        return ""
+    return text
+
+
+def injury_cell(value) -> str:
+    """Markdown cell: medical-cross icon, or empty when fit."""
+    if not injury_label(value):
+        return ""
+    return (
+        '<span class="rs-injury-cell">'
+        '<svg class="rs-injury-icon" viewBox="0 0 24 24" width="16" height="16" '
+        'role="img" aria-hidden="true">'
+        '<rect x="10" y="4" width="4" height="16" rx="0.75" fill="currentColor"/>'
+        '<rect x="4" y="10" width="16" height="4" rx="0.75" fill="currentColor"/>'
+        "</svg></span>"
+    )
+
+
+def injury_tooltip_entry(value) -> dict[str, str]:
+    """DataTable tooltip_data row fragment for the Injury column."""
+    text = injury_label(value)
+    return {"Injury": text} if text else {}
+
+
 def feet_sort_key(row: dict) -> tuple:
     left = foot_strength(row.get("Left Foot") or "")
     right = foot_strength(row.get("Right Foot") or "")
@@ -218,8 +248,15 @@ def style_cell_conditional(*, extra: Sequence[dict] | None = None) -> list[dict]
             "width": "84px",
             "overflow": "visible",
         },
+        {
+            "if": {"column_id": "Injury"},
+            "textAlign": "center",
+            "minWidth": "44px",
+            "width": "48px",
+            "maxWidth": "56px",
+            "padding": "6px 4px",
+        },
         {"if": {"column_id": "Club"}, "textAlign": "left"},
-        {"if": {"column_id": "Injury"}, "textAlign": "left"},
     ]
     if extra:
         rules.extend(extra)
@@ -285,6 +322,55 @@ def _feet_css() -> list[dict]:
                 "min-width: 84px !important; "
                 "width: 84px !important; "
                 "text-align: center !important;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-cell",
+            "rule": (
+                "display: inline-flex !important; "
+                "align-items: center; justify-content: center; "
+                "width: 100%; line-height: 0; cursor: help; vertical-align: middle;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-icon",
+            "rule": (
+                "display: block !important; color: #fbbf24; "
+                "flex-shrink: 0;"
+            ),
+        },
+        {
+            "selector": 'td.dash-cell[data-dash-column="Injury"]',
+            "rule": (
+                "position: relative !important; "
+                "text-align: center !important; "
+                "min-width: 44px !important; "
+                "width: 48px !important; "
+                "max-width: 56px !important; "
+                "vertical-align: middle !important; "
+                "overflow: visible !important;"
+            ),
+        },
+        {
+            "selector": 'td.dash-cell[data-dash-column="Injury"] .dash-cell-value',
+            "rule": (
+                "position: absolute !important; inset: 0 !important; "
+                "width: 100% !important; height: 100% !important; "
+                "margin: 0 !important; padding: 0 !important; "
+                "display: flex !important; align-items: center !important; "
+                "justify-content: center !important; line-height: 0 !important;"
+            ),
+        },
+        {
+            "selector": (
+                'td.dash-cell[data-dash-column="Injury"] .markdown, '
+                'td.dash-cell[data-dash-column="Injury"] .markdown p'
+            ),
+            "rule": (
+                "width: 100% !important; height: 100% !important; "
+                "margin: 0 !important; padding: 0 !important; "
+                "display: flex !important; align-items: center !important; "
+                "justify-content: center !important; line-height: 0 !important;"
             ),
         },
     ]
@@ -502,17 +588,18 @@ def identity_data_styles(
         },
         {
             "if": {"column_id": "Injury"},
-            "textAlign": "left",
-            "minWidth": "88px",
-            "maxWidth": "160px",
+            "textAlign": "center",
+            "minWidth": "44px",
+            "width": "48px",
+            "maxWidth": "56px",
+            "padding": "6px 4px",
         },
         {
-            "if": {"column_id": "Injury", "filter_query": '{Injury} != "-"'},
+            "if": {"column_id": "Injury", "filter_query": '{Injury} contains "rs-injury-cell"'},
             "color": "#fbbf24" if dark else "#b45309",
-            "fontWeight": "600",
         },
         {
-            "if": {"filter_query": '{Injury} != "-"'},
+            "if": {"filter_query": '{Injury} contains "rs-injury-cell"'},
             "backgroundColor": injury_bg,
         },
     ]
@@ -614,6 +701,7 @@ def player_data_table(
             fill_width=True,
             markdown_options={"html": True},
             tooltip_header=tooltip_header or {},
+            tooltip_data=[],
             tooltip_delay=0,
             tooltip_duration=None,
             style_table=style_table_props if style_table_props is not None else style_table(),

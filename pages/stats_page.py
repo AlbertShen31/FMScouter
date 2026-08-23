@@ -11,6 +11,7 @@ from dash import (
     Output,
     State,
     callback,
+    clientside_callback,
     ctx,
     dcc,
     html,
@@ -32,6 +33,8 @@ from components.player_table import (
     identity_data_styles,
     identity_header_name,
     identity_header_tooltips,
+    injury_cell,
+    injury_tooltip_entry,
     player_data_table,
     rec_sort_key,
     style_cell,
@@ -146,6 +149,44 @@ register_marks_callbacks(
     clear_button="st-clear-marks",
 )
 register_hist_toggle("st", use_open_store=False)
+
+ST_PERSIST_DEFAULTS = {
+    "pos": "all",
+    "category": "all",
+    "foot": "",
+    "search": "",
+    "max_age": "99",
+    "minutes_match": "any",
+    "minutes_required": None,
+    "division_tier": "all",
+    "page_size": None,
+    "sort_by": None,
+}
+
+
+def _st_persist_has_state(persist: dict | None) -> bool:
+    p = {**ST_PERSIST_DEFAULTS, **(persist or {})}
+    if (p.get("pos") or "all") != "all":
+        return True
+    if (p.get("category") or "all") != "all":
+        return True
+    if p.get("foot"):
+        return True
+    if (p.get("search") or "").strip():
+        return True
+    if str(p.get("max_age") or "99") != "99":
+        return True
+    if (p.get("minutes_match") or "any") != "any":
+        return True
+    if p.get("minutes_required") is not None:
+        return True
+    if (p.get("division_tier") or "all") != "all":
+        return True
+    if p.get("page_size") is not None:
+        return True
+    if p.get("sort_by"):
+        return True
+    return False
 
 
 def _help_icon(tip: str, help_id: str) -> list:
@@ -590,7 +631,7 @@ def _table_columns(
     cols = []
     for col in us.shortlist_columns_for("player_stats", settings):
         spec = {"name": identity_header_name(col), "id": col}
-        if col == "Feet":
+        if col in ("Feet", "Injury"):
             spec["presentation"] = "markdown"
         cols.append(spec)
     cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
@@ -642,7 +683,7 @@ def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
         "Position": lambda: player.get("position") or "—",
         "Club": lambda: player.get("club") or "—",
         "Rec": lambda: _display_blank(player.get("rec")),
-        "Injury": lambda: _display_blank(player.get("injury")),
+        "Injury": lambda: injury_cell(player.get("injury")),
         "Division": lambda: _display_blank(player.get("division")),
         "Nation": lambda: _display_blank(player.get("nation")),
         "Inf": lambda: _display_blank(player.get("inf")),
@@ -1528,6 +1569,8 @@ def layout(**_kwargs):
     return html.Div(
         [
             dcc.Interval(id="st-hydrate-tick", interval=50, max_intervals=1),
+            dcc.Store(id="st-persist-boot"),
+            dcc.Store(id="st-hydrated", data=False),
             dcc.Store(id="st-pos", data="all"),
             dcc.Store(id="st-category", data="all"),
             dcc.Store(id="st-foot", data=""),
@@ -1778,12 +1821,13 @@ def set_category(n_clicks, pos, current):
 
 @callback(
     Output("st-age", "data"),
-    Output("st-age", "value"),
+    Output("st-age", "value", allow_duplicate=True),
     Output("st-stats-thresh-pack", "data"),
     Output("st-stats-thresh-pack", "value"),
     Input("ui-settings", "data"),
     State("st-age", "value"),
     State("st-stats-thresh-pack", "value"),
+    prevent_initial_call="initial_duplicate",
 )
 def apply_stats_settings(settings, age, thresh_pack_id):
     settings = us.normalize(settings)
@@ -1823,15 +1867,20 @@ def switch_stats_thresh_pack(pack_id, settings):
     Output("st-page-size", "value"),
     Output("st-minutes-required", "value"),
     Input("ui-settings", "data"),
+    State("st-page-size", "value"),
+    State("st-minutes-required", "value"),
 )
-def sync_st_controls_from_settings(settings):
+def sync_st_controls_from_settings(settings, page_size, minutes_required):
     from components.player_table import default_page_size_value, page_size_select_data
 
     settings = us.normalize(settings)
+    size_data = page_size_select_data(settings)
+    default_size = default_page_size_value(settings)
+    default_mins = us.default_minutes_required(settings)
     return (
-        page_size_select_data(settings),
-        default_page_size_value(settings),
-        us.default_minutes_required(settings),
+        size_data,
+        us.clamp_choice(page_size, size_data, default_size),
+        minutes_required if minutes_required is not None else default_mins,
     )
 
 
@@ -1840,6 +1889,7 @@ def sync_st_controls_from_settings(settings):
     Output("st-table", "columns"),
     Output("st-table", "data"),
     Output("st-table", "tooltip_header"),
+    Output("st-table", "tooltip_data"),
     Output("st-table", "style_data_conditional"),
     Output("st-table", "page_size"),
     Output("st-table", "page_current"),
@@ -1944,7 +1994,13 @@ def refresh_table(
     _sort_table_rows(rows, sort_by)
     header_tips = _header_tooltips(pos, category, thresh, settings=settings)
     col_ids = [c["id"] for c in cols]
+    injury_by_key = {
+        player_key(p): p.get("injury")
+        for p in filtered
+        if player_key(p)
+    }
     table_rows = []
+    tooltip_data = []
     for row in rows:
         item = {col: row.get(col, "—") for col in col_ids}
         item["DivisionTier"] = row.get("DivisionTier") or ""
@@ -1953,6 +2009,7 @@ def refresh_table(
             item["id"] = key  # DataTable row id (stable across refreshes)
             item["_key"] = key
         table_rows.append(item)
+        tooltip_data.append(injury_tooltip_entry(injury_by_key.get(key)))
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]
     page_size_i = int(page_size or 50)
@@ -2042,6 +2099,7 @@ def refresh_table(
             no_update,
             no_update,
             no_update,
+            no_update,
             selected_ids,
             no_update,
             no_update,
@@ -2063,6 +2121,7 @@ def refresh_table(
         cols,
         table_rows,
         header_tips,
+        tooltip_data,
         style_data,
         page_size_i,
         0 if reset_page else no_update,
@@ -2322,3 +2381,113 @@ def download_csv(
     ]
     export_rows = [{k: _strip_cell(r.get(k)) for k in fieldnames} for r in table_rows]
     return _csv_payload(fieldnames, export_rows)
+
+
+@callback(
+    Output("st-persist", "data"),
+    Input("st-pos", "data"),
+    Input("st-category", "data"),
+    Input("st-foot", "data"),
+    Input("st-search", "value"),
+    Input("st-age", "value"),
+    Input("st-minutes-match", "value"),
+    Input("st-minutes-required", "value"),
+    Input("st-division-tier", "value"),
+    Input("st-page-size", "value"),
+    Input("st-table", "sort_by"),
+    State("st-hydrated", "data"),
+    prevent_initial_call=True,
+)
+def save_st_page_persist(
+    pos,
+    category,
+    foot,
+    search,
+    max_age,
+    minutes_match,
+    minutes_required,
+    division_tier,
+    page_size,
+    sort_by,
+    hydrated,
+):
+    if not hydrated:
+        return no_update
+    return {
+        "pos": pos or "all",
+        "category": category or "all",
+        "foot": foot or "",
+        "search": (search or "").strip(),
+        "max_age": str(max_age or "99"),
+        "minutes_match": minutes_match or "any",
+        "minutes_required": minutes_required,
+        "division_tier": division_tier or "all",
+        "page_size": page_size,
+        "sort_by": sort_by or None,
+    }
+
+
+clientside_callback(
+    """
+    function(n) {
+        if (!n) {
+            return window.dash_clientside.no_update;
+        }
+        try {
+            const raw = window.sessionStorage.getItem("st-persist");
+            if (raw == null || raw === "") {
+                return {};
+            }
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+    """,
+    Output("st-persist-boot", "data"),
+    Input("st-hydrate-tick", "n_intervals"),
+)
+
+
+@callback(
+    Output("st-pos", "data", allow_duplicate=True),
+    Output("st-category", "data", allow_duplicate=True),
+    Output("st-foot", "data", allow_duplicate=True),
+    Output("st-search", "value"),
+    Output("st-age", "value", allow_duplicate=True),
+    Output("st-minutes-match", "value"),
+    Output("st-minutes-required", "value", allow_duplicate=True),
+    Output("st-division-tier", "value"),
+    Output("st-page-size", "value", allow_duplicate=True),
+    Output("st-table", "sort_by", allow_duplicate=True),
+    Output("st-sort-memory", "data", allow_duplicate=True),
+    Output("st-hydrated", "data"),
+    Input("st-persist-boot", "data"),
+    State("st-hydrated", "data"),
+    prevent_initial_call=True,
+)
+def hydrate_st_page_persist(persist, hydrated):
+    if hydrated or persist is None:
+        return (no_update,) * 12
+    raw = persist or {}
+    if not _st_persist_has_state(raw):
+        return (*((no_update,) * 11), True)
+    p = {**ST_PERSIST_DEFAULTS, **raw}
+    sort_by = p.get("sort_by") or None
+    page_size = p.get("page_size")
+    minutes_required = p.get("minutes_required")
+    return (
+        p.get("pos") or "all",
+        p.get("category") or "all",
+        p.get("foot") or "",
+        p.get("search") or "",
+        str(p.get("max_age") or "99"),
+        p.get("minutes_match") or "any",
+        minutes_required if minutes_required is not None else no_update,
+        p.get("division_tier") or "all",
+        page_size if page_size is not None else no_update,
+        sort_by if sort_by else no_update,
+        sort_by if sort_by else no_update,
+        True,
+    )

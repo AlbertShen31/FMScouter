@@ -85,6 +85,7 @@ app.layout = dmc.MantineProvider(
             storage_type="session",
         ),
         dcc.Store(id="sf-club", data={}, storage_type="session"),
+        dcc.Store(id="st-persist", data={}, storage_type="session"),
         html.Div(id="ui-settings-css"),
         dbc.Navbar(
             dbc.Container(
