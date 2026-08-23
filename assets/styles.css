@@ -723,6 +723,7 @@ body {
     background-color: var(--app-card);
     color: var(--app-text);
     border-color: var(--app-line) !important;
+    vertical-align: middle !important;
 }
 
 #rs-table .dash-spreadsheet-inner th {
@@ -808,6 +809,17 @@ body {
 /* Center all numeric score columns (headers + values). */
 #rs-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
 #rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+#rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .dash-cell-value,
+#rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .markdown,
+#rs-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .markdown p {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     text-align: center !important;
 }
 
@@ -906,6 +918,48 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .Select-value-label {
     font-size: 12px !important;
     white-space: nowrap;
+}
+
+.rs-upload-dual {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem 1.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.rs-upload-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.rs-upload-slot-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--app-text);
+}
+
+.rs-upload-slot-note {
+    margin: -0.15rem 0 0.15rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--app-muted);
+}
+
+.rs-upload-slot-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--app-muted);
+    background: var(--app-head);
+    border: 1px solid var(--app-line);
 }
 
 .rs-upload {
@@ -1860,6 +1914,25 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     width: 100% !important;
 }
 
+/* Uniform body row height + vertical centering (Role scores + Player stats). */
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell {
+    vertical-align: middle !important;
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .dash-cell-value,
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .markdown,
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .markdown p {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .cmp-cell {
+    justify-content: center;
+}
+
 .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Feet"],
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Feet"] {
     min-width: 84px !important;
@@ -2339,6 +2412,56 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .rs-band-good { background: var(--band-good-bg); color: var(--band-good-fg); }
 .rs-band-ok { background: var(--band-ok-bg); color: var(--band-ok-fg); }
 .rs-band-poor { background: var(--band-poor-bg); color: var(--band-poor-fg); }
+
+/* Role score cells — match Player stats percentile density. */
+#rs-table .dash-spreadsheet-inner td .rs-score-cell {
+    display: inline-block;
+    font-weight: 750;
+    letter-spacing: 0.01em;
+    max-width: 100%;
+    line-height: 1.1;
+}
+
+#rs-table .dash-spreadsheet-inner td .rs-score-val {
+    display: inline-block;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.08em;
+    line-height: 1.15;
+}
+
+#rs-table .dash-spreadsheet-inner td .rs-score-cell .cmp-cell,
+#rs-table .dash-spreadsheet-inner td .cmp-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    line-height: 1.1;
+    text-align: center;
+}
+
+#rs-table .dash-spreadsheet-inner td .rs-score-cell .cmp-cell-val,
+#rs-table .dash-spreadsheet-inner td .cmp-cell-val {
+    display: block;
+    width: 100%;
+    text-align: center;
+    line-height: 1.15;
+}
+
+#rs-table .dash-spreadsheet-inner td .cmp-delta-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.62em;
+    font-weight: 650;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.92;
+}
 
 .rs-depth-bar {
     height: 4px;
@@ -4433,6 +4556,20 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     background-color: var(--app-card);
     color: var(--app-text);
     border-color: var(--app-line) !important;
+    vertical-align: middle !important;
+}
+
+#st-table .dash-spreadsheet-inner td.dash-cell {
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+#st-table .dash-spreadsheet-inner td.dash-cell .dash-cell-value,
+#st-table .dash-spreadsheet-inner td.dash-cell .markdown,
+#st-table .dash-spreadsheet-inner td.dash-cell .markdown p {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
 }
 
 #st-table .dash-spreadsheet-inner th {
@@ -4619,6 +4756,40 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     display: inline-block;
     font-weight: 750;
     letter-spacing: 0.01em;
+    max-width: 100%;
+}
+
+#st-table .dash-spreadsheet-inner td .st-pct-cell .cmp-cell,
+#st-table .dash-spreadsheet-inner td .cmp-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    line-height: 1.1;
+    text-align: center;
+}
+
+#st-table .dash-spreadsheet-inner td .cmp-cell-val {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+}
+
+#st-table .dash-spreadsheet-inner td .cmp-delta-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.62em;
+    font-weight: 650;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.92;
 }
 
 #st-table .dash-spreadsheet-inner td .st-pct-cell.is-missing {
@@ -5266,6 +5437,47 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     max-width: 42rem;
 }
 
-.fx-list li {
-    margin-bottom: 0.25rem;
+.cmp-cell {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    max-width: 100%;
+    line-height: 1.1;
+}
+
+.cmp-cell-val {
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+}
+
+.cmp-delta {
+    font-size: 0.82em;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cmp-delta-block {
+    display: block;
+    font-size: 0.62em;
+    line-height: 1;
+    margin-top: 1px;
+}
+
+.cmp-delta-up {
+    color: var(--app-ok, #22c55e);
+}
+
+.cmp-delta-down {
+    color: var(--app-danger, #ef4444);
+}
+
+.cmp-delta-wage-up {
+    color: var(--app-danger, #ef4444);
+}
+
+.cmp-delta-wage-down {
+    color: var(--app-ok, #22c55e);
 }

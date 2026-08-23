@@ -167,12 +167,14 @@ def style_cell(*, text_align: str = "right") -> dict:
     return {
         "fontFamily": "Inter, Segoe UI, sans-serif",
         "fontSize": "14px",
-        "padding": "10px 12px",
+        "padding": "8px 10px",
         "whiteSpace": "nowrap",
         "backgroundColor": "transparent",
         "color": "var(--app-text)",
         "border": "1px solid transparent",
         "textAlign": text_align,
+        "verticalAlign": "middle",
+        "lineHeight": "1.2",
     }
 
 
@@ -296,16 +298,33 @@ def _center_non_identity_css() -> list[dict]:
     )
     return [
         {
+            "selector": "td.dash-cell",
+            "rule": "vertical-align: middle !important;",
+        },
+        {
             "selector": f"td.dash-cell{skip}",
             "rule": "text-align: center !important;",
         },
         {
             "selector": (
                 f"td.dash-cell{skip} .dash-cell-value, "
+                f"td.dash-cell{skip} .markdown, "
+                f"td.dash-cell{skip} .markdown p, "
                 f"td.dash-cell{skip} p, "
                 f"td.dash-cell{skip} span"
             ),
-            "rule": "text-align: center !important; margin: 0 !important;",
+            "rule": (
+                "text-align: center !important; margin: 0 !important; "
+                "padding: 0 !important; line-height: 1.2 !important;"
+            ),
+        },
+        {
+            "selector": (
+                "td.dash-cell .dash-cell-value, "
+                "td.dash-cell .markdown, "
+                "td.dash-cell .markdown p"
+            ),
+            "rule": "margin: 0 !important; padding: 0 !important; line-height: 1.2 !important;",
         },
         {
             "selector": (
@@ -314,7 +333,7 @@ def _center_non_identity_css() -> list[dict]:
                 ':not([data-dash-column="Club"])'
                 ':not([data-dash-column="Injury"])'
             ),
-            "rule": "text-align: center !important;",
+            "rule": "text-align: center !important; vertical-align: middle !important;",
         },
     ]
 

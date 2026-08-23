@@ -10,9 +10,11 @@ from components.pack_picker import section_card_header
 from components.player_filters import help_icon
 from components.scouting_shell import (
     parsed_players,
+    parsed_historical_players,
     register_upload_callbacks,
     upload_card,
 )
+from scoring.comparison import money_delta_span
 from scoring.squad_finance import (
     DEFAULT_GAMES,
     DEFAULT_SEASON_GAMES,
@@ -229,8 +231,18 @@ def _player_options(rows: list[dict]) -> list[dict]:
     return options
 
 
-def _money_cell(value: float | None) -> html.Span:
-    return html.Span(format_money(value), className="sf-money")
+def _money_cell(
+    value: float | None,
+    *,
+    hist_value: float | None = None,
+    compare: bool = False,
+) -> html.Span:
+    parts: list = [format_money(value)]
+    if compare and value is not None and hist_value is not None:
+        delta = money_delta_span(float(value) - float(hist_value), enabled=True)
+        if delta is not None:
+            parts.append(delta)
+    return html.Span(parts, className="sf-money")
 
 
 def _signed_delta(value: float | None) -> str | None:
@@ -293,13 +305,23 @@ def _summary_card(
     *,
     tone: str = "",
     delta: float | None = None,
+    compare: bool = False,
 ) -> html.Div:
-    delta_txt = _signed_delta(delta)
+    delta_txt = _signed_delta(delta) if not compare else None
     body = format_money(value)
-    if delta_txt:
+    if compare and delta is not None and abs(float(delta)) >= 0.5:
+        wage_delta = money_delta_span(float(delta), enabled=True)
+        if wage_delta is not None:
+            body_nodes: list = [body, wage_delta]
+        else:
+            body_nodes = [body]
+    elif delta_txt:
         body = f"{body} ({delta_txt})"
+        body_nodes = [body]
+    else:
+        body_nodes = [body]
     value_class = f"sf-summary-value{' is-' + tone if tone else ''}"
-    if delta_txt:
+    if delta_txt and not compare:
         if float(delta or 0) > 0:
             value_class += " has-delta-up"
         elif float(delta or 0) < 0:
@@ -307,7 +329,7 @@ def _summary_card(
     return html.Div(
         [
             html.Div(title, className="sf-summary-label"),
-            html.Div(body, className=value_class),
+            html.Div(body_nodes, className=value_class),
         ],
         className="sf-summary-card",
     )
@@ -390,9 +412,12 @@ def _statement_table(
     statement: dict,
     *,
     rows_by_key: dict[str, dict] | None = None,
+    hist_rows_by_key: dict[str, dict] | None = None,
     division_mode: str | None = "none",
     apply_yearly_raises: bool = False,
     outlook_years: int = SUSTAINABILITY_YEARS,
+    hist_statement: dict | None = None,
+    compare: bool = False,
 ) -> html.Div:
     years = max(1, int(outlook_years or SUSTAINABILITY_YEARS))
     header = html.Tr(
@@ -409,14 +434,24 @@ def _statement_table(
     )
     body = []
     by_key = rows_by_key or {}
+    hist_by_key = hist_rows_by_key or {}
+    hist_lines = {
+        line.get("key"): line for line in (hist_statement or {}).get("lines") or []
+    }
     for line in statement.get("lines") or []:
         role = _ROLE_LABEL.get(line["role"], line["role"])
         name = line["name"]
         if line.get("is_gk"):
             name = f"{name} (GK)"
         player = by_key.get(line.get("key") or "")
+        hist_line = hist_lines.get(line.get("key") or "")
         if player is None:
             outlook = [float(line.get("salary_annual") or 0)] * years
+            hist_outlook = (
+                [float(hist_line.get("salary_annual") or 0)] * years
+                if hist_line
+                else outlook
+            )
         else:
             outlook = player_wage_outlook(
                 player,
@@ -424,17 +459,64 @@ def _statement_table(
                 division_mode=division_mode,
                 apply_yearly_raises=apply_yearly_raises,
             )
+            hist_player = hist_by_key.get(line.get("key") or "")
+            if compare and hist_player:
+                hist_outlook = player_wage_outlook(
+                    hist_player,
+                    years=years,
+                    division_mode=division_mode,
+                    apply_yearly_raises=apply_yearly_raises,
+                )
+            elif compare and hist_line:
+                hist_outlook = [float(hist_line.get("salary_annual") or 0)] * years
+            else:
+                hist_outlook = outlook
         body.append(
             html.Tr(
                 [
                     html.Td(role),
                     html.Td(name),
                     html.Td(line["position"]),
-                    html.Td(_money_cell(line["wage_period"])),
-                    html.Td(_money_cell(line["ffp_period"])),
-                    html.Td(_money_cell(line["match_fees"])),
-                    html.Td(_money_cell(line["total"])),
-                    *[html.Td(_money_cell(wage)) for wage in outlook],
+                    html.Td(
+                        _money_cell(
+                            line["wage_period"],
+                            hist_value=(hist_line or {}).get("wage_period"),
+                            compare=compare,
+                        )
+                    ),
+                    html.Td(
+                        _money_cell(
+                            line["ffp_period"],
+                            hist_value=(hist_line or {}).get("ffp_period"),
+                            compare=compare,
+                        )
+                    ),
+                    html.Td(
+                        _money_cell(
+                            line["match_fees"],
+                            hist_value=(hist_line or {}).get("match_fees"),
+                            compare=compare,
+                        )
+                    ),
+                    html.Td(
+                        _money_cell(
+                            line["total"],
+                            hist_value=(hist_line or {}).get("total"),
+                            compare=compare,
+                        )
+                    ),
+                    *[
+                        html.Td(
+                            _money_cell(
+                                wage,
+                                hist_value=hist_outlook[i]
+                                if compare and i < len(hist_outlook)
+                                else None,
+                                compare=compare,
+                            )
+                        )
+                        for i, wage in enumerate(outlook)
+                    ],
                 ],
                 className=f"sf-row-{line['role']}",
             )
@@ -1064,6 +1146,12 @@ def hydrate_club_finances(_tick, cached):
     return values
 
 
+def _hist_money_delta(current: float | None, hist: dict | None, key: str) -> float | None:
+    if hist is None:
+        return None
+    return float(current or 0) - float(hist.get(key) or 0)
+
+
 _RENDER_INPUTS = [
     Input("sf-parsed", "data"),
     Input("sf-starters", "value"),
@@ -1076,6 +1164,7 @@ _RENDER_INPUTS = [
     *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
     Input("sf-division-mode", "value"),
     Input("sf-projection-years", "value"),
+    Input("sf-parsed-historical", "data"),
     Input("theme", "data"),
 ]
 
@@ -1097,9 +1186,11 @@ def render_statement(
     *rest,
 ):
     theme = rest[-1] if rest else "dark"
-    projection_years = _projection_years(rest[-2] if len(rest) >= 2 else SUSTAINABILITY_YEARS)
-    division_mode = rest[-3] if len(rest) >= 3 else "none"
-    category_values = rest[:-3]
+    hist_parsed = rest[-2] if len(rest) >= 2 else None
+    projection_years = _projection_years(rest[-3] if len(rest) >= 3 else SUSTAINABILITY_YEARS)
+    division_mode = rest[-4] if len(rest) >= 4 else "none"
+    category_values = rest[:-4] if len(rest) >= 4 else rest
+    compare = bool(parsed_historical_players(hist_parsed))
     rows = parsed_players(parsed)
     starters = list(starters or [])
     subs = list(subs or [])
@@ -1155,34 +1246,100 @@ def render_statement(
         games=games_n,
         season_games=DEFAULT_SEASON_GAMES,
     )
+    hist_rows = parsed_historical_players(hist_parsed) if compare else []
+    hist_by_key = {row["key"]: row for row in hist_rows if row.get("key")}
+    hist_statement = None
+    if compare and hist_rows:
+        hist_statement = matchday_statement(
+            hist_rows,
+            starters,
+            subs,
+            games=games_n,
+            season_games=DEFAULT_SEASON_GAMES,
+        )
     raises = squad_raise_totals(rows)
     division = division_change_amounts(raises, division_mode)
     # Period-scaled wage delta (fees unchanged) for summary parentheses.
     period_delta = division["net"] * (games_n / DEFAULT_SEASON_GAMES)
     wage_adjusted = statement["wage_period"] + period_delta
     total_adjusted = statement["total"] + period_delta
-    show_delta = abs(period_delta) >= 0.5
+    show_delta = abs(period_delta) >= 0.5 and not compare
 
-    summary = [
-        _summary_card("Matchday wages", statement["matchday_wage_period"]),
-        _summary_card(
-            f"Reserve wages ({statement['reserves']})",
-            statement["reserve_wage_period"],
-        ),
-        _summary_card(
-            "Squad wages",
-            wage_adjusted if show_delta else statement["wage_period"],
-            delta=period_delta if show_delta else None,
-        ),
-        _summary_card("Appearance fees", statement["match_fees"]),
-        _summary_card("FFP (period)", statement["ffp_period"]),
-        _summary_card(
-            "Total",
-            total_adjusted if show_delta else statement["total"],
-            tone="best",
-            delta=period_delta if show_delta else None,
-        ),
-    ]
+    if compare and hist_statement:
+        summary = [
+            _summary_card(
+                "Matchday wages",
+                statement["matchday_wage_period"],
+                delta=_hist_money_delta(
+                    statement["matchday_wage_period"],
+                    hist_statement,
+                    "matchday_wage_period",
+                ),
+                compare=True,
+            ),
+            _summary_card(
+                f"Reserve wages ({statement['reserves']})",
+                statement["reserve_wage_period"],
+                delta=_hist_money_delta(
+                    statement["reserve_wage_period"],
+                    hist_statement,
+                    "reserve_wage_period",
+                ),
+                compare=True,
+            ),
+            _summary_card(
+                "Squad wages",
+                statement["wage_period"],
+                delta=_hist_money_delta(
+                    statement["wage_period"], hist_statement, "wage_period"
+                ),
+                compare=True,
+            ),
+            _summary_card(
+                "Appearance fees",
+                statement["match_fees"],
+                delta=_hist_money_delta(
+                    statement["match_fees"], hist_statement, "match_fees"
+                ),
+                compare=True,
+            ),
+            _summary_card(
+                "FFP (period)",
+                statement["ffp_period"],
+                delta=_hist_money_delta(
+                    statement["ffp_period"], hist_statement, "ffp_period"
+                ),
+                compare=True,
+            ),
+            _summary_card(
+                "Total",
+                statement["total"],
+                tone="best",
+                delta=_hist_money_delta(statement["total"], hist_statement, "total"),
+                compare=True,
+            ),
+        ]
+    else:
+        summary = [
+            _summary_card("Matchday wages", statement["matchday_wage_period"]),
+            _summary_card(
+                f"Reserve wages ({statement['reserves']})",
+                statement["reserve_wage_period"],
+            ),
+            _summary_card(
+                "Squad wages",
+                wage_adjusted if show_delta else statement["wage_period"],
+                delta=period_delta if show_delta else None,
+            ),
+            _summary_card("Appearance fees", statement["match_fees"]),
+            _summary_card("FFP (period)", statement["ffp_period"]),
+            _summary_card(
+                "Total",
+                total_adjusted if show_delta else statement["total"],
+                tone="best",
+                delta=period_delta if show_delta else None,
+            ),
+        ]
     note_bits = [
         "Matchday starters and substitutes are assumed to appear in every game "
         "(appearance fee × games). Reserves include wages only — no appearance fees. "
@@ -1195,6 +1352,11 @@ def render_statement(
             f" Squad wages and total include the selected {kind} adjustment "
             f"({format_signed_money(period_delta)} for this period)."
         )
+    if compare and hist_statement:
+        note_bits.append(
+            " Green ↓ / red ↑ in parentheses compare this export to the historical "
+            "upload (same starters and subs)."
+        )
     note = html.P(note_bits, className="sf-note")
     children: list = [
         note,
@@ -1203,9 +1365,12 @@ def render_statement(
             _statement_table(
                 statement,
                 rows_by_key={row["key"]: row for row in rows if row.get("key")},
+                hist_rows_by_key=hist_by_key,
                 division_mode=division_mode,
                 apply_yearly_raises=True,
                 outlook_years=projection_years,
+                hist_statement=hist_statement,
+                compare=compare and bool(hist_statement),
             ),
             hint=(
                 f"Period costs plus Y1–Y{projection_years} expected annual "

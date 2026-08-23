@@ -51,6 +51,7 @@ from scoring.role_scorer import (
 from components.scouting_shell import (
     clicked,
     hist_block,
+    parsed_historical_players,
     parsed_players,
     pattern_matching_stubs,
     register_hist_toggle,
@@ -60,6 +61,7 @@ from components.scouting_shell import (
     unpack_parsed,
     upload_card,
 )
+from scoring.comparison import delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
     POS_GROUPS,
     band_metric,
@@ -167,7 +169,12 @@ def _colored_cell(text: str, color: str | None) -> str:
     )
 
 
-def _percentile_cell(band: dict) -> str:
+def _percentile_cell(
+    band: dict,
+    *,
+    hist_pct: float | None = None,
+    compare: bool = False,
+) -> str:
     """Table cell for an average-percentile column (All category view)."""
     pct = band.get("percentile")
     if pct is None:
@@ -177,7 +184,33 @@ def _percentile_cell(band: dict) -> str:
     style = "font-weight:750;font-variant-numeric:tabular-nums;font-size:1.08em"
     if color:
         style = f"color:{color};{style}"
+    delta = ""
+    if compare and hist_pct is not None:
+        delta = delta_html(float(pct) - float(hist_pct), percent=True)
+    if delta:
+        val = f'<span style="{style}">{text}</span>'
+        return f'<span class="st-pct-cell">{wrap_cell_with_delta(val, delta)}</span>'
     return f'<span class="st-pct-cell" style="{style}">{text}</span>'
+
+
+def _metric_cell(
+    band: dict,
+    *,
+    hist_pct: float | None = None,
+    compare: bool = False,
+) -> str:
+    text = band.get("display") or "—"
+    color = band.get("color")
+    delta = ""
+    if compare and hist_pct is not None and band.get("percentile") is not None:
+        delta = delta_html(float(band["percentile"]) - float(hist_pct), percent=True)
+    if delta:
+        style = "font-weight:650;font-variant-numeric:tabular-nums"
+        if color:
+            style = f"color:{color};{style}"
+        val = f'<span style="{style}">{text}</span>'
+        return wrap_cell_with_delta(val, delta)
+    return _colored_cell(text, color)
 
 
 def _strip_cell(value) -> str:
@@ -187,18 +220,41 @@ def _strip_cell(value) -> str:
     return text
 
 
+def _sort_value_id(col_id: str) -> str:
+    """Hidden numeric field for sorting markdown cells (percentiles + metrics)."""
+    return "_sv_" + str(col_id)
+
+
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
 
 
 def _cell_number(value) -> float:
     """Parse a display cell (plain or colored markdown) as a float."""
-    text = _strip_cell(value).strip().replace("%", "").replace(",", "").replace(" ", "")
+    text = _strip_cell(value).strip()
     if not text or text in ("-", "—"):
         return float("nan")
+    if "(" in text:
+        text = text.split("(", 1)[0].strip()
+    match = re.search(r"-?\d+(?:\.\d+)?", text.replace("%", ""))
+    if not match:
+        return float("nan")
     try:
-        return float(text)
+        return float(match.group(0))
     except ValueError:
         return float("nan")
+
+
+def _row_sort_number(row: dict, column_id: str) -> float:
+    sid = _sort_value_id(column_id)
+    if sid in row:
+        try:
+            val = row[sid]
+            if val is None:
+                return float("nan")
+            return float(val)
+        except (TypeError, ValueError):
+            return float("nan")
+    return _cell_number(row.get(column_id))
 
 
 def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
@@ -211,7 +267,11 @@ def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
         if not text or text in ("-", "—"):
             return (1, "\uffff")
         return (0, text.casefold())
-    number = _cell_number(value)
+    number = (
+        _row_sort_number(row, column_id)
+        if row is not None
+        else _cell_number(value)
+    )
     if number != number:  # NaN
         return (1, float("inf"))
     return (0, number)
@@ -235,7 +295,7 @@ def _sort_table_rows(rows: list[dict], sort_by) -> None:
     if _is_percentile_sort_column(column):
         # Encode direction in the key so missing (—) values always sort last.
         def pct_key(row, *, _col=column, _desc=reverse):
-            number = _cell_number(row.get(_col))
+            number = _row_sort_number(row, _col)
             if number != number:  # NaN / blank
                 return (1, 0.0)
             return (0, -number if _desc else number)
@@ -628,6 +688,64 @@ def _header_tooltips(
     return tips
 
 
+def _player_percentile_map(
+    player,
+    *,
+    group,
+    category,
+    threshold_overrides=None,
+) -> dict[str, float | None]:
+    """Percentiles for comparison columns keyed by table column id."""
+    g, cat = _resolve_category(group, category)
+    stats = scoring_stats(player)
+    out: dict[str, float | None] = {}
+    if cat == "all":
+        bg, bc = _band_group_cat(player, group, cat)
+        if bg is None or bc is None:
+            return out
+        use_g = g if _bench_group_for_filter(group) else bg
+        out[OVERALL_COL["id"]] = overall_average_band(
+            use_g, stats, threshold_overrides=threshold_overrides
+        ).get("percentile")
+        for section in _avg_category_columns(g):
+            col_id = section["id"]
+            out[col_id] = category_average_band(
+                use_g,
+                section["id"],
+                stats,
+                threshold_overrides=threshold_overrides,
+            ).get("percentile")
+        return out
+    bg, bc = _band_group_cat(player, group, cat)
+    if bg is None or bc is None:
+        return out
+    use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
+    out[CATEGORY_AVG_COL["id"]] = category_average_band(
+        use_g, use_c, stats, threshold_overrides=threshold_overrides
+    ).get("percentile")
+    for mid in metrics_for(g, cat, threshold_overrides):
+        abbr = metric_defs()[mid]["abbr"]
+        if mid not in metrics_for(use_g, use_c, threshold_overrides):
+            continue
+        out[abbr] = band_metric(
+            use_g,
+            use_c,
+            mid,
+            stats.get(mid),
+            threshold_overrides=threshold_overrides,
+        ).get("percentile")
+    return out
+
+
+def _set_sort_value(row: dict, col_id: str, value: float | None) -> None:
+    if value is None:
+        return
+    try:
+        row[_sort_value_id(col_id)] = float(value)
+    except (TypeError, ValueError):
+        return
+
+
 def _build_rows(
     players,
     *,
@@ -636,6 +754,8 @@ def _build_rows(
     minutes_required,
     threshold_overrides=None,
     settings=None,
+    compare: bool = False,
+    hist_percentiles: dict[str, dict[str, float | None]] | None = None,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -645,6 +765,7 @@ def _build_rows(
     )
     avg_cats = _avg_category_columns(g) if cat == "all" else []
     rows = []
+    hist_percentiles = hist_percentiles or {}
     for p in players:
         if not _player_matches_pos_filter(p, group):
             continue
@@ -653,7 +774,9 @@ def _build_rows(
         mins_text = "—" if mins is None else f"{mins:.0f}"
         row = _identity_cells(p, identity_cols)
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
-        row["_key"] = player_key(p)
+        pkey = player_key(p)
+        row["_key"] = pkey
+        hist_map = hist_percentiles.get(pkey) or {}
         stats = scoring_stats(p)
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
@@ -663,11 +786,15 @@ def _build_rows(
                 )
             else:
                 use_g = g if _bench_group_for_filter(group) else bg
-                row[OVERALL_COL["id"]] = _percentile_cell(
-                    overall_average_band(
-                        use_g, stats, threshold_overrides=threshold_overrides
-                    )
+                overall_band = overall_average_band(
+                    use_g, stats, threshold_overrides=threshold_overrides
                 )
+                row[OVERALL_COL["id"]] = _percentile_cell(
+                    overall_band,
+                    hist_pct=hist_map.get(OVERALL_COL["id"]),
+                    compare=compare,
+                )
+                _set_sort_value(row, OVERALL_COL["id"], overall_band.get("percentile"))
             for section in avg_cats:
                 col_id = section["id"]
                 if bg is None or bc is None:
@@ -680,7 +807,12 @@ def _build_rows(
                     stats,
                     threshold_overrides=threshold_overrides,
                 )
-                row[col_id] = _percentile_cell(band)
+                row[col_id] = _percentile_cell(
+                    band,
+                    hist_pct=hist_map.get(col_id),
+                    compare=compare,
+                )
+                _set_sort_value(row, col_id, band.get("percentile"))
             rows.append(row)
             continue
         # Single category: avg percentile, then individual metrics.
@@ -690,11 +822,15 @@ def _build_rows(
             )
         else:
             use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
-            row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
-                category_average_band(
-                    use_g, use_c, stats, threshold_overrides=threshold_overrides
-                )
+            cat_band = category_average_band(
+                use_g, use_c, stats, threshold_overrides=threshold_overrides
             )
+            row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
+                cat_band,
+                hist_pct=hist_map.get(CATEGORY_AVG_COL["id"]),
+                compare=compare,
+            )
+            _set_sort_value(row, CATEGORY_AVG_COL["id"], cat_band.get("percentile"))
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
             if bg is None or bc is None:
@@ -711,7 +847,12 @@ def _build_rows(
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
             )
-            row[abbr] = _colored_cell(band["display"], band["color"])
+            row[abbr] = _metric_cell(
+                band,
+                hist_pct=hist_map.get(abbr),
+                compare=compare,
+            )
+            _set_sort_value(row, abbr, band.get("value"))
         rows.append(row)
     return rows
 
@@ -1725,6 +1866,7 @@ def sync_st_controls_from_settings(settings):
     Input("st-table", "sort_by"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
+    Input("st-parsed-historical", "data"),
     State("st-sort-memory", "data"),
 )
 def refresh_table(
@@ -1743,6 +1885,7 @@ def refresh_table(
     sort_by,
     settings,
     theme,
+    hist_parsed,
     sort_memory,
 ):
     players = _parsed_players(parsed)
@@ -1755,6 +1898,18 @@ def refresh_table(
     )
     g, category = _resolve_category(pos, category or "")
     thresh = settings.get("stats_thresholds")
+    compare = bool(parsed_historical_players(hist_parsed))
+    hist_percentiles: dict[str, dict[str, float | None]] = {}
+    if compare:
+        for hp in parsed_historical_players(hist_parsed):
+            pkey = player_key(hp)
+            if pkey:
+                hist_percentiles[pkey] = _player_percentile_map(
+                    hp,
+                    group=pos,
+                    category=category,
+                    threshold_overrides=thresh,
+                )
 
     filtered = _filter_players(
         players,
@@ -1774,6 +1929,8 @@ def refresh_table(
         minutes_required=minutes_required,
         threshold_overrides=thresh,
         settings=settings,
+        compare=compare,
+        hist_percentiles=hist_percentiles,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}

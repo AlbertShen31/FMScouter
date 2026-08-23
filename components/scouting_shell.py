@@ -8,6 +8,8 @@ Typical IDs (``prefix`` e.g. ``rs`` / ``st``):
 - ``{prefix}-upload``, ``{prefix}-upload-replace``, ``{prefix}-upload-wrap``,
   ``{prefix}-upload-replace-wrap``, ``{prefix}-upload-status``
 - ``{prefix}-parsed`` (often declared in ``app.py`` as a session store)
+- ``{prefix}-parsed-historical`` (optional comparison export; page logic uses current only)
+- ``{prefix}-upload-hist``, ``{prefix}-upload-hist-replace`` (historical slot)
 - ``{prefix}-table``, ``{prefix}-hist``, ``{prefix}-hist-wrap``, ``{prefix}-hist-toggle``
 - Pos/foot stores and pattern-matching buttons (configurable names)
 - Marked-rows store + clear button (configurable)
@@ -119,20 +121,40 @@ def parsed_players(data) -> list:
     return list((unpacked or {}).get("players") or [])
 
 
-def upload_status_bar(count: int, filename: str, *, replaced: bool = False) -> list:
+def parsed_historical_players(data) -> list:
+    """Players from the historical comparison slot (if uploaded)."""
+    return parsed_players(data)
+
+
+def upload_status_bar(
+    count: int,
+    filename: str,
+    *,
+    replaced: bool = False,
+    slot_label: str | None = None,
+) -> list:
     if replaced:
         lead = html.Span("Replaced", className="rs-upload-replaced")
         count_label = f"{count:,} players"
     else:
         lead = html.Span("✓", className="rs-upload-ok")
         count_label = f"{count:,} players loaded"
-    return [
-        lead,
-        html.Span(count_label, className="rs-upload-count"),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(filename, className="rs-upload-name", title=filename),
-        html.Span("·", className="rs-upload-sep"),
-    ]
+    parts: list = []
+    if slot_label:
+        parts.append(
+            html.Span(slot_label, className="rs-upload-slot-tag")
+        )
+        parts.append(html.Span("·", className="rs-upload-sep"))
+    parts.extend(
+        [
+            lead,
+            html.Span(count_label, className="rs-upload-count"),
+            html.Span("·", className="rs-upload-sep"),
+            html.Span(filename, className="rs-upload-name", title=filename),
+            html.Span("·", className="rs-upload-sep"),
+        ]
+    )
+    return parts
 
 
 def upload_error(message: str) -> html.Div:
@@ -146,6 +168,73 @@ def default_row_key(row: dict) -> str:
 # ── Layout builders ──────────────────────────────────────────────────────────
 
 
+def _upload_slot(
+    prefix: str,
+    slot: str,
+    *,
+    title: str,
+    upload_label: Any,
+    comparison: bool = False,
+) -> html.Div:
+    """One upload dropzone + status row. ``slot`` is ``current`` or ``hist``."""
+    if slot == "current":
+        upload_id = f"{prefix}-upload"
+        replace_id = f"{prefix}-upload-replace"
+        wrap_id = f"{prefix}-upload-wrap"
+        replace_wrap_id = f"{prefix}-upload-replace-wrap"
+        status_id = f"{prefix}-upload-status"
+    else:
+        upload_id = f"{prefix}-upload-hist"
+        replace_id = f"{prefix}-upload-hist-replace"
+        wrap_id = f"{prefix}-upload-hist-wrap"
+        replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+        status_id = f"{prefix}-upload-hist-status"
+    children: list = [
+        html.Div(title, className="rs-upload-slot-title"),
+    ]
+    if comparison:
+        children.append(
+            html.P(
+                "Kept for comparison — page data still uses the current export.",
+                className="rs-upload-slot-note",
+            )
+        )
+    children.extend(
+        [
+            html.Div(
+                dcc.Upload(
+                    id=upload_id,
+                    children=upload_label,
+                    className="rs-upload",
+                    multiple=False,
+                ),
+                id=wrap_id,
+            ),
+            html.Div(
+                [
+                    html.Div(id=status_id, className="rs-upload-status"),
+                    html.Div(
+                        dcc.Upload(
+                            id=replace_id,
+                            children=html.Span(
+                                "Replace file",
+                                className="rs-upload-replace",
+                            ),
+                            className="rs-upload-replace-btn",
+                            multiple=False,
+                        ),
+                        id=replace_wrap_id,
+                        hidden=True,
+                        title="Choose a different CSV for this slot",
+                    ),
+                ],
+                className="rs-upload-status-row",
+            ),
+        ]
+    )
+    return html.Div(children, className="rs-upload-slot")
+
+
 def upload_card(
     prefix: str,
     title: str,
@@ -154,11 +243,15 @@ def upload_card(
     hint: Any = None,
     class_name: str = "mb-3 rs-section-card",
     include_data_rev: bool = True,
+    include_historical: bool = True,
 ) -> dbc.Card:
-    """Standard upload + status + Replace control.
+    """Standard current + optional historical upload controls.
 
     Set ``include_data_rev=False`` when ``{prefix}-data-rev`` already lives in the
     app layout (needed if another always-mounted store shares a callback with it).
+
+    Page logic should read ``{prefix}-parsed`` (current). Historical data is stored
+    in ``{prefix}-parsed-historical`` for future comparison features.
     """
     if upload_label is None:
         upload_label = html.Div(["Drag a CSV here, or ", html.A("browse")])
@@ -167,40 +260,62 @@ def upload_card(
         body_children.append(
             dcc.Store(id=f"{prefix}-data-rev", data={"n": 0, "replaced": False})
         )
-    body_children.extend(
-        [
-            html.Div(id=f"{prefix}-pulse-token", hidden=True),
-            html.Div(
-                dcc.Upload(
-                    id=f"{prefix}-upload",
-                    children=upload_label,
-                    className="rs-upload",
-                    multiple=False,
-                ),
-                id=f"{prefix}-upload-wrap",
-            ),
+    body_children.append(html.Div(id=f"{prefix}-pulse-token", hidden=True))
+    if include_historical:
+        body_children.append(
             html.Div(
                 [
-                    html.Div(id=f"{prefix}-upload-status", className="rs-upload-status"),
-                    html.Div(
-                        dcc.Upload(
-                            id=f"{prefix}-upload-replace",
-                            children=html.Span(
-                                "Replace file",
-                                className="rs-upload-replace",
-                            ),
-                            className="rs-upload-replace-btn",
-                            multiple=False,
-                        ),
-                        id=f"{prefix}-upload-replace-wrap",
-                        hidden=True,
-                        title="Choose a different CSV to refresh the shortlist",
+                    _upload_slot(
+                        prefix,
+                        "current",
+                        title="Current export",
+                        upload_label=upload_label,
+                    ),
+                    _upload_slot(
+                        prefix,
+                        "hist",
+                        title="Historical export",
+                        upload_label=upload_label,
+                        comparison=True,
                     ),
                 ],
-                className="rs-upload-status-row",
-            ),
-        ]
-    )
+                className="rs-upload-dual",
+            )
+        )
+    else:
+        body_children.extend(
+            [
+                html.Div(
+                    dcc.Upload(
+                        id=f"{prefix}-upload",
+                        children=upload_label,
+                        className="rs-upload",
+                        multiple=False,
+                    ),
+                    id=f"{prefix}-upload-wrap",
+                ),
+                html.Div(
+                    [
+                        html.Div(id=f"{prefix}-upload-status", className="rs-upload-status"),
+                        html.Div(
+                            dcc.Upload(
+                                id=f"{prefix}-upload-replace",
+                                children=html.Span(
+                                    "Replace file",
+                                    className="rs-upload-replace",
+                                ),
+                                className="rs-upload-replace-btn",
+                                multiple=False,
+                            ),
+                            id=f"{prefix}-upload-replace-wrap",
+                            hidden=True,
+                            title="Choose a different CSV to refresh the shortlist",
+                        ),
+                    ],
+                    className="rs-upload-status-row",
+                ),
+            ]
+        )
     if hint is not None:
         body_children.append(hint)
     return dbc.Card(
@@ -278,6 +393,7 @@ def register_upload_callbacks(
     bad_file_message: str = "Upload a CSV export from Football Manager.",
     decode_strict: bool = False,
     catch_exceptions: bool = False,
+    include_historical: bool = True,
 ) -> None:
     """Parse Upload / Replace into ``{prefix}-parsed`` and toggle upload UI.
 
@@ -287,33 +403,102 @@ def register_upload_callbacks(
 
     ``pulse_ids`` are DOM ids flashed when a file is replaced so the shortlist
     refresh is obvious.
+
+    With ``include_historical`` (default), also wires a second slot into
+    ``{prefix}-parsed-historical`` for comparison exports. Page callbacks should
+    keep using ``parsed_players({prefix}-parsed)`` for active data.
     """
+    _register_upload_slot(
+        prefix,
+        slot="current",
+        parse_fn=parse_fn,
+        pack_store=pack_store,
+        reveal_ids=reveal_ids,
+        pulse_ids=pulse_ids,
+        bad_file_message=bad_file_message,
+        decode_strict=decode_strict,
+        catch_exceptions=catch_exceptions,
+        track_data_rev=True,
+    )
+    if include_historical:
+        _register_upload_slot(
+            prefix,
+            slot="hist",
+            parse_fn=parse_fn,
+            pack_store=pack_store,
+            reveal_ids=None,
+            pulse_ids=None,
+            bad_file_message=bad_file_message,
+            decode_strict=decode_strict,
+            catch_exceptions=catch_exceptions,
+            track_data_rev=False,
+            status_tag="Historical",
+        )
+
+
+def _register_upload_slot(
+    prefix: str,
+    *,
+    slot: str,
+    parse_fn: ParseFn,
+    pack_store: bool,
+    reveal_ids: Sequence[str] | None,
+    pulse_ids: Sequence[str] | None,
+    bad_file_message: str,
+    decode_strict: bool,
+    catch_exceptions: bool,
+    track_data_rev: bool,
+    status_tag: str | None = None,
+) -> None:
     reveal_ids = list(reveal_ids or [])
     pulse_ids = list(pulse_ids or [])
-    parsed_id = f"{prefix}-parsed"
+    if slot == "current":
+        parsed_id = f"{prefix}-parsed"
+        upload_id = f"{prefix}-upload"
+        replace_id = f"{prefix}-upload-replace"
+        wrap_id = f"{prefix}-upload-wrap"
+        replace_wrap_id = f"{prefix}-upload-replace-wrap"
+        status_id = f"{prefix}-upload-status"
+    else:
+        parsed_id = f"{prefix}-parsed-historical"
+        upload_id = f"{prefix}-upload-hist"
+        replace_id = f"{prefix}-upload-hist-replace"
+        wrap_id = f"{prefix}-upload-hist-wrap"
+        replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+        status_id = f"{prefix}-upload-hist-status"
+
     outputs = [
         Output(parsed_id, "data"),
-        Output(f"{prefix}-upload-status", "children"),
-        Output(f"{prefix}-upload-wrap", "hidden"),
-        Output(f"{prefix}-upload-replace-wrap", "hidden"),
-        Output(f"{prefix}-data-rev", "data"),
+        Output(status_id, "children"),
+        Output(wrap_id, "hidden"),
+        Output(replace_wrap_id, "hidden"),
     ]
+    if track_data_rev:
+        outputs.append(Output(f"{prefix}-data-rev", "data"))
     outputs.extend(Output(rid, "hidden") for rid in reveal_ids)
-    n_base = 5
+    n_base = 4 + (1 if track_data_rev else 0)
 
     def _fail(message: str):
-        row = [None, upload_error(message), False, True, no_update]
+        row = [None, upload_error(message), False, True]
+        if track_data_rev:
+            row.append(no_update)
         row.extend([True] * len(reveal_ids))
         return tuple(row)
 
-    def _ok(store_data, count: int, filename: str, rev: dict, *, replaced: bool):
+    def _ok(store_data, count: int, filename: str, rev: dict | None, *, replaced: bool):
         row = [
             store_data,
-            upload_status_bar(count, filename, replaced=replaced),
+            upload_status_bar(
+                count,
+                filename,
+                replaced=replaced,
+                slot_label=status_tag,
+            ),
             True,
             False,
-            rev,
         ]
+        if track_data_rev:
+            row.append(rev)
         row.extend([False] * len(reveal_ids))
         return tuple(row)
 
@@ -322,19 +507,19 @@ def register_upload_callbacks(
 
     @callback(
         *outputs,
-        Input(f"{prefix}-upload", "contents"),
-        Input(f"{prefix}-upload-replace", "contents"),
-        State(f"{prefix}-upload", "filename"),
-        State(f"{prefix}-upload-replace", "filename"),
-        State(f"{prefix}-data-rev", "data"),
+        Input(upload_id, "contents"),
+        Input(replace_id, "contents"),
+        State(upload_id, "filename"),
+        State(replace_id, "filename"),
+        *([State(f"{prefix}-data-rev", "data")] if track_data_rev else []),
         prevent_initial_call=True,
     )
-    def _on_upload(upload_contents, replace_contents, upload_name, replace_name, rev):
-        replaced = ctx.triggered_id == f"{prefix}-upload-replace"
+    def _on_upload(upload_contents, replace_contents, upload_name, replace_name, rev=None):
+        replaced = ctx.triggered_id == replace_id
         if replaced:
             contents = replace_contents
             name = replace_name or "upload.csv"
-        elif ctx.triggered_id == f"{prefix}-upload":
+        elif ctx.triggered_id == upload_id:
             contents = upload_contents
             name = upload_name or "upload.csv"
         else:
@@ -350,24 +535,28 @@ def register_upload_callbacks(
             if not catch_exceptions and not isinstance(exc, ValueError):
                 raise
             return _fail(str(exc))
-        prev_n = 0
-        if isinstance(rev, dict):
-            prev_n = int(rev.get("n") or 0)
-        elif rev:
-            prev_n = int(rev)
-        new_rev = {"n": prev_n + 1, "replaced": replaced}
+        rev_payload = None
+        if track_data_rev:
+            prev_n = 0
+            if isinstance(rev, dict):
+                prev_n = int(rev.get("n") or 0)
+            elif rev:
+                prev_n = int(rev)
+            rev_payload = {"n": prev_n + 1, "replaced": replaced}
         if pack_store:
             store = pack_parsed(players, name)
-            # Force Store clients to treat each upload as new data.
-            store["rev"] = new_rev["n"]
+            if track_data_rev and rev_payload:
+                store["rev"] = rev_payload["n"]
         else:
-            store = {"filename": name, "players": players, "rev": new_rev["n"]}
-        return _ok(store, len(players), name, new_rev, replaced=replaced)
+            store = {"filename": name, "players": players}
+            if track_data_rev and rev_payload:
+                store["rev"] = rev_payload["n"]
+        return _ok(store, len(players), name, rev_payload, replaced=replaced)
 
     restore_outputs = [
-        Output(f"{prefix}-upload-status", "children", allow_duplicate=True),
-        Output(f"{prefix}-upload-wrap", "hidden", allow_duplicate=True),
-        Output(f"{prefix}-upload-replace-wrap", "hidden", allow_duplicate=True),
+        Output(status_id, "children", allow_duplicate=True),
+        Output(wrap_id, "hidden", allow_duplicate=True),
+        Output(replace_wrap_id, "hidden", allow_duplicate=True),
     ]
     restore_outputs.extend(
         Output(rid, "hidden", allow_duplicate=True) for rid in reveal_ids
@@ -380,20 +569,24 @@ def register_upload_callbacks(
         prevent_initial_call="initial_duplicate",
     )
     def _restore_upload_ui(_tick, parsed):
-        """Restore upload chrome from session on page load only.
-
-        Do not also Input ``parsed`` — that races the upload callback and can
-        clobber the Replaced status (and confuse shortlist refresh timing).
-        """
+        """Restore upload chrome from session on page load only."""
         data = unpack_parsed(parsed) if pack_store else parsed
         if not data or not data.get("players"):
             return tuple([no_update] * (3 + len(reveal_ids)))
         filename = data.get("filename") or "export.csv"
-        row = [upload_status_bar(len(data["players"]), filename), True, False]
+        row = [
+            upload_status_bar(
+                len(data["players"]),
+                filename,
+                slot_label=status_tag,
+            ),
+            True,
+            False,
+        ]
         row.extend([False] * len(reveal_ids))
         return tuple(row)
 
-    if pulse_ids:
+    if track_data_rev and pulse_ids:
         targets_js = ", ".join(f'"{tid}"' for tid in pulse_ids)
         clientside_callback(
             f"""
@@ -401,7 +594,7 @@ def register_upload_callbacks(
                 if (!rev || !rev.n || !rev.replaced) {{
                     return window.dash_clientside.no_update;
                 }}
-                const status = document.getElementById("{prefix}-upload-status");
+                const status = document.getElementById("{status_id}");
                 if (status) {{
                     status.classList.remove("rs-upload-status-flash");
                     void status.offsetWidth;

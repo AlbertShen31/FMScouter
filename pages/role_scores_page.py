@@ -26,6 +26,7 @@ from components.scouting_shell import (
     as_list,
     clicked,
     hist_block,
+    parsed_historical_players,
     pattern_matching_stubs,
     register_hist_toggle,
     register_marks_callbacks,
@@ -33,6 +34,7 @@ from components.scouting_shell import (
     register_upload_callbacks,
     upload_card,
 )
+from scoring.comparison import score_display
 from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
@@ -1293,7 +1295,7 @@ def layout():
                                             "backgroundColor": "#fff3cd",
                                         }
                                     ],
-                                    css=table_css(),
+                                    css=table_css(center_non_identity=True),
                                 ),
                             ],
                             className="rs-table-area",
@@ -1374,8 +1376,16 @@ def _as_list(value) -> list:
 def _cell_number(value) -> float:
     if value in (None, "", "-"):
         return 0.0
+    text = str(value)
+    if "<" in text:
+        text = re.sub(r"<[^>]+>", "", text).strip()
+    if "(" in text:
+        text = text.split("(", 1)[0].strip()
+    match = re.search(r"-?\d+(?:\.\d+)?", text.replace("%", ""))
+    if not match:
+        return 0.0
     try:
-        return float(value)
+        return float(match.group(0))
     except (TypeError, ValueError):
         return 0.0
 
@@ -1539,10 +1549,9 @@ def _table_columns(col_ids: list[str]) -> list[dict]:
     columns = []
     for col in col_ids:
         spec = {"name": _column_display_name(col), "id": col}
-        if col in TABLE_MARKDOWN_COLS:
+        if col in TABLE_MARKDOWN_COLS or col not in TABLE_TEXT_COLS:
+            # Score / set-piece cells may include HTML deltas; Feet uses colored HTML.
             spec["presentation"] = "markdown"
-        elif col not in TABLE_TEXT_COLS:
-            spec["type"] = "numeric"
         columns.append(spec)
     return columns
 
@@ -1556,25 +1565,33 @@ def _score_column_styles(role_labels: list[str]) -> list[dict]:
                 {
                     "if": {"column_id": label},
                     "textAlign": "center",
+                    "verticalAlign": "middle",
                     "minWidth": "64px",
-                    "width": "68px",
+                    "width": "72px",
                     "maxWidth": "80px",
-                    "paddingLeft": "6px",
-                    "paddingRight": "6px",
-                    "whiteSpace": "pre-line",
+                    "paddingLeft": "4px",
+                    "paddingRight": "4px",
+                    "paddingTop": "6px",
+                    "paddingBottom": "6px",
+                    "whiteSpace": "normal",
+                    "lineHeight": "1.2",
                 }
             )
         else:
-            # Short codes (CF, WB) and 2–3 digit scores — keep readable + sortable.
             rules.append(
                 {
                     "if": {"column_id": label},
                     "textAlign": "center",
-                    "minWidth": "58px",
-                    "width": "62px",
-                    "maxWidth": "76px",
-                    "paddingLeft": "6px",
-                    "paddingRight": "6px",
+                    "verticalAlign": "middle",
+                    "minWidth": "64px",
+                    "width": "72px",
+                    "maxWidth": "80px",
+                    "paddingLeft": "4px",
+                    "paddingRight": "4px",
+                    "paddingTop": "6px",
+                    "paddingBottom": "6px",
+                    "whiteSpace": "normal",
+                    "lineHeight": "1.2",
                 }
             )
     return rules
@@ -1628,7 +1645,10 @@ def _score_header_css(role_labels: list[str], theme: str | None = None) -> list[
 
 def _table_css(role_labels: list[str] | None = None, theme: str | None = None) -> list[dict]:
     """Shared table CSS plus phase-colored score headers."""
-    return table_css(extra=_score_header_css(role_labels or [], theme))
+    return table_css(
+        center_non_identity=True,
+        extra=_score_header_css(role_labels or [], theme),
+    )
 
 
 def _column_signature(columns: list[dict]) -> str:
@@ -1670,51 +1690,7 @@ def _table_base_styles(theme: str | None = None) -> list[dict]:
 
 
 def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
-    settings = us.normalize(settings)
-    bands = settings["bands"]
-    colors = us.score_colors(settings)
-    elite, good, ok = bands["elite"], bands["good"], bands["ok"]
     rules = _table_base_styles(theme)
-    for label in role_labels:
-        rules.extend(
-            [
-                {
-                    "if": {"filter_query": f"{{{label}}} >= {elite}", "column_id": label},
-                    "backgroundColor": colors["elite"][0],
-                    "color": colors["elite"][1],
-                    "fontWeight": "700",
-                    "borderRadius": "6px",
-                    "fontVariantNumeric": "tabular-nums",
-                },
-                {
-                    "if": {
-                        "filter_query": f"{{{label}}} >= {good} && {{{label}}} < {elite}",
-                        "column_id": label,
-                    },
-                    "backgroundColor": colors["good"][0],
-                    "color": colors["good"][1],
-                    "fontWeight": "700",
-                    "fontVariantNumeric": "tabular-nums",
-                },
-                {
-                    "if": {
-                        "filter_query": f"{{{label}}} >= {ok} && {{{label}}} < {good}",
-                        "column_id": label,
-                    },
-                    "backgroundColor": colors["ok"][0],
-                    "color": colors["ok"][1],
-                    "fontWeight": "700",
-                    "fontVariantNumeric": "tabular-nums",
-                },
-                {
-                    "if": {"filter_query": f"{{{label}}} < {ok}", "column_id": label},
-                    "backgroundColor": colors["poor"][0],
-                    "color": colors["poor"][1],
-                    "fontWeight": "700",
-                    "fontVariantNumeric": "tabular-nums",
-                },
-            ]
-        )
     rules.extend(_score_column_styles(role_labels))
     return rules
 
@@ -2550,6 +2526,7 @@ def sync_rs_page_size_from_settings(settings):
     Output("rs-focus-role", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-parsed", "data"),
+    Input("rs-parsed-historical", "data"),
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
     Input("rs-config", "value"),
@@ -2557,7 +2534,7 @@ def sync_rs_page_size_from_settings(settings):
     State("rs-focus-role", "data"),
     prevent_initial_call="initial_duplicate",
 )
-def rescore(parsed, role_ids, combos, pack_id, settings, current_focus):
+def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
@@ -2586,6 +2563,23 @@ def rescore(parsed, role_ids, combos, pack_id, settings, current_focus):
         ip_weight=hybrid_w["ip"],
         oop_weight=hybrid_w["oop"],
     )
+    historical_by_key: dict[str, dict] = {}
+    hist_players = parsed_historical_players(hist_parsed)
+    if hist_players:
+        hist_rows = apply_combos(
+            score_players(
+                hist_players,
+                needed,
+                tier_weights=tier_w,
+                set_piece_profiles=profiles,
+            ),
+            combos,
+            ip_weight=hybrid_w["ip"],
+            oop_weight=hybrid_w["oop"],
+        )
+        historical_by_key = {
+            player_row_key(row): row for row in hist_rows if player_row_key(row)
+        }
     labels = combo_score_labels(needed, combos)
     selected = _focus_roles(current_focus)
     kept = [role for role in selected if role in labels]
@@ -2606,6 +2600,7 @@ def rescore(parsed, role_ids, combos, pack_id, settings, current_focus):
             "roles": labels,
             "role_ids": needed,
             "combos": combos,
+            "historical_by_key": historical_by_key,
         },
         focus,
         sort,
@@ -2677,6 +2672,8 @@ def render_shortlist(
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
     bins = us.hist_bins(settings)
+    historical_by_key = (payload or {}).get("historical_by_key") or {}
+    compare = bool(historical_by_key)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
     empty_header = _score_header_styles([], theme)
@@ -2806,16 +2803,33 @@ def render_shortlist(
     header_tips = _header_tooltips(table_cols, combos=combos)
     table_rows = []
     for row in filtered:
-        item = {
-            key: (feet_cell(row) if key == "Feet" else row.get(key, "-"))
-            for key in table_cols
-        }
+        row_key = player_row_key(row)
+        hist_row = historical_by_key.get(row_key) if compare else None
+        item = {}
+        for key in table_cols:
+            if key in score_cols:
+                raw = row.get(key)
+                band = None
+                try:
+                    if raw is not None and raw not in {"-", "—", ""}:
+                        band = score_band(float(raw), **bands)
+                except (TypeError, ValueError):
+                    band = None
+                item[key] = score_display(
+                    raw,
+                    hist_row.get(key) if hist_row else None,
+                    enabled=compare,
+                    color=us.band_text_color(band, settings, theme=theme)
+                    if band
+                    else None,
+                )
+            else:
+                item[key] = feet_cell(row) if key == "Feet" else row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["DivisionTier"] = row.get("DivisionTier") or ""
-        key = player_row_key(row)
-        if key:
-            item["id"] = key
-            item["_key"] = key
+        if row_key:
+            item["id"] = row_key
+            item["_key"] = row_key
         table_rows.append(item)
     page_keys = [str(row.get("id") or "").strip() for row in table_rows]
     selected_rows = [key for key in page_keys if key in marked_keys]

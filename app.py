@@ -68,9 +68,12 @@ app.layout = dmc.MantineProvider(
         ),
         dcc.Store(id="ui-settings", data=ui_settings.load()),
         dcc.Store(id="rs-parsed", storage_type="session"),
+        dcc.Store(id="rs-parsed-historical", storage_type="session"),
         dcc.Store(id="rs-persist", data={}, storage_type="session"),
         dcc.Store(id="st-parsed", storage_type="session"),
+        dcc.Store(id="st-parsed-historical", storage_type="session"),
         dcc.Store(id="sf-parsed", storage_type="session"),
+        dcc.Store(id="sf-parsed-historical", storage_type="session"),
         dcc.Store(
             id="sf-selection",
             data={"starters": [], "subs": []},

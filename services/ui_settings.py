@@ -959,6 +959,15 @@ def score_colors(settings=None) -> dict[str, tuple[str, str]]:
     }
 
 
+def band_text_color(band: str, settings=None, *, theme: str | None = None) -> str:
+    """Saturated tier text color from UI settings (Score bands colors)."""
+    settings = normalize(settings)
+    colors = settings["colors"][band]
+    if theme == "light":
+        return colors["fg"]
+    return colors["bar"]
+
+
 def css_vars(settings=None) -> dict[str, str]:
     settings = normalize(settings)
     vars_: dict[str, str] = {}
