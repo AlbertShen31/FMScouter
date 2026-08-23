@@ -570,7 +570,7 @@ def register_library_select_callbacks(
                 row.extend([no_update] * len(_reveal))
                 return tuple(row)
 
-            name = entry.get("original_name") or "saved.csv"
+            name = lib.display_label(entry)
             rev_payload = None
             if track_rev:
                 prev_n = 0

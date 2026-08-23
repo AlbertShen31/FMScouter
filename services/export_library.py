@@ -157,6 +157,21 @@ def classify_eligibility(text: str) -> dict[str, Any]:
     }
 
 
+def display_label(entry: dict[str, Any] | None) -> str:
+    """User-facing name for a saved file."""
+    if not entry:
+        return "export.csv"
+    name = (entry.get("display_name") or "").strip()
+    if name:
+        return name
+    return (
+        entry.get("original_name")
+        or entry.get("stored_name")
+        or entry.get("id")
+        or "export.csv"
+    )
+
+
 def list_files(*, page: str | None = None) -> list[dict[str, Any]]:
     """Return index entries newest-first. Optional ``page`` filters eligibility."""
     ensure_dirs()
@@ -167,7 +182,16 @@ def list_files(*, page: str | None = None) -> list[dict[str, Any]]:
             continue
         if page and page not in (entry.get("pages") or []):
             continue
-        entries.append(dict(entry))
+        item = dict(entry)
+        item.setdefault("display_name", item.get("original_name") or "")
+        item.setdefault("user_note", "")
+        # Legacy: ``notes`` was eligibility hints (list). Keep as eligibility_notes.
+        if "eligibility_notes" not in item:
+            legacy = item.get("notes")
+            item["eligibility_notes"] = (
+                list(legacy) if isinstance(legacy, list) else []
+            )
+        entries.append(item)
     entries.sort(key=lambda e: e.get("saved_at") or "", reverse=True)
     return entries
 
@@ -203,6 +227,8 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
     entry = {
         "id": file_id,
         "original_name": original,
+        "display_name": original,
+        "user_note": "",
         "stored_name": stored,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "size_bytes": path.stat().st_size,
@@ -215,12 +241,45 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
         "has_salary": eligibility["has_salary"],
         "has_fees": eligibility["has_fees"],
         "has_player_info": eligibility["has_player_info"],
-        "notes": eligibility["notes"],
+        "eligibility_notes": eligibility["notes"],
     }
     index = _read_index()
     index.append(entry)
     _write_index(index)
     return entry
+
+
+def update_file_meta(
+    file_id: str,
+    *,
+    display_name: str | None = None,
+    user_note: str | None = None,
+) -> dict[str, Any] | None:
+    """Rename and/or set a user note for a saved file (metadata only)."""
+    ensure_dirs()
+    index = _read_index()
+    updated = None
+    for entry in index:
+        if entry.get("id") != file_id:
+            continue
+        if display_name is not None:
+            name = str(display_name).strip()
+            if not name:
+                raise ValueError("Name cannot be empty.")
+            if len(name) > 120:
+                raise ValueError("Name is too long (max 120 characters).")
+            entry["display_name"] = name
+        if user_note is not None:
+            note = str(user_note).strip()
+            if len(note) > 500:
+                raise ValueError("Note is too long (max 500 characters).")
+            entry["user_note"] = note
+        updated = dict(entry)
+        break
+    if not updated:
+        return None
+    _write_index(index)
+    return get_file(file_id) or updated
 
 
 def delete_file(file_id: str) -> bool:
@@ -246,9 +305,13 @@ def select_options(*, page: str | None = None) -> list[dict[str, str]]:
     """Dash Select / Mantine options for eligible files."""
     opts = []
     for entry in list_files(page=page):
-        name = entry.get("original_name") or entry.get("stored_name") or entry["id"]
+        name = display_label(entry)
         when = (entry.get("saved_at") or "")[:10]
+        note = (entry.get("user_note") or "").strip()
         label = f"{name}" + (f" · {when}" if when else "")
+        if note:
+            short = note if len(note) <= 40 else note[:37] + "…"
+            label = f"{label} — {short}"
         opts.append({"value": entry["id"], "label": label})
     return opts
 

@@ -5658,10 +5658,112 @@ body[data-theme="light"] .up-elig.yes {
 .up-elig.no {
     color: var(--app-muted);
 }
-.up-notes {
-    max-width: 16rem;
+.up-file-name {
+    font-weight: 600;
+}
+.up-file-original {
+    font-size: 0.78rem;
+    margin-top: 0.15rem;
+}
+.up-user-note {
+    color: var(--app-text);
+}
+.up-elig-note {
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+}
+.up-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+.up-edit-error {
+    min-height: 1.25rem;
+}
+
+/* Edit saved file modal — dark/light via app theme tokens */
+.up-edit-modal .modal-content {
+    background: var(--app-card) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.up-edit-modal .modal-header {
+    background: var(--app-card) !important;
+    border-bottom: 1px solid var(--app-line);
+    color: var(--app-text);
+}
+
+.up-edit-modal .modal-title {
+    color: var(--app-text) !important;
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.up-edit-modal .modal-body {
+    background: var(--app-card) !important;
+    color: var(--app-text);
+}
+
+.up-edit-modal .modal-footer {
+    background: var(--app-card) !important;
+    border-top: 1px solid var(--app-line);
+}
+
+.up-edit-modal .btn-close {
+    filter: invert(1) grayscale(1) brightness(1.6);
+    opacity: 0.85;
+}
+
+html[data-theme="light"] .up-edit-modal .btn-close,
+body[data-theme="light"] .up-edit-modal .btn-close {
+    filter: none;
+    opacity: 0.7;
+}
+
+.up-edit-modal .rs-field-label {
     color: var(--app-muted);
-    font-size: 0.85rem;
+}
+
+.up-edit-modal .up-edit-note,
+.up-edit-modal textarea.form-control {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line) !important;
+    border-radius: 8px;
+}
+
+.up-edit-modal .up-edit-note:focus,
+.up-edit-modal textarea.form-control:focus {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-line)) !important;
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--app-accent) 18%, transparent);
+}
+
+.up-edit-modal .up-edit-note::placeholder,
+.up-edit-modal textarea.form-control::placeholder {
+    color: var(--app-faint) !important;
+    opacity: 1;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input,
+.up-edit-modal .mantine-TextInput-input {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line) !important;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input:focus,
+.up-edit-modal .mantine-TextInput-input:focus {
+    border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-line)) !important;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input::placeholder,
+.up-edit-modal .mantine-TextInput-input::placeholder {
+    color: var(--app-faint) !important;
 }
 .up-save-row {
     margin-bottom: 0.35rem;

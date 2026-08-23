@@ -38,38 +38,75 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         )
     header = html.Tr(
         [
-            html.Th("File"),
+            html.Th("Name"),
             html.Th("Saved"),
             html.Th("Role scores"),
             html.Th("Player stats"),
             html.Th("Squad finance"),
-            html.Th("Notes"),
+            html.Th("Note"),
             html.Th(""),
         ]
     )
     rows = []
     for entry in entries:
-        notes = "; ".join(entry.get("notes") or []) or "—"
+        file_id = entry["id"]
+        label = lib.display_label(entry)
+        original = entry.get("original_name") or ""
+        user_note = (entry.get("user_note") or "").strip()
+        elig = entry.get("eligibility_notes") or []
+        if isinstance(elig, str):
+            elig = [elig] if elig else []
+        note_bits = []
+        if user_note:
+            note_bits.append(html.Div(user_note, className="up-user-note"))
+        if elig:
+            note_bits.append(
+                html.Div("; ".join(elig), className="up-elig-note text-muted")
+            )
+        if not note_bits:
+            note_bits = [html.Span("—", className="text-muted")]
+        title = original if original and original != label else entry.get("stored_name") or ""
         rows.append(
             html.Tr(
                 [
                     html.Td(
-                        entry.get("original_name") or entry.get("id"),
-                        title=entry.get("stored_name") or "",
+                        [
+                            html.Div(label, className="up-file-name"),
+                            html.Div(
+                                original,
+                                className="up-file-original text-muted",
+                            )
+                            if original and original != label
+                            else None,
+                        ],
+                        title=title,
                     ),
                     html.Td((entry.get("saved_at") or "")[:19].replace("T", " ")),
                     html.Td(_yes_no(bool(entry.get("role_scores")))),
                     html.Td(_yes_no(bool(entry.get("stats")))),
                     html.Td(_yes_no(bool(entry.get("squad_finance")))),
-                    html.Td(notes, className="up-notes"),
+                    html.Td(note_bits, className="up-notes"),
                     html.Td(
-                        dmc.Button(
-                            "Delete",
-                            id={"type": "up-delete", "id": entry["id"]},
-                            size="xs",
-                            variant="light",
-                            color="red",
-                            n_clicks=0,
+                        html.Div(
+                            [
+                                dmc.Button(
+                                    "Edit",
+                                    id={"type": "up-edit", "id": file_id},
+                                    size="xs",
+                                    variant="light",
+                                    n_clicks=0,
+                                    className="me-1",
+                                ),
+                                dmc.Button(
+                                    "Delete",
+                                    id={"type": "up-delete", "id": file_id},
+                                    size="xs",
+                                    variant="light",
+                                    color="red",
+                                    n_clicks=0,
+                                ),
+                            ],
+                            className="up-row-actions",
                         )
                     ),
                 ]
@@ -128,6 +165,53 @@ def _view_panel() -> html.Div:
     )
 
 
+def _edit_modal() -> dbc.Modal:
+    return dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle("Edit saved file"), close_button=True),
+            dbc.ModalBody(
+                [
+                    dcc.Store(id="up-edit-id"),
+                    html.Label("Name", className="rs-field-label"),
+                    dmc.TextInput(
+                        id="up-edit-name",
+                        placeholder="Display name",
+                        className="mb-3 up-edit-name",
+                    ),
+                    html.Label("Note", className="rs-field-label"),
+                    dbc.Textarea(
+                        id="up-edit-note",
+                        placeholder="Optional note (e.g. season, scout date, league)",
+                        rows=3,
+                        className="up-edit-note",
+                    ),
+                    html.Div(id="up-edit-error", className="up-edit-error mt-2"),
+                ]
+            ),
+            dbc.ModalFooter(
+                [
+                    dmc.Button(
+                        "Cancel",
+                        id="up-edit-cancel",
+                        variant="default",
+                        n_clicks=0,
+                        className="me-2",
+                    ),
+                    dmc.Button(
+                        "Save",
+                        id="up-edit-save",
+                        n_clicks=0,
+                    ),
+                ]
+            ),
+        ],
+        id="up-edit-modal",
+        className="up-edit-modal",
+        is_open=False,
+        centered=True,
+    )
+
+
 def layout(**_kwargs):
     lib.ensure_dirs()
     return dbc.Container(
@@ -135,18 +219,26 @@ def layout(**_kwargs):
             dcc.Download(id="up-view-download"),
             dcc.Store(id="up-rev", data=0),
             html.Div(
-                dmc.Button(
-                    id={"type": "up-delete", "id": "_"},
-                    n_clicks=0,
-                    children="stub",
-                ),
+                [
+                    dmc.Button(
+                        id={"type": "up-delete", "id": "_"},
+                        n_clicks=0,
+                        children="stub",
+                    ),
+                    dmc.Button(
+                        id={"type": "up-edit", "id": "_"},
+                        n_clicks=0,
+                        children="stub",
+                    ),
+                ],
                 hidden=True,
             ),
+            _edit_modal(),
             html.H1("Uploads", className="mt-2 mb-3"),
             html.P(
                 "Save CSV exports on this machine. Role scores, Player stats, and "
                 "Squad finance can pick from this library or upload a file manually. "
-                "The last choice (library or manual) is what each page keeps in cache.",
+                "Rename files and add notes so the dropdowns stay readable.",
                 className="text-muted mb-3",
             ),
             dbc.Card(
@@ -198,7 +290,8 @@ def layout(**_kwargs):
                                 "Eligible means the file has Name/Player, enough "
                                 "player info (Club/Age/Position), plus: attributes "
                                 "for Role scores; stats markers for Player stats; "
-                                "Salary and match fees for Squad finance.",
+                                "Salary and match fees for Squad finance. Use Edit "
+                                "to rename a file or add a note.",
                                 className="text-muted small mb-3",
                             ),
                             html.Div(id="up-files-table", children=_files_table()),
@@ -246,7 +339,7 @@ def save_uploads(contents_list, filenames, rev):
                 html.Div(
                     [
                         html.Span("✓ ", className="rs-upload-ok"),
-                        html.Span(entry.get("original_name") or name),
+                        html.Span(lib.display_label(entry)),
                         html.Span(f" · eligible: {page_txt}", className="text-muted"),
                     ],
                     className="up-save-row",
@@ -272,10 +365,83 @@ def delete_saved(n_clicks, rev):
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
         return no_update, no_update
-    # Ignore initial stub / zero clicks on other buttons
     if not any((n or 0) > 0 for n in (n_clicks or [])):
         return no_update, no_update
     lib.delete_file(file_id)
+    return _files_table(), int(rev or 0) + 1
+
+
+@callback(
+    Output("up-edit-modal", "is_open"),
+    Output("up-edit-id", "data"),
+    Output("up-edit-name", "value"),
+    Output("up-edit-note", "value"),
+    Output("up-edit-error", "children"),
+    Input({"type": "up-edit", "id": ALL}, "n_clicks"),
+    Input("up-edit-cancel", "n_clicks"),
+    Input("up-edit-save", "n_clicks"),
+    State("up-edit-id", "data"),
+    State("up-edit-name", "value"),
+    State("up-edit-note", "value"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def edit_modal(
+    edit_clicks,
+    cancel_clicks,
+    save_clicks,
+    edit_id,
+    name,
+    note,
+    rev,
+):
+    triggered = ctx.triggered_id
+    if not triggered:
+        return no_update, no_update, no_update, no_update, no_update
+
+    if triggered == "up-edit-cancel":
+        return False, None, "", "", None
+
+    if triggered == "up-edit-save":
+        if not edit_id:
+            return False, None, "", "", None
+        try:
+            lib.update_file_meta(edit_id, display_name=name or "", user_note=note or "")
+        except ValueError as exc:
+            return True, edit_id, name, note, html.Div(str(exc), className="rs-upload-error")
+        return False, None, "", "", None
+
+    if isinstance(triggered, dict) and triggered.get("type") == "up-edit":
+        file_id = triggered.get("id")
+        if not file_id or file_id == "_":
+            return no_update, no_update, no_update, no_update, no_update
+        if not any((n or 0) > 0 for n in (edit_clicks or [])):
+            return no_update, no_update, no_update, no_update, no_update
+        entry = lib.get_file(file_id)
+        if not entry:
+            return no_update, no_update, no_update, no_update, no_update
+        return (
+            True,
+            file_id,
+            lib.display_label(entry),
+            entry.get("user_note") or "",
+            None,
+        )
+
+    return no_update, no_update, no_update, no_update, no_update
+
+
+@callback(
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Input("up-edit-modal", "is_open"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def refresh_table_after_edit(is_open, rev):
+    # Refresh when the edit modal closes after a save/cancel.
+    if is_open:
+        return no_update, no_update
     return _files_table(), int(rev or 0) + 1
 
 
