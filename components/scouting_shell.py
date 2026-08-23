@@ -153,43 +153,54 @@ def upload_card(
     upload_label: Any = None,
     hint: Any = None,
     class_name: str = "mb-3 rs-section-card",
+    include_data_rev: bool = True,
 ) -> dbc.Card:
-    """Standard upload + status + Replace control."""
+    """Standard upload + status + Replace control.
+
+    Set ``include_data_rev=False`` when ``{prefix}-data-rev`` already lives in the
+    app layout (needed if another always-mounted store shares a callback with it).
+    """
     if upload_label is None:
         upload_label = html.Div(["Drag a CSV here, or ", html.A("browse")])
-    body_children: list = [
-        dcc.Store(id=f"{prefix}-data-rev", data={"n": 0, "replaced": False}),
-        html.Div(id=f"{prefix}-pulse-token", hidden=True),
-        html.Div(
-            dcc.Upload(
-                id=f"{prefix}-upload",
-                children=upload_label,
-                className="rs-upload",
-                multiple=False,
-            ),
-            id=f"{prefix}-upload-wrap",
-        ),
-        html.Div(
-            [
-                html.Div(id=f"{prefix}-upload-status", className="rs-upload-status"),
-                html.Div(
-                    dcc.Upload(
-                        id=f"{prefix}-upload-replace",
-                        children=html.Span(
-                            "Replace file",
-                            className="rs-upload-replace",
-                        ),
-                        className="rs-upload-replace-btn",
-                        multiple=False,
-                    ),
-                    id=f"{prefix}-upload-replace-wrap",
-                    hidden=True,
-                    title="Choose a different CSV to refresh the shortlist",
+    body_children: list = []
+    if include_data_rev:
+        body_children.append(
+            dcc.Store(id=f"{prefix}-data-rev", data={"n": 0, "replaced": False})
+        )
+    body_children.extend(
+        [
+            html.Div(id=f"{prefix}-pulse-token", hidden=True),
+            html.Div(
+                dcc.Upload(
+                    id=f"{prefix}-upload",
+                    children=upload_label,
+                    className="rs-upload",
+                    multiple=False,
                 ),
-            ],
-            className="rs-upload-status-row",
-        ),
-    ]
+                id=f"{prefix}-upload-wrap",
+            ),
+            html.Div(
+                [
+                    html.Div(id=f"{prefix}-upload-status", className="rs-upload-status"),
+                    html.Div(
+                        dcc.Upload(
+                            id=f"{prefix}-upload-replace",
+                            children=html.Span(
+                                "Replace file",
+                                className="rs-upload-replace",
+                            ),
+                            className="rs-upload-replace-btn",
+                            multiple=False,
+                        ),
+                        id=f"{prefix}-upload-replace-wrap",
+                        hidden=True,
+                        title="Choose a different CSV to refresh the shortlist",
+                    ),
+                ],
+                className="rs-upload-status-row",
+            ),
+        ]
+    )
     if hint is not None:
         body_children.append(hint)
     return dbc.Card(

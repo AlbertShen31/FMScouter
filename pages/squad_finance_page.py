@@ -19,7 +19,9 @@ from scoring.squad_finance import (
     INCOME_CATEGORIES,
     STARTERS,
     SUBS,
+    SUSTAINABILITY_YEARS,
     club_sustainability,
+    default_matchday_keys,
     format_money,
     load_squad_finance,
     matchday_statement,
@@ -202,58 +204,31 @@ def _statement_table(statement: dict) -> html.Div:
 
 
 def _sustainability_panel(sustain: dict) -> html.Div:
+    years = int(sustain.get("years") or SUSTAINABILITY_YEARS)
     ok = sustain["sustainable"]
     verdict = (
-        "Sustainable at current figures"
+        f"Sustainable over {years} years"
         if ok
-        else "Not sustainable at current figures"
+        else f"Not sustainable over {years} years"
     )
     tone = "best" if ok else "worst"
-    income_bits = [
-        html.Li(f"{label}: {format_money(sustain['income_parts'].get(key, 0))}")
-        for key, label in INCOME_CATEGORIES
-        if sustain["income_parts"].get(key, 0)
-    ]
-    expense_bits = [
-        html.Li(f"{label}: {format_money(sustain['expense_parts'].get(key, 0))}")
-        for key, label in EXPENSE_CATEGORIES
-        if sustain["expense_parts"].get(key, 0)
-    ]
-    breakdown = []
-    if income_bits:
-        breakdown.append(
-            html.Div(
-                [
-                    html.Div("Income (period)", className="sf-breakdown-label"),
-                    html.Ul(income_bits),
-                ],
-                className="sf-breakdown",
-            )
-        )
-    if expense_bits:
-        breakdown.append(
-            html.Div(
-                [
-                    html.Div("Expenses (period)", className="sf-breakdown-label"),
-                    html.Ul(expense_bits),
-                ],
-                className="sf-breakdown",
-            )
-        )
     return html.Div(
         [
             html.H3("Club sustainability", className="sf-subhead"),
             html.P(
-                "Funds available = balance + prorated category income − prorated "
-                f"category expenses (entered in $M, share = games / {DEFAULT_SEASON_GAMES}). "
-                "Compared with matchday + reserve wages and matchday appearance fees.",
+                f"Projects {years} years at today’s annual income and expenses. "
+                f"Annual expenses = club P&L (box 3) + debt payments + full-season "
+                f"squad bill from the statement (box 4, scaled to {DEFAULT_SEASON_GAMES} "
+                f"games). Closing position = (balance − debt) + {years} × "
+                f"(income − expenses).",
                 className="sf-note",
             ),
             html.Div(
                 [
-                    _summary_card("Funds available", sustain["funds_available"]),
+                    _summary_card("Annual income", sustain["annual_income"]),
+                    _summary_card("Annual expenses", sustain["annual_expenses"]),
                     _summary_card(
-                        "Surplus",
+                        f"{years}-year surplus",
                         sustain["surplus"],
                         tone="best" if ok else "worst",
                     ),
@@ -261,7 +236,6 @@ def _sustainability_panel(sustain: dict) -> html.Div:
                 ],
                 className="sf-summary-row",
             ),
-            html.Div(breakdown, className="sf-breakdown-row") if breakdown else None,
         ],
         className="sf-sustainability",
     )
@@ -275,11 +249,6 @@ def layout(**_kwargs):
     return dbc.Container(
         [
             dcc.Interval(id="sf-hydrate-tick", interval=50, max_intervals=1),
-            dcc.Store(
-                id="sf-selection",
-                data={"starters": [], "subs": []},
-                storage_type="session",
-            ),
             html.H1("Squad finance", className="mt-2 mb-2"),
             html.P(
                 "Upload a Moneyball player export with salary and match fees, pick "
@@ -298,6 +267,7 @@ def layout(**_kwargs):
                     "FFP is shown for reference and is not included in totals.",
                     className="text-muted small mb-0 mt-2",
                 ),
+                include_data_rev=False,
             ),
             html.Div(
                 [
@@ -314,9 +284,12 @@ def layout(**_kwargs):
                                                         "Games",
                                                         tip=(
                                                             "Matches to model. Appearance "
-                                                            "fees use this count; wages and "
-                                                            "club P&L are prorated against a "
-                                                            f"{DEFAULT_SEASON_GAMES}-game season."
+                                                            "fees use this count; wages are "
+                                                            "prorated against a "
+                                                            f"{DEFAULT_SEASON_GAMES}-game season. "
+                                                            "Club income/expenses stay annual "
+                                                            f"for the {SUSTAINABILITY_YEARS}-year "
+                                                            "verdict."
                                                         ),
                                                         help_id="sf-help-games",
                                                     ),
@@ -402,10 +375,10 @@ def layout(**_kwargs):
                             dbc.CardBody(
                                 [
                                     html.P(
-                                        f"Enter figures in millions (one decimal, e.g. 25.5). "
-                                        f"Category totals are prorated by games / "
-                                        f"{DEFAULT_SEASON_GAMES}. Leave blank to skip the "
-                                        "sustainability check.",
+                                        f"Enter annual figures in millions (one decimal, "
+                                        f"e.g. 25.5). The verdict holds today’s income and "
+                                        f"expenses constant for {SUSTAINABILITY_YEARS} years. "
+                                        "Leave blank to skip the sustainability check.",
                                         className="sf-note",
                                     ),
                                     _money_field(
@@ -415,19 +388,52 @@ def layout(**_kwargs):
                                         help_id="sf-help-balance",
                                         placeholder="e.g. 25.5",
                                     ),
+                                    html.H4("Debt", className="sf-cat-head"),
+                                    html.Div(
+                                        [
+                                            _money_field(
+                                                "sf-debt",
+                                                "Outstanding debt ($M)",
+                                                tip=(
+                                                    "Total club debt outstanding. "
+                                                    "Subtracted from balance for the "
+                                                    f"{SUSTAINABILITY_YEARS}-year opening "
+                                                    "position."
+                                                ),
+                                                help_id="sf-help-debt",
+                                                placeholder="e.g. 40.0",
+                                            ),
+                                            _money_field(
+                                                "sf-debt-payments",
+                                                "Annual debt payments ($M)",
+                                                tip=(
+                                                    "Yearly debt service (interest + "
+                                                    "principal) at today’s rate, held "
+                                                    f"for {SUSTAINABILITY_YEARS} years. "
+                                                    "Included in annual expenses."
+                                                ),
+                                                help_id="sf-help-debt-payments",
+                                                placeholder="e.g. 5.0",
+                                            ),
+                                        ],
+                                        className="sf-params-row",
+                                    ),
                                     html.H4("Income", className="sf-cat-head"),
                                     _category_fields(
                                         "sf-income",
                                         INCOME_CATEGORIES,
-                                        tip_suffix="Prorated over the modeled games.",
+                                        tip_suffix=(
+                                            "Annual amount at today’s rate "
+                                            f"(held for {SUSTAINABILITY_YEARS} years)."
+                                        ),
                                     ),
                                     html.H4("Expenses", className="sf-cat-head"),
                                     _category_fields(
                                         "sf-expense",
                                         EXPENSE_CATEGORIES,
                                         tip_suffix=(
-                                            "Excludes squad wages and appearance fees "
-                                            "(already modeled above)."
+                                            "Annual amount excluding squad wages and "
+                                            "appearance fees (already modeled above)."
                                         ),
                                     ),
                                 ]
@@ -458,25 +464,44 @@ def layout(**_kwargs):
 
 
 @callback(
+    Output("sf-selection", "data"),
+    Input("sf-data-rev", "data"),
+    State("sf-parsed", "data"),
+    prevent_initial_call=True,
+)
+def reset_selection_on_replace(rev, parsed):
+    """Wage defaults after Replace file — app-layout IDs only."""
+    if not (isinstance(rev, dict) and rev.get("replaced")):
+        return no_update
+    rows = parsed_players(parsed)
+    if not rows:
+        return {"starters": [], "subs": []}
+    starters, subs = default_matchday_keys(rows)
+    return {"starters": starters, "subs": subs}
+
+
+@callback(
     Output("sf-starters", "data"),
     Output("sf-subs", "data"),
     Output("sf-starters", "value"),
     Output("sf-subs", "value"),
-    Output("sf-selection", "data"),
     Input("sf-parsed", "data"),
-    Input("sf-data-rev", "data"),
-    State("sf-selection", "data"),
+    Input("sf-selection", "data"),
+    Input("sf-hydrate-tick", "n_intervals"),
 )
-def sync_player_options(parsed, _rev, cached):
+def sync_player_options(parsed, cached, _tick):
+    """Page Multiselects only — safe with page-local hydrate tick."""
     rows = parsed_players(parsed)
     options = _player_options(rows)
+    if not rows:
+        return no_update, no_update, no_update, no_update
     cached = cached or {}
     starters, subs = restore_matchday_keys(
         rows,
         cached.get("starters"),
         cached.get("subs"),
     )
-    return options, options, starters, subs, {"starters": starters, "subs": subs}
+    return options, options, starters, subs
 
 
 @callback(
@@ -489,10 +514,16 @@ def sync_player_options(parsed, _rev, cached):
 def persist_selection(starters, subs, cached):
     if ctx.triggered_id not in {"sf-starters", "sf-subs"}:
         return no_update
+    starters = list(starters or [])
+    subs = list(subs or [])
+    cached = cached or {}
+    # Multiselect remounts empty before hydrate; don't wipe a good cache.
+    if not starters and not subs and (cached.get("starters") or cached.get("subs")):
+        return no_update
     return {
-        **(cached or {}),
-        "starters": list(starters or []),
-        "subs": list(subs or []),
+        **cached,
+        "starters": starters,
+        "subs": subs,
     }
 
 
@@ -502,6 +533,8 @@ _RENDER_INPUTS = [
     Input("sf-subs", "value"),
     Input("sf-games", "value"),
     Input("sf-balance", "value"),
+    Input("sf-debt", "value"),
+    Input("sf-debt-payments", "value"),
     *[Input(field_id, "value") for field_id in _INCOME_IDS],
     *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
 ]
@@ -513,7 +546,9 @@ _RENDER_INPUTS = [
     Output("sf-statement", "children"),
     *_RENDER_INPUTS,
 )
-def render_statement(parsed, starters, subs, games, balance, *category_values):
+def render_statement(
+    parsed, starters, subs, games, balance, debt, debt_payments, *category_values
+):
     rows = parsed_players(parsed)
     starters = list(starters or [])
     subs = list(subs or [])
@@ -590,10 +625,12 @@ def render_statement(parsed, starters, subs, games, balance, *category_values):
     )
     children: list = [note, _statement_table(statement)]
 
-    club_values = [balance, *income_vals, *expense_vals]
+    club_values = [balance, debt, debt_payments, *income_vals, *expense_vals]
     if any(v is not None and v != "" for v in club_values):
         sustain = club_sustainability(
             balance=_millions_to_cash(balance),
+            debt=_millions_to_cash(debt),
+            debt_payments=_millions_to_cash(debt_payments),
             income=income_map,
             expenses=expense_map,
             squad_total=statement["total"],

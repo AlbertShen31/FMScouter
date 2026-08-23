@@ -26,6 +26,7 @@ SUBS = 5
 MATCHDAY = STARTERS + SUBS
 DEFAULT_GAMES = 38
 DEFAULT_SEASON_GAMES = 38
+SUSTAINABILITY_YEARS = 5
 
 # Club P&L category keys (values are absolute currency, not millions).
 INCOME_CATEGORIES = (
@@ -214,16 +215,49 @@ def restore_matchday_keys(
     starter_keys: list[str] | None,
     sub_keys: list[str] | None,
 ) -> tuple[list[str], list[str]]:
-    """Keep cached starters/subs when still present; otherwise fall back to defaults."""
+    """Keep cached starters/subs when still present; pad gaps from defaults."""
+    if not rows:
+        return [], []
     keys = {row["key"] for row in rows if row.get("key")}
     starters = [key for key in (starter_keys or []) if key in keys][:STARTERS]
     starter_set = set(starters)
-    subs = [key for key in (sub_keys or []) if key in keys and key not in starter_set][
-        :SUBS
-    ]
+    subs = [
+        key
+        for key in (sub_keys or [])
+        if key in keys and key not in starter_set
+    ][:SUBS]
     if len(starters) == STARTERS and len(subs) == SUBS:
         return starters, subs
-    return default_matchday_keys(rows)
+    if not starters and not subs:
+        return default_matchday_keys(rows)
+
+    used = set(starters) | set(subs)
+    default_starters, default_subs = default_matchday_keys(rows)
+    for key in default_starters + default_subs:
+        if len(starters) >= STARTERS:
+            break
+        if key not in used:
+            starters.append(key)
+            used.add(key)
+    for key in default_subs + default_starters:
+        if len(subs) >= SUBS:
+            break
+        if key not in used:
+            subs.append(key)
+            used.add(key)
+    for row in rows:
+        if len(starters) >= STARTERS and len(subs) >= SUBS:
+            break
+        key = row.get("key")
+        if not key or key in used:
+            continue
+        if len(starters) < STARTERS:
+            starters.append(key)
+            used.add(key)
+        elif len(subs) < SUBS:
+            subs.append(key)
+            used.add(key)
+    return starters[:STARTERS], subs[:SUBS]
 
 
 def _index_by_key(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -247,37 +281,53 @@ def club_sustainability(
     squad_total: float,
     games: int,
     season_games: int,
+    debt: float | None = None,
+    debt_payments: float | None = None,
+    years: int = SUSTAINABILITY_YEARS,
 ) -> dict[str, Any]:
-    """Compare opening balance + categorized, prorated P&L against squad outlay.
+    """Project club cash over ``years`` at today's annual income / expenses.
 
-    Income/expense values should already be absolute currency (not millions).
-    Squad wages/fees are passed separately via ``squad_total``.
+    Income and expense category values should already be absolute annual currency
+    (not millions). ``squad_total`` is the modeled-period squad outlay and is
+    annualized to a full season before the multi-year projection.
+
+    ``debt`` is outstanding liability (stock). ``debt_payments`` is the annual
+    debt service and is included in annual expenses. Closing position starts from
+    ``balance − debt``.
     """
+    years = max(1, int(years or SUSTAINABILITY_YEARS))
     games = max(0, int(games or 0))
     season_games = max(1, int(season_games or DEFAULT_SEASON_GAMES))
-    share = games / season_games
     bal = _as_float(balance)
+    debt_bal = _as_float(debt)
+    annual_debt_payments = _as_float(debt_payments)
     income = income or {}
     expenses = expenses or {}
 
-    income_parts = {
-        key: _as_float(income.get(key)) * share for key, _ in INCOME_CATEGORIES
-    }
-    expense_parts = {
-        key: _as_float(expenses.get(key)) * share for key, _ in EXPENSE_CATEGORIES
-    }
-    income_period = sum(income_parts.values())
-    expenses_period = sum(expense_parts.values())
-    funds = bal + income_period - expenses_period
-    surplus = funds - squad_total
+    annual_income = sum(_as_float(income.get(key)) for key, _ in INCOME_CATEGORIES)
+    annual_club_expenses = sum(
+        _as_float(expenses.get(key)) for key, _ in EXPENSE_CATEGORIES
+    )
+    # Scale the modeled squad bill (statement total) up to a full season.
+    annual_squad = (
+        _as_float(squad_total) * (season_games / games) if games > 0 else 0.0
+    )
+    # Display + verdict: club P&L + squad + annual debt service.
+    annual_expenses = annual_club_expenses + annual_squad + annual_debt_payments
+    annual_net = annual_income - annual_expenses
+    opening_net = bal - debt_bal
+    surplus = opening_net + years * annual_net
     return {
         "balance": bal,
-        "income_parts": income_parts,
-        "expense_parts": expense_parts,
-        "income_period": income_period,
-        "expenses_period": expenses_period,
-        "funds_available": funds,
-        "squad_total": squad_total,
+        "debt": debt_bal,
+        "debt_payments": annual_debt_payments,
+        "opening_net": opening_net,
+        "years": years,
+        "annual_income": annual_income,
+        "annual_club_expenses": annual_club_expenses,
+        "annual_expenses": annual_expenses,
+        "annual_squad": annual_squad,
+        "annual_net": annual_net,
         "surplus": surplus,
         "sustainable": surplus >= 0,
     }
