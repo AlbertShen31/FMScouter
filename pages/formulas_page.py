@@ -1,7 +1,7 @@
 """Formulas reference — how each FMScouter page calculates its numbers."""
 from __future__ import annotations
 
-from dash import html, register_page
+from dash import ALL, Input, Output, clientside_callback, html, register_page
 import dash_bootstrap_components as dbc
 
 from components.pack_picker import section_card_header
@@ -13,6 +13,15 @@ register_page(__name__, path="/formulas", name="Formulas")
 _DEFAULT_KEY = pc.KEY_WEIGHT
 _DEFAULT_PREF = pc.PREFERRED_WEIGHT
 _DEFAULT_USEFUL = pc.USEFUL_WEIGHT
+
+_TOC = (
+    ("role-scores", "Role scores"),
+    ("player-stats", "Player stats"),
+    ("squad-finance", "Squad finance"),
+    ("role-config", "Role configs"),
+    ("formations", "Formations"),
+    ("settings", "Settings"),
+)
 
 
 def _formula(text: str) -> html.Pre:
@@ -35,9 +44,10 @@ def _section(
 ) -> html.Div:
     return html.Div(
         [
-            html.H2(title, id=section_id, className="fx-section-title"),
+            html.H2(title, className="fx-section-title"),
             *children,
         ],
+        id=section_id,
         className="fx-section",
     )
 
@@ -52,8 +62,22 @@ def _subsection(title: str, *children) -> html.Div:
     )
 
 
+def _toc_link(section_id: str, label: str) -> html.Li:
+    # Buttons + clientside scroll: Dash NavLink / dcc.Link treat #hash as routes.
+    return html.Li(
+        html.Button(
+            label,
+            id={"type": "fx-toc", "section": section_id},
+            n_clicks=0,
+            type="button",
+            className="fx-toc-link",
+        )
+    )
+
+
 layout = dbc.Container(
     [
+        html.Div(id="fx-toc-scroll", style={"display": "none"}),
         html.Div(
             [
                 html.H1("Formulas", className="fx-page-title"),
@@ -65,14 +89,7 @@ layout = dbc.Container(
                 ),
                 html.Nav(
                     html.Ul(
-                        [
-                            html.Li(dbc.NavLink("Role scores", href="#role-scores")),
-                            html.Li(dbc.NavLink("Player stats", href="#player-stats")),
-                            html.Li(dbc.NavLink("Squad finance", href="#squad-finance")),
-                            html.Li(dbc.NavLink("Role configs", href="#role-config")),
-                            html.Li(dbc.NavLink("Formations", href="#formations")),
-                            html.Li(dbc.NavLink("Settings", href="#settings")),
-                        ],
+                        [_toc_link(sid, label) for sid, label in _TOC],
                         className="fx-toc",
                     ),
                     className="fx-toc-wrap",
@@ -403,4 +420,33 @@ default OOP weight = {COMBO_OOP_WEIGHT:g}
     ],
     fluid=True,
     className="fx-page",
+)
+
+
+clientside_callback(
+    """
+    function(n_clicks) {
+        const triggered = window.dash_clientside.callback_context.triggered;
+        if (!triggered || !triggered.length) {
+            return window.dash_clientside.no_update;
+        }
+        const value = triggered[0].value;
+        if (!value) {
+            return window.dash_clientside.no_update;
+        }
+        const id = window.dash_clientside.callback_context.triggered_id;
+        const section = id && id.section;
+        if (!section) {
+            return window.dash_clientside.no_update;
+        }
+        const el = document.getElementById(section);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return "";
+    }
+    """,
+    Output("fx-toc-scroll", "children"),
+    Input({"type": "fx-toc", "section": ALL}, "n_clicks"),
+    prevent_initial_call=True,
 )

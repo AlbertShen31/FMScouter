@@ -5174,14 +5174,21 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     margin: 0;
 }
 
-.fx-toc a {
+.fx-toc a,
+.fx-toc-link {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--app-accent, #3dffa8);
     text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
 }
 
-.fx-toc a:hover {
+.fx-toc a:hover,
+.fx-toc-link:hover {
     text-decoration: underline;
 }
 
@@ -5198,6 +5205,7 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .fx-section {
     padding: 1.35rem 0;
     border-bottom: 1px solid var(--app-line);
+    scroll-margin-top: 5rem;
 }
 
 .fx-section:last-child {
@@ -5210,7 +5218,6 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     font-weight: 700;
     margin: 0 0 1rem;
     color: var(--app-text);
-    scroll-margin-top: 5rem;
 }
 
 .fx-subsection {
