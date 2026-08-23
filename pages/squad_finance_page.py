@@ -4,6 +4,7 @@ from __future__ import annotations
 from dash import Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
+import plotly.graph_objects as go
 
 from components.pack_picker import section_card_header
 from components.player_filters import help_icon
@@ -49,6 +50,122 @@ _ROLE_LABEL = {
 
 _INCOME_IDS = [f"sf-income-{key}" for key, _ in INCOME_CATEGORIES]
 _EXPENSE_IDS = [f"sf-expense-{key}" for key, _ in EXPENSE_CATEGORIES]
+_CLUB_FIELD_IDS = [
+    "sf-balance",
+    "sf-debt",
+    "sf-debt-payments",
+    *_INCOME_IDS,
+    *_EXPENSE_IDS,
+]
+
+_CHART_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "responsive": True,
+}
+
+
+def _to_millions(value: float) -> float:
+    return float(value or 0.0) / 1_000_000.0
+
+
+def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
+    """Balance (green) and debt (red filled) from now through the projection horizon."""
+    dark = (theme or "dark") != "light"
+    timeline = list(sustain.get("timeline") or [])
+    if not timeline:
+        years = int(sustain.get("years") or SUSTAINABILITY_YEARS)
+        timeline = [
+            {
+                "year": year,
+                "balance": float(sustain.get("balance") or 0)
+                + year * float(sustain.get("annual_net") or 0),
+                "debt": max(
+                    0.0,
+                    float(sustain.get("debt") or 0)
+                    - year * float(sustain.get("debt_payments") or 0),
+                ),
+            }
+            for year in range(years + 1)
+        ]
+
+    labels = ["Now" if point["year"] == 0 else f"Year {point['year']}" for point in timeline]
+    balances = [_to_millions(point["balance"]) for point in timeline]
+    debts = [_to_millions(point["debt"]) for point in timeline]
+    font = "#e8eef6" if dark else "#0f172a"
+    muted = "#8b9bb0" if dark else "#64748b"
+    grid = "rgba(139, 155, 176, 0.22)" if dark else "rgba(100, 116, 139, 0.25)"
+    green = "#22c55e"
+    red = "#ef4444"
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=debts,
+            name="Debt",
+            mode="lines",
+            line=dict(color=red, width=2.5, shape="linear"),
+            fill="tozeroy",
+            fillcolor="rgba(239, 68, 68, 0.28)",
+            hovertemplate="Debt: $%{y:.1f}M<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=balances,
+            name="Balance",
+            mode="lines+markers",
+            line=dict(color=green, width=3, shape="linear"),
+            marker=dict(size=7, color=green),
+            hovertemplate="Balance: $%{y:.1f}M<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        template="plotly_dark" if dark else "plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=font, size=13, family="Inter, Segoe UI, sans-serif"),
+        margin=dict(l=56, r=24, t=12, b=44),
+        height=320,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="#1a2430" if dark else "#ffffff",
+            bordercolor="#4a6078" if dark else "#c5d0de",
+            font=dict(
+                color=font,
+                size=13,
+                family="Inter, Segoe UI, sans-serif",
+            ),
+            align="left",
+        ),
+        xaxis=dict(
+            title=None,
+            showgrid=False,
+            tickfont=dict(color=muted, size=12),
+        ),
+        yaxis=dict(
+            title="Millions ($)",
+            zeroline=True,
+            zerolinecolor=grid,
+            zerolinewidth=1,
+            gridcolor=grid,
+            tickfont=dict(color=muted, size=12),
+            tickformat=".1f",
+            separatethousands=True,
+        ),
+    )
+    return fig
 
 
 def _help(tip: str, help_id: str) -> list:
@@ -203,7 +320,7 @@ def _statement_table(statement: dict) -> html.Div:
     )
 
 
-def _sustainability_panel(sustain: dict) -> html.Div:
+def _sustainability_panel(sustain: dict, theme: str | None = None) -> html.Div:
     years = int(sustain.get("years") or SUSTAINABILITY_YEARS)
     ok = sustain["sustainable"]
     verdict = (
@@ -235,6 +352,17 @@ def _sustainability_panel(sustain: dict) -> html.Div:
                     _status_card("Verdict", verdict, tone=tone),
                 ],
                 className="sf-summary-row",
+            ),
+            html.H4("Balance & debt outlook", className="sf-cat-head"),
+            html.P(
+                "Cash balance grows by annual net each year; outstanding debt falls "
+                "by annual debt payments (floored at zero).",
+                className="sf-note",
+            ),
+            dcc.Graph(
+                figure=_projection_figure(sustain, theme),
+                config=_CHART_CONFIG,
+                className="sf-projection-chart",
             ),
         ],
         className="sf-sustainability",
@@ -527,6 +655,69 @@ def persist_selection(starters, subs, cached):
     }
 
 
+def _club_payload(balance, debt, debt_payments, *category_values):
+    n_income = len(_INCOME_IDS)
+    income_vals = list(category_values[:n_income])
+    expense_vals = list(category_values[n_income : n_income + len(_EXPENSE_IDS)])
+    return {
+        "balance": balance,
+        "debt": debt,
+        "debt_payments": debt_payments,
+        "income": {
+            key: val for (key, _), val in zip(INCOME_CATEGORIES, income_vals)
+        },
+        "expenses": {
+            key: val for (key, _), val in zip(EXPENSE_CATEGORIES, expense_vals)
+        },
+    }
+
+
+def _club_values(cached: dict | None) -> tuple:
+    cached = cached or {}
+    income = cached.get("income") or {}
+    expenses = cached.get("expenses") or {}
+    return (
+        cached.get("balance"),
+        cached.get("debt"),
+        cached.get("debt_payments"),
+        *[income.get(key) for key, _ in INCOME_CATEGORIES],
+        *[expenses.get(key) for key, _ in EXPENSE_CATEGORIES],
+    )
+
+
+def _club_has_values(cached: dict | None) -> bool:
+    if not cached:
+        return False
+    values = _club_values(cached)
+    return any(v is not None and v != "" for v in values)
+
+
+@callback(
+    Output("sf-club", "data"),
+    *[Input(field_id, "value") for field_id in _CLUB_FIELD_IDS],
+    State("sf-club", "data"),
+    prevent_initial_call=True,
+)
+def persist_club_finances(*args):
+    *field_values, cached = args
+    payload = _club_payload(*field_values)
+    # NumberInputs remount empty before hydrate; keep prior session values.
+    if not _club_has_values(payload) and _club_has_values(cached):
+        return no_update
+    return payload
+
+
+@callback(
+    *[Output(field_id, "value") for field_id in _CLUB_FIELD_IDS],
+    Input("sf-hydrate-tick", "n_intervals"),
+    State("sf-club", "data"),
+)
+def hydrate_club_finances(_tick, cached):
+    if not _club_has_values(cached):
+        return tuple(no_update for _ in _CLUB_FIELD_IDS)
+    return _club_values(cached)
+
+
 _RENDER_INPUTS = [
     Input("sf-parsed", "data"),
     Input("sf-starters", "value"),
@@ -537,6 +728,7 @@ _RENDER_INPUTS = [
     Input("sf-debt-payments", "value"),
     *[Input(field_id, "value") for field_id in _INCOME_IDS],
     *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
+    Input("theme", "data"),
 ]
 
 
@@ -547,8 +739,17 @@ _RENDER_INPUTS = [
     *_RENDER_INPUTS,
 )
 def render_statement(
-    parsed, starters, subs, games, balance, debt, debt_payments, *category_values
+    parsed,
+    starters,
+    subs,
+    games,
+    balance,
+    debt,
+    debt_payments,
+    *rest,
 ):
+    theme = rest[-1] if rest else "dark"
+    category_values = rest[:-1]
     rows = parsed_players(parsed)
     starters = list(starters or [])
     subs = list(subs or [])
@@ -637,6 +838,6 @@ def render_statement(
             games=games_n,
             season_games=DEFAULT_SEASON_GAMES,
         )
-        children.append(_sustainability_panel(sustain))
+        children.append(_sustainability_panel(sustain, theme))
 
     return hint, summary, html.Div(children)

@@ -317,6 +317,20 @@ def club_sustainability(
     annual_net = annual_income - annual_expenses
     opening_net = bal - debt_bal
     surplus = opening_net + years * annual_net
+
+    # Year-by-year stocks for the projection chart (year 0 = now).
+    cash = bal
+    remaining_debt = debt_bal
+    timeline: list[dict[str, float | int]] = [
+        {"year": 0, "balance": cash, "debt": remaining_debt}
+    ]
+    for year in range(1, years + 1):
+        cash = cash + annual_net
+        remaining_debt = max(0.0, remaining_debt - annual_debt_payments)
+        timeline.append(
+            {"year": year, "balance": cash, "debt": remaining_debt}
+        )
+
     return {
         "balance": bal,
         "debt": debt_bal,
@@ -330,6 +344,7 @@ def club_sustainability(
         "annual_net": annual_net,
         "surplus": surplus,
         "sustainable": surplus >= 0,
+        "timeline": timeline,
     }
 
 
