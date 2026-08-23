@@ -5135,3 +5135,130 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .sf-statement-table tr.sf-row-reserve td {
     color: var(--app-muted);
 }
+
+/* Formulas reference page */
+.fx-page {
+    max-width: 920px;
+    padding-bottom: 2rem;
+}
+
+.fx-hero {
+    margin: 1.25rem 0 1.5rem;
+}
+
+.fx-page-title {
+    font-size: 1.75rem;
+    font-weight: 750;
+    margin: 0 0 0.5rem;
+    color: var(--app-text);
+}
+
+.fx-lead {
+    color: var(--app-muted);
+    font-size: 0.95rem;
+    line-height: 1.55;
+    margin: 0 0 1rem;
+    max-width: 42rem;
+}
+
+.fx-toc-wrap {
+    margin-top: 0.25rem;
+}
+
+.fx-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.fx-toc a {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--app-accent, #3dffa8);
+    text-decoration: none;
+}
+
+.fx-toc a:hover {
+    text-decoration: underline;
+}
+
+.fx-card .card-body {
+    padding-top: 0.5rem;
+}
+
+.fx-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.fx-section {
+    padding: 1.35rem 0;
+    border-bottom: 1px solid var(--app-line);
+}
+
+.fx-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0.5rem;
+}
+
+.fx-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 1rem;
+    color: var(--app-text);
+    scroll-margin-top: 5rem;
+}
+
+.fx-subsection {
+    margin-bottom: 1.25rem;
+}
+
+.fx-subsection:last-child {
+    margin-bottom: 0;
+}
+
+.fx-subhead {
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin: 0 0 0.5rem;
+    color: var(--app-text);
+}
+
+.fx-formula {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    margin: 0 0 0.65rem;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--app-line);
+    background: var(--app-inset);
+    color: var(--app-text);
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+.fx-note {
+    color: var(--app-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+    max-width: 42rem;
+}
+
+.fx-list {
+    color: var(--app-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+    max-width: 42rem;
+}
+
+.fx-list li {
+    margin-bottom: 0.25rem;
+}
