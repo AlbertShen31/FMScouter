@@ -62,6 +62,15 @@ _CHART_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
     "responsive": True,
+    "staticPlot": False,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "showAxisDragHandles": False,
+    "showAxisRangeEntryBoxes": False,
+    "edits": {
+        "shapePosition": False,
+        "annotationPosition": False,
+    },
 }
 
 
@@ -119,6 +128,8 @@ def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
             mode="lines+markers",
             line=dict(color=green, width=3, shape="linear"),
             marker=dict(size=7, color=green),
+            fill="tozeroy",
+            fillcolor="rgba(34, 197, 94, 0.28)" if dark else "rgba(34, 197, 94, 0.22)",
             hovertemplate="Balance: $%{y:.1f}M<extra></extra>",
         )
     )
@@ -139,6 +150,7 @@ def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
             bgcolor="rgba(0,0,0,0)",
         ),
         hovermode="x unified",
+        dragmode=False,
         hoverlabel=dict(
             bgcolor="#1a2430" if dark else "#ffffff",
             bordercolor="#4a6078" if dark else "#c5d0de",
@@ -152,6 +164,7 @@ def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
         xaxis=dict(
             title=None,
             showgrid=False,
+            fixedrange=True,
             tickfont=dict(color=muted, size=12),
         ),
         yaxis=dict(
@@ -160,6 +173,7 @@ def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
             zerolinecolor=grid,
             zerolinewidth=1,
             gridcolor=grid,
+            fixedrange=True,
             tickfont=dict(color=muted, size=12),
             tickformat=".1f",
             separatethousands=True,
