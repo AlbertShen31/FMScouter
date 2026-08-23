@@ -173,8 +173,9 @@ def _upload_slot(
     slot: str,
     *,
     title: str,
+    subtitle: str,
     upload_label: Any,
-    comparison: bool = False,
+    library_page: str | None = None,
 ) -> html.Div:
     """One upload dropzone + status row. ``slot`` is ``current`` or ``hist``."""
     if slot == "current":
@@ -183,20 +184,45 @@ def _upload_slot(
         wrap_id = f"{prefix}-upload-wrap"
         replace_wrap_id = f"{prefix}-upload-replace-wrap"
         status_id = f"{prefix}-upload-status"
+        lib_select_id = f"{prefix}-lib-select"
+        lib_clear_id = f"{prefix}-lib-clear"
     else:
         upload_id = f"{prefix}-upload-hist"
         replace_id = f"{prefix}-upload-hist-replace"
         wrap_id = f"{prefix}-upload-hist-wrap"
         replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
         status_id = f"{prefix}-upload-hist-status"
+        lib_select_id = f"{prefix}-lib-select-hist"
+        lib_clear_id = f"{prefix}-lib-clear-hist"
     children: list = [
         html.Div(title, className="rs-upload-slot-title"),
+        html.P(subtitle, className="rs-upload-slot-note"),
     ]
-    if comparison:
+    if library_page:
+        import services.export_library as lib
+
+        lib.ensure_dirs()
+        options = lib.select_options(page=library_page)
         children.append(
-            html.P(
-                "Kept for comparison — page data still uses the current export.",
-                className="rs-upload-slot-note",
+            html.Div(
+                [
+                    html.Label("Saved file", className="rs-field-label"),
+                    dmc.Select(
+                        id=lib_select_id,
+                        data=options,
+                        value=None,
+                        placeholder=(
+                            "Choose from Uploads library"
+                            if options
+                            else "No eligible saved files"
+                        ),
+                        clearable=True,
+                        searchable=True,
+                        disabled=not options,
+                        className="rs-lib-select",
+                    ),
+                ],
+                className="rs-lib-picker",
             )
         )
     children.extend(
@@ -209,6 +235,7 @@ def _upload_slot(
                     multiple=False,
                 ),
                 id=wrap_id,
+                className="rs-upload-drop-wrap",
             ),
             html.Div(
                 [
@@ -227,6 +254,22 @@ def _upload_slot(
                         hidden=True,
                         title="Choose a different CSV for this slot",
                     ),
+                    dmc.Button(
+                        "Clear",
+                        id=lib_clear_id,
+                        n_clicks=0,
+                        size="xs",
+                        variant="light",
+                        color="red",
+                        disabled=True,
+                        className="rs-lib-clear",
+                                buttonProps={
+                                    "title": (
+                                        "Remove this side’s export "
+                                        "(manual upload or saved file) from the page cache"
+                                    )
+                                },
+                    ),
                 ],
                 className="rs-upload-status-row",
             ),
@@ -244,11 +287,15 @@ def upload_card(
     class_name: str = "mb-3 rs-section-card",
     include_data_rev: bool = True,
     include_historical: bool = True,
+    library_page: str | None = None,
 ) -> dbc.Card:
     """Standard current + optional historical upload controls.
 
     Set ``include_data_rev=False`` when ``{prefix}-data-rev`` already lives in the
     app layout (needed if another always-mounted store shares a callback with it).
+
+    ``library_page`` is an export_library page key (``role_scores``, ``stats``,
+    ``squad_finance``) to show a saved-file picker above the dropzone.
 
     Page logic should read ``{prefix}-parsed`` (current). Historical data is stored
     in ``{prefix}-parsed-historical`` for future comparison features.
@@ -269,53 +316,57 @@ def upload_card(
                         prefix,
                         "current",
                         title="Current export",
+                        subtitle="Active data used by this page.",
                         upload_label=upload_label,
+                        library_page=library_page,
                     ),
                     _upload_slot(
                         prefix,
                         "hist",
                         title="Historical export",
+                        subtitle="Comparison only — does not replace current.",
                         upload_label=upload_label,
-                        comparison=True,
+                        library_page=library_page,
                     ),
                 ],
                 className="rs-upload-dual",
             )
         )
-    else:
-        body_children.extend(
-            [
-                html.Div(
-                    dcc.Upload(
-                        id=f"{prefix}-upload",
-                        children=upload_label,
-                        className="rs-upload",
-                        multiple=False,
-                    ),
-                    id=f"{prefix}-upload-wrap",
-                ),
-                html.Div(
+        if library_page:
+            body_children.append(
+                html.P(
                     [
-                        html.Div(id=f"{prefix}-upload-status", className="rs-upload-status"),
-                        html.Div(
-                            dcc.Upload(
-                                id=f"{prefix}-upload-replace",
-                                children=html.Span(
-                                    "Replace file",
-                                    className="rs-upload-replace",
-                                ),
-                                className="rs-upload-replace-btn",
-                                multiple=False,
-                            ),
-                            id=f"{prefix}-upload-replace-wrap",
-                            hidden=True,
-                            title="Choose a different CSV to refresh the shortlist",
-                        ),
+                        "Selecting a saved file loads that slot. Clear removes "
+                        "only that side’s export from the page cache. Manage files on ",
+                        html.A("Uploads", href="/uploads"),
+                        ".",
                     ],
-                    className="rs-upload-status-row",
-                ),
-            ]
+                    className="rs-lib-hint text-muted small mb-0 mt-2",
+                )
+            )
+    else:
+        body_children.append(
+            _upload_slot(
+                prefix,
+                "current",
+                title="Export",
+                subtitle="Active data used by this page.",
+                upload_label=upload_label,
+                library_page=library_page,
+            )
         )
+        if library_page:
+            body_children.append(
+                html.P(
+                    [
+                        "Selecting a saved file loads it. Clear removes the "
+                        "export from this page’s cache. Manage files on ",
+                        html.A("Uploads", href="/uploads"),
+                        ".",
+                    ],
+                    className="rs-lib-hint text-muted small mb-0 mt-2",
+                )
+            )
     if hint is not None:
         body_children.append(hint)
     return dbc.Card(
@@ -434,6 +485,225 @@ def register_upload_callbacks(
             track_data_rev=False,
             status_tag="Historical",
         )
+
+
+def register_library_select_callbacks(
+    prefix: str,
+    *,
+    parse_fn: ParseFn,
+    library_page: str,
+    pack_store: bool = False,
+    reveal_ids: Sequence[str] | None = None,
+    catch_exceptions: bool = False,
+    include_historical: bool = True,
+) -> None:
+    """Load saved library files on select; Clear wipes page session stores."""
+    reveal_ids = list(reveal_ids or [])
+
+    def _wire_load(slot: str) -> None:
+        if slot == "current":
+            parsed_id = f"{prefix}-parsed"
+            select_id = f"{prefix}-lib-select"
+            status_id = f"{prefix}-upload-status"
+            wrap_id = f"{prefix}-upload-wrap"
+            replace_wrap_id = f"{prefix}-upload-replace-wrap"
+            track_rev = True
+            status_tag = None
+        else:
+            parsed_id = f"{prefix}-parsed-historical"
+            select_id = f"{prefix}-lib-select-hist"
+            status_id = f"{prefix}-upload-hist-status"
+            wrap_id = f"{prefix}-upload-hist-wrap"
+            replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+            track_rev = False
+            status_tag = "Historical"
+
+        slot_reveal = reveal_ids if slot == "current" else []
+        load_outputs = [
+            Output(parsed_id, "data", allow_duplicate=True),
+            Output(status_id, "children", allow_duplicate=True),
+            Output(wrap_id, "hidden", allow_duplicate=True),
+            Output(replace_wrap_id, "hidden", allow_duplicate=True),
+        ]
+        if track_rev:
+            load_outputs.append(
+                Output(f"{prefix}-data-rev", "data", allow_duplicate=True)
+            )
+        load_outputs.extend(
+            Output(rid, "hidden", allow_duplicate=True) for rid in slot_reveal
+        )
+        n_load = 4 + (1 if track_rev else 0) + len(slot_reveal)
+
+        @callback(
+            *load_outputs,
+            Input(select_id, "value"),
+            *([State(f"{prefix}-data-rev", "data")] if track_rev else []),
+            prevent_initial_call=True,
+        )
+        def _load_from_library(
+            file_id,
+            rev=None,
+            _n_out=n_load,
+            _reveal=slot_reveal,
+            _tag=status_tag,
+        ):
+            if not file_id:
+                return tuple([no_update] * _n_out)
+            import services.export_library as lib
+
+            try:
+                text, entry = lib.read_text(file_id)
+                if library_page not in (entry.get("pages") or []):
+                    raise ValueError(
+                        "That file is not eligible for "
+                        f"{lib.PAGE_LABELS.get(library_page, library_page)}."
+                    )
+                players = parse_fn(text)
+            except Exception as exc:
+                if not catch_exceptions and not isinstance(
+                    exc, (ValueError, FileNotFoundError, OSError)
+                ):
+                    raise
+                row = [no_update, upload_error(str(exc)), no_update, no_update]
+                if track_rev:
+                    row.append(no_update)
+                row.extend([no_update] * len(_reveal))
+                return tuple(row)
+
+            name = lib.display_label(entry)
+            rev_payload = None
+            if track_rev:
+                prev_n = 0
+                if isinstance(rev, dict):
+                    prev_n = int(rev.get("n") or 0)
+                elif rev:
+                    prev_n = int(rev)
+                rev_payload = {"n": prev_n + 1, "replaced": True}
+            if pack_store:
+                store = pack_parsed(players, name)
+                if track_rev and rev_payload:
+                    store["rev"] = rev_payload["n"]
+            else:
+                store = {"filename": name, "players": players}
+                if track_rev and rev_payload:
+                    store["rev"] = rev_payload["n"]
+            row = [
+                store,
+                upload_status_bar(
+                    len(players),
+                    name,
+                    replaced=True,
+                    slot_label=_tag,
+                ),
+                True,
+                False,
+            ]
+            if track_rev:
+                row.append(rev_payload)
+            row.extend([False] * len(_reveal))
+            return tuple(row)
+
+    def _has_players(parsed) -> bool:
+        if not parsed or not isinstance(parsed, dict):
+            return False
+        data = unpack_parsed(parsed) if pack_store else parsed
+        if data and data.get("players"):
+            return True
+        # Packed / partial session payloads still count as a loaded export.
+        return bool(parsed.get("players") or parsed.get("payload") or parsed.get("n"))
+
+    _wire_load("current")
+    if include_historical:
+        _wire_load("hist")
+
+    def _wire_clear(slot: str) -> None:
+        if slot == "current":
+            clear_id = f"{prefix}-lib-clear"
+            parsed_id = f"{prefix}-parsed"
+            status_id = f"{prefix}-upload-status"
+            wrap_id = f"{prefix}-upload-wrap"
+            replace_wrap_id = f"{prefix}-upload-replace-wrap"
+            select_id = f"{prefix}-lib-select"
+            upload_id = f"{prefix}-upload"
+            replace_id = f"{prefix}-upload-replace"
+            track_rev = True
+            slot_reveal = reveal_ids
+        else:
+            clear_id = f"{prefix}-lib-clear-hist"
+            parsed_id = f"{prefix}-parsed-historical"
+            status_id = f"{prefix}-upload-hist-status"
+            wrap_id = f"{prefix}-upload-hist-wrap"
+            replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+            select_id = f"{prefix}-lib-select-hist"
+            upload_id = f"{prefix}-upload-hist"
+            replace_id = f"{prefix}-upload-hist-replace"
+            track_rev = False
+            slot_reveal = []
+
+        clear_outputs = [
+            Output(parsed_id, "data", allow_duplicate=True),
+            Output(status_id, "children", allow_duplicate=True),
+            Output(wrap_id, "hidden", allow_duplicate=True),
+            Output(replace_wrap_id, "hidden", allow_duplicate=True),
+            Output(select_id, "value", allow_duplicate=True),
+            Output(upload_id, "contents", allow_duplicate=True),
+            Output(replace_id, "contents", allow_duplicate=True),
+            Output(upload_id, "filename", allow_duplicate=True),
+            Output(replace_id, "filename", allow_duplicate=True),
+        ]
+        if track_rev:
+            clear_outputs.append(
+                Output(f"{prefix}-data-rev", "data", allow_duplicate=True)
+            )
+        clear_outputs.extend(
+            Output(rid, "hidden", allow_duplicate=True) for rid in slot_reveal
+        )
+        n_clear = len(clear_outputs)
+
+        @callback(
+            *clear_outputs,
+            Input(clear_id, "n_clicks"),
+            *([State(f"{prefix}-data-rev", "data")] if track_rev else []),
+            prevent_initial_call=True,
+        )
+        def _clear_slot(n_clicks, rev=None, _n_out=n_clear, _reveal=slot_reveal):
+            if not n_clicks:
+                return tuple([no_update] * _n_out)
+            rev_payload = None
+            if track_rev:
+                prev_n = 0
+                if isinstance(rev, dict):
+                    prev_n = int(rev.get("n") or 0)
+                elif rev:
+                    prev_n = int(rev)
+                rev_payload = {"n": prev_n + 1, "replaced": True}
+            row: list = [
+                None,
+                [],
+                False,
+                True,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ]
+            if track_rev:
+                row.append(rev_payload)
+            row.extend([True] * len(_reveal))
+            return tuple(row)
+
+        @callback(
+            Output(clear_id, "disabled"),
+            Input(parsed_id, "data"),
+            Input(status_id, "children"),
+        )
+        def _sync_clear_enabled(parsed, _status, _pack=pack_store):
+            return not _has_players(parsed)
+
+    _wire_clear("current")
+    if include_historical:
+        _wire_clear("hist")
 
 
 def _register_upload_slot(

@@ -58,6 +58,7 @@ from components.scouting_shell import (
     parsed_players,
     pattern_matching_stubs,
     register_hist_toggle,
+    register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
     register_upload_callbacks,
@@ -140,6 +141,14 @@ register_upload_callbacks(
     pulse_ids=["st-main"],
     bad_file_message="Upload a Moneyball statistics CSV export.",
     decode_strict=True,
+    catch_exceptions=True,
+)
+register_library_select_callbacks(
+    "st",
+    parse_fn=parse_stats_export,
+    library_page="stats",
+    pack_store=True,
+    reveal_ids=["st-main"],
     catch_exceptions=True,
 )
 register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
@@ -1600,6 +1609,7 @@ def layout(**_kwargs):
                     f"Use the statistics Moneyball export. Benchmarks: {benchmarks()['name']}.",
                     className="text-muted small mb-0 mt-2",
                 ),
+                library_page="stats",
             ),
             html.Div(
                 [

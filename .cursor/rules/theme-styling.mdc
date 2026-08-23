@@ -1,0 +1,34 @@
+---
+description: Dark mode is the primary styling target; keep light mode readable too
+alwaysApply: true
+---
+
+# Theme-first styling (FMScouter)
+
+Dark mode is the **primary** design target for any style or UI chrome change. Light mode must still work and stay readable.
+
+## Requirements
+
+- Prefer CSS variables from `assets/styles.css` (`--app-bg`, `--app-card`, `--app-text`, `--app-muted`, `--app-line`, `--app-input`, `--app-accent`, etc.) over hard-coded light Bootstrap defaults.
+- Design and verify contrast first for dark (`html`/`body` without `data-theme="light"`): text, icons, borders, inputs, modals, tables, and hover/active states must be clearly visible on dark surfaces.
+- Still check light mode (`html[data-theme="light"]` / `body[data-theme="light"]`): text and accents must remain legible on light backgrounds; invert close-button filters / high-invert tricks as needed.
+- When adding a new surface (modal, panel, form, tooltip), style both themes in the same change—don’t leave Bootstrap/Mantine white defaults for dark.
+- Avoid pure `#fff` / `#000` text unless tied to a theme variable or a deliberate light-mode override.
+- Status colors (green/red/yellow) should remain distinguishable in both themes.
+
+## Pattern
+
+```css
+/* ✅ Theme tokens */
+.my-panel {
+  background: var(--app-card);
+  color: var(--app-text);
+  border: 1px solid var(--app-line);
+}
+
+/* ✅ Light-only tweak when dark default needs it */
+html[data-theme="light"] .my-panel .btn-close,
+body[data-theme="light"] .my-panel .btn-close {
+  filter: none;
+}
+```

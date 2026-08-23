@@ -416,7 +416,7 @@ body {
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 10px;
-    min-height: 0;
+    min-height: 1.75rem;
 }
 
 .rs-upload-status-row .rs-upload-status {
@@ -922,9 +922,16 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
 .rs-upload-dual {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem 1.25rem;
     margin-bottom: 0.25rem;
+    align-items: stretch;
+}
+
+@media (max-width: 720px) {
+    .rs-upload-dual {
+        grid-template-columns: 1fr;
+    }
 }
 
 .rs-upload-slot {
@@ -932,6 +939,12 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0;
+    height: 100%;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-card);
+    box-sizing: border-box;
 }
 
 .rs-upload-slot-title {
@@ -943,10 +956,25 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 }
 
 .rs-upload-slot-note {
-    margin: -0.15rem 0 0.15rem;
+    margin: 0;
+    min-height: 2.4em;
     font-size: 0.8125rem;
     line-height: 1.4;
     color: var(--app-muted);
+}
+
+.rs-upload-drop-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.rs-upload-drop-wrap .rs-upload {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 6.5rem;
 }
 
 .rs-upload-slot-tag {
@@ -2445,6 +2473,11 @@ body[data-theme="light"] .rs-table-shell .dash-spreadsheet-inner td[data-dash-co
     border-radius: 999px;
     padding: 2px 8px;
     line-height: 1.3;
+    display: none;
+}
+
+.rs-depth-card.active .rs-depth-focus-badge {
+    display: inline-block;
 }
 
 .rs-depth-card.active .rs-depth-name {
@@ -5590,4 +5623,167 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 
 .cmp-delta-wage-down {
     color: var(--app-ok, #22c55e);
+}
+
+/* Uploads library */
+.up-page .up-files-wrap {
+    overflow-x: auto;
+}
+.up-files-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+.up-files-table th,
+.up-files-table td {
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid var(--app-line);
+    text-align: left;
+    vertical-align: middle;
+}
+.up-files-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--app-muted);
+}
+.up-elig.yes {
+    color: #3dff88;
+    font-weight: 650;
+}
+html[data-theme="light"] .up-elig.yes,
+body[data-theme="light"] .up-elig.yes {
+    color: #15803d;
+}
+.up-elig.no {
+    color: var(--app-muted);
+}
+.up-file-name {
+    font-weight: 600;
+}
+.up-file-original {
+    font-size: 0.78rem;
+    margin-top: 0.15rem;
+}
+.up-user-note {
+    color: var(--app-text);
+}
+.up-elig-note {
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+}
+.up-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+.up-edit-error {
+    min-height: 1.25rem;
+}
+
+/* Edit saved file modal — dark/light via app theme tokens */
+.up-edit-modal .modal-content {
+    background: var(--app-card) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.up-edit-modal .modal-header {
+    background: var(--app-card) !important;
+    border-bottom: 1px solid var(--app-line);
+    color: var(--app-text);
+}
+
+.up-edit-modal .modal-title {
+    color: var(--app-text) !important;
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.up-edit-modal .modal-body {
+    background: var(--app-card) !important;
+    color: var(--app-text);
+}
+
+.up-edit-modal .modal-footer {
+    background: var(--app-card) !important;
+    border-top: 1px solid var(--app-line);
+}
+
+.up-edit-modal .btn-close {
+    filter: invert(1) grayscale(1) brightness(1.6);
+    opacity: 0.85;
+}
+
+html[data-theme="light"] .up-edit-modal .btn-close,
+body[data-theme="light"] .up-edit-modal .btn-close {
+    filter: none;
+    opacity: 0.7;
+}
+
+.up-edit-modal .rs-field-label {
+    color: var(--app-muted);
+}
+
+.up-edit-modal .up-edit-note,
+.up-edit-modal textarea.form-control {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line) !important;
+    border-radius: 8px;
+}
+
+.up-edit-modal .up-edit-note:focus,
+.up-edit-modal textarea.form-control:focus {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-line)) !important;
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--app-accent) 18%, transparent);
+}
+
+.up-edit-modal .up-edit-note::placeholder,
+.up-edit-modal textarea.form-control::placeholder {
+    color: var(--app-faint) !important;
+    opacity: 1;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input,
+.up-edit-modal .mantine-TextInput-input {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border: 1px solid var(--app-line) !important;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input:focus,
+.up-edit-modal .mantine-TextInput-input:focus {
+    border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-line)) !important;
+}
+
+.up-edit-modal .up-edit-name .mantine-TextInput-input::placeholder,
+.up-edit-modal .mantine-TextInput-input::placeholder {
+    color: var(--app-faint) !important;
+}
+.up-save-row {
+    margin-bottom: 0.35rem;
+}
+.rs-lib-picker {
+    margin-bottom: 0.15rem;
+}
+.rs-lib-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+    flex-wrap: nowrap;
+}
+.rs-lib-select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.rs-lib-clear {
+    flex-shrink: 0;
+}
+.rs-lib-hint {
+    margin-top: 0.35rem;
 }
