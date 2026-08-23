@@ -45,10 +45,8 @@ def bind_host() -> str:
 
 
 def bind_port() -> int:
-    # Render sets PORT; prefer it, then FM_PORT, then local default.
-    raw = (os.environ.get("PORT") or os.environ.get("FM_PORT") or "8050").strip()
     try:
-        return int(raw)
+        return int(os.environ.get("FM_PORT") or "8050")
     except ValueError:
         return 8050
 

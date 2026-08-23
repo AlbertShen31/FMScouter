@@ -21,19 +21,8 @@ cp .env.example .env
 python app.py
 ```
 
-## Public Render deploy
-
-A public `*.onrender.com` URL is fine with **Basic Auth required** (`FM_AUTH_USER` / `FM_AUTH_PASSWORD`; never `FM_AUTH_DISABLED` on Render). Render terminates TLS.
-
-Caveats:
-
-- Uploads and saved packs live on the instance disk, which is **ephemeral** on free/starter plans (cleared on redeploy/restart) and is a **third-party** host.
-- Prefer **not** uploading Moneyball / squad finance CSVs (wages/contracts) to the public demo. Attribute/stats scouting exports are still sensitive—treat the Basic Auth password like a shared secret.
-- Free instances may sleep when idle; the first request after sleep can be slow.
-- Stronger gate (Cloudflare Access, Tailscale, etc.) in front of Render remains preferred for long-lived private use.
-
 ## What you must do on the host (not automated in-app)
 
 - Enable disk encryption (or do not persist wage/contract CSVs).
-- Terminate TLS at the reverse proxy (Render does this for you).
-- Prefer Cloudflare Access / Tailscale / VPN over exposing Basic Auth alone to the public internet when the host holds finance data.
+- Terminate TLS at the reverse proxy.
+- Prefer Cloudflare Access / Tailscale / VPN over exposing Basic Auth alone to the public internet.

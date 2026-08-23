@@ -18,17 +18,6 @@ python app.py
 
 Defaults: bind `127.0.0.1:8050`, debugger off, HTTP Basic Auth on all routes (including Dash callbacks). Saved CSVs under `data/uploads/` are confidential (wages/contracts may be present).
 
-## Deploy on Render
-
-This is a Python/Dash app (not static), so GitHub Pages cannot host it. Use a [Render](https://render.com) Web Service instead.
-
-1. Push this repo to GitHub (already: `AlbertShen31/FMScouter`).
-2. In the [Render Dashboard](https://dashboard.render.com): **New → Blueprint**, select the repo (uses [render.yaml](render.yaml)).
-3. When prompted, set secrets: `FM_AUTH_USER`, `FM_AUTH_PASSWORD`. `FM_SECRET_KEY` is generated automatically.
-4. Deploy, then open the public `https://….onrender.com` URL and sign in with Basic Auth.
-
-Notes: free instances may sleep after idle (cold start). Disk is **ephemeral** — saved uploads and pack edits are lost on redeploy/restart. See [docs/SECURITY.md](docs/SECURITY.md) before uploading finance/wage CSVs.
-
 ## Role scores
 
 FM26 roles, with each role tagged IP, OOP, or GK.
