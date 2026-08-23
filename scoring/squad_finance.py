@@ -249,17 +249,18 @@ def player_wage_for_year(
     division_mode: str | None = "none",
     apply_yearly_raises: bool = False,
 ) -> float:
-    """Project one player's annual wage for season ``year`` (1-indexed).
+    """Project one player's annual wage at the **end** of season ``year`` (1-indexed).
 
-    Division change applies from year 1. Yearly raises (when enabled) apply after
-    each completed year: percentage clauses compound on the post-division wage;
-    absolute clauses add a flat amount each year.
+    Division change is applied first, then yearly raises for each completed season
+    through that year (so Y1 already includes one raise cycle when enabled).
+    Percentage clauses compound on the post-division wage; absolute clauses add
+    a flat amount per year.
     """
     base = player_wage_after_division(row, division_mode)
     year = max(1, int(year or 1))
-    if not apply_yearly_raises or year <= 1:
+    if not apply_yearly_raises:
         return base
-    steps = year - 1
+    steps = year
     kind = row.get("yearly_salary_raise_kind")
     if kind == "pct":
         rate = float(row.get("yearly_salary_raise_rate") or 0)

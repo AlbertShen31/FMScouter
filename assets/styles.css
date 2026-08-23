@@ -4750,6 +4750,14 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     margin-bottom: 14px;
 }
 
+.sf-params-row-tight {
+    margin-bottom: 0;
+}
+
+.sf-club-block .sf-params-row > .sf-field {
+    flex: 1 1 11rem;
+}
+
 .sf-select-row {
     margin-bottom: 8px;
 }
@@ -4769,6 +4777,83 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 
 .sf-switch {
     margin-top: 2px;
+}
+
+.sf-club-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.sf-club-block {
+    padding: 0 0 1.35rem;
+    margin: 0 0 1.35rem;
+    border-bottom: 1px solid var(--app-line);
+}
+
+.sf-club-block-last {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.sf-club-block > .sf-cat-head {
+    margin-top: 0;
+    margin-bottom: 6px;
+}
+
+.sf-note-tight {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.sf-scenario-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.sf-scenario-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sf-pill-control.mantine-SegmentedControl-root {
+    width: fit-content;
+    max-width: 100%;
+    padding: 3px;
+    border: 1px solid var(--app-line);
+    background: var(--app-inset);
+}
+
+.sf-division-pills.mantine-SegmentedControl-root {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.sf-years-pills.mantine-SegmentedControl-root {
+    width: auto;
+}
+
+.sf-pill-control .mantine-SegmentedControl-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 7px 12px;
+    color: var(--app-muted);
+    white-space: nowrap;
+}
+
+.sf-years-pills .mantine-SegmentedControl-label {
+    min-width: 2.25rem;
+    padding: 7px 10px;
+    text-align: center;
+}
+
+.sf-pill-control .mantine-SegmentedControl-label[data-active],
+.sf-pill-control .mantine-SegmentedControl-control[data-active] .mantine-SegmentedControl-label {
+    color: var(--app-text);
 }
 
 .sf-select {
@@ -4887,7 +4972,8 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .sf-note {
     color: var(--app-muted);
     font-size: 0.875rem;
-    margin-bottom: 12px;
+    line-height: 1.45;
+    margin: 0 0 1.1rem;
 }
 
 .sf-empty {
@@ -4942,7 +5028,7 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .sf-cat-head {
     font-size: 0.95rem;
     font-weight: 650;
-    margin: 16px 0 8px;
+    margin: 0 0 8px;
     color: var(--app-text);
 }
 

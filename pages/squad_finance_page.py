@@ -36,11 +36,19 @@ from scoring.squad_finance import (
 
 _DIVISION_MODE_BASE = (
     ("none", "No change"),
-    ("promo_normal", "Normal promotion"),
-    ("promo_top", "Top-tier promotion"),
-    ("releg_normal", "Normal relegation"),
-    ("releg_top", "Top-tier relegation"),
+    ("promo_normal", "Promotion"),
+    ("promo_top", "Top promo"),
+    ("releg_normal", "Relegation"),
+    ("releg_top", "Top releg"),
 )
+_DIVISION_MODE_OPTIONS = [
+    {"value": value, "label": label} for value, label in _DIVISION_MODE_BASE
+]
+_PROJECTION_YEAR_OPTIONS = [
+    {"value": "1", "label": "1"},
+    {"value": str(SUSTAINABILITY_YEARS), "label": str(SUSTAINABILITY_YEARS)},
+]
+_PROJECTION_YEAR_CHOICES = {1, SUSTAINABILITY_YEARS}
 
 register_page(__name__, path="/squad-finance", name="Squad finance")
 
@@ -71,8 +79,8 @@ _CLUB_FIELD_IDS = [
     *_EXPENSE_IDS,
 ]
 _WAGE_SCENARIO_IDS = [
-    "sf-yearly-raises",
     "sf-division-mode",
+    "sf-projection-years",
 ]
 _CLUB_PERSIST_IDS = [*_CLUB_FIELD_IDS, *_WAGE_SCENARIO_IDS]
 
@@ -231,23 +239,34 @@ def _signed_delta(value: float | None) -> str | None:
     return format_signed_money(value)
 
 
-def _division_options(raises: dict[str, float] | None = None) -> list[dict]:
-    """Select options with annual wage deltas in parentheses when known."""
-    raises = raises or {}
-    options = []
-    for value, label in _DIVISION_MODE_BASE:
-        if value == "none":
-            options.append({"value": value, "label": label})
-            continue
-        amounts = division_change_amounts(raises, value)
-        delta = _signed_delta(amounts["net"])
-        options.append(
-            {
-                "value": value,
-                "label": f"{label} ({delta})" if delta else f"{label} ($0)",
-            }
-        )
-    return options
+def _projection_years(value) -> int:
+    try:
+        years = int(value if value is not None else SUSTAINABILITY_YEARS)
+    except (TypeError, ValueError):
+        years = SUSTAINABILITY_YEARS
+    if years in _PROJECTION_YEAR_CHOICES:
+        return years
+    # Legacy mid-range values → nearest allowed horizon.
+    return 1 if years < 3 else SUSTAINABILITY_YEARS
+
+
+def _pill_control(
+    control_id: str,
+    data: list[dict],
+    *,
+    value: str,
+    class_name: str = "",
+    full_width: bool = False,
+) -> dmc.SegmentedControl:
+    return dmc.SegmentedControl(
+        id=control_id,
+        data=data,
+        value=value,
+        fullWidth=full_width,
+        size="sm",
+        radius="xl",
+        className=f"sf-pill-control {class_name}".strip(),
+    )
 
 
 def _migrate_division_mode(cached: dict | None) -> str:
@@ -423,10 +442,9 @@ def _statement_table(
     return html.Div(
         [
             html.P(
-                f"Y1–Y{years} are expected annual salaries if the player stays on "
-                f"this contract under the Wage scenario filters "
-                f"(division change from Y1; yearly rises after each completed year "
-                f"when enabled).",
+                f"Y1–Y{years} are expected annual salaries at the end of each "
+                f"season if the player stays on this contract (division change plus "
+                f"that year’s raise/drop applied).",
                 className="sf-note sf-statement-outlook-note",
             ),
             html.Table(
@@ -462,8 +480,9 @@ def _sustainability_panel(sustain: dict, theme: str | None = None) -> html.Div:
         )
     if sustain.get("apply_yearly_raises") and yearly > 0:
         scenario_bits.append(
-            f"adds {format_money(yearly)} in yearly wage rises after each completed year "
-            f"(percent clauses compound; cash clauses add a flat amount)"
+            f"uses end-of-season wages including {format_money(yearly)} in "
+            f"first-year raise effect (percent clauses compound each year; "
+            f"cash clauses add flat)"
         )
     scenario_note = (
         (" Wage scenario: " + "; ".join(scenario_bits) + ".")
@@ -597,8 +616,8 @@ def layout(**_kwargs):
                                                             "prorated against a "
                                                             f"{DEFAULT_SEASON_GAMES}-game season. "
                                                             "Club income/expenses stay annual "
-                                                            f"for the {SUSTAINABILITY_YEARS}-year "
-                                                            "verdict."
+                                                            "for the selected projection "
+                                                            "horizon."
                                                         ),
                                                         help_id="sf-help-games",
                                                     ),
@@ -691,130 +710,165 @@ def layout(**_kwargs):
                             dbc.CardBody(
                                 [
                                     html.P(
-                                        f"Enter annual figures in millions (one decimal, "
-                                        f"e.g. 25.5). The verdict holds today’s income and "
-                                        f"expenses constant for {SUSTAINABILITY_YEARS} years. "
-                                        "Leave blank to skip the sustainability check. "
-                                        "Wage-scenario options below use division-change "
-                                        "and Yearly Salary Raise columns from the "
-                                        "Moneyball export.",
+                                        "Enter annual figures in millions (e.g. 25.5). "
+                                        "Income and expenses are held constant over the "
+                                        "selected years. Leave blank to skip the "
+                                        "sustainability check.",
                                         className="sf-note",
                                     ),
-                                    html.H4("Wage scenario", className="sf-cat-head"),
                                     html.Div(
                                         [
-                                            html.Div(
-                                                [
-                                                    _field_label(
-                                                        "Yearly salary rises",
-                                                        tip=(
-                                                            "When enabled, each player’s "
-                                                            "Yearly Salary Raise applies "
-                                                            "after every completed year "
-                                                            "(year 1 stays at today’s wages "
-                                                            "± any division change). "
-                                                            "Percentages compound on the "
-                                                            "post-division wage; cash "
-                                                            "amounts add flat each year."
-                                                        ),
-                                                        help_id="sf-help-yearly-raises",
-                                                    ),
-                                                    dmc.Switch(
-                                                        id="sf-yearly-raises",
-                                                        label="Apply yearly raises",
-                                                        checked=False,
-                                                        className="sf-switch",
-                                                    ),
-                                                ],
-                                                className="sf-field",
+                                            html.H4(
+                                                "Wage scenario",
+                                                className="sf-cat-head",
+                                            ),
+                                            html.P(
+                                                "Uses division-change and Yearly Salary "
+                                                "Raise columns from the Moneyball export. "
+                                                "Projected Y1–Yn salaries are end-of-season "
+                                                "figures after raises and drops.",
+                                                className="sf-note sf-note-tight",
                                             ),
                                             html.Div(
                                                 [
-                                                    _field_label(
-                                                        "Division change",
-                                                        tip=(
-                                                            "One season outcome only — "
-                                                            "promotion raise or relegation "
-                                                            "drop from year 1 (not both). "
-                                                            "Percent clauses (e.g. 25%) are "
-                                                            "of each player’s annual salary; "
-                                                            "cash clauses are absolute. "
-                                                            "Amounts in parentheses are the "
-                                                            "squad’s annual wage change. "
-                                                            "Appearance fees are unchanged."
-                                                        ),
-                                                        help_id="sf-help-division",
+                                                    html.Div(
+                                                        [
+                                                            _field_label(
+                                                                "Division change",
+                                                                tip=(
+                                                                    "One season outcome only — "
+                                                                    "promotion or relegation "
+                                                                    "from year 1 (not both). "
+                                                                    "Percent clauses are of "
+                                                                    "each player’s annual "
+                                                                    "salary; cash clauses are "
+                                                                    "absolute. Appearance fees "
+                                                                    "are unchanged."
+                                                                ),
+                                                                help_id="sf-help-division",
+                                                            ),
+                                                            _pill_control(
+                                                                "sf-division-mode",
+                                                                _DIVISION_MODE_OPTIONS,
+                                                                value="none",
+                                                                class_name="sf-division-pills",
+                                                                full_width=True,
+                                                            ),
+                                                        ],
+                                                        className="sf-scenario-item",
                                                     ),
-                                                    dmc.Select(
-                                                        id="sf-division-mode",
-                                                        data=_division_options(),
-                                                        value="none",
-                                                        clearable=False,
-                                                        searchable=False,
-                                                        className="sf-select sf-select-wide",
+                                                    html.Div(
+                                                        [
+                                                            _field_label(
+                                                                "Years",
+                                                                tip=(
+                                                                    "Projection length for "
+                                                                    "expected player salaries "
+                                                                    "and club sustainability "
+                                                                    f"(1 or {SUSTAINABILITY_YEARS}). "
+                                                                    "Each Yn column is the "
+                                                                    "salary at the end of that "
+                                                                    "season after division "
+                                                                    "change and yearly raises."
+                                                                ),
+                                                                help_id="sf-help-projection-years",
+                                                            ),
+                                                            _pill_control(
+                                                                "sf-projection-years",
+                                                                _PROJECTION_YEAR_OPTIONS,
+                                                                value=str(
+                                                                    SUSTAINABILITY_YEARS
+                                                                ),
+                                                                class_name="sf-years-pills",
+                                                            ),
+                                                        ],
+                                                        className="sf-scenario-item",
                                                     ),
                                                 ],
-                                                className="sf-field sf-field-grow",
+                                                className="sf-scenario-stack",
                                             ),
                                         ],
-                                        className="sf-params-row",
+                                        className="sf-club-block",
                                     ),
-                                    _money_field(
-                                        "sf-balance",
-                                        "Current balance ($M)",
-                                        tip="Opening cash on hand, in millions.",
-                                        help_id="sf-help-balance",
-                                        placeholder="e.g. 25.5",
-                                    ),
-                                    html.H4("Debt", className="sf-cat-head"),
                                     html.Div(
                                         [
-                                            _money_field(
-                                                "sf-debt",
-                                                "Outstanding debt ($M)",
-                                                tip=(
-                                                    "Total club debt outstanding. "
-                                                    "Subtracted from balance for the "
-                                                    f"{SUSTAINABILITY_YEARS}-year opening "
-                                                    "position."
-                                                ),
-                                                help_id="sf-help-debt",
-                                                placeholder="e.g. 40.0",
+                                            html.H4(
+                                                "Opening position",
+                                                className="sf-cat-head",
                                             ),
-                                            _money_field(
-                                                "sf-debt-payments",
-                                                "Annual debt payments ($M)",
-                                                tip=(
-                                                    "Yearly debt service (interest + "
-                                                    "principal) at today’s rate, held "
-                                                    f"for {SUSTAINABILITY_YEARS} years. "
-                                                    "Included in annual expenses."
-                                                ),
-                                                help_id="sf-help-debt-payments",
-                                                placeholder="e.g. 5.0",
+                                            html.Div(
+                                                [
+                                                    _money_field(
+                                                        "sf-balance",
+                                                        "Current balance ($M)",
+                                                        tip=(
+                                                            "Opening cash on hand, "
+                                                            "in millions."
+                                                        ),
+                                                        help_id="sf-help-balance",
+                                                        placeholder="e.g. 25.5",
+                                                    ),
+                                                    _money_field(
+                                                        "sf-debt",
+                                                        "Outstanding debt ($M)",
+                                                        tip=(
+                                                            "Total club debt outstanding. "
+                                                            "Subtracted from balance for the "
+                                                            "opening position of the "
+                                                            "projection."
+                                                        ),
+                                                        help_id="sf-help-debt",
+                                                        placeholder="e.g. 40.0",
+                                                    ),
+                                                    _money_field(
+                                                        "sf-debt-payments",
+                                                        "Annual debt payments ($M)",
+                                                        tip=(
+                                                            "Yearly debt service (interest + "
+                                                            "principal) at today’s rate, held "
+                                                            "for the selected years. Included "
+                                                            "in annual expenses."
+                                                        ),
+                                                        help_id="sf-help-debt-payments",
+                                                        placeholder="e.g. 5.0",
+                                                    ),
+                                                ],
+                                                className="sf-params-row sf-params-row-tight",
                                             ),
                                         ],
-                                        className="sf-params-row",
+                                        className="sf-club-block",
                                     ),
-                                    html.H4("Income", className="sf-cat-head"),
-                                    _category_fields(
-                                        "sf-income",
-                                        INCOME_CATEGORIES,
-                                        tip_suffix=(
-                                            "Annual amount at today’s rate "
-                                            f"(held for {SUSTAINABILITY_YEARS} years)."
-                                        ),
+                                    html.Div(
+                                        [
+                                            html.H4("Income", className="sf-cat-head"),
+                                            _category_fields(
+                                                "sf-income",
+                                                INCOME_CATEGORIES,
+                                                tip_suffix=(
+                                                    "Annual amount at today’s rate "
+                                                    "(held for the selected years)."
+                                                ),
+                                            ),
+                                        ],
+                                        className="sf-club-block",
                                     ),
-                                    html.H4("Expenses", className="sf-cat-head"),
-                                    _category_fields(
-                                        "sf-expense",
-                                        EXPENSE_CATEGORIES,
-                                        tip_suffix=(
-                                            "Annual amount excluding squad wages and "
-                                            "appearance fees (already modeled above)."
-                                        ),
+                                    html.Div(
+                                        [
+                                            html.H4("Expenses", className="sf-cat-head"),
+                                            _category_fields(
+                                                "sf-expense",
+                                                EXPENSE_CATEGORIES,
+                                                tip_suffix=(
+                                                    "Annual amount excluding squad wages "
+                                                    "and appearance fees (already modeled "
+                                                    "above)."
+                                                ),
+                                            ),
+                                        ],
+                                        className="sf-club-block sf-club-block-last",
                                     ),
-                                ]
+                                ],
+                                className="sf-club-body",
                             ),
                         ],
                         className="mb-3 rs-section-card",
@@ -910,8 +964,8 @@ def _club_payload(
     debt,
     debt_payments,
     *category_values,
-    yearly_raises=False,
     division_mode="none",
+    projection_years=SUSTAINABILITY_YEARS,
 ):
     n_income = len(_INCOME_IDS)
     income_vals = list(category_values[:n_income])
@@ -926,8 +980,9 @@ def _club_payload(
         "expenses": {
             key: val for (key, _), val in zip(EXPENSE_CATEGORIES, expense_vals)
         },
-        "yearly_raises": bool(yearly_raises),
+        "yearly_raises": True,
         "division_mode": (division_mode or "none"),
+        "projection_years": _projection_years(projection_years),
     }
 
 
@@ -941,8 +996,8 @@ def _club_values(cached: dict | None) -> tuple:
         cached.get("debt_payments"),
         *[income.get(key) for key, _ in INCOME_CATEGORIES],
         *[expenses.get(key) for key, _ in EXPENSE_CATEGORIES],
-        bool(cached.get("yearly_raises")),
         _migrate_division_mode(cached),
+        str(_projection_years(cached.get("projection_years"))),
     )
 
 
@@ -951,34 +1006,38 @@ def _club_has_values(cached: dict | None) -> bool:
         return False
     values = _club_values(cached)
     # Money fields only — wage toggles alone shouldn't block remount wipe.
-    money = values[:-2]
+    money = values[: -len(_WAGE_SCENARIO_IDS)]
     return any(v is not None and v != "" for v in money)
 
 
 @callback(
     Output("sf-club", "data"),
     *[Input(field_id, "value") for field_id in _CLUB_FIELD_IDS],
-    Input("sf-yearly-raises", "checked"),
     Input("sf-division-mode", "value"),
+    Input("sf-projection-years", "value"),
     State("sf-club", "data"),
     prevent_initial_call=True,
 )
 def persist_club_finances(*args):
-    *field_values, yearly_raises, division_mode, cached = args
+    *field_values, division_mode, projection_years, cached = args
     payload = _club_payload(
         *field_values,
-        yearly_raises=yearly_raises,
         division_mode=division_mode,
+        projection_years=projection_years,
     )
     # NumberInputs remount empty before hydrate; keep prior session values.
     if not _club_has_values(payload) and _club_has_values(cached):
         # Still allow wage-scenario-only updates when money fields remount empty.
-        if ctx.triggered_id in {"sf-yearly-raises", "sf-division-mode"}:
+        if ctx.triggered_id in {
+            "sf-division-mode",
+            "sf-projection-years",
+        }:
             cached = cached or {}
             return {
                 **cached,
-                "yearly_raises": bool(yearly_raises),
+                "yearly_raises": True,
                 "division_mode": division_mode or "none",
+                "projection_years": _projection_years(projection_years),
             }
         return no_update
     return payload
@@ -986,8 +1045,8 @@ def persist_club_finances(*args):
 
 @callback(
     *[Output(field_id, "value") for field_id in _CLUB_FIELD_IDS],
-    Output("sf-yearly-raises", "checked"),
     Output("sf-division-mode", "value"),
+    Output("sf-projection-years", "value"),
     Input("sf-hydrate-tick", "n_intervals"),
     State("sf-club", "data"),
 )
@@ -997,21 +1056,12 @@ def hydrate_club_finances(_tick, cached):
     values = _club_values(cached)
     wage_only = (
         not _club_has_values(cached)
-        and not cached.get("yearly_raises")
         and _migrate_division_mode(cached) == "none"
+        and _projection_years(cached.get("projection_years")) == SUSTAINABILITY_YEARS
     )
     if wage_only:
         return tuple(no_update for _ in _CLUB_PERSIST_IDS)
     return values
-
-
-@callback(
-    Output("sf-division-mode", "data"),
-    Input("sf-parsed", "data"),
-)
-def sync_division_options(parsed):
-    rows = parsed_players(parsed)
-    return _division_options(squad_raise_totals(rows) if rows else None)
 
 
 _RENDER_INPUTS = [
@@ -1024,8 +1074,8 @@ _RENDER_INPUTS = [
     Input("sf-debt-payments", "value"),
     *[Input(field_id, "value") for field_id in _INCOME_IDS],
     *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
-    Input("sf-yearly-raises", "checked"),
     Input("sf-division-mode", "value"),
+    Input("sf-projection-years", "value"),
     Input("theme", "data"),
 ]
 
@@ -1047,8 +1097,8 @@ def render_statement(
     *rest,
 ):
     theme = rest[-1] if rest else "dark"
-    division_mode = rest[-2] if len(rest) >= 2 else "none"
-    yearly_raises = bool(rest[-3]) if len(rest) >= 3 else False
+    projection_years = _projection_years(rest[-2] if len(rest) >= 2 else SUSTAINABILITY_YEARS)
+    division_mode = rest[-3] if len(rest) >= 3 else "none"
     category_values = rest[:-3]
     rows = parsed_players(parsed)
     starters = list(starters or [])
@@ -1154,10 +1204,11 @@ def render_statement(
                 statement,
                 rows_by_key={row["key"]: row for row in rows if row.get("key")},
                 division_mode=division_mode,
-                apply_yearly_raises=bool(yearly_raises),
+                apply_yearly_raises=True,
+                outlook_years=projection_years,
             ),
             hint=(
-                f"Period costs plus Y1–Y{SUSTAINABILITY_YEARS} expected annual "
+                f"Period costs plus Y1–Y{projection_years} expected annual "
                 "salary under Wage scenario filters"
             ),
         ),
@@ -1175,15 +1226,16 @@ def render_statement(
             squad_wage_period=statement["wage_period"],
             games=games_n,
             season_games=DEFAULT_SEASON_GAMES,
-            apply_yearly_raises=yearly_raises,
+            years=projection_years,
+            apply_yearly_raises=True,
             yearly_raise_total=raises["yearly"],
             promotion_raise_total=division["promotion"],
             relegation_drop_total=division["relegation"],
             squad_wages_by_year=projected_annual_wages(
                 rows,
-                years=SUSTAINABILITY_YEARS,
+                years=projection_years,
                 division_mode=division_mode,
-                apply_yearly_raises=bool(yearly_raises),
+                apply_yearly_raises=True,
             ),
         )
         children.append(_sustainability_panel(sustain, theme))
