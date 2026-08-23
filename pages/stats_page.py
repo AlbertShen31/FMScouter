@@ -747,6 +747,9 @@ def _player_metric_sections(
     *,
     threshold_overrides=None,
 ) -> list[dict]:
+    # Present in some threshold packs but unused by Mustermann scoring — omit from
+    # modal bars / pizzas / values so charts match the metrics that drive averages.
+    skip_metrics = frozenset({"shots_on_target", "conversion_rate"})
     g = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
@@ -755,6 +758,8 @@ def _player_metric_sections(
     for cat in categories_for_group(g):
         metrics = []
         for mid in metrics_for(g, cat["id"], threshold_overrides):
+            if mid in skip_metrics:
+                continue
             band = band_metric(
                 g,
                 cat["id"],
