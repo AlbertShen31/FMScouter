@@ -762,9 +762,10 @@ body {
     pointer-events: none;
 }
 
-/* Hybrid columns: wrapped header (IP+ / OOP) — keep the column narrow. */
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"],
-#rs-table .dash-spreadsheet-inner td[data-dash-column*="+"] {
+/* Hybrid columns: wrapped header (IP+\\nOOP) — keep the column narrow.
+   Header-only: pre-line + extra right padding for the sort chevron.
+   Body cells match IP/OOP (centered; no pre-line / asymmetric padding). */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] {
     min-width: 64px !important;
     max-width: 80px !important;
     width: 68px !important;
@@ -776,11 +777,26 @@ body {
     vertical-align: middle !important;
 }
 
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column*="+"] {
+    min-width: 64px !important;
+    max-width: 80px !important;
+    width: 68px !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    white-space: normal !important;
+}
+
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name {
     white-space: pre-line !important;
     text-align: center;
     max-width: 100%;
     overflow-wrap: anywhere;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header--sort {

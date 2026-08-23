@@ -239,6 +239,12 @@ def layout(**_kwargs):
                 "Save CSV exports on this machine. Role scores, Player stats, and "
                 "Squad finance can pick from this library or upload a file manually. "
                 "Rename files and add notes so the dropdowns stay readable.",
+                className="text-muted mb-2",
+            ),
+            html.P(
+                "Confidential: files stay under data/uploads/ (not published as static "
+                "assets). Moneyball / finance exports include contracts and wages — "
+                "encrypt the host disk or delete CSVs you do not need.",
                 className="text-muted mb-3",
             ),
             dbc.Card(

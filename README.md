@@ -4,13 +4,25 @@ Based on the python evaluation script created by https://www.youtube.com/@squirr
 
 How the scorer, role groups, packs, and naming are wired: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+Security before any non-localhost exposure: [docs/SECURITY.md](docs/SECURITY.md).
+
 Code layout: `pages/` (routes), `components/` (shared UI), `scoring/` (parse/score), `services/` (packs/settings), `config/` (data).
+
+## Run locally
+
+```bash
+cp .env.example .env
+# Set FM_AUTH_USER / FM_AUTH_PASSWORD, or FM_AUTH_DISABLED=true for loopback-only
+python app.py
+```
+
+Defaults: bind `127.0.0.1:8050`, debugger off, HTTP Basic Auth on all routes (including Dash callbacks). Saved CSVs under `data/uploads/` are confidential (wages/contracts may be present).
 
 ## Role scores
 
 FM26 roles, with each role tagged IP, OOP, or GK.
 
-1. Run the app: `python app.py`
+1. Run the app (see above).
 2. Open http://127.0.0.1:8050
 3. Upload an FM **attribute** CSV (semicolon or comma). A stats-only export will be rejected.
 4. Pick roles to score. Reset defaults loads SKP, BCB, WB, CM, CHM, IF.
