@@ -13,6 +13,7 @@ from components.scouting_shell import (
     parsed_historical_players,
     register_library_select_callbacks,
     register_upload_callbacks,
+    shortlist_busy_overlay,
     upload_card,
 )
 from scoring.comparison import money_delta_span
@@ -61,6 +62,8 @@ register_upload_callbacks(
     pack_store=False,
     reveal_ids=["sf-main"],
     pulse_ids=["sf-main"],
+    busy_ready_id="sf-statement",
+    busy_ready_prop="children",
     bad_file_message="Upload a Moneyball player CSV export.",
     decode_strict=False,
     catch_exceptions=True,
@@ -977,8 +980,10 @@ def layout(**_kwargs):
                         ],
                         className="mb-4 rs-section-card",
                     ),
+                    shortlist_busy_overlay("sf"),
                 ],
                 id="sf-main",
+                className="rs-shortlist-busy-host",
                 hidden=True,
             ),
         ],

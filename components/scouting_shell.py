@@ -394,6 +394,24 @@ def pattern_matching_stubs(
     return html.Div(buttons, hidden=True)
 
 
+def shortlist_busy_overlay(prefix: str) -> html.Div:
+    """Blocking refresh overlay; toggle ``is-on`` via shortlist-busy clientside callbacks.
+
+    Place as the last child of the shortlist host (``pulse_ids`` target) and keep
+    ``rs-shortlist-busy-host`` on that host.
+    """
+    return html.Div(
+        [
+            html.Div(className="rs-shortlist-busy-spinner", **{"aria-hidden": "true"}),
+            html.Span("Updating shortlist…", className="rs-shortlist-busy-label"),
+        ],
+        id=f"{prefix}-shortlist-busy",
+        className="rs-shortlist-busy",
+        role="status",
+        **{"aria-live": "polite"},
+    )
+
+
 def hist_block(
     prefix: str,
     *,
@@ -441,6 +459,8 @@ def register_upload_callbacks(
     pack_store: bool = False,
     reveal_ids: Sequence[str] | None = None,
     pulse_ids: Sequence[str] | None = None,
+    busy_ready_id: str | None = None,
+    busy_ready_prop: str = "data",
     bad_file_message: str = "Upload a CSV export from Football Manager.",
     decode_strict: bool = False,
     catch_exceptions: bool = False,
@@ -452,8 +472,10 @@ def register_upload_callbacks(
     become False on success and True on error. Leave empty for pages that use a
     separate workflow gate (Role scores).
 
-    ``pulse_ids`` are DOM ids flashed when a file is replaced so the shortlist
-    refresh is obvious.
+    ``pulse_ids`` are DOM ids that show a blocking shortlist refresh overlay while
+    an export is loading, replacing, or clearing, until the shortlist finishes
+    updating. ``busy_ready_id`` / ``busy_ready_prop`` name the component that
+    signals the shortlist is done (default: ``{prefix}-table`` ``data``).
 
     With ``include_historical`` (default), also wires a second slot into
     ``{prefix}-parsed-historical`` for comparison exports. Page callbacks should
@@ -466,6 +488,8 @@ def register_upload_callbacks(
         pack_store=pack_store,
         reveal_ids=reveal_ids,
         pulse_ids=pulse_ids,
+        busy_ready_id=busy_ready_id,
+        busy_ready_prop=busy_ready_prop,
         bad_file_message=bad_file_message,
         decode_strict=decode_strict,
         catch_exceptions=catch_exceptions,
@@ -719,6 +743,8 @@ def _register_upload_slot(
     catch_exceptions: bool,
     track_data_rev: bool,
     status_tag: str | None = None,
+    busy_ready_id: str | None = None,
+    busy_ready_prop: str = "data",
 ) -> None:
     reveal_ids = list(reveal_ids or [])
     pulse_ids = list(pulse_ids or [])
@@ -857,32 +883,111 @@ def _register_upload_slot(
         return tuple(row)
 
     if track_data_rev and pulse_ids:
-        targets_js = ", ".join(f'"{tid}"' for tid in pulse_ids)
-        clientside_callback(
-            f"""
-            function(rev) {{
-                if (!rev || !rev.n || !rev.replaced) {{
-                    return window.dash_clientside.no_update;
-                }}
-                const status = document.getElementById("{status_id}");
-                if (status) {{
-                    status.classList.remove("rs-upload-status-flash");
-                    void status.offsetWidth;
-                    status.classList.add("rs-upload-status-flash");
-                }}
-                [{targets_js}].forEach(function(id) {{
-                    const el = document.getElementById(id);
-                    if (!el || el.hidden) return;
-                    el.classList.remove("rs-data-flash");
-                    void el.offsetWidth;
-                    el.classList.add("rs-data-flash");
-                }});
-                return String(rev.n);
-            }}
-            """,
-            Output(f"{prefix}-pulse-token", "children"),
-            Input(f"{prefix}-data-rev", "data"),
+        _register_shortlist_busy(
+            prefix,
+            pulse_ids,
+            ready_id=busy_ready_id,
+            ready_prop=busy_ready_prop,
         )
+
+
+def _register_shortlist_busy(
+    prefix: str,
+    target_ids: Sequence[str],
+    *,
+    ready_id: str | None = None,
+    ready_prop: str = "data",
+) -> None:
+    """Toggle ``{prefix}-shortlist-busy`` overlay during export load/clear.
+
+    Uses a layout-owned overlay (see ``shortlist_busy_overlay``) so React re-renders
+    do not wipe the spinner. ``target_ids`` is kept for call-site compatibility with
+    ``pulse_ids``.
+    """
+    del target_ids
+    overlay_id = f"{prefix}-shortlist-busy"
+    status_id = f"{prefix}-upload-status"
+    ready_id = ready_id or f"{prefix}-table"
+    off_cls = "rs-shortlist-busy"
+
+    clientside_callback(
+        f"""
+        function(clearClicks, libValue, uploadContents, replaceContents) {{
+            var trig = window.dash_clientside.callback_context.triggered;
+            if (!trig || !trig.length) {{
+                return window.dash_clientside.no_update;
+            }}
+            var prop = trig[0].prop_id || "";
+            if (prop.indexOf("n_clicks") !== -1 && !clearClicks) {{
+                return window.dash_clientside.no_update;
+            }}
+            if (prop.indexOf("contents") !== -1 && !trig[0].value) {{
+                return window.dash_clientside.no_update;
+            }}
+            window.__rsShortlistBusyAt = window.__rsShortlistBusyAt || {{}};
+            window.__rsShortlistBusyAt["{prefix}"] = Date.now();
+            return "rs-shortlist-busy is-on t-" + String(Date.now());
+        }}
+        """,
+        Output(overlay_id, "className"),
+        Input(f"{prefix}-lib-clear", "n_clicks"),
+        Input(f"{prefix}-lib-select", "value"),
+        Input(f"{prefix}-upload", "contents"),
+        Input(f"{prefix}-upload-replace", "contents"),
+        prevent_initial_call=True,
+    )
+
+    clientside_callback(
+        f"""
+        function(rev) {{
+            if (!rev || !rev.n) {{
+                return window.dash_clientside.no_update;
+            }}
+            var status = document.getElementById("{status_id}");
+            if (rev.replaced && status) {{
+                status.classList.remove("rs-upload-status-flash");
+                void status.offsetWidth;
+                status.classList.add("rs-upload-status-flash");
+            }}
+            // Do not toggle the overlay here: table-ready hide often runs in the
+            // same update as data-rev and would clear a show from this callback.
+            return window.dash_clientside.no_update;
+        }}
+        """,
+        Output(f"{prefix}-pulse-token", "children"),
+        Input(f"{prefix}-data-rev", "data"),
+        prevent_initial_call=True,
+    )
+
+    clientside_callback(
+        f"""
+        function(_ready) {{
+            var el = document.getElementById("{overlay_id}");
+            if (!el || el.className.indexOf("is-on") === -1) {{
+                return window.dash_clientside.no_update;
+            }}
+            return "{off_cls}";
+        }}
+        """,
+        Output(overlay_id, "className", allow_duplicate=True),
+        Input(ready_id, ready_prop),
+        prevent_initial_call=True,
+    )
+
+    clientside_callback(
+        f"""
+        function(_statusChildren) {{
+            var status = document.getElementById("{status_id}");
+            if (!(status && status.querySelector(".rs-upload-error"))) {{
+                return window.dash_clientside.no_update;
+            }}
+            return "{off_cls}";
+        }}
+        """,
+        Output(overlay_id, "className", allow_duplicate=True),
+        Input(status_id, "children"),
+        prevent_initial_call=True,
+    )
 
 
 def register_pos_foot_callbacks(

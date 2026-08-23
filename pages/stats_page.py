@@ -62,6 +62,7 @@ from components.scouting_shell import (
     register_marks_callbacks,
     register_pos_foot_callbacks,
     register_upload_callbacks,
+    shortlist_busy_overlay,
     unpack_parsed,
     upload_card,
 )
@@ -1796,8 +1797,10 @@ def layout(**_kwargs):
                         ],
                         className="mb-3 rs-section-card",
                     ),
+                    shortlist_busy_overlay("st"),
                 ],
                 id="st-main",
+                className="rs-shortlist-busy-host",
                 hidden=True,
             ),
             player_modal(prefix="st"),

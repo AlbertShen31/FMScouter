@@ -33,6 +33,7 @@ from components.scouting_shell import (
     register_marks_callbacks,
     register_pos_foot_callbacks,
     register_upload_callbacks,
+    shortlist_busy_overlay,
     upload_card,
 )
 from scoring.comparison import score_display
@@ -1456,8 +1457,10 @@ def layout():
             ],
             className="mb-4 rs-section-card",
         ),
+            shortlist_busy_overlay("rs"),
             ],
             id="rs-results-wrap",
+            className="rs-shortlist-busy-host",
             hidden=True,
         ),
     ],

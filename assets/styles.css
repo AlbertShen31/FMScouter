@@ -547,6 +547,53 @@ body {
     border-radius: 8px;
 }
 
+.rs-shortlist-busy-host {
+    position: relative;
+}
+
+.rs-shortlist-busy {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--app-card) 82%, transparent);
+    backdrop-filter: blur(2px);
+    pointer-events: all;
+    cursor: wait;
+}
+
+.rs-shortlist-busy.is-on {
+    display: flex;
+}
+
+.rs-shortlist-busy-spinner {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid color-mix(in srgb, var(--app-accent) 25%, var(--app-line));
+    border-top-color: var(--app-accent);
+    animation: rs-shortlist-busy-spin 0.75s linear infinite;
+}
+
+.rs-shortlist-busy-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--app-text);
+}
+
+@keyframes rs-shortlist-busy-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .rs-export-subhead-row {
     display: flex;
     align-items: center;
