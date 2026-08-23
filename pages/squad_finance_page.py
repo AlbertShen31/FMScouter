@@ -1,11 +1,17 @@
 """Squad finance page: Moneyball upload → matchday wage/fee statement."""
 from __future__ import annotations
 
-from dash import Input, Output, State, callback, ctx, dcc, html, no_update, register_page
+from dash import Input, Output, State, callback, dcc, html, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
-from components.scouting_shell import decode_upload, upload_card
+from components.pack_picker import section_card_header
+from components.player_filters import help_icon
+from components.scouting_shell import (
+    parsed_players,
+    register_upload_callbacks,
+    upload_card,
+)
 from scoring.squad_finance import (
     DEFAULT_GAMES,
     DEFAULT_SEASON_GAMES,
@@ -19,6 +25,28 @@ from scoring.squad_finance import (
 )
 
 register_page(__name__, path="/squad-finance", name="Squad finance")
+
+register_upload_callbacks(
+    "sf",
+    parse_fn=load_squad_finance,
+    pack_store=False,
+    reveal_ids=["sf-main"],
+    pulse_ids=["sf-main"],
+    bad_file_message="Upload a Moneyball player CSV export.",
+    decode_strict=False,
+    catch_exceptions=True,
+)
+
+
+def _help(tip: str, help_id: str) -> list:
+    return help_icon(tip, help_id)
+
+
+def _field_label(text: str, *, tip: str | None = None, help_id: str | None = None) -> html.Div:
+    parts: list = [html.Span(text, className="rs-field-label")]
+    if tip:
+        parts.extend(_help(tip, help_id or f"sf-help-{text.lower().replace(' ', '-')}"))
+    return html.Div(parts, className="rs-field-label-row")
 
 
 def _player_options(rows: list[dict]) -> list[dict]:
@@ -64,25 +92,36 @@ def _status_card(title: str, body: str, *, tone: str = "") -> html.Div:
     )
 
 
-def _money_field(field_id: str, label: str, *, placeholder: str = "0") -> html.Div:
+def _money_field(field_id: str, label: str, *, tip: str, help_id: str, placeholder: str = "0") -> html.Div:
     return html.Div(
         [
-            html.Label(label, className="rs-field-label"),
+            _field_label(label, tip=tip, help_id=help_id),
             dmc.NumberInput(
                 id=field_id,
                 value=None,
                 min=0,
-                step=100_000,
+                step=0.1,
                 hideControls=False,
                 thousandSeparator=",",
                 allowDecimal=True,
-                decimalScale=0,
+                decimalScale=1,
+                fixedDecimalScale=False,
                 placeholder=placeholder,
                 className="sf-number sf-number-wide",
             ),
         ],
         className="sf-field",
     )
+
+
+def _millions_to_cash(value) -> float | None:
+    """Club finance inputs are in millions; convert to currency units."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value) * 1_000_000.0
+    except (TypeError, ValueError):
+        return None
 
 
 def _statement_table(statement: dict) -> html.Div:
@@ -127,14 +166,19 @@ def _statement_table(statement: dict) -> html.Div:
 
 def _sustainability_panel(sustain: dict) -> html.Div:
     ok = sustain["sustainable"]
-    verdict = "Sustainable at current figures" if ok else "Not sustainable at current figures"
+    verdict = (
+        "Sustainable at current figures"
+        if ok
+        else "Not sustainable at current figures"
+    )
     tone = "best" if ok else "worst"
     return html.Div(
         [
             html.H3("Club sustainability", className="sf-subhead"),
             html.P(
                 "Funds available = balance + prorated annual income − prorated other "
-                "annual expenses. Compared with XVI wages + appearance fees.",
+                f"annual expenses (club figures entered in $M, wages prorated by games / "
+                f"{DEFAULT_SEASON_GAMES}). Compared with XVI wages + appearance fees.",
                 className="sf-note",
             ),
             html.Div(
@@ -161,21 +205,25 @@ def _empty_statement(message: str) -> html.Div:
 def layout(**_kwargs):
     return dbc.Container(
         [
-            dcc.Store(id="sf-rows", data=[]),
+            dcc.Interval(id="sf-hydrate-tick", interval=50, max_intervals=1),
             html.H1("Squad finance", className="mt-2 mb-2"),
             html.P(
-                "Upload a Moneyball player export with salary, FFP contribution, and "
-                f"match fees, pick {STARTERS} starters (including a GK) and {SUBS} "
-                "substitutes, then set how many games to model. Every selected player "
-                "is assumed to appear in every game. Optionally enter club balance / "
-                "income / expenses to check wage sustainability.",
+                "Upload a Moneyball player export with salary and match fees, pick "
+                f"{STARTERS} starters (including a GK) and {SUBS} substitutes, then set "
+                "how many games to model. Every selected player is assumed to appear in "
+                "every game. Optionally enter club balance / income / expenses in millions "
+                "to check wage sustainability.",
                 className="text-muted mb-3",
             ),
             upload_card(
                 "sf",
                 "1. Upload squad export",
+                upload_label=html.Div(
+                    ["Drag a CSV here, or ", html.A("browse")]
+                ),
                 hint=html.P(
-                    "Uses Salary, FFP Contribution, and Appearance Fee columns.",
+                    "Uses Salary, Appearance Fee, and FFP Contribution columns. "
+                    "FFP is shown for reference and is not included in totals.",
                     className="text-muted small mb-0 mt-2",
                 ),
             ),
@@ -183,38 +231,27 @@ def layout(**_kwargs):
                 [
                     dbc.Card(
                         [
-                            dbc.CardHeader("2. Matchday squad"),
+                            section_card_header("2. Matchday squad"),
                             dbc.CardBody(
                                 [
                                     html.Div(
                                         [
                                             html.Div(
                                                 [
-                                                    html.Label(
+                                                    _field_label(
                                                         "Games",
-                                                        className="rs-field-label",
+                                                        tip=(
+                                                            "Matches to model. Appearance "
+                                                            "fees use this count; wages and "
+                                                            f"optional club P&L are prorated "
+                                                            f"against a {DEFAULT_SEASON_GAMES}-game "
+                                                            "season."
+                                                        ),
+                                                        help_id="sf-help-games",
                                                     ),
                                                     dmc.NumberInput(
                                                         id="sf-games",
                                                         value=DEFAULT_GAMES,
-                                                        min=1,
-                                                        max=100,
-                                                        step=1,
-                                                        hideControls=False,
-                                                        className="sf-number",
-                                                    ),
-                                                ],
-                                                className="sf-field",
-                                            ),
-                                            html.Div(
-                                                [
-                                                    html.Label(
-                                                        "Season games (wage proration)",
-                                                        className="rs-field-label",
-                                                    ),
-                                                    dmc.NumberInput(
-                                                        id="sf-season-games",
-                                                        value=DEFAULT_SEASON_GAMES,
                                                         min=1,
                                                         max=100,
                                                         step=1,
@@ -231,9 +268,14 @@ def layout(**_kwargs):
                                         [
                                             html.Div(
                                                 [
-                                                    html.Label(
+                                                    _field_label(
                                                         f"Starters ({STARTERS})",
-                                                        className="rs-field-label",
+                                                        tip=(
+                                                            "Defaults include the highest-"
+                                                            "wage GK when one is present "
+                                                            "in the export."
+                                                        ),
+                                                        help_id="sf-help-starters",
                                                     ),
                                                     dmc.MultiSelect(
                                                         id="sf-starters",
@@ -252,9 +294,14 @@ def layout(**_kwargs):
                                             ),
                                             html.Div(
                                                 [
-                                                    html.Label(
+                                                    _field_label(
                                                         f"Substitutes ({SUBS})",
-                                                        className="rs-field-label",
+                                                        tip=(
+                                                            "Bench players are also assumed "
+                                                            "to appear in every game for "
+                                                            "fee planning."
+                                                        ),
+                                                        help_id="sf-help-subs",
                                                     ),
                                                     dmc.MultiSelect(
                                                         id="sf-subs",
@@ -280,31 +327,46 @@ def layout(**_kwargs):
                     ),
                     dbc.Card(
                         [
-                            dbc.CardHeader("3. Club finances (optional)"),
+                            section_card_header("3. Club finances (optional)"),
                             dbc.CardBody(
                                 [
                                     html.P(
-                                        "Income and other expenses are annual figures, "
-                                        "prorated by games / season games. Leave blank to "
-                                        "skip the sustainability check.",
+                                        f"Enter figures in millions (one decimal, e.g. 25.5). "
+                                        f"Annual income / expenses are prorated by games / "
+                                        f"{DEFAULT_SEASON_GAMES}. Leave blank to skip the "
+                                        "sustainability check.",
                                         className="sf-note",
                                     ),
                                     html.Div(
                                         [
                                             _money_field(
                                                 "sf-balance",
-                                                "Current balance",
-                                                placeholder="e.g. 25000000",
+                                                "Current balance ($M)",
+                                                tip="Cash on hand, in millions.",
+                                                help_id="sf-help-balance",
+                                                placeholder="e.g. 25.5",
                                             ),
                                             _money_field(
                                                 "sf-income",
-                                                "Annual club income",
-                                                placeholder="e.g. 80000000",
+                                                "Annual club income ($M)",
+                                                tip=(
+                                                    "Gate, commercial, prize money, and "
+                                                    "other annual income in millions — "
+                                                    "prorated over the modeled games."
+                                                ),
+                                                help_id="sf-help-income",
+                                                placeholder="e.g. 80.0",
                                             ),
                                             _money_field(
                                                 "sf-expenses",
-                                                "Annual other expenses",
-                                                placeholder="excl. this XVI",
+                                                "Annual other expenses ($M)",
+                                                tip=(
+                                                    "Other annual club costs in millions, "
+                                                    "excluding this XVI’s wages and "
+                                                    "appearance fees."
+                                                ),
+                                                help_id="sf-help-expenses",
+                                                placeholder="e.g. 40.0",
                                             ),
                                         ],
                                         className="sf-params-row",
@@ -316,7 +378,7 @@ def layout(**_kwargs):
                     ),
                     dbc.Card(
                         [
-                            dbc.CardHeader("4. Financial statement"),
+                            section_card_header("4. Financial statement"),
                             dbc.CardBody(
                                 [
                                     html.Div(id="sf-summary", className="sf-summary-row"),
@@ -337,81 +399,15 @@ def layout(**_kwargs):
 
 
 @callback(
-    Output("sf-rows", "data"),
-    Output("sf-upload-status", "children"),
-    Output("sf-upload-wrap", "hidden"),
-    Output("sf-upload-replace-wrap", "hidden"),
-    Output("sf-main", "hidden"),
-    Input("sf-upload", "contents"),
-    Input("sf-upload-replace", "contents"),
-    State("sf-upload", "filename"),
-    State("sf-upload-replace", "filename"),
-    prevent_initial_call=True,
-)
-def on_upload(upload_contents, replace_contents, upload_name, replace_name):
-    if ctx.triggered_id == "sf-upload-replace":
-        contents, name = replace_contents, replace_name or "squad.csv"
-    else:
-        contents, name = upload_contents, upload_name or "squad.csv"
-    if not contents:
-        return no_update, no_update, no_update, no_update, no_update
-    if not str(name).lower().endswith(".csv"):
-        return (
-            [],
-            html.Div("Upload a Moneyball CSV export.", className="rs-upload-error"),
-            False,
-            True,
-            True,
-        )
-    try:
-        rows = load_squad_finance(decode_upload(contents))
-    except Exception as exc:
-        return (
-            [],
-            html.Div(str(exc), className="rs-upload-error"),
-            False,
-            True,
-            True,
-        )
-    if not rows:
-        return (
-            [],
-            html.Div("No players found in that file.", className="rs-upload-error"),
-            False,
-            True,
-            True,
-        )
-    with_pay = sum(
-        1
-        for row in rows
-        if row["salary"] or row["appearance_fee"] or row["ffp_contribution"]
-    )
-    gk_count = sum(1 for row in rows if row.get("is_gk"))
-    status = [
-        html.Span("✓", className="rs-upload-ok"),
-        html.Span(f"{len(rows):,} players", className="rs-upload-count"),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(
-            f"{with_pay:,} with salary/fees/FFP",
-            className="rs-upload-count",
-        ),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(f"{gk_count:,} GK", className="rs-upload-count"),
-        html.Span("·", className="rs-upload-sep"),
-        html.Span(name, className="rs-upload-name", title=name),
-    ]
-    return rows, status, True, False, False
-
-
-@callback(
     Output("sf-starters", "data"),
     Output("sf-subs", "data"),
     Output("sf-starters", "value"),
     Output("sf-subs", "value"),
-    Input("sf-rows", "data"),
+    Input("sf-parsed", "data"),
+    Input("sf-data-rev", "data"),
 )
-def sync_player_options(rows):
-    rows = rows or []
+def sync_player_options(parsed, _rev):
+    rows = parsed_players(parsed)
     options = _player_options(rows)
     starters, subs = default_matchday_keys(rows)
     return options, options, starters, subs
@@ -421,19 +417,16 @@ def sync_player_options(rows):
     Output("sf-selection-hint", "children"),
     Output("sf-summary", "children"),
     Output("sf-statement", "children"),
-    Input("sf-rows", "data"),
+    Input("sf-parsed", "data"),
     Input("sf-starters", "value"),
     Input("sf-subs", "value"),
     Input("sf-games", "value"),
-    Input("sf-season-games", "value"),
     Input("sf-balance", "value"),
     Input("sf-income", "value"),
     Input("sf-expenses", "value"),
 )
-def render_statement(
-    rows, starters, subs, games, season_games, balance, income, expenses
-):
-    rows = rows or []
+def render_statement(parsed, starters, subs, games, balance, income, expenses):
+    rows = parsed_players(parsed)
     starters = list(starters or [])
     subs = list(subs or [])
     by_key = {row["key"]: row for row in rows if row.get("key")}
@@ -451,6 +444,9 @@ def render_statement(
         hint_bits.append("add at least one GK to starters")
     hint = " · ".join(hint_bits)
 
+    if not rows:
+        return hint, [], _empty_statement("Upload a squad export to build the statement.")
+
     if len(starters) < STARTERS or len(subs) < SUBS:
         return (
             hint,
@@ -461,17 +457,16 @@ def render_statement(
         )
 
     games_n = int(games or DEFAULT_GAMES)
-    season_n = int(season_games or DEFAULT_SEASON_GAMES)
     statement = matchday_statement(
         rows,
         starters,
         subs,
         games=games_n,
-        season_games=season_n,
+        season_games=DEFAULT_SEASON_GAMES,
     )
     summary = [
         _summary_card(
-            f"Wages ({statement['games']}/{statement['season_games']} games)",
+            f"Wages ({statement['games']} games)",
             statement["wage_period"],
         ),
         _summary_card("FFP contribution (period)", statement["ffp_period"]),
@@ -481,7 +476,8 @@ def render_statement(
     note = html.P(
         [
             "Every selected player is assumed to appear in every game "
-            "(appearance fee × games). Totals are wages + appearance fees; "
+            "(appearance fee × games). Wages are annual salary prorated by "
+            f"games / {DEFAULT_SEASON_GAMES}. Totals are wages + appearance fees; "
             "FFP is shown separately and not added in. "
             "Goal / assist / clean-sheet bonuses are not included.",
         ],
@@ -492,12 +488,12 @@ def render_statement(
     has_club_inputs = any(v is not None and v != "" for v in (balance, income, expenses))
     if has_club_inputs:
         sustain = club_sustainability(
-            balance=balance,
-            annual_income=income,
-            annual_expenses=expenses,
+            balance=_millions_to_cash(balance),
+            annual_income=_millions_to_cash(income),
+            annual_expenses=_millions_to_cash(expenses),
             squad_total=statement["total"],
             games=games_n,
-            season_games=season_n,
+            season_games=DEFAULT_SEASON_GAMES,
         )
         children.append(_sustainability_panel(sustain))
 

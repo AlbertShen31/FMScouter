@@ -53,14 +53,15 @@ docs/
 
 ### Scouting shell
 
-`components/scouting_shell.py` owns the shared plumbing between Role scores (`rs-*`) and Player stats (`st-*`):
+`components/scouting_shell.py` owns the shared plumbing between Role scores (`rs-*`), Player stats (`st-*`), and Squad finance (`sf-*`):
 
-- **Upload** — decode CSV, parse via a page-supplied function, write `{prefix}-parsed` (plain `{players, filename}` or zlib-packed).
-- **Pos / foot** — pattern-matching card toggles into filter stores.
-- **Marks** — DataTable `selected_row_ids` synced to a marked-keys store (stable row `id` / `_key`).
-- **Hist** — show/hide score-distribution wrap.
+- **Upload** — decode CSV, parse via a page-supplied function, write `{prefix}-parsed` (plain `{players, filename}` or zlib-packed). Session stores live in `app.py` (`rs-parsed`, `st-parsed`, `sf-parsed`).
+- **Reveal / replace pulse** — optional `{prefix}-main` unhide on successful upload (Stats, Squad finance); replace flashes status + pulse targets.
+- **Pos / foot** — pattern-matching card toggles into filter stores (Role scores / Stats).
+- **Marks** — DataTable `selected_row_ids` synced to a marked-keys store (Role scores / Stats).
+- **Hist** — show/hide score-distribution wrap (Role scores / Stats).
 
-Domain scoring, columns, and workflow gates stay page-local: Role scores still gates results until roles are scored; Stats reveals the shortlist on upload (`reveal_ids=["st-main"]`). Division tier filtering stays on Stats only.
+Domain scoring, columns, and workflow gates stay page-local: Role scores still gates results until roles are scored; Stats and Squad finance reveal the main panel on upload (`reveal_ids`). Division tier filtering stays on Stats only.
 
 ### Config layout
 
