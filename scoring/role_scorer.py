@@ -289,17 +289,27 @@ IDENTITY = {
     "Age": ["Age"],
     "Club": ["Club"],
     "Division": ["Division", "Div"],
-    "Nation": ["Based In", "Nat", "Nationality"],
+    # Nation = nationality code (ENG); Based In = country the club is in.
+    "Nation": ["Nation", "Nat", "Nationality"],
+    "BasedIn": ["Based In"],
+    "SecondNation": ["2nd Nat", "Second Nationality", "Second Nation"],
     "Position": ["Position"],
     "SecPosition": ["Sec. Position", "Secondary Position", "Sec Position"],
     "BestPos": ["Best Pos", "Best Position"],
     "BestRole": ["Best Role"],
+    "PositionRole": ["Position/Role", "Position / Role"],
     "Style": ["Style"],
     "Personality": ["Personality"],
     "MediaHandling": ["Media Handling"],
     "WorldReputation": ["World Reputation"],
+    "WorldReputationGold": ["World Reputation Gold"],
+    "WorldReputationSilver": ["World Reputation Silver"],
     "Ability": ["Ability", "CA"],
+    "AbilityGold": ["Ability Gold"],
+    "AbilitySilver": ["Ability Silver"],
     "Potential": ["Potential", "PA"],
+    "PotentialGold": ["Potential Gold"],
+    "PotentialSilver": ["Potential Silver"],
     "Height": ["Height"],
     "LeftFoot": ["Left Foot", "LFoot", "L"],
     "RightFoot": ["Right Foot", "RFoot", "R"],
@@ -307,17 +317,90 @@ IDENTITY = {
     "Inf": ["Inf"],
     "Injury": ["Injury"],
     "Squad": ["Squad"],
+    "Picked": ["Picked"],
+    "HomeGrownStatus": ["Home Grown Status"],
     "NationalTeam": ["National Team"],
-    "IntAppsSeason": ["International Appearances (Season)"],
-    "IntAssists": ["International Assists"],
-    "AvgRatingInt": ["Average Rating International"],
-    "Last5Int": ["Last 5 Games International"],
-    "FormInt": ["Form International"],
+    "IntAppsSeason": [
+        "International Appearances (Season)",
+        "Int Apps (Season)",
+    ],
+    "IntAssists": ["International Assists", "Int Assists"],
+    "AvgRatingInt": [
+        "Average Rating International",
+        "Avg Rating International",
+    ],
+    "Last5Int": [
+        "Last 5 Games International",
+        "Last 5 Games Int",
+    ],
+    "FormInt": ["Form International", "Form Int"],
     "IntGoalsConceded": ["International Goals Conceded"],
     "IntGls": ["Int Gls", "International Goals"],
     "IntApps": ["Int Apps", "International Appearances"],
     "YthApps": ["Yth Apps", "Youth Apps"],
     "YthGls": ["Yth Gls", "Youth Goals"],
+}
+
+# Contract / transfer / wage columns from the Moneyball view (FM26).
+FINANCE_CSV = {
+    "min_release_clause": ["Minimum Fee Release Clause"],
+    "active_non_promotion_release": ["Active Non Promotion Release Clause"],
+    "active_relegation_release": ["Active Relegation Release Clause"],
+    "min_release_clause_expires": ["Minimum Fee Release Clause - Expiry Date"],
+    "min_release_clause_continental": [
+        "Minimum Fee Release Clause (Clubs in a Continental Competition)"
+    ],
+    "min_release_clause_continental_expires": [
+        "Minimum Fee Release Clause (Clubs in a Continental Competition) - Expiry Date"
+    ],
+    "min_release_clause_major_continental": [
+        "Minimum Fee Release Clause (Clubs in a Major Continental Competition)"
+    ],
+    "min_release_clause_major_continental_expires": [
+        "Minimum Fee Release Clause (Clubs in a Major Continental Competition) - Expiry Date"
+    ],
+    "min_release_clause_higher_division": [
+        "Minimum Fee Release Clause (Domestic Clubs in Higher Division)"
+    ],
+    "min_release_clause_higher_division_expires": [
+        "Minimum Fee Release Clause (Domestic Clubs in Higher Division) - Expiry Date"
+    ],
+    "min_release_clause_domestic": [
+        "Minimum Fee Release Clause (Domestic Clubs)"
+    ],
+    "min_release_clause_domestic_expires": [
+        "Minimum Fee Release Clause (Domestic Clubs) - Expiry Date"
+    ],
+    "min_release_clause_foreign": [
+        "Minimum Fee Release Clause (Foreign Clubs)"
+    ],
+    "min_release_clause_foreign_expires": [
+        "Minimum Fee Release Clause (Foreign Clubs) - Expiry Date"
+    ],
+    "non_promotion_release": ["Non Promotion Release Clause"],
+    "relegation_release": ["Relegation Release Clause"],
+    "promotion_salary_raise": ["Promotion Salary Raise"],
+    "relegation_salary_drop": ["Relegation Salary Drop"],
+    "top_division_promotion_salary_raise": [
+        "Top Division Promotion Salary raise",
+        "Top Division Promotion Salary Raise",
+    ],
+    "top_division_relegation_salary_drop": [
+        "Top Division Relegation Salary Drop",
+    ],
+    "yearly_salary_raise": ["Yearly Salary Raise"],
+    "ffp_contribution": ["FFP Contribution"],
+    "contract_expires": ["Expires"],
+    "work_permit_required": ["Work Permit Required"],
+    "wp_needed": ["WP Needed"],
+    "transfer_value": ["Transfer Value"],
+    "salary": ["Salary"],
+    "appearance_fee": ["Appearance Fee"],
+    "unused_sub_fee": ["Unused Substitute Fee"],
+    "goal_bonus": ["Goal Bonus"],
+    "assist_bonus": ["Assist Bonus"],
+    "shutout_bonus": ["Shutout Bonus"],
+    "int_cap_bonus": ["Int Cap Bonus"],
 }
 
 # FM26 Moneyball export: star ratings (Ability / Potential / World Reputation) are unreliable.
@@ -483,6 +566,16 @@ def extract_record_fields(row: dict[str, str]) -> dict[str, str]:
     """Career totals and discipline columns from the stats export (when present)."""
     out: dict[str, str] = {}
     for key, aliases in {**CAREER_CSV, **DISCIPLINE_CSV}.items():
+        value = pick(row, aliases)
+        if value not in ("", "-"):
+            out[key] = value
+    return out
+
+
+def extract_finance_fields(row: dict[str, str]) -> dict[str, str]:
+    """Contract, transfer, wage, and release-clause columns when present."""
+    out: dict[str, str] = {}
+    for key, aliases in FINANCE_CSV.items():
         value = pick(row, aliases)
         if value not in ("", "-"):
             out[key] = value
@@ -1061,16 +1154,28 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
-                "nation": pick(row, IDENTITY["Nation"]),
+                "nation": pick(row, IDENTITY["Nation"])
+                or pick(row, IDENTITY["BasedIn"]),
+                "based_in": pick(row, IDENTITY["BasedIn"]),
+                "second_nation": pick(row, IDENTITY["SecondNation"]),
                 "position": pos,
                 "best_pos": pick(row, IDENTITY["BestPos"]),
                 "best_role": pick_best_role(row),
+                "position_role": pick(row, IDENTITY["PositionRole"]),
                 "style": pick(row, IDENTITY["Style"]),
                 "personality": pick(row, IDENTITY["Personality"]),
                 "media_handling": pick(row, IDENTITY["MediaHandling"]),
                 "world_reputation": pick(row, IDENTITY["WorldReputation"]),
+                "world_reputation_gold": pick(row, IDENTITY["WorldReputationGold"]),
+                "world_reputation_silver": pick(
+                    row, IDENTITY["WorldReputationSilver"]
+                ),
                 "ability": pick(row, IDENTITY["Ability"]),
+                "ability_gold": pick(row, IDENTITY["AbilityGold"]),
+                "ability_silver": pick(row, IDENTITY["AbilitySilver"]),
                 "potential": pick(row, IDENTITY["Potential"]),
+                "potential_gold": pick(row, IDENTITY["PotentialGold"]),
+                "potential_silver": pick(row, IDENTITY["PotentialSilver"]),
                 "height": pick(row, IDENTITY["Height"]).strip('"'),
                 "left_foot": pick(row, IDENTITY["LeftFoot"]),
                 "right_foot": pick(row, IDENTITY["RightFoot"]),
@@ -1078,6 +1183,8 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "inf": pick(row, IDENTITY["Inf"]),
                 "injury": pick(row, IDENTITY["Injury"]),
                 "squad": pick(row, IDENTITY["Squad"]),
+                "picked": pick(row, IDENTITY["Picked"]),
+                "home_grown_status": pick(row, IDENTITY["HomeGrownStatus"]),
                 "national_team": pick(row, IDENTITY["NationalTeam"]),
                 "int_apps_season": pick(row, IDENTITY["IntAppsSeason"]),
                 "int_assists": pick(row, IDENTITY["IntAssists"]),
@@ -1090,6 +1197,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "yth_apps": pick(row, IDENTITY["YthApps"]),
                 "yth_gls": pick(row, IDENTITY["YthGls"]),
                 **extract_record_fields(row),
+                **extract_finance_fields(row),
                 "attrs": attrs,
                 "attr_hits": attr_count(row),
                 "positions": positions,

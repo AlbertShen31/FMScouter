@@ -1,0 +1,1024 @@
+{
+  "id": "fm26-moneyball-combined-20260822",
+  "name": "FM26 Moneyball combined attributes + finance + season stats",
+  "source_file": "moneyball_export_20260822_234042.csv",
+  "captured": "2026-08-22",
+  "delimiter": ";",
+  "column_count": 248,
+  "groups": {
+    "selection": [
+      {
+        "name": "Picked",
+        "sample": "AM (R)"
+      },
+      {
+        "name": "Inf",
+        "sample": ""
+      }
+    ],
+    "identity": [
+      {
+        "name": "Player",
+        "sample": "Bukayo Saka"
+      },
+      {
+        "name": "Ability",
+        "sample": "Unknown"
+      },
+      {
+        "name": "Ability Gold",
+        "sample": ""
+      },
+      {
+        "name": "Ability Silver",
+        "sample": ""
+      },
+      {
+        "name": "Potential",
+        "sample": "Unknown"
+      },
+      {
+        "name": "Potential Gold",
+        "sample": ""
+      },
+      {
+        "name": "Potential Silver",
+        "sample": ""
+      },
+      {
+        "name": "Based In",
+        "sample": "England"
+      },
+      {
+        "name": "Club",
+        "sample": "Arsenal"
+      },
+      {
+        "name": "Division",
+        "sample": "Premier League"
+      },
+      {
+        "name": "Best Pos",
+        "sample": "AM (R)"
+      },
+      {
+        "name": "Best Role",
+        "sample": "IW"
+      },
+      {
+        "name": "Sec. Position",
+        "sample": ""
+      },
+      {
+        "name": "Position/Role",
+        "sample": "-"
+      },
+      {
+        "name": "Height",
+        "sample": "5'10\""
+      },
+      {
+        "name": "Nation",
+        "sample": "ENG"
+      },
+      {
+        "name": "2nd Nat",
+        "sample": "NGA"
+      },
+      {
+        "name": "Personality",
+        "sample": "Model Citizen"
+      },
+      {
+        "name": "Left Foot",
+        "sample": "Very Strong"
+      },
+      {
+        "name": "Right Foot",
+        "sample": "Reasonable"
+      },
+      {
+        "name": "Style",
+        "sample": "Physical"
+      },
+      {
+        "name": "Age",
+        "sample": "24"
+      },
+      {
+        "name": "Position",
+        "sample": "AM (RL)"
+      },
+      {
+        "name": "World Reputation",
+        "sample": "4"
+      },
+      {
+        "name": "World Reputation Gold",
+        "sample": "4"
+      },
+      {
+        "name": "World Reputation Silver",
+        "sample": "0"
+      },
+      {
+        "name": "Media Handling",
+        "sample": "Unflappable"
+      },
+      {
+        "name": "Home Grown Status",
+        "sample": "Trained at club (0-21)"
+      }
+    ],
+    "release_clauses": [
+      {
+        "name": "Minimum Fee Release Clause",
+        "sample": "-"
+      },
+      {
+        "name": "Active Non Promotion Release Clause",
+        "sample": "-"
+      },
+      {
+        "name": "Active Relegation Release Clause",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Clubs in a Continental Competition)",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Clubs in a Continental Competition) - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Clubs in a Major Continental Competition)",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Clubs in a Major Continental Competition) - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Domestic Clubs in Higher Division)",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Domestic Clubs in Higher Division) - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Domestic Clubs)",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Domestic Clubs) - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Foreign Clubs)",
+        "sample": "-"
+      },
+      {
+        "name": "Minimum Fee Release Clause (Foreign Clubs) - Expiry Date",
+        "sample": "-"
+      },
+      {
+        "name": "Non Promotion Release Clause",
+        "sample": "-"
+      },
+      {
+        "name": "Relegation Release Clause",
+        "sample": "-"
+      }
+    ],
+    "salary_clauses": [
+      {
+        "name": "Promotion Salary Raise",
+        "sample": "-"
+      },
+      {
+        "name": "Relegation Salary Drop",
+        "sample": "-"
+      },
+      {
+        "name": "Top Division Promotion Salary raise",
+        "sample": "-"
+      },
+      {
+        "name": "Top Division Relegation Salary Drop",
+        "sample": "25%"
+      },
+      {
+        "name": "Yearly Salary Raise",
+        "sample": "-"
+      },
+      {
+        "name": "Salary",
+        "sample": "$21.07M p/a"
+      }
+    ],
+    "contract_fees": [
+      {
+        "name": "FFP Contribution",
+        "sample": "$26.01M p/a"
+      },
+      {
+        "name": "Expires",
+        "sample": "6/30/2031"
+      },
+      {
+        "name": "Work Permit Required",
+        "sample": "N/A"
+      },
+      {
+        "name": "WP Needed",
+        "sample": "No"
+      },
+      {
+        "name": "Transfer Value",
+        "sample": "$95M - $144M"
+      },
+      {
+        "name": "Salary",
+        "sample": "$21.07M p/a"
+      },
+      {
+        "name": "Appearance Fee",
+        "sample": "$68K"
+      },
+      {
+        "name": "Unused Substitute Fee",
+        "sample": "$20.5K"
+      },
+      {
+        "name": "Goal Bonus",
+        "sample": "$88K"
+      },
+      {
+        "name": "Assist Bonus",
+        "sample": "$61K"
+      },
+      {
+        "name": "Shutout Bonus",
+        "sample": "-"
+      },
+      {
+        "name": "Int Cap Bonus",
+        "sample": "-"
+      }
+    ],
+    "career_intl": [
+      {
+        "name": "AT Apps",
+        "sample": "201"
+      },
+      {
+        "name": "AT Gls",
+        "sample": "54"
+      },
+      {
+        "name": "AT League Apps",
+        "sample": "200"
+      },
+      {
+        "name": "AT League Goals",
+        "sample": "54"
+      },
+      {
+        "name": "Int Apps",
+        "sample": "46"
+      },
+      {
+        "name": "Int Gls",
+        "sample": "12"
+      },
+      {
+        "name": "National Team",
+        "sample": "Main"
+      },
+      {
+        "name": "Yth Apps",
+        "sample": "1"
+      },
+      {
+        "name": "Yth Gls",
+        "sample": "0"
+      },
+      {
+        "name": "International Appearances (Season)",
+        "sample": "2"
+      },
+      {
+        "name": "International Assists",
+        "sample": "3"
+      },
+      {
+        "name": "International Goals Conceded",
+        "sample": "0"
+      }
+    ],
+    "season_overview": [
+      {
+        "name": "Appearances",
+        "sample": "6"
+      },
+      {
+        "name": "Assists",
+        "sample": "1"
+      },
+      {
+        "name": "Average Rating Club",
+        "sample": "7.42"
+      },
+      {
+        "name": "Average Rating International",
+        "sample": "8.50"
+      },
+      {
+        "name": "Mins/Gl",
+        "sample": "487"
+      },
+      {
+        "name": "Rating",
+        "sample": "7.42"
+      },
+      {
+        "name": "Shutouts",
+        "sample": "0"
+      },
+      {
+        "name": "Cln/90",
+        "sample": "0.0"
+      },
+      {
+        "name": "Form Club",
+        "sample": "-"
+      },
+      {
+        "name": "All/90",
+        "sample": "0.0"
+      },
+      {
+        "name": "Form International",
+        "sample": "-"
+      },
+      {
+        "name": "Form",
+        "sample": "-"
+      },
+      {
+        "name": "Last 5 Games Club",
+        "sample": "-"
+      },
+      {
+        "name": "Last 5 Games International",
+        "sample": "-"
+      },
+      {
+        "name": "Last Match Rating",
+        "sample": "7.20"
+      },
+      {
+        "name": "Minutes",
+        "sample": "487"
+      },
+      {
+        "name": "Mins/Gm",
+        "sample": "81.1666666666667"
+      },
+      {
+        "name": "Starts",
+        "sample": "6"
+      },
+      {
+        "name": "Player of the Match",
+        "sample": "1"
+      },
+      {
+        "name": "Pts/Gm",
+        "sample": "1.8"
+      },
+      {
+        "name": "Red cards",
+        "sample": "0"
+      },
+      {
+        "name": "Yellow Cards",
+        "sample": "0"
+      }
+    ],
+    "attributes": [
+      {
+        "name": "Marking",
+        "sample": "8"
+      },
+      {
+        "name": "Technique",
+        "sample": "17"
+      },
+      {
+        "name": "Tackling",
+        "sample": "10"
+      },
+      {
+        "name": "Penalty Taking",
+        "sample": "15"
+      },
+      {
+        "name": "Passing",
+        "sample": "13"
+      },
+      {
+        "name": "Aerial Reach",
+        "sample": "1"
+      },
+      {
+        "name": "Long Throws",
+        "sample": "6"
+      },
+      {
+        "name": "Long Shots",
+        "sample": "17"
+      },
+      {
+        "name": "Heading",
+        "sample": "9"
+      },
+      {
+        "name": "Free Kick Taking",
+        "sample": "14"
+      },
+      {
+        "name": "First Touch",
+        "sample": "16"
+      },
+      {
+        "name": "Finishing",
+        "sample": "15"
+      },
+      {
+        "name": "Dribbling",
+        "sample": "17"
+      },
+      {
+        "name": "Crossing",
+        "sample": "15"
+      },
+      {
+        "name": "Corners",
+        "sample": "18"
+      },
+      {
+        "name": "Strength",
+        "sample": "13"
+      },
+      {
+        "name": "Stamina",
+        "sample": "17"
+      },
+      {
+        "name": "Pace",
+        "sample": "15"
+      },
+      {
+        "name": "Natural Fitness",
+        "sample": "18"
+      },
+      {
+        "name": "Balance",
+        "sample": "18"
+      },
+      {
+        "name": "Jumping Reach",
+        "sample": "9"
+      },
+      {
+        "name": "Agility",
+        "sample": "16"
+      },
+      {
+        "name": "Acceleration",
+        "sample": "17"
+      },
+      {
+        "name": "Throwing",
+        "sample": "1"
+      },
+      {
+        "name": "Rushing Out (Tendency)",
+        "sample": "3"
+      },
+      {
+        "name": "Reflexes",
+        "sample": "3"
+      },
+      {
+        "name": "Punching",
+        "sample": "3"
+      },
+      {
+        "name": "One On Ones",
+        "sample": "1"
+      },
+      {
+        "name": "Kicking",
+        "sample": "1"
+      },
+      {
+        "name": "Handling",
+        "sample": "1"
+      },
+      {
+        "name": "Eccentricity",
+        "sample": "3"
+      },
+      {
+        "name": "Communication",
+        "sample": "2"
+      },
+      {
+        "name": "Command Of Area",
+        "sample": "2"
+      },
+      {
+        "name": "Aggression",
+        "sample": "13"
+      },
+      {
+        "name": "Anticipation",
+        "sample": "16"
+      },
+      {
+        "name": "Bravery",
+        "sample": "12"
+      },
+      {
+        "name": "Composure",
+        "sample": "15"
+      },
+      {
+        "name": "Concentration",
+        "sample": "14"
+      },
+      {
+        "name": "Decisions",
+        "sample": "16"
+      },
+      {
+        "name": "Determination",
+        "sample": "17"
+      },
+      {
+        "name": "Flair",
+        "sample": "16"
+      },
+      {
+        "name": "Leadership",
+        "sample": "13"
+      },
+      {
+        "name": "Off The Ball",
+        "sample": "17"
+      },
+      {
+        "name": "Positioning",
+        "sample": "10"
+      },
+      {
+        "name": "Team Work",
+        "sample": "17"
+      },
+      {
+        "name": "Vision",
+        "sample": "16"
+      },
+      {
+        "name": "Work Rate",
+        "sample": "16"
+      }
+    ],
+    "season_stats_detail": [
+      {
+        "name": "xA",
+        "sample": "1.85"
+      },
+      {
+        "name": "xA/90",
+        "sample": "0.3"
+      },
+      {
+        "name": "xG-OP",
+        "sample": "-1.68"
+      },
+      {
+        "name": "xG/90",
+        "sample": "0.5"
+      },
+      {
+        "name": "Fouls Against",
+        "sample": "6"
+      },
+      {
+        "name": "Fouls Made",
+        "sample": "3"
+      },
+      {
+        "name": "Game Win Ratio",
+        "sample": "67"
+      },
+      {
+        "name": "Games Drawn",
+        "sample": "0"
+      },
+      {
+        "name": "Games Lost",
+        "sample": "2"
+      },
+      {
+        "name": "Games Missed In A Row",
+        "sample": "0"
+      },
+      {
+        "name": "Games Won",
+        "sample": "4"
+      },
+      {
+        "name": "Goals",
+        "sample": "1"
+      },
+      {
+        "name": "Goals Allowed",
+        "sample": "0"
+      },
+      {
+        "name": "Goals per 90 minutes",
+        "sample": "0.2"
+      },
+      {
+        "name": "Minutes Since Last Conceded",
+        "sample": "0"
+      },
+      {
+        "name": "Minutes Since Last Goal",
+        "sample": "189"
+      },
+      {
+        "name": "NP-xG",
+        "sample": "2.68"
+      },
+      {
+        "name": "NP-xG/90",
+        "sample": "0.5"
+      },
+      {
+        "name": "Penalties Taken",
+        "sample": "0"
+      },
+      {
+        "name": "Penalties Faced",
+        "sample": "0"
+      },
+      {
+        "name": "Penalties Saved",
+        "sample": "0"
+      },
+      {
+        "name": "Penalties Saved Ratio",
+        "sample": "0"
+      },
+      {
+        "name": "Penalties Scored",
+        "sample": "0"
+      },
+      {
+        "name": "Penalties Scored Ratio",
+        "sample": "0"
+      },
+      {
+        "name": "Team Goals",
+        "sample": "7"
+      },
+      {
+        "name": "Tall",
+        "sample": "0"
+      },
+      {
+        "name": "Tcon/90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Tgls/90",
+        "sample": "1.3"
+      },
+      {
+        "name": "xG",
+        "sample": "2.68"
+      },
+      {
+        "name": "Saves per 90",
+        "sample": "0"
+      },
+      {
+        "name": "Headers Attempted",
+        "sample": "10"
+      },
+      {
+        "name": "Headers Attempted per 90",
+        "sample": "1.8"
+      },
+      {
+        "name": "Headers Lost per 90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Headers Won",
+        "sample": "5"
+      },
+      {
+        "name": "Headers Won per 90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Headers Won Percentage",
+        "sample": "50"
+      },
+      {
+        "name": "Key Headers per 90",
+        "sample": "0.0"
+      },
+      {
+        "name": "Crosses Completed Ratio",
+        "sample": "22"
+      },
+      {
+        "name": "Crosses Attempted",
+        "sample": "22"
+      },
+      {
+        "name": "Crosses Attempted per 90",
+        "sample": "4.1"
+      },
+      {
+        "name": "Crosses Completed",
+        "sample": "5"
+      },
+      {
+        "name": "Crosses Completed per 90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Open Play Cross Completion Percentage",
+        "sample": "25"
+      },
+      {
+        "name": "Open Play Crosses Attempted",
+        "sample": "20"
+      },
+      {
+        "name": "Open Play Crosses Attempted per 90",
+        "sample": "3.7"
+      },
+      {
+        "name": "Open Play Crosses Completed",
+        "sample": "5"
+      },
+      {
+        "name": "Open Play Crosses Completed per 90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Mistakes Leading to Goals",
+        "sample": "0"
+      },
+      {
+        "name": "Distance",
+        "sample": "37.2mi"
+      },
+      {
+        "name": "Dist/90",
+        "sample": "11.1"
+      },
+      {
+        "name": "Dribbles",
+        "sample": "28"
+      },
+      {
+        "name": "Dribbles per 90",
+        "sample": "5.2"
+      },
+      {
+        "name": "Sprints/90",
+        "sample": "17.9"
+      },
+      {
+        "name": "Off",
+        "sample": "2"
+      },
+      {
+        "name": "Asts/90",
+        "sample": "0.2"
+      },
+      {
+        "name": "Chances Created per 90",
+        "sample": "0.6"
+      },
+      {
+        "name": "Clear Cut Chances Created",
+        "sample": "3"
+      },
+      {
+        "name": "Key Passes",
+        "sample": "11"
+      },
+      {
+        "name": "Key Passes per 90",
+        "sample": "2.0"
+      },
+      {
+        "name": "Open Play Key Passes per 90",
+        "sample": "2.0"
+      },
+      {
+        "name": "Pass Completion Percentage",
+        "sample": "86%"
+      },
+      {
+        "name": "Passes Attempted",
+        "sample": "288"
+      },
+      {
+        "name": "Passes Attempted per 90",
+        "sample": "53.2"
+      },
+      {
+        "name": "Passes Completed",
+        "sample": "249"
+      },
+      {
+        "name": "Passes Completed per 90",
+        "sample": "46.0"
+      },
+      {
+        "name": "Possession Lost per 90",
+        "sample": "12.6"
+      },
+      {
+        "name": "PsP",
+        "sample": "26"
+      },
+      {
+        "name": "Progressive Passes per 90",
+        "sample": "4.8"
+      },
+      {
+        "name": "xGP",
+        "sample": "0"
+      },
+      {
+        "name": "xGP/90",
+        "sample": "0.0"
+      },
+      {
+        "name": "Expected Save Percentage",
+        "sample": "0"
+      },
+      {
+        "name": "Save Percentage",
+        "sample": "0"
+      },
+      {
+        "name": "Saves Held",
+        "sample": "0"
+      },
+      {
+        "name": "Saves Parried",
+        "sample": "0"
+      },
+      {
+        "name": "Saves Tipped",
+        "sample": "0"
+      },
+      {
+        "name": "Conv %",
+        "sample": "5%"
+      },
+      {
+        "name": "xG/shot",
+        "sample": "0.127619047619048"
+      },
+      {
+        "name": "Free Kick Shots",
+        "sample": "0"
+      },
+      {
+        "name": "Goals From Outside The Box",
+        "sample": "1"
+      },
+      {
+        "name": "Shots",
+        "sample": "21"
+      },
+      {
+        "name": "Shots From Outside The Box Per 90 minutes",
+        "sample": "1.1"
+      },
+      {
+        "name": "Shots on Target",
+        "sample": "7"
+      },
+      {
+        "name": "Shots on Target per 90",
+        "sample": "1.3"
+      },
+      {
+        "name": "Shots on Target Percentage",
+        "sample": "33%"
+      },
+      {
+        "name": "Shot/90",
+        "sample": "3.9"
+      },
+      {
+        "name": "Blk",
+        "sample": "1"
+      },
+      {
+        "name": "Blk/90",
+        "sample": "0.2"
+      },
+      {
+        "name": "Clearances",
+        "sample": "5"
+      },
+      {
+        "name": "Clearances per 90",
+        "sample": "0.9"
+      },
+      {
+        "name": "Interceptions",
+        "sample": "12"
+      },
+      {
+        "name": "Interceptions per 90",
+        "sample": "2.2"
+      },
+      {
+        "name": "Key Tackles",
+        "sample": "2"
+      },
+      {
+        "name": "Key Tackles per 90",
+        "sample": "0.4"
+      },
+      {
+        "name": "Possession Won per 90",
+        "sample": "7.0"
+      },
+      {
+        "name": "Pres A",
+        "sample": "73"
+      },
+      {
+        "name": "Pres A/90",
+        "sample": "13.5"
+      },
+      {
+        "name": "Pres C",
+        "sample": "30"
+      },
+      {
+        "name": "Pres C/90",
+        "sample": "5.5"
+      },
+      {
+        "name": "Shts Blckd",
+        "sample": "1"
+      },
+      {
+        "name": "Shts Blckd/90",
+        "sample": "0.2"
+      },
+      {
+        "name": "Tackle Completion Percentage",
+        "sample": "75"
+      },
+      {
+        "name": "Tackles Attempted",
+        "sample": "20"
+      },
+      {
+        "name": "Tackled Completed",
+        "sample": "15"
+      },
+      {
+        "name": "Tackles Completed per 90",
+        "sample": "2.8"
+      }
+    ]
+  }
+}

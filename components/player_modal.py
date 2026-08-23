@@ -28,6 +28,11 @@ MODAL_EXTRA_FIELD_DEFS = (
     ("Squad", "squad"),
     ("Personality", "personality"),
     ("Media handling", "media_handling"),
+    ("Based in", "based_in"),
+    ("2nd nation", "second_nation"),
+    ("Home grown", "home_grown_status"),
+    ("Picked", "picked"),
+    ("Position/role", "position_role"),
 )
 
 CAREER_MODAL_FIELDS = (
@@ -43,6 +48,25 @@ DISCIPLINE_MODAL_FIELDS = (
     ("Red cards", "red_cards"),
     ("Fouls made", "fouls_made"),
     ("Fouls against", "fouls_against"),
+)
+
+FINANCE_MODAL_FIELDS = (
+    ("Transfer value", "transfer_value"),
+    ("Salary", "salary"),
+    ("Contract expires", "contract_expires"),
+    ("FFP contribution", "ffp_contribution"),
+    ("Release clause", "min_release_clause"),
+    ("Work permit", "work_permit_required"),
+    ("WP needed", "wp_needed"),
+    ("Appearance fee", "appearance_fee"),
+    ("Unused sub fee", "unused_sub_fee"),
+    ("Goal bonus", "goal_bonus"),
+    ("Assist bonus", "assist_bonus"),
+    ("Shutout bonus", "shutout_bonus"),
+    ("Int cap bonus", "int_cap_bonus"),
+    ("Yearly raise", "yearly_salary_raise"),
+    ("Promotion raise", "promotion_salary_raise"),
+    ("Relegation drop", "relegation_salary_drop"),
 )
 
 PLAYER_IDENTITY_SECTIONS = [
@@ -117,6 +141,10 @@ def iter_modal_field_defs() -> list[tuple[str, str, str]]:
     for label, key in MODAL_EXTRA_FIELD_DEFS:
         if key not in seen and key not in STAR_ATTRIBUTES_BROKEN:
             out.append((label, key, "identity"))
+            seen.add(key)
+    for label, key in FINANCE_MODAL_FIELDS:
+        if key not in seen:
+            out.append((label, key, "finance"))
             seen.add(key)
     return out
 
@@ -228,6 +256,10 @@ def player_career_section(player: dict, **kwargs) -> html.Div | None:
 
 def player_discipline_section(player: dict, **kwargs) -> html.Div | None:
     return player_record_section(player, "Discipline", DISCIPLINE_MODAL_FIELDS, **kwargs)
+
+
+def player_finance_section(player: dict, **kwargs) -> html.Div | None:
+    return player_record_section(player, "Contract & finance", FINANCE_MODAL_FIELDS, **kwargs)
 
 
 def player_identity_item(
@@ -382,7 +414,7 @@ def player_detail_body(
     after_identity=None,
     bottom=None,
 ) -> html.Div:
-    """Shared modal body: identity → international → career → discipline → personality → page content."""
+    """Shared modal body: identity → international → finance → career → discipline → personality → page content."""
     section_kwargs = {
         "field_styles": field_styles,
         "field_formatters": field_formatters,
@@ -396,6 +428,7 @@ def player_detail_body(
             field_styles=field_styles,
             field_formatters=field_formatters,
         ),
+        player_finance_section(player, **section_kwargs),
         player_career_section(player, **section_kwargs),
         player_discipline_section(player, **section_kwargs),
         player_personality_section(player, id_prefix=id_prefix),

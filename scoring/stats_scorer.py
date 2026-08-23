@@ -13,6 +13,7 @@ from typing import Any
 from scoring.role_scorer import (
     IDENTITY,
     extract_attrs,
+    extract_finance_fields,
     extract_record_fields,
     foot_strength,
     parse_positions,
@@ -450,13 +451,19 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
-                "nation": pick(row, IDENTITY["Nation"]),
+                "nation": pick(row, IDENTITY["Nation"])
+                or pick(row, IDENTITY["BasedIn"]),
+                "based_in": pick(row, IDENTITY["BasedIn"]),
+                "second_nation": pick(row, IDENTITY["SecondNation"]),
                 "position": position,
                 "best_pos": best_pos,
                 "best_role": pick(row, IDENTITY.get("BestRole", ["Best Role"])),
+                "position_role": pick(row, IDENTITY.get("PositionRole", ["Position/Role"])),
                 "style": pick(row, IDENTITY["Style"]),
                 "personality": pick(row, IDENTITY.get("Personality", ["Personality"])),
-                "media_handling": pick(row, IDENTITY.get("MediaHandling", ["Media Handling"])),
+                "media_handling": pick(
+                    row, IDENTITY.get("MediaHandling", ["Media Handling"])
+                ),
                 "height": pick(row, IDENTITY["Height"]).strip('"'),
                 "left_foot": pick(row, IDENTITY["LeftFoot"]),
                 "right_foot": pick(row, IDENTITY["RightFoot"]),
@@ -464,6 +471,10 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "inf": pick(row, IDENTITY["Inf"]),
                 "injury": pick(row, IDENTITY["Injury"]),
                 "squad": pick(row, IDENTITY["Squad"]),
+                "picked": pick(row, IDENTITY.get("Picked", ["Picked"])),
+                "home_grown_status": pick(
+                    row, IDENTITY.get("HomeGrownStatus", ["Home Grown Status"])
+                ),
                 "national_team": pick(row, IDENTITY["NationalTeam"]),
                 "int_apps_season": pick(row, IDENTITY["IntAppsSeason"]),
                 "int_assists": pick(row, IDENTITY["IntAssists"]),
@@ -476,6 +487,7 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "yth_apps": pick(row, IDENTITY["YthApps"]),
                 "yth_gls": pick(row, IDENTITY["YthGls"]),
                 **extract_record_fields(row),
+                **extract_finance_fields(row),
                 "minutes": minutes,
                 "pos_group": group,
                 "pos_cards": player_pos_groups(positions),

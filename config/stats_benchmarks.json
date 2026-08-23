@@ -212,9 +212,11 @@
       "label": "Shots On Target",
       "abbr": "SOT",
       "csv": [
+        "Shots on Target per 90",
         "Shots On Target per 90",
         "Shots on Target/90",
         "SOT/90",
+        "Shots on Target",
         "Shots On Target"
       ],
       "prefer_per90": true,
@@ -233,6 +235,7 @@
       "label": "Conversion Rate",
       "abbr": "Conv %",
       "csv": [
+        "Conv %",
         "Conversion Rate",
         "Shot Conversion %",
         "Conversion %",
