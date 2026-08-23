@@ -5,7 +5,6 @@ from dash import Input, Output, State, callback, dcc, html
 
 import services.ui_settings as ui_settings
 import services.export_library as export_library
-import services.security as security
 
 export_library.ensure_dirs()
 # Mantine components require React 18 (useId); Dash 2.x defaults to React 16.
@@ -59,9 +58,6 @@ app = dash.Dash(
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
     ],
 )
-server = app.server
-server.config["SECRET_KEY"] = security.secret_key()
-security.install_basic_auth(server)
 
 app.layout = dmc.MantineProvider(
     id="mantine-provider",
@@ -186,11 +182,4 @@ def sync_mantine_theme(theme):
 
 
 if __name__ == "__main__":
-    host = security.bind_host()
-    port = security.bind_port()
-    debug = security.debug_enabled()
-    security.assert_auth_config(host=host)
-    if debug:
-        print("WARNING: FM_DEBUG=true — Werkzeug debugger enabled; local use only.")
-    # Never use the Werkzeug debugger unless FM_DEBUG is explicitly true.
-    app.run_server(host=host, port=port, debug=debug)
+    app.run_server(debug=True)
