@@ -894,7 +894,6 @@ def layout():
             ],
         ),
         dcc.Store(id="rs-config", data=rc.active_pack_id()),
-        dcc.Interval(id="rs-config-tick", interval=2500),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
         upload_card("rs", "1. Saved export", library_page="role_scores", library_only=True),
         html.Div(
@@ -1050,7 +1049,6 @@ def layout():
                                             ],
                                             className="rs-formation-row",
                                         ),
-                                        dcc.Interval(id="rs-formation-tick", interval=2500),
                                     ],
                                     id="rs-formation-panel",
                                     className="rs-role-mode-panel rs-formation-bar",
@@ -1971,7 +1969,7 @@ clientside_callback(
     Output("rs-roles", "data", allow_duplicate=True),
     Output("rs-combos", "data", allow_duplicate=True),
     Output("rs-role-mode", "value", allow_duplicate=True),
-    Output("rs-formation", "value", allow_duplicate=True),
+    Output("rs-formation", "value"),
     Output("rs-set-pieces", "value"),
     Output("rs-pos-match", "value"),
     Output("rs-hybrids-only", "checked"),
@@ -2496,29 +2494,6 @@ def sync_table_sort(set_pieces, prev_pieces):
         if column:
             return [{"column_id": column, "direction": "desc"}], selected_pieces
     return no_update, selected_pieces
-
-
-@callback(
-    Output("rs-config", "data"),
-    Input("rs-config-tick", "n_intervals"),
-    Input("ui-settings", "data"),
-)
-def refresh_active_role_weights(_n, _settings):
-    return rc.active_pack_id()
-
-
-@callback(
-    Output("rs-formation", "data"),
-    Output("rs-formation", "value"),
-    Input("rs-formation-tick", "n_intervals"),
-    State("rs-formation", "value"),
-)
-def refresh_formation_options(_n, current):
-    options = fm.pack_options()
-    allowed = {opt["value"] for opt in options}
-    if current and current not in allowed:
-        return options, None
-    return options, no_update
 
 
 @callback(
