@@ -40,6 +40,8 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 UPLOADS_INDEX_PATH = UPLOADS_DIR / "index.json"
 UPLOAD_CACHE_DIR = UPLOADS_DIR / "cache"
 VIEWS_DIR = DATA_DIR / "views"
+PROFILES_DIR = DATA_DIR / "profiles"
+PROFILES_INDEX_PATH = PROFILES_DIR / "index.json"
 
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"

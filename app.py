@@ -5,8 +5,10 @@ from dash import Input, Output, State, callback, dcc, html
 
 import services.ui_settings as ui_settings
 import services.export_library as export_library
+import services.player_profiles as player_profiles
 
 export_library.ensure_dirs()
+player_profiles.ensure_dirs()
 # Mantine components require React 18 (useId); Dash 2.x defaults to React 16.
 dash._dash_renderer._set_react_version("18.2.0")
 
@@ -99,6 +101,7 @@ app.layout = dmc.MantineProvider(
                             dbc.NavItem(dbc.NavLink("Uploads", href="/uploads")),
                             dbc.NavItem(dbc.NavLink("Role scores", href="/")),
                             dbc.NavItem(dbc.NavLink("Player stats", href="/stats")),
+                            dbc.NavItem(dbc.NavLink("Profiles", href="/profiles")),
                             dbc.NavItem(dbc.NavLink("Squad finance", href="/squad-finance")),
                             dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
                             dbc.NavItem(dbc.NavLink("Formations", href="/formations")),

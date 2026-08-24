@@ -174,3 +174,6 @@ data/uploads/*
 data/views/*
 !data/views/.gitkeep
 !data/views/README.md
+data/profiles/*
+!data/profiles/.gitkeep
+!data/profiles/README.md

@@ -1,4 +1,4 @@
-"""Role scores page: load a saved FM attribute CSV, pick roles, filter, export."""
+"""Role scores page: load a saved FM attribute CSV, pick roles, filter, save profiles."""
 from __future__ import annotations
 
 import re
@@ -53,16 +53,11 @@ from scoring.role_scorer import (
     normalize_combos,
     parse_combo_id,
     parse_export,
-    planned_squad_csv,
-    planned_squad_export_rows,
-    planned_squad_fieldnames,
-    player_role_highlights,
     player_row_key,
     role_meta,
     role_options,
     score_band,
     score_players,
-    scored_csv,
     to_int,
     set_piece_columns,
     set_piece_filter_columns,
@@ -71,7 +66,13 @@ from scoring.role_scorer import (
     set_piece_hint,
     set_piece_sort_column,
 )
-from components.player_modal import player_detail_body, player_modal
+from components.profile_save import (
+    profile_save_panel,
+    register_profile_save_callbacks,
+    register_role_profile_save_callbacks,
+)
+from components.player_detail import find_parsed_player, role_player_detail_card
+from components.player_modal import player_modal
 from components.player_table import (
     IDENTITY_LEFT_COLS,
     IDENTITY_TEXT_COLS,
@@ -93,7 +94,6 @@ from components.player_table import (
     table_caption_row,
     table_css,
 )
-from components.attr_columns import attr_grid, attr_group_columns, attr_row
 import services.formations as fm
 import services.role_config as rc
 import services.ui_settings as us
@@ -120,6 +120,14 @@ register_marks_callbacks(
     clear_button="rs-squad-clear-btn",
 )
 register_hist_toggle("rs", use_open_store=True)
+register_role_profile_save_callbacks(
+    "rs",
+    marked_store="rs-squad-marked",
+    parsed_id="rs-parsed",
+    rows_id="rs-rows",
+    focus_id="rs-focus-role",
+    hybrids_id="rs-hybrids-only",
+)
 
 
 PERSIST_DEFAULTS = {
@@ -358,164 +366,6 @@ def _field_label(
     if tip:
         parts.extend(_help_icon(tip, help_id or f"rs-help-{text.lower().replace(' ', '-')}"))
     return html.Div(parts, className="rs-field-label-row")
-
-
-def _find_parsed_player(parsed, name: str, club: str) -> dict | None:
-    if not parsed or not parsed.get("players"):
-        return None
-    name = (name or "").strip()
-    club = (club or "").strip()
-    club_key = "" if club in ("", "-") else club
-    for player in parsed["players"]:
-        if (player.get("name") or "").strip() != name:
-            continue
-        player_club = (player.get("club") or "").strip()
-        if player_club == club_key or (not player_club and not club_key):
-            return player
-    return None
-
-
-def _player_is_gk(player: dict) -> bool:
-    """True when the player is a keeper (pos card is GK, not lowercase role group)."""
-    groups = {str(g) for g in (player.get("pos_groups") or [])}
-    if groups & {"GK", "gk"}:
-        return True
-    for field in ("best_pos", "position"):
-        text = str(player.get(field) or "").upper()
-        if re.search(r"\bGK\b", text) or "GOALKEEPER" in text:
-            return True
-    return False
-
-
-def _player_attr_row(code: str, label: str, attrs: dict, bands: dict):
-    value = attrs.get(code)
-    if value is None:
-        return attr_row(label, "—", value_class="none", title=code)
-    band = score_band(float(value), **bands)
-    return attr_row(
-        label,
-        str(value),
-        value_class=f"score rs-band-{band}",
-        title=code,
-    )
-
-
-def _player_attributes(player: dict, bands: dict) -> html.Div:
-    """Same attribute columns component as Role configs."""
-    attrs = player.get("attrs") or {}
-    columns = attr_group_columns(
-        is_gk=_player_is_gk(player),
-        make_row=lambda code, label: _player_attr_row(code, label, attrs, bands),
-    )
-    return html.Div(
-        [
-            html.Div("Attributes", className="rs-player-attrs-title"),
-            attr_grid(columns),
-        ],
-        className="rs-player-attrs",
-    )
-
-
-def _role_highlight_row(phase: str, pick: dict | None, bands: dict) -> html.Div | None:
-    if not pick:
-        return None
-    band = score_band(float(pick["score"]), **bands)
-    return html.Div(
-        [
-            html.Span(phase, className=f"rs-role-fit-phase is-{phase.lower()}"),
-            html.Span(
-                pick.get("compact") or pick.get("name") or pick.get("code") or "—",
-                className="rs-role-fit-name",
-                title=pick.get("column") or "",
-            ),
-            html.Span(
-                f"{float(pick['score']):.2f}",
-                className=f"rs-role-fit-score rs-band-{band}",
-            ),
-        ],
-        className="rs-role-fit-row",
-    )
-
-
-def _player_role_fit_section(player: dict, settings=None) -> html.Div | None:
-    """Best IP/OOP roles for Best Pos, plus best IP/OOP in other available positions."""
-    settings = us.normalize(settings)
-    bands = settings["bands"]
-    highlights = player_role_highlights(
-        player,
-        tier_weights=us.tier_weights(settings),
-    )
-    blocks = []
-    in_best_rows = [
-        row
-        for row in (
-            _role_highlight_row("IP", highlights["in_best"].get("IP"), bands),
-            _role_highlight_row("OOP", highlights["in_best"].get("OOP"), bands),
-        )
-        if row is not None
-    ]
-    if in_best_rows:
-        best_label = highlights.get("best_group_label") or "Best position"
-        best_pos = (player.get("best_pos") or "").strip()
-        subtitle = best_label
-        if best_pos and best_pos != "-":
-            subtitle = f"{best_label} · {best_pos}"
-        blocks.append(
-            html.Div(
-                [
-                    html.Div(subtitle, className="rs-role-fit-subtitle"),
-                    html.Div(in_best_rows, className="rs-role-fit-rows"),
-                ],
-                className="rs-role-fit-block",
-            )
-        )
-    other_rows = [
-        row
-        for row in (
-            _role_highlight_row("IP", highlights["other"].get("IP"), bands),
-            _role_highlight_row("OOP", highlights["other"].get("OOP"), bands),
-        )
-        if row is not None
-    ]
-    if other_rows:
-        blocks.append(
-            html.Div(
-                [
-                    html.Div(
-                        "Other available positions",
-                        className="rs-role-fit-subtitle",
-                    ),
-                    html.Div(other_rows, className="rs-role-fit-rows"),
-                ],
-                className="rs-role-fit-block",
-            )
-        )
-    if not blocks:
-        return None
-    return html.Div(
-        [
-            html.Div("Role fit", className="rs-player-id-section-title"),
-            *blocks,
-        ],
-        className="rs-player-id-section rs-role-fit-section",
-    )
-
-
-def _player_detail_card(
-    player: dict,
-    settings=None,
-    *,
-    position_eligible: str | None = None,
-) -> html.Div:
-    settings = us.normalize(settings)
-    return player_detail_body(
-        player,
-        id_prefix="rs",
-        position_eligible=position_eligible,
-        modal_fields=us.modal_identity_fields_for("role_scores", settings),
-        after_identity=_player_role_fit_section(player, settings),
-        bottom=_player_attributes(player, settings["bands"]),
-    )
 
 
 def _combo_columns_by_label(combos) -> dict[str, dict]:
@@ -1020,8 +870,6 @@ def layout():
                 {"type": "clear-roles", "loc": "_"},
             ],
         ),
-        dcc.Download(id="rs-download-csv"),
-        dcc.Download(id="rs-download-squad"),
         dcc.Store(id="rs-config", data=rc.active_pack_id()),
         dcc.Interval(id="rs-config-tick", interval=2500),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
@@ -1402,42 +1250,7 @@ def layout():
             ],
             className="mb-3 rs-section-card",
         ),
-        dbc.Card(
-            [
-                dbc.CardHeader("4. Export"),
-                dbc.CardBody(
-                    [
-                        dmc.Button(
-                            "Download scored CSV",
-                            id="rs-csv-btn",
-                            className="me-2",
-                        ),
-                        html.Hr(className="my-3"),
-                        html.Div(
-                            [
-                                html.Span("Planned squad", className="rs-export-subhead"),
-                                *_help_icon(
-                                    "Mark players in the shortlist table, then download a CSV "
-                                    "with identity fields, displayed scores, and any set-piece "
-                                    "columns you checked.",
-                                    "rs-help-planned-squad",
-                                ),
-                            ],
-                            className="rs-export-subhead-row",
-                        ),
-                        html.Div(id="rs-squad-preview", className="rs-squad-preview"),
-                        dmc.Button(
-                            "Download planned squad CSV",
-                            id="rs-squad-btn",
-                            color="green",
-                            className="mt-2",
-                            disabled=True,
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-4 rs-section-card",
-        ),
+        profile_save_panel(prefix="rs", section_number=4),
             shortlist_busy_overlay("rs"),
             ],
             id="rs-results-wrap",
@@ -2301,7 +2114,7 @@ def open_player_modal(
     row = viewport[row_idx] or {}
     name = str(row.get("Name") or "").strip()
     club = str(row.get("Club") or "").strip()
-    player = _find_parsed_player(parsed, name, club)
+    player = find_parsed_player(parsed, name, club)
     if not player:
         return (
             True,
@@ -2331,7 +2144,7 @@ def open_player_modal(
     return (
         True,
         title,
-        _player_detail_card(
+        role_player_detail_card(
             player,
             settings,
             position_eligible=position_eligible,
@@ -3613,172 +3426,10 @@ clientside_callback(
 )
 
 
-SQUAD_PREVIEW_MAX_ROWS = 8
-
-
-def _squad_preview_panel(
-    marked, payload, view_roles, set_pieces, *, hybrids_only: bool = False
-) -> html.Div:
-    view_roles = _as_list(view_roles)
-    if not payload or not view_roles:
-        return html.P("Score roles in section 2 first.", className="text-muted mb-0")
-    marked = _as_list(marked)
-    if not marked:
-        return html.P("No players marked yet.", className="text-muted mb-0")
-    rows = payload.get("rows") or []
-    combos = normalize_combos(payload.get("combos"))
-    include_parts = not hybrids_only
-    export_rows = planned_squad_export_rows(
-        rows,
-        marked,
-        view_roles,
-        combos,
-        _as_list(set_pieces),
-        include_parts=include_parts,
-    )
-    if not export_rows:
-        return html.P("Marked players are not in the current data.", className="text-muted mb-0")
-    fieldnames = planned_squad_fieldnames(
-        view_roles, combos, _as_list(set_pieces), include_parts=include_parts
-    )
-    preview_rows = export_rows[:SQUAD_PREVIEW_MAX_ROWS]
-    extra = len(export_rows) - len(preview_rows)
-    parts = [f"{len(export_rows)} player(s) marked", f"{len(fieldnames)} columns"]
-    if set_pieces:
-        parts.append(f"set pieces: {', '.join(_as_list(set_pieces))}")
-    if extra > 0:
-        parts.append(f"showing first {len(preview_rows)}")
-    return html.Div(
-        [
-            html.Div(" · ".join(parts), className="rs-squad-preview-note"),
-            dash_table.DataTable(
-                columns=[{"name": col, "id": col} for col in fieldnames],
-                data=preview_rows,
-                page_action="none",
-                style_table={"overflowX": "auto"},
-                style_cell={
-                    "fontFamily": "Inter, Segoe UI, sans-serif",
-                    "fontSize": "12px",
-                    "padding": "6px",
-                    "whiteSpace": "nowrap",
-                    "backgroundColor": "transparent",
-                    "color": "inherit",
-                },
-                style_header={
-                    "fontWeight": "600",
-                    "fontSize": "11px",
-                    "textTransform": "uppercase",
-                    "backgroundColor": "transparent",
-                    "color": "inherit",
-                },
-            ),
-        ]
-    )
-
-
 @callback(
     Output("rs-squad-clear-btn", "disabled"),
     Input("rs-squad-marked", "data"),
 )
 def toggle_clear_marks_btn(marked):
     return not _as_list(marked)
-
-
-@callback(
-    Output("rs-squad-preview", "children"),
-    Output("rs-squad-btn", "disabled"),
-    Input("rs-squad-marked", "data"),
-    Input("rs-rows", "data"),
-    Input("rs-focus-role", "data"),
-    Input("rs-set-pieces", "value"),
-    Input("rs-hybrids-only", "checked"),
-)
-def render_squad_preview(marked, payload, focus_role, set_pieces, hybrids_only):
-    marked_list = _as_list(marked)
-    triggered = {
-        (t.get("prop_id") or "").split(".")[0]
-        for t in (ctx.triggered or [])
-        if t.get("prop_id")
-    }
-    # Focus-only with nothing marked: skip rebuilding the empty preview panel.
-    if triggered == {"rs-focus-role"} and not marked_list:
-        return no_update, True
-    combos = normalize_combos((payload or {}).get("combos"))
-    hybrids_only = bool(hybrids_only)
-    view_roles = _hybrid_only_roles(
-        _resolved_view_roles(payload, focus_role), combos, hybrids_only
-    )
-    export_rows = []
-    if payload and view_roles and marked_list:
-        export_rows = planned_squad_export_rows(
-            payload.get("rows") or [],
-            marked_list,
-            view_roles,
-            combos,
-            _as_list(set_pieces),
-            include_parts=not hybrids_only,
-        )
-    return (
-        _squad_preview_panel(
-            marked, payload, view_roles, set_pieces, hybrids_only=hybrids_only
-        ),
-        not export_rows,
-    )
-
-
-@callback(
-    Output("rs-download-squad", "data"),
-    Input("rs-squad-btn", "n_clicks"),
-    State("rs-squad-marked", "data"),
-    State("rs-rows", "data"),
-    State("rs-focus-role", "data"),
-    State("rs-set-pieces", "value"),
-    State("rs-hybrids-only", "checked"),
-    prevent_initial_call=True,
-)
-def download_squad_csv(n_clicks, marked, payload, focus_role, set_pieces, hybrids_only):
-    if not n_clicks or not payload or not payload.get("rows"):
-        return no_update
-    hybrids_only = bool(hybrids_only)
-    combos = normalize_combos(payload.get("combos"))
-    view_roles = _hybrid_only_roles(
-        _resolved_view_roles(payload, focus_role), combos, hybrids_only
-    )
-    marked = _as_list(marked)
-    if not view_roles or not marked:
-        return no_update
-    name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
-    text = planned_squad_csv(
-        payload["rows"],
-        marked,
-        view_roles,
-        combos,
-        _as_list(set_pieces),
-        include_parts=not hybrids_only,
-    )
-    return dict(content=text, filename=f"{name}_planned_squad.csv")
-
-
-@callback(
-    Output("rs-download-csv", "data"),
-    Input("rs-csv-btn", "n_clicks"),
-    State("rs-rows", "data"),
-    State("rs-focus-role", "data"),
-    State("rs-hybrids-only", "checked"),
-    prevent_initial_call=True,
-)
-def download_csv(n_clicks, payload, focus_role, hybrids_only):
-    if not n_clicks or not payload or not payload.get("rows"):
-        return no_update
-    hybrids_only = bool(hybrids_only)
-    combos = normalize_combos(payload.get("combos"))
-    view_roles = _hybrid_only_roles(
-        _resolved_view_roles(payload, focus_role), combos, hybrids_only
-    )
-    if not view_roles:
-        return no_update
-    role_labels = _table_role_columns(view_roles, combos, hybrids_only)
-    name = (payload.get("filename") or "role_scores").rsplit(".", 1)[0]
-    text = scored_csv(payload["rows"], role_labels)
-    return dict(content=text, filename=f"{name}_role_scores.csv")
 

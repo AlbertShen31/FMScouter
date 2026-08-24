@@ -1,8 +1,6 @@
 """Player statistics page: Moneyball stats CSV vs MustermannFM benchmarks."""
 from __future__ import annotations
 
-import csv
-import io
 import re
 
 from dash import (
@@ -25,6 +23,7 @@ import plotly.graph_objects as go
 from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division
 from components.player_filters import help_icon, player_filters, player_filters_host
+from components.profile_save import profile_save_panel, register_profile_save_callbacks
 from components.player_modal import player_detail_body, player_modal
 from components.player_table import (
     IDENTITY_TEXT_COLS,
@@ -149,6 +148,12 @@ register_marks_callbacks(
     clear_button="st-clear-marks",
 )
 register_hist_toggle("st", use_open_store=False)
+register_profile_save_callbacks(
+    "st",
+    marked_store="st-marked",
+    parsed_id="st-parsed",
+    saved_from="stats",
+)
 
 ST_PERSIST_DEFAULTS = {
     "pos": "all",
@@ -1579,7 +1584,6 @@ def layout(**_kwargs):
             dcc.Store(id="st-player-key", data=None),
             dcc.Store(id="st-player-view", data="bars", storage_type="local"),
             dcc.Store(id="st-player-group", data="mid"),
-            dcc.Download(id="st-download"),
             pattern_matching_stubs(
                 "st",
                 [
@@ -1742,31 +1746,7 @@ def layout(**_kwargs):
                         ],
                         className="mb-3 rs-section-card",
                     ),
-                    dbc.Card(
-                        [
-                            dbc.CardHeader("3. Export"),
-                            dbc.CardBody(
-                                [
-                                    dmc.Button(
-                                        "Download stats CSV",
-                                        id="st-csv-btn",
-                                        className="me-2",
-                                    ),
-                                    dmc.Button(
-                                        "Download marked CSV",
-                                        id="st-marked-csv-btn",
-                                        variant="light",
-                                        disabled=True,
-                                    ),
-                                    html.Div(
-                                        id="st-marked-preview",
-                                        className="mt-2 text-muted",
-                                    ),
-                                ]
-                            ),
-                        ],
-                        className="mb-3 rs-section-card",
-                    ),
+                    profile_save_panel(prefix="st", section_number=3),
                     shortlist_busy_overlay("st"),
                 ],
                 id="st-main",
@@ -1851,8 +1831,6 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Output("st-sort-memory", "data"),
     Output("st-table-caption", "children"),
     Output("st-clear-marks", "disabled"),
-    Output("st-marked-csv-btn", "disabled"),
-    Output("st-marked-preview", "children"),
     Output("st-hist", "figure"),
     Input("st-parsed", "data"),
     Input("st-data-rev", "data"),
@@ -2029,11 +2007,6 @@ def refresh_table(
                     yaxis_title="Players",
                 )
 
-    preview = (
-        f"{len(marked_set)} player(s) marked"
-        if marked_set
-        else "No players marked yet."
-    )
     foot_filter = foot or ""
     triggered = {
         (t.get("prop_id") or "").split(".")[0]
@@ -2058,8 +2031,6 @@ def refresh_table(
             no_update,
             caption,
             not bool(marked_set),
-            not bool(marked_set),
-            preview,
             no_update,
         )
     reset_page = bool(triggered & {"st-parsed", "st-data-rev"})
@@ -2083,8 +2054,6 @@ def refresh_table(
         sort_by,
         caption,
         not bool(marked_set),
-        not bool(marked_set),
-        preview,
         fig,
     )
 
@@ -2250,90 +2219,6 @@ def switch_player_group(
             settings=settings,
         ),
     )
-
-
-def _csv_payload(fieldnames, rows) -> dict:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow(row)
-    return dict(content=buf.getvalue(), filename="fm_stats_export.csv")
-
-
-@callback(
-    Output("st-download", "data"),
-    Input("st-csv-btn", "n_clicks"),
-    Input("st-marked-csv-btn", "n_clicks"),
-    State("st-parsed", "data"),
-    State("st-pos", "data"),
-    State("st-category", "data"),
-    State("st-search", "value"),
-    State("st-age", "value"),
-    State("st-minutes-match", "value"),
-    State("st-minutes-required", "value"),
-    State("st-foot", "data"),
-    State("st-division-tier", "value"),
-    State("st-marked", "data"),
-    State("ui-settings", "data"),
-    prevent_initial_call=True,
-)
-def download_csv(
-    _all,
-    _marked,
-    parsed,
-    pos,
-    category,
-    search,
-    max_age,
-    minutes_match,
-    minutes_required,
-    foot,
-    division_tier,
-    marked,
-    settings,
-):
-    players = _parsed_players(parsed)
-    if not players:
-        return no_update
-    settings = us.normalize(settings)
-    minutes_required = float(
-        minutes_required
-        if minutes_required is not None
-        else us.default_minutes_required(settings)
-    )
-    pos = pos or "all"
-    _g, category = _resolve_category(pos, category or "")
-    filtered = _filter_players(
-        players,
-        pos=pos,
-        search=search,
-        max_age=max_age,
-        minutes_match=minutes_match,
-        minutes_required=minutes_required,
-        foot=foot or "",
-        foot_thresholds=settings["foot_thresholds"],
-        division_tier=division_tier or "all",
-    )
-    if ctx.triggered_id == "st-marked-csv-btn":
-        marked_set = set(marked or [])
-        filtered = [p for p in filtered if player_key(p) in marked_set]
-    table_rows = _build_rows(
-        filtered,
-        group=pos,
-        category=category,
-        minutes_required=minutes_required,
-        threshold_overrides=settings.get("stats_thresholds"),
-        settings=settings,
-    )
-    fieldnames = [
-        c["id"]
-        for c in _table_columns(
-            pos, category, settings.get("stats_thresholds"), settings=settings
-        )
-    ]
-    export_rows = [{k: _strip_cell(r.get(k)) for k in fieldnames} for r in table_rows]
-    return _csv_payload(fieldnames, export_rows)
 
 
 @callback(

@@ -5815,3 +5815,150 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 .rs-lib-hint {
     margin-top: 0.35rem;
 }
+
+/* Profiles page */
+.profiles-wrap {
+    overflow-x: auto;
+}
+.profiles-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.profiles-table th,
+.profiles-table td {
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid var(--app-line);
+    vertical-align: middle;
+}
+.profiles-table th {
+    color: var(--app-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.profiles-table tbody tr:hover {
+    background: color-mix(in srgb, var(--app-card) 88%, var(--app-accent));
+}
+.pf-name-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--app-accent);
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.pf-name-link:hover {
+    text-decoration: underline;
+}
+.pf-source-cell {
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pf-note-cell {
+    max-width: 12rem;
+    color: var(--app-muted);
+}
+.pf-row-actions {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+.pf-source-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+.pf-source-label {
+    color: var(--app-text);
+    font-weight: 600;
+}
+.pf-section-divider {
+    border-color: var(--app-line);
+    opacity: 0.65;
+}
+.pf-save-preview {
+    margin-bottom: 0.75rem;
+}
+.pf-unavailable-section {
+    margin-top: 0.5rem;
+}
+.pf-stats-body .st-metrics-values {
+    display: grid;
+    gap: 0.35rem;
+}
+.pf-stats-body .st-metric-item {
+    display: grid;
+    grid-template-columns: 3rem 1fr auto;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--app-line) 65%, transparent);
+}
+.pf-stats-body .st-metric-abbr {
+    font-weight: 700;
+    color: var(--app-muted);
+}
+.pf-stats-body .st-metric-name {
+    color: var(--app-text);
+}
+.pf-stats-body .st-metric-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    justify-content: flex-end;
+}
+.pf-view-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.pf-role-cell {
+    font-weight: 600;
+    color: var(--app-text);
+    max-width: 10rem;
+}
+.pf-score-val,
+.pf-pct-val {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.pf-modal-role-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.pf-modal-role-name {
+    font-weight: 600;
+    color: var(--app-text);
+}
+.pf-modal-role-score {
+    font-size: 1.25rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+.pf-modal-role-elig {
+    font-size: 0.8rem;
+    color: var(--app-muted);
+}
+.pf-modal-role-elig.is-yes {
+    color: var(--app-accent);
+}
+.pf-modal-role-elig.is-no {
+    color: #f87171;
+}
+.pf-table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
