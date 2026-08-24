@@ -14,12 +14,12 @@ from components.player_table import (
     identity_header_name,
     injury_cell,
     injury_tooltip_entry,
+    page_size_select_data,
     player_data_table,
     style_cell,
     style_cell_conditional,
     style_header,
     style_header_conditional,
-    table_caption_row,
     table_css,
 )
 from components.scouting_shell import clicked
@@ -809,11 +809,57 @@ def layout(**_kwargs):
                                 className="rs-table-area",
                             ),
                             html.Div(id="pf-table-layout-nudge", hidden=True),
-                            table_caption_row(
-                                prefix="pf",
-                                clear_button_id="pf-delete-selected",
-                                clear_label="Delete selected",
-                                settings=settings,
+                            html.Div(
+                                [
+                                    html.Div(
+                                        id="pf-table-caption",
+                                        className="text-muted",
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "Rows per page",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    dmc.Select(
+                                                        id="pf-page-size",
+                                                        data=page_size_select_data(
+                                                            settings
+                                                        ),
+                                                        value=default_page_size_value(
+                                                            settings
+                                                        ),
+                                                        clearable=False,
+                                                        searchable=False,
+                                                    ),
+                                                ],
+                                                className="rs-table-page-size",
+                                            ),
+                                            dmc.Button(
+                                                "Select all",
+                                                id="pf-select-all",
+                                                size="sm",
+                                                variant="light",
+                                                n_clicks=0,
+                                                disabled=True,
+                                            ),
+                                            dmc.Button(
+                                                "Delete selected",
+                                                id="pf-delete-selected",
+                                                size="sm",
+                                                variant="light",
+                                                color="red",
+                                                n_clicks=0,
+                                                disabled=True,
+                                                className="rs-squad-clear-btn",
+                                            ),
+                                        ],
+                                        className="rs-table-caption-actions",
+                                    ),
+                                ],
+                                className="rs-table-caption-row mt-2",
                             ),
                         ]
                     ),
@@ -902,6 +948,7 @@ def focus_profile_role(n_clicks, current_focus):
     Output("pf-table-empty", "children"),
     Output("pf-table-empty", "hidden"),
     Output("pf-table-shell", "hidden"),
+    Output("pf-select-all", "disabled"),
     Output("pf-delete-selected", "disabled"),
     Output("pf-summary", "children"),
     Output("pf-depth-wrap", "hidden"),
@@ -1010,6 +1057,7 @@ def refresh_profiles_table(
             False,
             True,
             True,
+            True,
             depth_cards,
             depth_hidden,
         )
@@ -1032,6 +1080,7 @@ def refresh_profiles_table(
             False,
             True,
             True,
+            True,
             depth_cards,
             depth_hidden,
         )
@@ -1048,6 +1097,7 @@ def refresh_profiles_table(
         caption,
         None,
         True,
+        False,
         False,
         True,
         depth_cards,
@@ -1091,6 +1141,41 @@ clientside_callback(
     Input("pf-table", "columns"),
     prevent_initial_call=True,
 )
+
+
+@callback(
+    Output("pf-table", "selected_row_ids", allow_duplicate=True),
+    Output("pf-table", "selected_rows", allow_duplicate=True),
+    Input("pf-select-all", "n_clicks"),
+    State("pf-table", "data"),
+    State("pf-table", "selected_row_ids"),
+    State("pf-table", "page_current"),
+    State("pf-table", "page_size"),
+    prevent_initial_call=True,
+)
+def select_all_profiles(n_clicks, rows, selected_ids, page_current, page_size):
+    if not n_clicks or not rows:
+        return no_update, no_update
+    all_ids = [
+        row_id
+        for row in rows
+        if (row_id := str(row.get("id") or row.get("_key") or "").strip())
+    ]
+    if not all_ids:
+        return [], []
+    current = {str(item) for item in (selected_ids or []) if item}
+    # Toggle: clear if every visible row is already selected.
+    if current and current.issuperset(all_ids):
+        return [], []
+    try:
+        page = int(page_current or 0)
+        size = int(page_size or len(rows) or 50)
+    except (TypeError, ValueError):
+        page, size = 0, len(rows) or 50
+    start = max(0, page * size)
+    end = start + size
+    page_indices = list(range(min(size, max(0, len(rows) - start))))
+    return all_ids, page_indices
 
 
 @callback(
