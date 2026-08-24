@@ -8,8 +8,12 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
-from components.player_detail import role_player_detail_card
-from components.player_modal import player_modal
+from components.player_detail import (
+    player_attributes,
+    player_role_fit_section,
+    role_player_detail_card,
+)
+from components.player_modal import player_detail_body, player_modal
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     default_page_size_value,
@@ -47,6 +51,7 @@ from scoring.stats_scorer import (
 )
 import services.player_profiles as profiles
 import services.ui_settings as us
+from components.stats_player_pane import stats_charts_bottom_pane
 
 register_page(__name__, path="/profiles", name="Profiles")
 
@@ -1594,6 +1599,116 @@ def delete_selected(n_clicks, selected_ids, rev):
     return int(rev or 0) + 1
 
 
+def _resolve_stats_player_for_profile(profile: dict, player: dict) -> dict | None:
+    """Return a full stats player (minutes + stats) for the Profiles modal if available."""
+    from scoring.stats_scorer import player_key as stats_player_key
+
+    embedded = profile.get("stats_player")
+    if isinstance(embedded, dict) and embedded.get("stats"):
+        return embedded
+
+    file_id = str(profile.get("file_id") or "").strip()
+    if not file_id:
+        return None
+    stat_players = profiles.load_stats_players_for_file(file_id)
+    if not stat_players:
+        return None
+    name = (player.get("name") or "").strip()
+    club = (player.get("club") or "").strip()
+    target_key = stats_player_key({"name": name, "club": club})
+    if not target_key:
+        return None
+    for sp in stat_players:
+        if stats_player_key(sp) == target_key:
+            return sp
+    return None
+
+
+def _build_profile_modal_body(
+    profile: dict,
+    player: dict,
+    *,
+    settings: dict,
+    theme: str | None,
+    mode: str = "roles",
+) -> html.Div:
+    """Shared body builder for open and switch callbacks."""
+    stats_player = _resolve_stats_player_for_profile(profile, player)
+    display_player = dict(player)
+    if isinstance(stats_player, dict):
+        for key in (
+            "minutes",
+            "age",
+            "club",
+            "division",
+            "nation",
+            "position",
+            "best_pos",
+            "height",
+            "left_foot",
+            "right_foot",
+            "rec",
+            "injury",
+            "pos_group",
+        ):
+            if display_player.get(key) in (None, "", [], {}):
+                display_player[key] = stats_player.get(key)
+
+    field_status = minutes_status(
+        display_player.get("minutes"), us.default_minutes_required(settings)
+    )
+    field_styles = {
+        "minutes": {"color": minutes_color(field_status)},
+        "injury": {"color": "#fbbf24", "fontWeight": "600"},
+    }
+    segmented = dmc.SegmentedControl(
+        id="pf-modal-bottom-mode",
+        size="sm",
+        value=mode,
+        data=[
+            {"label": "Role scores", "value": "roles"},
+            {"label": "Player stats", "value": "stats"},
+        ],
+    )
+
+    if (mode or "roles") == "roles":
+        role_blocks = []
+        role_fit = player_role_fit_section(display_player, settings)
+        if role_fit:
+            role_blocks.append(role_fit)
+        role_blocks.append(player_attributes(display_player, settings["bands"]))
+        bottom = html.Div(role_blocks)
+    else:
+        if stats_player:
+            stats_content = stats_charts_bottom_pane(
+                stats_player,
+                theme=theme,
+                view="bars",
+                threshold_overrides=settings.get("stats_thresholds"),
+            )
+        else:
+            stats_content = html.P(
+                "Player stats not available. This profile was saved from an "
+                "attribute-only export. To see charts, re-save from a combined "
+                "export that includes Moneyball stats, or compute the library "
+                "cache on the Uploads page.",
+                className="text-muted small",
+            )
+        bottom = html.Div(
+            [html.Div("Player stats", className="rs-player-id-section-title"), stats_content]
+        )
+
+    return player_detail_body(
+        display_player,
+        id_prefix="pf",
+        modal_fields=us.modal_identity_fields_for("player_stats", settings),
+        extra_identity_fields=[("Minutes", "minutes")],
+        field_styles=field_styles,
+        after_identity=segmented,
+        bottom=bottom,
+    )
+
+
 @callback(
     Output("pf-player-modal", "is_open"),
     Output("pf-player-modal-title", "children"),
@@ -1606,6 +1721,7 @@ def delete_selected(n_clicks, selected_ids, rev):
     State("pf-table", "derived_viewport_data"),
     State("pf-player-modal", "is_open"),
     State("ui-settings", "data"),
+    State("theme", "data"),
     prevent_initial_call=True,
 )
 def open_profile_modal(
@@ -1615,6 +1731,7 @@ def open_profile_modal(
     viewport,
     is_open,
     settings,
+    theme,
 ):
     triggered = ctx.triggered_id
     if triggered == "pf-player-modal":
@@ -1662,10 +1779,32 @@ def open_profile_modal(
             profile_id,
             None,
         )
-    return (
-        True,
-        title,
-        role_player_detail_card(player, settings),
-        profile_id,
-        None,
+    settings = us.normalize(settings)
+    body = _build_profile_modal_body(
+        profile, player, settings=settings, theme=theme, mode="roles"
+    )
+    return (True, title, body, profile_id, None)
+
+
+@callback(
+    Output("pf-player-modal-body", "children", allow_duplicate=True),
+    Input("pf-modal-bottom-mode", "value"),
+    State("pf-player-key", "data"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def switch_profile_modal_bottom(mode, profile_id, settings, theme):
+    if not profile_id:
+        return no_update
+    profile = profiles.get_profile(str(profile_id))
+    if not profile:
+        return no_update
+    player = profile.get("player")
+    if not isinstance(player, dict) or not player:
+        return no_update
+
+    settings = us.normalize(settings)
+    return _build_profile_modal_body(
+        profile, player, settings=settings, theme=theme, mode=mode or "roles"
     )

@@ -97,6 +97,12 @@ def _clean_cell(value: Any) -> Any:
     return text
 
 
+def _clean_snapshot_dict(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {}
+    return {key: _clean_cell(value) for key, value in row.items()}
+
+
 def build_role_row_snapshot(
     scored_row: dict[str, Any],
     role_column: str,
@@ -104,11 +110,8 @@ def build_role_row_snapshot(
     percentiles: dict[str, Any] | None = None,
     minutes: Any = None,
 ) -> dict[str, Any]:
-    """One shortlist-style row: identity + this role’s score (+ optional percentiles)."""
-    out: dict[str, Any] = {}
-    for key in ROLE_IDENTITY_KEYS:
-        if key in scored_row:
-            out[key] = _clean_cell(scored_row.get(key))
+    """Preserve the computed row and add normalized role snapshot fields."""
+    out = _clean_snapshot_dict(scored_row)
     score = scored_row.get(role_column)
     try:
         score_f = float(score) if score not in (None, "", "-", "—") else None
@@ -235,6 +238,7 @@ def expand_role_profile_rows(
     eligible_only: bool = True,
     role_players: list[dict[str, Any]] | None = None,
     stats_players: list[dict[str, Any]] | None = None,
+    file_id: str = "",
     settings=None,
 ) -> list[dict[str, Any]]:
     """Build one snapshot entry dict per (player, eligible role) for saving.
@@ -316,6 +320,8 @@ def expand_role_profile_rows(
                         minutes=minutes,
                     ),
                     "player": player,
+                    "stats_player": stats_player,
+                    "file_id": file_id or "",
                 }
             )
     return out
@@ -407,6 +413,8 @@ def save_profile_rows(
         role_column = str(item.get("role_column") or "").strip()
         row = item.get("row")
         player = item.get("player")
+        stats_player = item.get("stats_player")
+        file_id = str(item.get("file_id") or "").strip()
         if not player_key_value or not isinstance(row, dict):
             continue
         pair = (player_key_value, role_column)
@@ -417,10 +425,15 @@ def save_profile_rows(
             existing["row"] = row
             if isinstance(player, dict):
                 existing["player"] = player
+            if isinstance(stats_player, dict):
+                existing["stats_player"] = stats_player
+            elif "stats_player" in existing and stats_player is None:
+                existing.pop("stats_player", None)
             existing["source_label"] = source_label or existing.get("source_label") or ""
             if note is not None:
                 existing["note"] = note_text
-            existing.pop("file_id", None)
+            if file_id:
+                existing["file_id"] = file_id
             saved.append(dict(existing))
             continue
         entry = {
@@ -435,6 +448,10 @@ def save_profile_rows(
         }
         if isinstance(player, dict):
             entry["player"] = player
+        if isinstance(stats_player, dict):
+            entry["stats_player"] = stats_player
+        if file_id:
+            entry["file_id"] = file_id
         index.append(entry)
         by_key[pair] = entry
         saved.append(dict(entry))

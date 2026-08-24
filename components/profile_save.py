@@ -199,6 +199,7 @@ def register_role_profile_save_callbacks(
                 hybrids_only=bool(hybrids_only),
                 role_players=parsed_players(parsed),
                 stats_players=profiles.load_stats_players_for_file(file_id or ""),
+                file_id=file_id or "",
                 settings=settings,
             )
             if not items:
