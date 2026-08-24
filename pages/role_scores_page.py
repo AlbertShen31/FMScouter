@@ -109,6 +109,18 @@ def _shortlist_row_key(row: dict) -> str:
     return player_row_key(row)
 
 
+def _marked_selected_ids(table_rows: list[dict] | None, marked) -> list[str]:
+    """DataTable selected_row_ids for keys in the marked store (current page rows)."""
+    marked_set = set(_as_list(marked))
+    if not marked_set:
+        return []
+    return [
+        key
+        for row in (table_rows or [])
+        if (key := _shortlist_row_key(row)) and key in marked_set
+    ]
+
+
 register_library_select_callbacks(
     "rs",
     parse_fn=parse_export,
@@ -2786,7 +2798,7 @@ def _subset_table_data_by_keys(
     State("rs-table", "data"),
     State("rs-table", "tooltip_data"),
     State("rs-table-cache", "data"),
-    State("rs-squad-marked", "data"),
+    Input("rs-squad-marked", "data"),
 )
 def render_shortlist(
     payload,
@@ -2816,6 +2828,17 @@ def render_shortlist(
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
         return (no_update,) * 21
+
+    triggered = {
+        (item.get("prop_id") or "").split(".")[0]
+        for item in (ctx.triggered or [])
+        if item.get("prop_id")
+    }
+    # Updating `data` resets DataTable selection and re-fires selected_row_ids as [],
+    # which clears marks. When *only* marks changed, leave row data alone (stats parity).
+    if triggered == {"rs-squad-marked"}:
+        selected_ids = _marked_selected_ids(table_data, squad_marked)
+        return (no_update,) * 13 + (selected_ids,) + (no_update,) * 7
 
     # Pure header-sort: reorder already-built markdown rows. Avoids re-filtering and
     # rebuilding every score/Feet cell (the main sort lag source).
@@ -2847,6 +2870,7 @@ def render_shortlist(
                 view_roles=view_roles,
                 min_score_mode=mode,
             )
+            selected_ids = _marked_selected_ids(new_data, squad_marked)
             return (
                 no_update,
                 no_update,
@@ -2861,7 +2885,7 @@ def render_shortlist(
                 no_update,
                 no_update,
                 no_update,
-                no_update,
+                selected_ids,
                 no_update,
                 no_update,
                 no_update,
@@ -3072,6 +3096,7 @@ def render_shortlist(
                     if no_matches
                     else None
                 )
+                selected_ids = _marked_selected_ids(new_data, squad_marked)
                 return (
                     no_update,
                     no_update,
@@ -3086,7 +3111,7 @@ def render_shortlist(
                     _table_style_table(len(new_data), page_size),
                     page_size,
                     page_current,
-                    no_update,
+                    selected_ids,
                     new_sig,
                     fig,
                     caption,
@@ -3368,6 +3393,7 @@ def render_shortlist(
         out_css = table_css_rules
         out_sig = new_sig
         out_page = page_current
+    selected_ids = _marked_selected_ids(table_rows, marked_keys)
     return (
         pos_bar,
         depth_cards,
@@ -3382,7 +3408,7 @@ def render_shortlist(
         _table_style_table(len(table_rows), page_size),
         page_size,
         out_page,
-        no_update,
+        selected_ids,
         out_sig,
         fig,
         caption,
