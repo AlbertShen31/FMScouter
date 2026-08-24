@@ -47,6 +47,10 @@ def _cache_status_cell(entry: dict) -> html.Span:
     )
 
 
+def _any_computable() -> bool:
+    return any(e.get("role_scores") or e.get("stats") for e in lib.list_files())
+
+
 def _files_table(entries: list[dict] | None = None) -> html.Div:
     entries = entries if entries is not None else lib.list_files()
     if not entries:
@@ -341,6 +345,24 @@ def layout(**_kwargs):
                                         "load from the cache instead of rescoring.",
                                         className="text-muted small mb-3",
                                     ),
+                                    html.Div(
+                                        [
+                                            dmc.Button(
+                                                "Compute All",
+                                                id="up-compute-all",
+                                                size="sm",
+                                                variant="light",
+                                                n_clicks=0,
+                                                disabled=not _any_computable(),
+                                            ),
+                                            html.Span(
+                                                "Recompute role scores and stats percentiles "
+                                                "for every eligible saved file.",
+                                                className="text-muted small ms-2",
+                                            ),
+                                        ],
+                                        className="up-compute-all-row mb-3",
+                                    ),
                                     html.Div(id="up-files-table", children=_files_table()),
                                 ]
                             ),
@@ -376,6 +398,7 @@ def layout(**_kwargs):
     Output("up-upload-status", "children"),
     Output("up-files-table", "children"),
     Output("up-rev", "data"),
+    Output("up-compute-all", "disabled"),
     Input("up-upload", "contents"),
     State("up-upload", "filename"),
     State("up-rev", "data"),
@@ -383,7 +406,7 @@ def layout(**_kwargs):
 )
 def save_uploads(contents_list, filenames, rev):
     if not contents_list:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     if isinstance(contents_list, str):
         contents_list = [contents_list]
         filenames = [filenames]
@@ -419,27 +442,33 @@ def save_uploads(contents_list, filenames, rev):
         except Exception as exc:
             messages.append(upload_error(f"{name}: {exc}"))
     if not messages:
-        return no_update, no_update, no_update
-    return html.Div(messages), _files_table(), int(rev or 0) + 1
+        return no_update, no_update, no_update, no_update
+    return (
+        html.Div(messages),
+        _files_table(),
+        int(rev or 0) + 1,
+        not _any_computable(),
+    )
 
 
 @callback(
     Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
+    Output("up-compute-all", "disabled", allow_duplicate=True),
     Input({"type": "up-delete", "id": ALL}, "n_clicks"),
     State("up-rev", "data"),
     prevent_initial_call=True,
 )
 def delete_saved(n_clicks, rev):
     if not ctx.triggered_id or not any(n_clicks or []):
-        return no_update, no_update
+        return no_update, no_update, no_update
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
-        return no_update, no_update
+        return no_update, no_update, no_update
     if not any((n or 0) > 0 for n in (n_clicks or [])):
-        return no_update, no_update
+        return no_update, no_update, no_update
     lib.delete_file(file_id)
-    return _files_table(), int(rev or 0) + 1
+    return _files_table(), int(rev or 0) + 1, not _any_computable()
 
 
 @callback(
@@ -553,6 +582,57 @@ def compute_saved(n_clicks, rev):
 
 
 @callback(
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-upload-status", "children", allow_duplicate=True),
+    Output("up-compute-all", "disabled", allow_duplicate=True),
+    Input("up-compute-all", "n_clicks"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def compute_all_saved(n_clicks, rev):
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update
+    eligible = [
+        entry
+        for entry in lib.list_files()
+        if entry.get("role_scores") or entry.get("stats")
+    ]
+    if not eligible:
+        return (
+            _files_table(),
+            int(rev or 0) + 1,
+            html.Div("No eligible files to precompute.", className="text-muted"),
+            True,
+        )
+    ok = 0
+    errors = []
+    for entry in eligible:
+        file_id = entry.get("id") or ""
+        try:
+            upload_cache.compute_file(file_id)
+            ok += 1
+        except Exception as exc:
+            label = lib.display_label(entry)
+            errors.append(f"{label}: {exc}")
+    rows = [
+        html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(
+                    f"Precomputed {ok} of {len(eligible)} file"
+                    f"{'' if len(eligible) == 1 else 's'}."
+                ),
+            ],
+            className="up-save-row",
+        )
+    ]
+    for err in errors:
+        rows.append(upload_error(err))
+    return _files_table(), int(rev or 0) + 1, html.Div(rows), not _any_computable()
+
+
+@callback(
     Output("up-view-download", "data"),
     Input("up-view-download-btn", "n_clicks"),
     prevent_initial_call=True,
@@ -568,7 +648,7 @@ def download_view(n_clicks):
 
 clientside_callback(
     """
-    function(contents, computeClicks) {
+    function(contents, computeClicks, computeAllClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -577,7 +657,10 @@ clientside_callback(
         if (prop.indexOf("contents") !== -1 && !trig[0].value) {
             return window.dash_clientside.no_update;
         }
-        if (prop.indexOf("n_clicks") !== -1) {
+        if (prop.indexOf("up-compute-all") !== -1 && !computeAllClicks) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("up-compute") !== -1 && prop.indexOf("up-compute-all") === -1) {
             var clicks = computeClicks || [];
             var any = false;
             for (var i = 0; i < clicks.length; i++) {
@@ -589,9 +672,13 @@ clientside_callback(
         }
         var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
         if (label) {
-            label.textContent = prop.indexOf("n_clicks") !== -1
-                ? "Precomputing…"
-                : "Saving and precomputing…";
+            if (prop.indexOf("up-compute-all") !== -1) {
+                label.textContent = "Precomputing all files…";
+            } else if (prop.indexOf("n_clicks") !== -1) {
+                label.textContent = "Precomputing…";
+            } else {
+                label.textContent = "Saving and precomputing…";
+            }
         }
         return "rs-shortlist-busy is-on t-" + String(Date.now());
     }
@@ -599,6 +686,7 @@ clientside_callback(
     Output("up-busy", "className"),
     Input("up-upload", "contents"),
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
+    Input("up-compute-all", "n_clicks"),
     prevent_initial_call=True,
 )
 

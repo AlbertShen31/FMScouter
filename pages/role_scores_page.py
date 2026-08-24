@@ -20,7 +20,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import plotly.graph_objects as go
 
-from components.pack_picker import pack_picker_bar, section_card_header
+from components.pack_picker import section_card_header
 from components.player_filters import help_icon, player_filters
 from components.scouting_shell import (
     as_list,
@@ -1022,6 +1022,8 @@ def layout():
         ),
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-squad"),
+        dcc.Store(id="rs-config", data=rc.active_pack_id()),
+        dcc.Interval(id="rs-config-tick", interval=2500),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
         upload_card("rs", "1. Saved export", library_page="role_scores", library_only=True),
         html.Div(
@@ -1031,20 +1033,6 @@ def layout():
                 section_card_header(
                     "2. Scored roles",
                     next_badge=True,
-                    trailing=pack_picker_bar(
-                        select_id="rs-config",
-                        label="Scoring weights",
-                        options=rc.pack_options(),
-                        value=rc.active_pack_id(),
-                        edit_href="/role-config",
-                        edit_title="Open the Role configs page to edit and save weights.",
-                        select_title=(
-                            "Scores use this file’s key / preferred / useful weights. "
-                            "Edit and Save a config on the Role configs page."
-                        ),
-                        select_wrap_class="pack-picker-dd rs-config-dd",
-                        interval_id="rs-config-tick",
-                    ),
                 ),
                 dbc.CardBody(
                     [
@@ -2276,7 +2264,7 @@ def reveal_workflow(parsed, payload):
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
     State("rs-hybrids-only", "checked"),
-    State("rs-config", "value"),
+    State("rs-config", "data"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
 )
@@ -2676,9 +2664,10 @@ def sync_table_sort(set_pieces, prev_pieces):
 @callback(
     Output("rs-config", "data"),
     Input("rs-config-tick", "n_intervals"),
+    Input("ui-settings", "data"),
 )
-def refresh_config_options(_n):
-    return rc.pack_options()
+def refresh_active_role_weights(_n, _settings):
+    return rc.active_pack_id()
 
 
 @callback(
@@ -2748,7 +2737,7 @@ def sync_rs_page_size_from_settings(settings, page_size):
     Input("rs-parsed-historical", "data"),
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
-    Input("rs-config", "value"),
+    Input("rs-config", "data"),
     Input("ui-settings", "data"),
     State("rs-focus-role", "data"),
     prevent_initial_call="initial_duplicate",

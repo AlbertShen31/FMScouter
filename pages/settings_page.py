@@ -297,7 +297,8 @@ def _general_panel(settings: dict) -> list:
     return [
         _section_heading(
             "General",
-            "Manage the Role scores settings pack, theme, table paging, and player detail modal.",
+            "Manage the Role scores settings pack, theme, table paging, active "
+            "scoring packs, and player detail modal.",
         ),
         dbc.Card(
             [
@@ -401,6 +402,74 @@ def _general_panel(settings: dict) -> list:
                             "Preferred theme applies on Save (and when loading a pack). "
                             "Page size options are comma-separated; the default must be one of them.",
                             className="text-muted d-block mt-2",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Active scoring packs"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "These packs are used on Role scores and Player stats. "
+                            "Edit pack contents on Role configs or Settings → Player stats.",
+                            className="text-muted",
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    [
+                                        dmc.Select(
+                                            id="st-role-weights-pack",
+                                            label="Scoring weights",
+                                            data=rc.pack_options(),
+                                            value=rc.active_pack_id(),
+                                            clearable=False,
+                                            searchable=False,
+                                        ),
+                                        html.Small(
+                                            [
+                                                "Attribute key / preferred / useful weights. ",
+                                                dcc.Link("Edit on Role configs", href="/role-config"),
+                                                ".",
+                                            ],
+                                            className="text-muted d-block mt-1",
+                                        ),
+                                    ],
+                                    md=6,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dmc.Select(
+                                            id="st-percentiles-pack",
+                                            label="Percentiles",
+                                            data=stp.pack_options(),
+                                            value=(
+                                                settings.get("stats_threshold_pack_id")
+                                                or stp.active_id()
+                                            ),
+                                            clearable=False,
+                                            searchable=False,
+                                        ),
+                                        html.Small(
+                                            [
+                                                "Benchmark cut-points for estimated percentiles. ",
+                                                dcc.Link(
+                                                    "Edit under Player stats",
+                                                    href="/settings?section=player-stats",
+                                                ),
+                                                ".",
+                                            ],
+                                            className="text-muted d-block mt-1",
+                                        ),
+                                    ],
+                                    md=6,
+                                ),
+                            ],
+                            className="g-3",
                         ),
                         _section_save_row("st-save-general", "st-status-general"),
                     ]
@@ -1295,6 +1364,10 @@ def _ui_draft_from_state(
     Output("st-page-size-default", "value"),
     Output("st-page-size-options", "value"),
     Output("st-default-minutes", "value"),
+    Output("st-role-weights-pack", "data"),
+    Output("st-role-weights-pack", "value"),
+    Output("st-percentiles-pack", "data"),
+    Output("st-percentiles-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
     Output("st-status-general", "children"),
     Output("st-status-role", "children"),
@@ -1327,6 +1400,8 @@ def _ui_draft_from_state(
     State("st-page-size-default", "value"),
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),
+    State("st-role-weights-pack", "value"),
+    State("st-percentiles-pack", "value"),
     prevent_initial_call=True,
 )
 def handle_ui_settings(
@@ -1358,9 +1433,11 @@ def handle_ui_settings(
     page_size_default,
     page_size_options,
     default_minutes,
+    role_weights_pack,
+    percentiles_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 30
+    n_out = 34
     if not triggered:
         return (no_update,) * n_out
 
@@ -1448,6 +1525,14 @@ def handle_ui_settings(
             status_general = f"Saved {settings['name']}."
             update_pack_options = False
         sync_theme = True
+        # Active scoring packs (role weights + percentiles).
+        if role_weights_pack:
+            rc.load_pack(role_weights_pack)
+        if percentiles_pack:
+            pack = stp.load(percentiles_pack)
+            settings["stats_thresholds"] = pack["thresholds"]
+            settings["stats_threshold_pack_id"] = pack["id"]
+            settings = us.save(settings, settings.get("id") or pack_id)
     elif triggered == "st-save-role":
         if us.is_builtin(pack_id):
             settings = us.save(draft, pack_id)
@@ -1473,11 +1558,19 @@ def handle_ui_settings(
     pack_options = us.pack_options() if update_pack_options else no_update
     pack_value = settings["id"] if update_pack_options else no_update
     theme_value = settings["preferred_theme"] if sync_theme else no_update
+    role_weights_options = rc.pack_options()
+    role_weights_value = rc.active_pack_id()
+    percentiles_options = stp.pack_options()
+    percentiles_value = settings.get("stats_threshold_pack_id") or stp.active_id()
     return (
         settings,
         pack_options,
         pack_value,
         *role_values,
+        role_weights_options,
+        role_weights_value,
+        percentiles_options,
+        percentiles_value,
         theme_value,
         status_general,
         status_role,
@@ -1494,6 +1587,8 @@ def handle_ui_settings(
     Output("st-status-thresh", "children"),
     Output("st-thresh-new-name", "value"),
     Output("st-default-minutes", "value", allow_duplicate=True),
+    Output("st-percentiles-pack", "data", allow_duplicate=True),
+    Output("st-percentiles-pack", "value", allow_duplicate=True),
     Input("st-thresh-pack", "value"),
     Input("st-thresh-new", "n_clicks"),
     Input("st-thresh-reset", "n_clicks"),
@@ -1518,7 +1613,7 @@ def handle_thresh_packs(
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return (no_update,) * 8
+        return (no_update,) * 10
     draft = {"id": pack_id, "thresholds": thresh_data}
     clear_name = no_update
     update_options = True
@@ -1597,4 +1692,6 @@ def handle_thresh_packs(
         status,
         clear_name,
         minutes_out,
+        stp.pack_options(),
+        settings.get("stats_threshold_pack_id") or pack["id"],
     )
