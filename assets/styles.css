@@ -5649,6 +5649,36 @@ body[data-theme="light"] .up-elig.yes {
 .up-elig.no {
     color: var(--app-muted);
 }
+.up-cache {
+    font-weight: 650;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.up-cache.ready {
+    color: #3dff88;
+}
+html[data-theme="light"] .up-cache.ready,
+body[data-theme="light"] .up-cache.ready {
+    color: #15803d;
+}
+.up-cache.stale {
+    color: #fbbf24;
+}
+html[data-theme="light"] .up-cache.stale,
+body[data-theme="light"] .up-cache.stale {
+    color: #b45309;
+}
+.up-cache.missing,
+.up-cache.na {
+    color: var(--app-muted);
+}
+.up-cache.error {
+    color: #f87171;
+}
+html[data-theme="light"] .up-cache.error,
+body[data-theme="light"] .up-cache.error {
+    color: #b91c1c;
+}
 .up-file-name {
     font-weight: 600;
 }

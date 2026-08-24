@@ -18,6 +18,7 @@ import dash_mantine_components as dmc
 
 from components.scouting_shell import decode_upload, upload_error
 import services.export_library as lib
+import services.upload_cache as upload_cache
 
 register_page(__name__, path="/uploads", name="Uploads")
 
@@ -26,6 +27,22 @@ def _yes_no(ok: bool) -> html.Span:
     return html.Span(
         "Yes" if ok else "No",
         className="up-elig yes" if ok else "up-elig no",
+    )
+
+
+def _cache_status_cell(entry: dict) -> html.Span:
+    status = upload_cache.cache_status(entry.get("id") or "", entry)
+    tone = {
+        "ready": "up-cache ready",
+        "stale": "up-cache stale",
+        "missing": "up-cache missing",
+        "error": "up-cache error",
+        "n/a": "up-cache na",
+    }.get(status["status"], "up-cache")
+    return html.Span(
+        status["label"],
+        className=tone,
+        title=status.get("detail") or "",
     )
 
 
@@ -43,6 +60,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
             html.Th("Role scores"),
             html.Th("Player stats"),
             html.Th("Squad finance"),
+            html.Th("Precompute"),
             html.Th("Note"),
             html.Th(""),
         ]
@@ -85,10 +103,22 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
                     html.Td(_yes_no(bool(entry.get("role_scores")))),
                     html.Td(_yes_no(bool(entry.get("stats")))),
                     html.Td(_yes_no(bool(entry.get("squad_finance")))),
+                    html.Td(_cache_status_cell(entry)),
                     html.Td(note_bits, className="up-notes"),
                     html.Td(
                         html.Div(
                             [
+                                dmc.Button(
+                                    "Compute",
+                                    id={"type": "up-compute", "id": file_id},
+                                    size="xs",
+                                    variant="light",
+                                    n_clicks=0,
+                                    className="me-1",
+                                    disabled=not (
+                                        entry.get("role_scores") or entry.get("stats")
+                                    ),
+                                ),
                                 dmc.Button(
                                     "Edit",
                                     id={"type": "up-edit", "id": file_id},
@@ -230,6 +260,11 @@ def layout(**_kwargs):
                         n_clicks=0,
                         children="stub",
                     ),
+                    dmc.Button(
+                        id={"type": "up-compute", "id": "_"},
+                        n_clicks=0,
+                        children="stub",
+                    ),
                 ],
                 hidden=True,
             ),
@@ -296,8 +331,11 @@ def layout(**_kwargs):
                                 "Eligible means the file has Name/Player, enough "
                                 "player info (Club/Age/Position), plus: attributes "
                                 "for Role scores; stats markers for Player stats; "
-                                "Salary and match fees for Squad finance. Use Edit "
-                                "to rename a file or add a note.",
+                                "Salary and match fees for Squad finance. Upload "
+                                "precomputes all role scores and stats percentiles "
+                                "using current Settings / role packs. If you change "
+                                "those settings, click Compute to refresh. Pages then "
+                                "load from the cache instead of rescoring.",
                                 className="text-muted small mb-3",
                             ),
                             html.Div(id="up-files-table", children=_files_table()),
@@ -341,12 +379,17 @@ def save_uploads(contents_list, filenames, rev):
             page_txt = (
                 ", ".join(lib.PAGE_LABELS[p] for p in pages) if pages else "none"
             )
+            cache = upload_cache.cache_status(entry.get("id") or "", entry)
             messages.append(
                 html.Div(
                     [
                         html.Span("✓ ", className="rs-upload-ok"),
                         html.Span(lib.display_label(entry)),
                         html.Span(f" · eligible: {page_txt}", className="text-muted"),
+                        html.Span(
+                            f" · precompute: {cache['label']}",
+                            className="text-muted",
+                        ),
                     ],
                     className="up-save-row",
                 )
@@ -449,6 +492,42 @@ def refresh_table_after_edit(is_open, rev):
     if is_open:
         return no_update, no_update
     return _files_table(), int(rev or 0) + 1
+
+
+
+@callback(
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-upload-status", "children", allow_duplicate=True),
+    Input({"type": "up-compute", "id": ALL}, "n_clicks"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def compute_saved(n_clicks, rev):
+    if not ctx.triggered_id or not any(n_clicks or []):
+        return no_update, no_update, no_update
+    file_id = ctx.triggered_id.get("id")
+    if not file_id or file_id == "_":
+        return no_update, no_update, no_update
+    if not any((n or 0) > 0 for n in (n_clicks or [])):
+        return no_update, no_update, no_update
+    entry = lib.get_file(file_id)
+    if not entry:
+        return no_update, no_update, no_update
+    try:
+        upload_cache.compute_file(file_id)
+        status = upload_cache.cache_status(file_id)
+        msg = html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(f"Precomputed {lib.display_label(entry)}"),
+                html.Span(f" · {status['detail']}", className="text-muted"),
+            ],
+            className="up-save-row",
+        )
+    except Exception as exc:
+        msg = upload_error(f"Compute failed: {exc}")
+    return _files_table(), int(rev or 0) + 1, msg
 
 
 @callback(

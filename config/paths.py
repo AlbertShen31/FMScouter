@@ -38,6 +38,7 @@ STATS_THRESHOLDS_DEFAULTS_PATH = STATS_THRESHOLDS_DIR / "default-overrides.json"
 DATA_DIR = ROOT_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 UPLOADS_INDEX_PATH = UPLOADS_DIR / "index.json"
+UPLOAD_CACHE_DIR = UPLOADS_DIR / "cache"
 VIEWS_DIR = DATA_DIR / "views"
 
 # Pre-reorg locations (still read once, then moved into role_weights/).

@@ -176,8 +176,13 @@ def _upload_slot(
     subtitle: str,
     upload_label: Any,
     library_page: str | None = None,
+    library_only: bool = False,
 ) -> html.Div:
-    """One upload dropzone + status row. ``slot`` is ``current`` or ``hist``."""
+    """One upload dropzone + status row. ``slot`` is ``current`` or ``hist``.
+
+    When ``library_only`` is True, the dropzone/replace controls stay hidden
+    (stub Upload components remain so Clear callbacks still have targets).
+    """
     if slot == "current":
         upload_id = f"{prefix}-upload"
         replace_id = f"{prefix}-upload-replace"
@@ -225,17 +230,20 @@ def _upload_slot(
                 className="rs-lib-picker",
             )
         )
+    # Keep Upload stubs in the tree so library Clear can reset contents/filename.
     children.extend(
         [
             html.Div(
                 dcc.Upload(
                     id=upload_id,
-                    children=upload_label,
+                    children=None if library_only else upload_label,
                     className="rs-upload",
                     multiple=False,
+                    disabled=library_only,
                 ),
                 id=wrap_id,
                 className="rs-upload-drop-wrap",
+                hidden=library_only,
             ),
             html.Div(
                 [
@@ -243,12 +251,17 @@ def _upload_slot(
                     html.Div(
                         dcc.Upload(
                             id=replace_id,
-                            children=html.Span(
-                                "Replace file",
-                                className="rs-upload-replace",
+                            children=(
+                                None
+                                if library_only
+                                else html.Span(
+                                    "Replace file",
+                                    className="rs-upload-replace",
+                                )
                             ),
                             className="rs-upload-replace-btn",
                             multiple=False,
+                            disabled=library_only,
                         ),
                         id=replace_wrap_id,
                         hidden=True,
@@ -263,12 +276,16 @@ def _upload_slot(
                         color="red",
                         disabled=True,
                         className="rs-lib-clear",
-                                buttonProps={
-                                    "title": (
-                                        "Remove this side’s export "
-                                        "(manual upload or saved file) from the page cache"
-                                    )
-                                },
+                        buttonProps={
+                            "title": (
+                                "Remove this saved file from the page cache"
+                                if library_only
+                                else (
+                                    "Remove this side’s export "
+                                    "(manual upload or saved file) from the page cache"
+                                )
+                            )
+                        },
                     ),
                 ],
                 className="rs-upload-status-row",
@@ -288,6 +305,7 @@ def upload_card(
     include_data_rev: bool = True,
     include_historical: bool = True,
     library_page: str | None = None,
+    library_only: bool = False,
 ) -> dbc.Card:
     """Standard current + optional historical upload controls.
 
@@ -297,9 +315,14 @@ def upload_card(
     ``library_page`` is an export_library page key (``role_scores``, ``stats``,
     ``squad_finance``) to show a saved-file picker above the dropzone.
 
+    When ``library_only`` is True, manual CSV dropzones are hidden and the page
+    only loads files from the Uploads library (``library_page`` is required).
+
     Page logic should read ``{prefix}-parsed`` (current). Historical data is stored
     in ``{prefix}-parsed-historical`` for future comparison features.
     """
+    if library_only and not library_page:
+        raise ValueError("library_only=True requires library_page")
     if upload_label is None:
         upload_label = html.Div(["Drag a CSV here, or ", html.A("browse")])
     body_children: list = []
@@ -316,17 +339,27 @@ def upload_card(
                         prefix,
                         "current",
                         title="Current export",
-                        subtitle="Active data used by this page.",
+                        subtitle=(
+                            "Active data used by this page. Choose a saved file below."
+                            if library_only
+                            else "Active data used by this page."
+                        ),
                         upload_label=upload_label,
                         library_page=library_page,
+                        library_only=library_only,
                     ),
                     _upload_slot(
                         prefix,
                         "hist",
                         title="Historical export",
-                        subtitle="Comparison only — does not replace current.",
+                        subtitle=(
+                            "Comparison only — does not replace current. Choose a saved file below."
+                            if library_only
+                            else "Comparison only — does not replace current."
+                        ),
                         upload_label=upload_label,
                         library_page=library_page,
+                        library_only=library_only,
                     ),
                 ],
                 className="rs-upload-dual",
@@ -336,37 +369,79 @@ def upload_card(
             body_children.append(
                 html.P(
                     [
-                        "Selecting a saved file loads that slot. Clear removes "
-                        "only that side’s export from the page cache. Manage files on ",
+                        (
+                            "Choose a saved file for each slot (Ready = fast load from "
+                            "precompute). Clear removes only that side from the page "
+                            "cache. Add or compute files on "
+                            if library_only
+                            else (
+                                "Selecting a saved file loads that slot. Labels show "
+                                "cache status (Ready / Stale / Not computed). Clear "
+                                "removes only that side’s export from the page cache. "
+                                "Manage files on "
+                            )
+                        ),
                         html.A("Uploads", href="/uploads"),
                         ".",
                     ],
                     className="rs-lib-hint text-muted small mb-0 mt-2",
                 )
             )
+            if library_page in {"role_scores", "stats"}:
+                body_children.append(
+                    dcc.Interval(
+                        id=f"{prefix}-lib-options-tick",
+                        interval=250,
+                        n_intervals=0,
+                        max_intervals=1,
+                    )
+                )
     else:
         body_children.append(
             _upload_slot(
                 prefix,
                 "current",
-                title="Export",
-                subtitle="Active data used by this page.",
+                title="Export" if not library_only else "Saved export",
+                subtitle=(
+                    "Active data used by this page. Choose a saved file below."
+                    if library_only
+                    else "Active data used by this page."
+                ),
                 upload_label=upload_label,
                 library_page=library_page,
+                library_only=library_only,
             )
         )
         if library_page:
             body_children.append(
                 html.P(
                     [
-                        "Selecting a saved file loads it. Clear removes the "
-                        "export from this page’s cache. Manage files on ",
+                        (
+                            "Choose a saved file to load (Ready = fast load from "
+                            "precompute). Clear removes it from this page’s cache. "
+                            "Add or compute files on "
+                            if library_only
+                            else (
+                                "Selecting a saved file loads it. Labels show cache "
+                                "status (Ready / Stale / Not computed). Clear removes "
+                                "the export from this page’s cache. Manage files on "
+                            )
+                        ),
                         html.A("Uploads", href="/uploads"),
                         ".",
                     ],
                     className="rs-lib-hint text-muted small mb-0 mt-2",
                 )
             )
+            if library_page in {"role_scores", "stats"}:
+                body_children.append(
+                    dcc.Interval(
+                        id=f"{prefix}-lib-options-tick",
+                        interval=250,
+                        n_intervals=0,
+                        max_intervals=1,
+                    )
+                )
     if hint is not None:
         body_children.append(hint)
     return dbc.Card(
@@ -520,8 +595,13 @@ def register_library_select_callbacks(
     reveal_ids: Sequence[str] | None = None,
     catch_exceptions: bool = False,
     include_historical: bool = True,
+    library_only: bool = False,
 ) -> None:
-    """Load saved library files on select; Clear wipes page session stores."""
+    """Load saved library files on select; Clear wipes page session stores.
+
+    When ``library_only`` is True, dropzone/replace wraps stay hidden after load
+    and clear (manual upload UI is not used on the page).
+    """
     reveal_ids = list(reveal_ids or [])
 
     def _wire_load(slot: str) -> None:
@@ -557,32 +637,109 @@ def register_library_select_callbacks(
             Output(rid, "hidden", allow_duplicate=True) for rid in slot_reveal
         )
         n_load = 4 + (1 if track_rev else 0) + len(slot_reveal)
+        wrap_hidden_loaded = True
+        replace_hidden_loaded = True if library_only else False
+
+        def _already_loaded_row(parsed, file_id, entry, *, rev=None, _tag=None):
+            """Reuse session data when remounting; only refresh status chrome."""
+            import services.export_library as lib
+
+            name = lib.display_label(entry)
+            if pack_store:
+                data = unpack_parsed(parsed) or {}
+                count = int(parsed.get("n") or len(data.get("players") or []))
+                name = data.get("filename") or parsed.get("filename") or name
+            else:
+                count = len((parsed or {}).get("players") or [])
+                name = (parsed or {}).get("filename") or name
+            row = [
+                no_update,
+                upload_status_bar(
+                    count,
+                    name,
+                    replaced=True,
+                    slot_label=_tag,
+                ),
+                wrap_hidden_loaded,
+                replace_hidden_loaded,
+            ]
+            if track_rev:
+                row.append(no_update)
+            row.extend([False] * len(slot_reveal))
+            return tuple(row)
+
+        load_states = [State(parsed_id, "data")]
+        if track_rev:
+            load_states.insert(0, State(f"{prefix}-data-rev", "data"))
 
         @callback(
             *load_outputs,
             Input(select_id, "value"),
-            *([State(f"{prefix}-data-rev", "data")] if track_rev else []),
+            *load_states,
             prevent_initial_call=True,
         )
         def _load_from_library(
             file_id,
             rev=None,
+            parsed=None,
             _n_out=n_load,
             _reveal=slot_reveal,
             _tag=status_tag,
+            _track_rev=track_rev,
         ):
+            # Argument order: file_id, [rev,] parsed when track_rev else file_id, parsed
+            if not _track_rev:
+                parsed = rev
+                rev = None
             if not file_id:
                 return tuple([no_update] * _n_out)
             import services.export_library as lib
 
             try:
-                text, entry = lib.read_text(file_id)
+                entry = lib.get_file(file_id)
+                if not entry:
+                    raise FileNotFoundError("Saved file not found.")
                 if library_page not in (entry.get("pages") or []):
                     raise ValueError(
                         "That file is not eligible for "
                         f"{lib.PAGE_LABELS.get(library_page, library_page)}."
                     )
-                players = parse_fn(text)
+                if (
+                    isinstance(parsed, dict)
+                    and parsed.get("file_id") == file_id
+                    and _has_players(parsed)
+                ):
+                    return _already_loaded_row(
+                        parsed, file_id, entry, rev=rev, _tag=_tag
+                    )
+                players = None
+                cache_extra = {}
+                try:
+                    import services.upload_cache as upload_cache
+
+                    if library_page == "role_scores":
+                        hit = upload_cache.try_role_players(file_id)
+                        if hit:
+                            players, _cache = hit
+                            cache_extra = {"from_cache": True}
+                    elif library_page == "stats":
+                        hit = upload_cache.try_stats_players(file_id)
+                        if hit:
+                            players, cache = hit
+                            cache_extra = {
+                                "from_cache": True,
+                                "percentiles": (cache.get("stats") or {}).get(
+                                    "percentiles"
+                                )
+                                or upload_cache.cached_stats_percentiles(file_id),
+                            }
+                except Exception:
+                    players = None
+                    cache_extra = {}
+                if players is None:
+                    text, entry = lib.read_text(file_id)
+                    players = parse_fn(text)
+                    cache_extra = {}
             except Exception as exc:
                 if not catch_exceptions and not isinstance(
                     exc, (ValueError, FileNotFoundError, OSError)
@@ -611,6 +768,9 @@ def register_library_select_callbacks(
                 store = {"filename": name, "players": players}
                 if track_rev and rev_payload:
                     store["rev"] = rev_payload["n"]
+            store["file_id"] = file_id
+            if cache_extra:
+                store.update(cache_extra)
             row = [
                 store,
                 upload_status_bar(
@@ -620,12 +780,61 @@ def register_library_select_callbacks(
                     slot_label=_tag,
                 ),
                 True,
-                False,
+                True if library_only else False,
             ]
             if track_rev:
                 row.append(rev_payload)
             row.extend([False] * len(_reveal))
             return tuple(row)
+
+        sync_inputs = [Input(parsed_id, "data")]
+        if library_page in {"role_scores", "stats"}:
+            # Page remount does not re-fire session Store inputs; tick restores the
+            # saved-file dropdown after navigating back with data still loaded.
+            sync_inputs.append(Input(f"{prefix}-lib-options-tick", "n_intervals"))
+
+        @callback(
+            Output(select_id, "value", allow_duplicate=True),
+            Output(status_id, "children", allow_duplicate=True),
+            *sync_inputs,
+            State(select_id, "value"),
+            prevent_initial_call="initial_duplicate",
+        )
+        def _sync_lib_select_from_parsed(*args, _tag=status_tag):
+            """Restore dropdown + status when navigating back with session data."""
+            # args: parsed, [n_intervals,] current_value
+            parsed = args[0] if args else None
+            current_value = args[-1] if args else None
+            if not isinstance(parsed, dict) or not _has_players(parsed):
+                return no_update, no_update
+            file_id = parsed.get("file_id")
+            if not file_id:
+                return no_update, no_update
+            import services.export_library as lib
+
+            entry = lib.get_file(file_id) or {}
+            if pack_store:
+                data = unpack_parsed(parsed) or {}
+                count = int(parsed.get("n") or len(data.get("players") or []))
+                name = (
+                    data.get("filename")
+                    or parsed.get("filename")
+                    or lib.display_label(entry)
+                    or "Saved file"
+                )
+            else:
+                count = len(parsed.get("players") or [])
+                name = parsed.get("filename") or lib.display_label(entry) or "Saved file"
+            status = upload_status_bar(
+                count,
+                name,
+                replaced=True,
+                slot_label=_tag,
+            )
+            # Avoid re-firing load when the select already shows this file.
+            if current_value == file_id:
+                return no_update, status
+            return file_id, status
 
     def _has_players(parsed) -> bool:
         if not parsed or not isinstance(parsed, dict):
@@ -704,7 +913,7 @@ def register_library_select_callbacks(
             row: list = [
                 None,
                 [],
-                False,
+                True if library_only else False,
                 True,
                 None,
                 None,
@@ -728,6 +937,30 @@ def register_library_select_callbacks(
     _wire_clear("current")
     if include_historical:
         _wire_clear("hist")
+
+    if library_only:
+        # Upload callbacks normally own the busy overlay; library-only pages need it here.
+        _register_shortlist_busy(prefix, [])
+
+    # Refresh dropdown labels (Ready / Stale / …) shortly after mount so status
+    # matches Uploads even if layout was built before a recent Compute.
+    if library_page in {"role_scores", "stats"}:
+        refresh_outputs = [Output(f"{prefix}-lib-select", "data")]
+        if include_historical:
+            refresh_outputs.append(Output(f"{prefix}-lib-select-hist", "data"))
+
+        @callback(
+            *refresh_outputs,
+            Input(f"{prefix}-lib-options-tick", "n_intervals"),
+            prevent_initial_call=False,
+        )
+        def _refresh_lib_options(_n, _page=library_page, _hist=include_historical):
+            import services.export_library as lib
+
+            opts = lib.select_options(page=_page)
+            if _hist:
+                return opts, opts
+            return (opts,)
 
 
 def _register_upload_slot(

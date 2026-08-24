@@ -960,12 +960,25 @@ def score_colors(settings=None) -> dict[str, tuple[str, str]]:
 
 
 def band_text_color(band: str, settings=None, *, theme: str | None = None) -> str:
-    """Saturated tier text color from UI settings (Score bands colors)."""
-    settings = normalize(settings)
+    """Saturated tier text color from UI settings (Score bands colors).
+
+    Pass already-normalized settings when coloring many cells — ``normalize`` is
+    expensive and must not run per cell in table builds.
+    """
+    if not isinstance(settings, dict) or "colors" not in settings:
+        settings = normalize(settings)
     colors = settings["colors"][band]
     if theme == "light":
         return colors["fg"]
     return colors["bar"]
+
+
+def band_text_colors(settings=None, *, theme: str | None = None) -> dict[str, str]:
+    """Band → text color map for bulk shortlist/table rendering."""
+    if not isinstance(settings, dict) or "colors" not in settings:
+        settings = normalize(settings)
+    key = "fg" if theme == "light" else "bar"
+    return {band: settings["colors"][band][key] for band in BAND_KEYS}
 
 
 def css_vars(settings=None) -> dict[str, str]:

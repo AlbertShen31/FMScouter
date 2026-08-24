@@ -1,4 +1,4 @@
-"""Role scores page: upload an FM attribute CSV, pick roles, filter, export."""
+"""Role scores page: load a saved FM attribute CSV, pick roles, filter, export."""
 from __future__ import annotations
 
 import re
@@ -32,7 +32,6 @@ from components.scouting_shell import (
     register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
-    register_upload_callbacks,
     shortlist_busy_overlay,
     upload_card,
 )
@@ -101,20 +100,13 @@ import services.ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
 
-register_upload_callbacks(
-    "rs",
-    parse_fn=parse_export,
-    pack_store=False,
-    reveal_ids=[],
-    pulse_ids=["rs-results-wrap"],
-    bad_file_message="Upload the CSV from FM Player Export, not the HTML file.",
-)
 register_library_select_callbacks(
     "rs",
     parse_fn=parse_export,
     library_page="role_scores",
     pack_store=False,
     reveal_ids=[],
+    library_only=True,
 )
 register_pos_foot_callbacks(
     "rs",
@@ -1010,6 +1002,7 @@ def layout():
         dcc.Store(id="rs-focus-role", data=[]),
         dcc.Store(id="rs-set-pieces-prev", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
+        dcc.Store(id="rs-table-cache"),
         dcc.Store(id="rs-hydrated", data=False),
         dcc.Store(id="rs-persist-boot"),
         dcc.Store(id="rs-role-mode-prev", data=None),
@@ -1030,7 +1023,7 @@ def layout():
         dcc.Download(id="rs-download-csv"),
         dcc.Download(id="rs-download-squad"),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
-        upload_card("rs", "1. Upload export", library_page="role_scores"),
+        upload_card("rs", "1. Saved export", library_page="role_scores", library_only=True),
         html.Div(
             [
         dbc.Card(
@@ -2326,7 +2319,7 @@ def open_player_modal(
             True,
             name or "Player",
             html.Div(
-                "Could not load full player details from the uploaded CSV.",
+                "Could not load full player details from the saved CSV.",
                 className="rs-player-missing",
             ),
             None,
@@ -2778,13 +2771,24 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
                 needed.append(role_id)
     if not needed:
         return None, no_update, no_update
-    rows = apply_combos(
-        score_players(
+    scored = None
+    file_id = (parsed or {}).get("file_id")
+    if file_id and (parsed or {}).get("from_cache"):
+        try:
+            import services.upload_cache as upload_cache
+
+            scored = upload_cache.cached_role_rows(file_id)
+        except Exception:
+            scored = None
+    if scored is None:
+        scored = score_players(
             parsed["players"],
             needed,
             tier_weights=tier_w,
             set_piece_profiles=profiles,
-        ),
+        )
+    rows = apply_combos(
+        scored,
         combos,
         ip_weight=hybrid_w["ip"],
         oop_weight=hybrid_w["oop"],
@@ -2833,6 +2837,99 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     )
 
 
+
+_COLUMN_TOGGLE_TRIGGERS = {
+    "rs-focus-role.data",
+    "rs-set-pieces.value",
+    "rs-hybrids-only.checked",
+}
+
+
+def _all_scored_role_columns(payload: dict | None, combos) -> list[str]:
+    """Every scored role column (with hybrid parts) for wide table data."""
+    labels = list((payload or {}).get("roles") or [])
+    return expand_view_role_columns(labels, combos, include_parts=True)
+
+
+def _visible_shortlist_cols(
+    *,
+    settings,
+    view_roles: list[str],
+    combos,
+    hybrids_only: bool,
+    set_pieces,
+) -> tuple[list[str], list[str], list[str]]:
+    """Return (visible_cols, visible_score_cols, piece_cols)."""
+    table_role_cols = _table_role_columns(view_roles, combos, hybrids_only)
+    piece_cols = set_piece_columns(set_pieces, us.set_piece_profiles(settings))
+    chosen = set(_as_list(set_pieces))
+    score_cols = [
+        profile["score"]
+        for profile in us.set_piece_profiles(settings)
+        if profile["id"] in chosen and profile.get("score")
+    ] + table_role_cols
+    table_cols = list(us.shortlist_columns_for("role_scores", settings))
+    table_cols.extend(piece_cols)
+    table_cols.extend(table_role_cols)
+    return table_cols, score_cols, piece_cols
+
+
+def _data_shortlist_cols(
+    *,
+    settings,
+    payload: dict,
+    combos,
+    set_pieces,
+) -> tuple[list[str], list[str]]:
+    """Wide data columns: identity + all set-piece scores + all scored roles."""
+    all_role_cols = _all_scored_role_columns(payload, combos)
+    all_piece_ids = [p["id"] for p in us.set_piece_profiles(settings)]
+    piece_cols = set_piece_columns(all_piece_ids, us.set_piece_profiles(settings))
+    score_cols = [
+        profile["score"]
+        for profile in us.set_piece_profiles(settings)
+        if profile.get("score")
+    ] + all_role_cols
+    table_cols = list(us.shortlist_columns_for("role_scores", settings))
+    table_cols.extend(piece_cols)
+    table_cols.extend(all_role_cols)
+    return table_cols, score_cols
+
+
+def _table_data_has_columns(table_data, col_ids: list[str]) -> bool:
+    if not table_data or not col_ids:
+        return bool(table_data is not None)
+    sample = table_data[0] if table_data else {}
+    return all(col in sample for col in col_ids if col not in TABLE_TEXT_COLS)
+
+
+def _subset_table_data_by_keys(
+    table_data: list[dict],
+    tooltip_data: list | None,
+    ordered_keys: list[str],
+) -> tuple[list[dict], list] | None:
+    """Reorder/subset built rows by player key. None if any key is missing."""
+    tips = list(tooltip_data or [])
+    if len(tips) < len(table_data):
+        tips.extend({} for _ in range(len(table_data) - len(tips)))
+    by_key = {}
+    tip_by_key = {}
+    for idx, row in enumerate(table_data):
+        key = str(row.get("id") or row.get("_key") or "").strip()
+        if key:
+            by_key[key] = row
+            tip_by_key[key] = tips[idx] if idx < len(tips) else {}
+    out_rows = []
+    out_tips = []
+    for key in ordered_keys:
+        row = by_key.get(key)
+        if row is None:
+            return None
+        out_rows.append(row)
+        out_tips.append(tip_by_key.get(key) or {})
+    return out_rows, out_tips
+
+
 @callback(
     Output("rs-pos-bar", "children"),
     Output("rs-summary", "children"),
@@ -2854,6 +2951,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     Output("rs-table-empty", "children"),
     Output("rs-table-empty", "hidden"),
     Output("rs-table-shell", "hidden"),
+    Output("rs-table-cache", "data"),
     Input("rs-rows", "data"),
     Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
@@ -2876,6 +2974,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     State("rs-table-cols-sig", "data"),
     State("rs-table", "data"),
     State("rs-table", "tooltip_data"),
+    State("rs-table-cache", "data"),
 )
 def render_shortlist(
     payload,
@@ -2900,10 +2999,11 @@ def render_shortlist(
     cols_sig,
     table_data,
     tooltip_data_state,
+    table_cache,
 ):
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
-        return (no_update,) * 20
+        return (no_update,) * 21
 
     # Pure header-sort: reorder already-built markdown rows. Avoids re-filtering and
     # rebuilding every score/Feet cell (the main sort lag source).
@@ -2956,7 +3056,237 @@ def render_shortlist(
                 no_update,
                 no_update,
                 no_update,
+                no_update,  # cache
             )
+
+    # Focus / set-piece / hybrids toggles: change visible columns (and row
+    # membership) from the wide markdown cache — no cell rebuild.
+    if (
+        triggered_props
+        and triggered_props.issubset(_COLUMN_TOGGLE_TRIGGERS)
+        and payload
+        and payload.get("rows")
+    ):
+        cache_blob = table_cache if isinstance(table_cache, dict) else {}
+        cache_rows = cache_blob.get("data") or table_data
+        cache_tips = cache_blob.get("tips")
+        if cache_tips is None:
+            cache_tips = tooltip_data_state
+        settings = us.normalize(settings)
+        bins = us.hist_bins(settings)
+        hybrids_only = bool(hybrids_only)
+        page_size = int(page_size or 50)
+        hist_open = bool(hist_open)
+        combos = normalize_combos(payload.get("combos"))
+        view_roles = _hybrid_only_roles(
+            _resolved_view_roles(payload, focus_role),
+            combos,
+            hybrids_only,
+        )
+        min_score = us.parse_score_floor(min_score)
+        min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
+        pos_match = _normalize_pos_match(pos_match)
+        visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
+            settings=settings,
+            view_roles=view_roles,
+            combos=combos,
+            hybrids_only=hybrids_only,
+            set_pieces=set_pieces,
+        )
+        if view_roles and cache_rows and _table_data_has_columns(
+            cache_rows, visible_score_cols
+        ):
+            rows = payload["rows"]
+            query = (query or "").strip().lower()
+            max_age = 99 if max_age is None else int(max_age)
+            set_piece_min = us.parse_score_floor(set_piece_min)
+            chosen_pieces = _as_list(set_pieces)
+            marked_keys = set(_as_list(squad_marked))
+            pos_filter = pos_filter or "all"
+            foot_filter = foot_filter or ""
+            foot_thresholds = settings["foot_thresholds"]
+            combo_by_col = _combo_columns_by_label(combos)
+
+            filtered = []
+            for row in rows:
+                if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
+                    continue
+                if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
+                    continue
+                pos_elig = (
+                    _position_eligibility(row, view_roles, combo_by_col=combo_by_col)
+                    or "no"
+                )
+                if not _passes_pos_match(pos_elig, pos_match):
+                    continue
+                if to_int(row.get("Age")) > max_age:
+                    continue
+                if not _passes_min_score(row, view_roles, min_score, min_score_mode):
+                    continue
+                if set_piece_min > 0 and chosen_pieces:
+                    piece_filter_cols = [
+                        set_piece_filter_columns(piece_id)
+                        for piece_id in chosen_pieces
+                    ]
+                    if any(
+                        _cell_number(row.get(col)) < set_piece_min
+                        for col in piece_filter_cols
+                        if col
+                    ):
+                        continue
+                if query:
+                    blob = (
+                        f"{row.get('Name','')} {row.get('Club','')} "
+                        f"{row.get('Position','')} {row.get('Division','')}".lower()
+                    )
+                    if query not in blob:
+                        continue
+                row = dict(row)
+                row["_PosEligible"] = pos_elig
+                filtered.append(row)
+
+            _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
+            ordered_keys = [
+                key
+                for row in filtered
+                if (key := player_row_key(row))
+            ]
+            elig_by_key = {
+                key: (row.get("_PosEligible") or "no")
+                for row in filtered
+                if (key := player_row_key(row))
+            }
+            current_keys = [
+                str(row.get("id") or row.get("_key") or "").strip()
+                for row in (table_data or [])
+            ]
+            columns = _table_columns(visible_cols)
+            header_tips = _header_tooltips(visible_cols, combos=combos)
+            page_current, new_sig = _table_page_state(columns, cols_sig)
+            style_data, style_header, table_css_rules = _cached_table_chrome(
+                visible_score_cols, settings, theme
+            )
+            selected_rows = [
+                key for key in ordered_keys if key in marked_keys
+            ]
+            focused = [
+                role for role in _focus_roles(focus_role) if role in view_roles
+            ]
+            focus_note = f" Focused: {', '.join(focused)}." if focused else ""
+            hybrid_note = (
+                " Hybrids only."
+                if hybrids_only and combo_column_labels(combos)
+                else ""
+            )
+            min_note = ""
+            if min_score > 0:
+                min_note = (
+                    f" Min score {min_score:g}+ on "
+                    f"{MIN_SCORE_MODES[min_score_mode]}: {', '.join(view_roles)}."
+                )
+            caption = (
+                f"{len(filtered)} of {len(rows)} players"
+                f"{focus_note}{hybrid_note}{min_note}"
+                f" · {payload.get('filename')}."
+            )
+            fig = (
+                _hist_figure(filtered, view_roles, bins, theme)
+                if hist_open
+                else no_update
+            )
+            # Same row set + no focus change: only swap visible columns.
+            # Focus still needs a data pass so PosEligible highlighting stays correct.
+            if (
+                ordered_keys == current_keys
+                and "rs-focus-role.data" not in triggered_props
+            ):
+                new_data = no_update
+                new_tips = no_update
+                style_table = no_update
+                no_matches = not ordered_keys
+                empty_panel = (
+                    _no_match_placeholder(
+                        pos_match=pos_match,
+                        pos_filter=pos_filter,
+                        foot_filter=foot_filter,
+                        min_score=min_score,
+                        set_piece_min=set_piece_min,
+                        query=query,
+                        max_age=max_age,
+                    )
+                    if no_matches
+                    else None
+                )
+                return (
+                    no_update,
+                    no_update,
+                    no_update,
+                    new_data,
+                    columns,
+                    header_tips,
+                    new_tips,
+                    style_data,
+                    style_header,
+                    table_css_rules,
+                    style_table,
+                    page_size,
+                    page_current,
+                    selected_rows,
+                    new_sig,
+                    fig,
+                    caption,
+                    empty_panel,
+                    not no_matches,
+                    no_matches,
+                    no_update,  # keep wide cache
+                )
+            subset = _subset_table_data_by_keys(
+                list(cache_rows), cache_tips, ordered_keys
+            )
+            if subset is not None:
+                new_data, new_tips = subset
+                for item in new_data:
+                    key = str(item.get("id") or item.get("_key") or "").strip()
+                    if key in elig_by_key:
+                        item["PosEligible"] = elig_by_key[key]
+                no_matches = not new_data
+                empty_panel = (
+                    _no_match_placeholder(
+                        pos_match=pos_match,
+                        pos_filter=pos_filter,
+                        foot_filter=foot_filter,
+                        min_score=min_score,
+                        set_piece_min=set_piece_min,
+                        query=query,
+                        max_age=max_age,
+                    )
+                    if no_matches
+                    else None
+                )
+                return (
+                    no_update,
+                    no_update,
+                    no_update,
+                    new_data,
+                    columns,
+                    header_tips,
+                    new_tips,
+                    style_data,
+                    style_header,
+                    table_css_rules,
+                    _table_style_table(len(new_data), page_size),
+                    page_size,
+                    page_current,
+                    selected_rows,
+                    new_sig,
+                    fig,
+                    caption,
+                    empty_panel,
+                    not no_matches,
+                    no_matches,
+                    no_update,  # keep wide cache
+                )
+
     settings = us.normalize(settings)
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
@@ -2992,10 +3322,11 @@ def render_shortlist(
             [],
             empty_sig,
             _blank_fig(theme) if hist_open else no_update,
-            "Upload a file and pick at least one role in section 2.",
+            "Load a saved file and pick at least one role in section 2.",
             None,
             True,
             False,
+            None,
         )
     rows = payload["rows"]
     role_ids = payload.get("role_ids") or []
@@ -3030,6 +3361,7 @@ def render_shortlist(
             None,
             True,
             False,
+            None,
         )
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
@@ -3077,30 +3409,38 @@ def render_shortlist(
 
     _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
 
-    table_role_cols = _table_role_columns(view_roles, combos, hybrids_only)
     fig = _hist_figure(filtered, view_roles, bins, theme) if hist_open else no_update
 
-    piece_cols = set_piece_columns(set_pieces, us.set_piece_profiles(settings))
-    chosen = set(chosen_pieces)
-    score_cols = [
-        profile["score"]
-        for profile in us.set_piece_profiles(settings)
-        if profile["id"] in chosen and profile.get("score")
-    ] + table_role_cols
-    table_cols = list(us.shortlist_columns_for("role_scores", settings))
-    table_cols.extend(piece_cols)
-    table_cols.extend(table_role_cols)
-    columns = _table_columns(table_cols)
-    header_tips = _header_tooltips(table_cols, combos=combos)
+    # Wide row payload (all roles + all set-piece scores) so later focus / set-piece /
+    # hybrids toggles can change `columns` without rebuilding markdown cells.
+    data_cols, data_score_cols = _data_shortlist_cols(
+        settings=settings,
+        payload=payload,
+        combos=combos,
+        set_pieces=set_pieces,
+    )
+    visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
+        settings=settings,
+        view_roles=view_roles,
+        combos=combos,
+        hybrids_only=hybrids_only,
+        set_pieces=set_pieces,
+    )
+    score_cols = visible_score_cols
+    columns = _table_columns(visible_cols)
+    header_tips = _header_tooltips(visible_cols, combos=combos)
     table_rows = []
     tooltip_data = []
+    data_score_set = set(data_score_cols)
+    # Hoist once — per-cell band_text_color/normalize was ~0.5ms × tens of thousands.
+    band_colors = us.band_text_colors(settings, theme=theme)
     for row in filtered:
         row_key = player_row_key(row)
         hist_row = historical_by_key.get(row_key) if compare else None
         item = {}
         tip_row: dict[str, str] = {}
-        for key in table_cols:
-            if key in score_cols:
+        for key in data_cols:
+            if key in data_score_set:
                 raw = row.get(key)
                 band = None
                 try:
@@ -3112,9 +3452,7 @@ def render_shortlist(
                     raw,
                     hist_row.get(key) if hist_row else None,
                     enabled=compare,
-                    color=us.band_text_color(band, settings, theme=theme)
-                    if band
-                    else None,
+                    color=band_colors.get(band) if band else None,
                 )
             else:
                 if key == "Feet":
@@ -3132,6 +3470,9 @@ def render_shortlist(
             item["_key"] = row_key
         table_rows.append(item)
         tooltip_data.append(tip_row)
+    # Cache keeps wide score cells for the current row set so column toggles can
+    # swap visibility without rebuilding markdown.
+    wide_cache = {"data": table_rows, "tips": tooltip_data}
     page_keys = [str(row.get("id") or "").strip() for row in table_rows]
     selected_rows = [key for key in page_keys if key in marked_keys]
     extras = []
@@ -3241,6 +3582,7 @@ def render_shortlist(
         empty_panel,
         not no_matches,
         no_matches,
+        wide_cache,
     )
 
 

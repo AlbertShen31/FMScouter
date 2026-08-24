@@ -246,6 +246,28 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
     index = _read_index()
     index.append(entry)
     _write_index(index)
+    # Precompute role scores / stats percentiles for faster page loads.
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.compute_file(file_id)
+        # Refresh entry with cache metadata written by compute_file.
+        entry = get_file(file_id) or entry
+    except Exception as exc:
+        entry = dict(entry)
+        entry["cache"] = {
+            "status": "error",
+            "error": str(exc),
+            "role_scores": False,
+            "stats": False,
+        }
+        # Persist error status without failing the upload itself.
+        index = _read_index()
+        for item in index:
+            if item.get("id") == file_id:
+                item["cache"] = entry["cache"]
+                break
+        _write_index(index)
     return entry
 
 
@@ -297,14 +319,60 @@ def delete_file(file_id: str) -> bool:
     path = UPLOADS_DIR / (removed.get("stored_name") or "")
     if path.is_file():
         path.unlink()
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.delete_cache(file_id)
+    except Exception:
+        pass
     _write_index(kept)
     return True
 
 
-def select_options(*, page: str | None = None) -> list[dict[str, str]]:
-    """Dash Select / Mantine options for eligible files."""
+def select_options(
+    *,
+    page: str | None = None,
+    include_cache: bool = True,
+) -> list[dict[str, str]]:
+    """Dash Select / Mantine options for eligible files.
+
+    When ``include_cache`` is True and ``page`` is ``role_scores`` or ``stats``,
+    labels include Ready / Stale / Not computed from upload precompute status.
+    Ready files are listed first.
+    """
+    entries = list_files(page=page)
+    show_cache = bool(include_cache and page in {"role_scores", "stats"})
+    sig_key = None
+    status_by_id: dict[str, dict] = {}
+    if show_cache:
+        import services.upload_cache as upload_cache
+
+        sig_key = upload_cache.signature_key()
+        for entry in entries:
+            status_by_id[str(entry.get("id") or "")] = upload_cache.cache_status_light(
+                entry,
+                page=page,
+                sig_key=sig_key,
+            )
+
+    rank = {"ready": 0, "stale": 1, "missing": 2, "error": 3, "n/a": 4}
+
+    def _status_rank(entry: dict) -> int:
+        fid = str(entry.get("id") or "")
+        st = (status_by_id.get(fid) or {}).get("status") or "n/a"
+        return rank.get(st, 9)
+
+    if show_cache:
+        # Newest first within a status, then Ready → Stale → Not computed.
+        entries = sorted(
+            entries,
+            key=lambda e: e.get("saved_at") or "",
+            reverse=True,
+        )
+        entries = sorted(entries, key=_status_rank)
+
     opts = []
-    for entry in list_files(page=page):
+    for entry in entries:
         name = display_label(entry)
         when = (entry.get("saved_at") or "")[:10]
         note = (entry.get("user_note") or "").strip()
@@ -312,6 +380,11 @@ def select_options(*, page: str | None = None) -> list[dict[str, str]]:
         if note:
             short = note if len(note) <= 40 else note[:37] + "…"
             label = f"{label} — {short}"
+        if show_cache:
+            st = status_by_id.get(str(entry.get("id") or "")) or {}
+            cache_label = st.get("label")
+            if cache_label and cache_label != "—":
+                label = f"{label} · {cache_label}"
         opts.append({"value": entry["id"], "label": label})
     return opts
 

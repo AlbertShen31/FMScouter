@@ -61,7 +61,6 @@ from components.scouting_shell import (
     register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
-    register_upload_callbacks,
     shortlist_busy_overlay,
     unpack_parsed,
     upload_card,
@@ -134,16 +133,6 @@ BLANK_FIG.update_layout(
     height=240,
 )
 
-register_upload_callbacks(
-    "st",
-    parse_fn=parse_stats_export,
-    pack_store=True,
-    reveal_ids=["st-main"],
-    pulse_ids=["st-main"],
-    bad_file_message="Upload a Moneyball statistics CSV export.",
-    decode_strict=True,
-    catch_exceptions=True,
-)
 register_library_select_callbacks(
     "st",
     parse_fn=parse_stats_export,
@@ -151,6 +140,7 @@ register_library_select_callbacks(
     pack_store=True,
     reveal_ids=["st-main"],
     catch_exceptions=True,
+    library_only=True,
 )
 register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
 register_marks_callbacks(
@@ -1602,15 +1592,13 @@ def layout(**_kwargs):
             ),
             upload_card(
                 "st",
-                "1. Upload statistics export",
-                upload_label=html.Div(
-                    ["Drag and drop or ", html.A("select a Moneyball stats CSV")]
-                ),
+                "1. Saved statistics export",
                 hint=html.P(
-                    f"Use the statistics Moneyball export. Benchmarks: {benchmarks()['name']}.",
+                    f"Use a saved Moneyball statistics export. Benchmarks: {benchmarks()['name']}.",
                     className="text-muted small mb-0 mt-2",
                 ),
                 library_page="stats",
+                library_only=True,
             ),
             html.Div(
                 [
