@@ -5620,6 +5620,13 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .up-page .up-files-wrap {
     overflow-x: auto;
 }
+.up-page .up-busy-host {
+    position: relative;
+    min-height: 12rem;
+}
+.up-page .up-busy-host > .rs-shortlist-busy.is-on {
+    border-radius: 12px;
+}
 .up-files-table {
     width: 100%;
     border-collapse: collapse;

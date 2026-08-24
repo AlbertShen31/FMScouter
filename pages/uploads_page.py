@@ -7,6 +7,7 @@ from dash import (
     Output,
     State,
     callback,
+    clientside_callback,
     ctx,
     dcc,
     html,
@@ -271,9 +272,9 @@ def layout(**_kwargs):
             _edit_modal(),
             html.H1("Uploads", className="mt-2 mb-3"),
             html.P(
-                "Save CSV exports on this machine. Role scores, Player stats, and "
-                "Squad finance can pick from this library or upload a file manually. "
-                "Rename files and add notes so the dropdowns stay readable.",
+                "Save CSV exports on this machine. Role scores and Player stats load "
+                "from this library; Squad finance can also upload manually. Rename "
+                "files and add notes so the dropdowns stay readable.",
                 className="text-muted mb-2",
             ),
             html.P(
@@ -299,50 +300,71 @@ def layout(**_kwargs):
                 ],
                 className="mb-3 rs-section-card",
             ),
-            dbc.Card(
+            html.Div(
                 [
-                    dbc.CardHeader("2. Upload CSV files"),
-                    dbc.CardBody(
+                    dbc.Card(
                         [
-                            dcc.Upload(
-                                id="up-upload",
-                                children=html.Div(
-                                    [
-                                        "Drag and drop CSVs here, or ",
-                                        html.A("browse"),
-                                        " (multiple allowed)",
-                                    ]
-                                ),
-                                className="rs-upload",
-                                multiple=True,
+                            dbc.CardHeader("2. Upload CSV files"),
+                            dbc.CardBody(
+                                [
+                                    dcc.Upload(
+                                        id="up-upload",
+                                        children=html.Div(
+                                            [
+                                                "Drag and drop CSVs here, or ",
+                                                html.A("browse"),
+                                                " (multiple allowed)",
+                                            ]
+                                        ),
+                                        className="rs-upload",
+                                        multiple=True,
+                                    ),
+                                    html.Div(id="up-upload-status", className="mt-2"),
+                                ]
                             ),
-                            html.Div(id="up-upload-status", className="mt-2"),
-                        ]
+                        ],
+                        className="mb-3 rs-section-card",
+                    ),
+                    dbc.Card(
+                        [
+                            dbc.CardHeader("3. Saved files & page eligibility"),
+                            dbc.CardBody(
+                                [
+                                    html.P(
+                                        "Eligible means the file has Name/Player, enough "
+                                        "player info (Club/Age/Position), plus: attributes "
+                                        "for Role scores; stats markers for Player stats; "
+                                        "Salary and match fees for Squad finance. Upload "
+                                        "precomputes all role scores and stats percentiles "
+                                        "using current Settings / role packs. If you change "
+                                        "those settings, click Compute to refresh. Pages then "
+                                        "load from the cache instead of rescoring.",
+                                        className="text-muted small mb-3",
+                                    ),
+                                    html.Div(id="up-files-table", children=_files_table()),
+                                ]
+                            ),
+                        ],
+                        className="mb-3 rs-section-card",
+                    ),
+                    html.Div(
+                        [
+                            html.Div(
+                                className="rs-shortlist-busy-spinner",
+                                **{"aria-hidden": "true"},
+                            ),
+                            html.Span(
+                                "Saving and precomputing…",
+                                className="rs-shortlist-busy-label",
+                            ),
+                        ],
+                        id="up-busy",
+                        className="rs-shortlist-busy",
+                        role="status",
+                        **{"aria-live": "polite"},
                     ),
                 ],
-                className="mb-3 rs-section-card",
-            ),
-            dbc.Card(
-                [
-                    dbc.CardHeader("3. Saved files & page eligibility"),
-                    dbc.CardBody(
-                        [
-                            html.P(
-                                "Eligible means the file has Name/Player, enough "
-                                "player info (Club/Age/Position), plus: attributes "
-                                "for Role scores; stats markers for Player stats; "
-                                "Salary and match fees for Squad finance. Upload "
-                                "precomputes all role scores and stats percentiles "
-                                "using current Settings / role packs. If you change "
-                                "those settings, click Compute to refresh. Pages then "
-                                "load from the cache instead of rescoring.",
-                                className="text-muted small mb-3",
-                            ),
-                            html.Div(id="up-files-table", children=_files_table()),
-                        ]
-                    ),
-                ],
-                className="mb-3 rs-section-card",
+                className="rs-shortlist-busy-host up-busy-host",
             ),
         ],
         fluid=True,
@@ -542,3 +564,55 @@ def download_view(n_clicks):
     if not path:
         return no_update
     return dcc.send_file(str(path))
+
+
+clientside_callback(
+    """
+    function(contents, computeClicks) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        var prop = trig[0].prop_id || "";
+        if (prop.indexOf("contents") !== -1 && !trig[0].value) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("n_clicks") !== -1) {
+            var clicks = computeClicks || [];
+            var any = false;
+            for (var i = 0; i < clicks.length; i++) {
+                if (clicks[i]) { any = true; break; }
+            }
+            if (!any) {
+                return window.dash_clientside.no_update;
+            }
+        }
+        var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
+        if (label) {
+            label.textContent = prop.indexOf("n_clicks") !== -1
+                ? "Precomputing…"
+                : "Saving and precomputing…";
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("up-busy", "className"),
+    Input("up-upload", "contents"),
+    Input({"type": "up-compute", "id": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_rev) {
+        var el = document.getElementById("up-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("up-busy", "className", allow_duplicate=True),
+    Input("up-rev", "data"),
+    prevent_initial_call=True,
+)
