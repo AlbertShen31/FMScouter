@@ -1283,6 +1283,8 @@ def register_marks_callbacks(
     """Sync DataTable ``selected_row_ids`` with a marked-keys store.
 
     Pages must put a stable ``id`` (and ideally ``_key``) on each table row.
+    Marks persist across table refreshes (role/filter changes); checkboxes are
+    restored clientside when ``{prefix}-table`` ``data`` changes.
     """
     marked_store = marked_store or f"{prefix}-marked"
     clear_button = clear_button or f"{prefix}-clear-marks"
@@ -1299,15 +1301,57 @@ def register_marks_callbacks(
     def _sync_marks(selected_ids, table_data, marked):
         table_data = table_data or []
         keys_on_page = [key_fn(row) for row in table_data]
-        keys_on_page = [key for key in keys_on_page if key]
+        page_set = {key for key in keys_on_page if key}
         marked_set = set(as_list(marked))
-        expected = {key for key in keys_on_page if key in marked_set}
+        expected_on_page = {key for key in page_set if key in marked_set}
         selected = {str(key) for key in (selected_ids or []) if key}
-        if selected == expected:
+        if selected == expected_on_page:
             return no_update
-        marked_set -= set(keys_on_page)
+
+        # DataTable emits selected_row_ids=[] after data/column refreshes — never
+        # treat an empty selection as "deselect all" (would wipe marks on role change).
+        if not selected:
+            return no_update
+
+        # Page-level merge: update marks for rows on this page only; preserve off-page.
+        marked_set -= page_set
         marked_set |= selected
         return sorted(marked_set)
+
+    clientside_callback(
+        f"""
+        function(tableData, marked) {{
+            const keys = Array.isArray(marked)
+                ? marked.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
+                : [];
+            if (!Array.isArray(tableData) || !tableData.length) {{
+                return keys.length ? keys : [];
+            }}
+            if (!keys.length) {{
+                return [];
+            }}
+            const markedSet = new Set(keys);
+            const ids = [];
+            for (let i = 0; i < tableData.length; i++) {{
+                const row = tableData[i] || {{}};
+                let id = String(row.id || row._key || "").trim();
+                if (!id) {{
+                    const name = String(row.Name || "").trim();
+                    const club = String(row.Club || "").trim();
+                    id = name ? name + "|" + club : "";
+                }}
+                if (id && markedSet.has(id)) {{
+                    ids.push(id);
+                }}
+            }}
+            return ids;
+        }}
+        """,
+        Output(f"{prefix}-table", "selected_row_ids", allow_duplicate=True),
+        Input(f"{prefix}-table", "data"),
+        State(marked_store, "data"),
+        prevent_initial_call=True,
+    )
 
     @callback(
         Output(marked_store, "data", allow_duplicate=True),

@@ -1,6 +1,8 @@
 """Saved player profiles from Role scores and Player stats."""
 from __future__ import annotations
 
+import re
+
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
@@ -8,14 +10,17 @@ import dash_mantine_components as dmc
 from components.player_detail import role_player_detail_card
 from components.player_modal import player_modal
 from components.player_table import (
+    IDENTITY_TEXT_COLS,
     default_page_size_value,
     feet_cell,
+    feet_sort_key,
     identity_data_styles,
     identity_header_name,
     injury_cell,
     injury_tooltip_entry,
     page_size_select_data,
     player_data_table,
+    rec_sort_key,
     style_cell,
     style_cell_conditional,
     style_header,
@@ -33,6 +38,7 @@ from scoring.role_scorer import (
     score_band,
     to_int,
 )
+from scoring.stats_scorer import category_abbr, minutes_color, minutes_status
 import services.player_profiles as profiles
 import services.ui_settings as us
 
@@ -44,12 +50,156 @@ VIEW_MODES = (
 )
 
 PCT_COLS = ("overall", "defending", "final_third", "possession")
-PCT_HEADERS = {
-    "overall": "Ovr",
-    "defending": "Def",
-    "final_third": "Final third",
-    "possession": "Possession",
-}
+OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
+
+
+def _pct_header_name(col_id: str) -> str:
+    """Compact headers aligned with Player stats (Ovr, Def, F3 / GK, Poss)."""
+    if col_id == OVERALL_PCT_COL["id"]:
+        return OVERALL_PCT_COL["abbr"]
+    text = category_abbr(col_id, group=None, dual_final_third=True)
+    return text.replace(" / ", " /\n")
+
+
+TABLE_TEXT_COLS = IDENTITY_TEXT_COLS | {"Role"}
+
+
+def _strip_cell(value) -> str:
+    text = "" if value is None else str(value)
+    if "<" in text:
+        text = re.sub(r"<[^>]+>", "", text)
+    return text
+
+
+def _cell_number(value) -> float:
+    text = _strip_cell(value).strip()
+    if not text or text in ("-", "—"):
+        return float("nan")
+    if "(" in text:
+        text = text.split("(", 1)[0].strip()
+    match = re.search(r"-?\d+(?:\.\d+)?", text.replace("%", ""))
+    if not match:
+        return float("nan")
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return float("nan")
+
+
+def _raw_float(value) -> float | None:
+    if value in (None, "", "-", "—"):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return number
+
+
+def _profile_sort_key(column_id: str, row: dict) -> tuple:
+    if column_id == "Role":
+        text = str(row.get("_role_column") or row.get("Role") or "").strip()
+        if not text or text in ("-", "—"):
+            return (1, "\uffff")
+        return (0, text.casefold())
+    if column_id == "Score":
+        number = row.get("_score_raw")
+    elif column_id == "Minutes":
+        number = row.get("_minutes_raw")
+    elif column_id in PCT_COLS:
+        number = row.get(f"_{column_id}_raw")
+    else:
+        if column_id == "Feet":
+            return feet_sort_key(row)
+        if column_id == "Rec":
+            return rec_sort_key(row.get(column_id))
+        if column_id in TABLE_TEXT_COLS:
+            text = _strip_cell(row.get(column_id)).strip()
+            if not text or text in ("-", "—"):
+                return (1, "\uffff")
+            return (0, text.casefold())
+        number = _cell_number(row.get(column_id))
+    if number is None:
+        return (1, float("inf"))
+    try:
+        number = float(number)
+    except (TypeError, ValueError):
+        return (1, float("inf"))
+    if number != number:
+        return (1, float("inf"))
+    return (0, number)
+
+
+def _is_percentile_sort_column(column_id: str) -> bool:
+    if not column_id or column_id in TABLE_TEXT_COLS:
+        return False
+    if column_id in ("Feet", "Rec", "Minutes", "Age", "Height"):
+        return False
+    return column_id in PCT_COLS or column_id in ("Score",)
+
+
+def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
+    out = list(rows)
+    if sort_by:
+        item = sort_by[0]
+        column = item.get("column_id")
+        reverse = item.get("direction") == "desc"
+        if _is_percentile_sort_column(column):
+
+            def pct_key(row, *, _col=column, _desc=reverse):
+                _prefix, number = _profile_sort_key(_col, row)
+                if _prefix:
+                    return (1, 0.0)
+                return (0, -number if _desc else number)
+
+            out.sort(key=pct_key)
+            return out
+        out.sort(
+            key=lambda row: _profile_sort_key(column, row),
+            reverse=reverse,
+        )
+        return out
+    if mode == "roles":
+        return _sort_role_rows(out)
+    out.sort(
+        key=lambda row: (
+            1 if row.get("_overall_raw") is None else 0,
+            -(float(row.get("_overall_raw") or 0)),
+        )
+    )
+    return out
+
+
+def _default_sort_by(mode: str) -> list[dict]:
+    if mode == "percentiles":
+        return [{"column_id": "overall", "direction": "desc"}]
+    return [{"column_id": "Role", "direction": "asc"}]
+
+
+def _coerce_sort_by(
+    sort_by,
+    mode: str,
+    column_ids: set[str],
+    *,
+    triggered_id,
+    previous,
+) -> list[dict]:
+    default = _default_sort_by(mode)
+    if triggered_id == "pf-view-mode":
+        return default
+    if not sort_by:
+        if triggered_id == "pf-table":
+            prev = (previous or [None])[0] or {}
+            col = prev.get("column_id")
+            if col in column_ids:
+                return [{"column_id": col, "direction": "asc"}]
+        return []
+    column = (sort_by[0] or {}).get("column_id")
+    if column in column_ids:
+        return list(sort_by)
+    return []
 
 _ROLE_COLUMN_META: dict[str, dict] | None = None
 
@@ -85,6 +235,43 @@ def _blank(value) -> str:
     if value in (None, "", "-", "—"):
         return "—"
     return str(value)
+
+
+def _minutes_cell(mins_raw, settings) -> str:
+    if mins_raw in (None, "", "-", "—", "undefined", "null", "None"):
+        return "—"
+    try:
+        mins_f = float(mins_raw)
+    except (TypeError, ValueError):
+        return _blank(mins_raw)
+    if mins_f != mins_f:  # NaN
+        return "—"
+    settings = us.normalize(settings)
+    minutes_required = us.default_minutes_required(settings)
+    status = minutes_status(mins_f, minutes_required)
+    text = f"{int(mins_f):,}"
+    color = minutes_color(status)
+    if not color:
+        return text
+    return (
+        f'<span style="color:{color};font-weight:650;font-variant-numeric:tabular-nums">'
+        f"{text}</span>"
+    )
+
+
+def _profile_minutes_raw(entry: dict, raw: dict) -> Any:
+    for source in (
+        raw.get("Minutes"),
+        raw.get("minutes"),
+    ):
+        if source not in (None, "", "-", "—", "undefined", "null", "None"):
+            return source
+    player = entry.get("player")
+    if isinstance(player, dict):
+        mins = player.get("minutes")
+        if mins not in (None, "", "-", "—", "undefined", "null", "None"):
+            return mins
+    return None
 
 
 def _focus_roles(value) -> list[str]:
@@ -333,10 +520,11 @@ def _role_table_columns(settings) -> list[dict]:
         cols.append(spec)
     cols.append({"name": "Role", "id": "Role"})
     cols.append({"name": "Score", "id": "Score", "presentation": "markdown"})
+    cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     for pct in PCT_COLS:
         cols.append(
             {
-                "name": PCT_HEADERS[pct],
+                "name": _pct_header_name(pct),
                 "id": pct,
                 "presentation": "markdown",
             }
@@ -356,12 +544,50 @@ def _percentile_table_columns(settings) -> list[dict]:
     for pct in PCT_COLS:
         cols.append(
             {
-                "name": PCT_HEADERS[pct],
+                "name": _pct_header_name(pct),
                 "id": pct,
                 "presentation": "markdown",
             }
         )
     return cols
+
+
+def _table_header_styles(*, include_role: bool = False, include_score: bool = False) -> list[dict]:
+    """Match Player stats / Role scores shortlist header sizing and weight."""
+    rules: list[dict] = []
+    if include_role:
+        rules.append(
+            {
+                "if": {"column_id": "Role"},
+                "textAlign": "left",
+                "fontWeight": "600",
+                "minWidth": "72px",
+                "maxWidth": "120px",
+                "whiteSpace": "pre-line",
+                "overflow": "visible",
+                "lineHeight": "1.2",
+                "padding": "10px 8px",
+            }
+        )
+    metric_cols = ["Minutes", *PCT_COLS]
+    if include_score:
+        metric_cols = ["Score", *metric_cols]
+    for col_id in metric_cols:
+        rules.append(
+            {
+                "if": {"column_id": col_id},
+                "textAlign": "center",
+                "minWidth": "64px",
+                "width": "68px" if col_id == "Minutes" else "72px",
+                "maxWidth": "76px" if col_id == "Minutes" else "80px",
+                "whiteSpace": "pre-line",
+                "overflow": "visible",
+                "lineHeight": "1.2",
+                "padding": "10px 8px",
+                "fontWeight": "700" if col_id in ("Score", "overall") else "600",
+            }
+        )
+    return rules
 
 
 def _role_metric_styles() -> list[dict]:
@@ -381,6 +607,15 @@ def _role_metric_styles() -> list[dict]:
             "minWidth": "64px",
             "width": "72px",
             "maxWidth": "80px",
+            "fontVariantNumeric": "tabular-nums",
+        },
+        {
+            "if": {"column_id": "Minutes"},
+            "textAlign": "center",
+            "minWidth": "64px",
+            "width": "68px",
+            "maxWidth": "76px",
+            "fontWeight": "650",
             "fontVariantNumeric": "tabular-nums",
         },
         *[
@@ -425,23 +660,14 @@ def _pct_metric_styles() -> list[dict]:
 def _role_table_styles(theme) -> tuple[list, list]:
     data = identity_data_styles(theme, extra=_role_metric_styles())
     header = style_header_conditional(
-        extra=[
-            {"if": {"column_id": "Role"}, "textAlign": "left"},
-            {"if": {"column_id": "Score"}, "textAlign": "center", "fontWeight": "700"},
-            *[{"if": {"column_id": col}, "textAlign": "center"} for col in PCT_COLS],
-        ]
+        extra=_table_header_styles(include_role=True, include_score=True)
     )
     return data, header
 
 
 def _pct_table_styles(theme) -> tuple[list, list]:
     data = identity_data_styles(theme, extra=_pct_metric_styles())
-    header = style_header_conditional(
-        extra=[
-            {"if": {"column_id": "Minutes"}, "textAlign": "center"},
-            *[{"if": {"column_id": col}, "textAlign": "center"} for col in PCT_COLS],
-        ]
-    )
+    header = style_header_conditional(extra=_table_header_styles())
     return data, header
 
 
@@ -464,21 +690,15 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
             )
         except (TypeError, ValueError):
             score_f = None
-        overall_raw = raw.get("overall")
-        try:
-            overall_f = (
-                float(overall_raw)
-                if overall_raw not in (None, "", "-", "—")
-                else None
-            )
-        except (TypeError, ValueError):
-            overall_f = None
+        overall_raw = _raw_float(raw.get("overall"))
+        pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
         item: dict = {
             "id": entry.get("id") or "",
             "_key": entry.get("id") or "",
             "_role_column": role_column,
             "_score_raw": score_f,
-            "_overall_raw": overall_f,
+            "_overall_raw": overall_raw,
+            **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
         }
         for col in identity:
             if col == "Feet":
@@ -489,6 +709,44 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
                 item[col] = _blank(raw.get(col))
         item["Role"] = _blank(raw.get("Role"))
         item["Score"] = _score_markdown(score_raw, settings, theme=theme)
+        mins_raw = _profile_minutes_raw(entry, raw)
+        item["_minutes_raw"] = mins_raw
+        item["Minutes"] = _minutes_cell(mins_raw, settings)
+        for pct in PCT_COLS:
+            item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
+        rows.append(item)
+        tips.append(injury_tooltip_entry(raw.get("Injury")))
+    return rows, tips
+
+
+def _build_percentile_table_rows(settings=None) -> tuple[list[dict], list[dict]]:
+    settings = us.normalize(settings)
+    identity = us.shortlist_columns_for("player_stats", settings)
+    rows = []
+    tips = []
+    for entry in profiles.list_percentile_profiles():
+        raw = dict(entry.get("row") or {})
+        pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
+        item: dict = {
+            "id": entry.get("id") or "",
+            "_key": entry.get("id") or "",
+            "_overall_raw": pct_raw["overall"],
+            **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
+        }
+        for col in identity:
+            if col == "Feet":
+                item[col] = feet_cell(raw)
+            elif col == "Injury":
+                item[col] = injury_cell(raw.get("Injury"))
+            else:
+                item[col] = _blank(raw.get(col))
+        mins = raw.get("Minutes")
+        mins_raw = _raw_float(mins)
+        item["_minutes_raw"] = mins_raw
+        if mins_raw is None:
+            item["Minutes"] = "—"
+        else:
+            item["Minutes"] = f"{int(mins_raw):,}"
         for pct in PCT_COLS:
             item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
         rows.append(item)
@@ -508,36 +766,6 @@ def _sort_role_rows(rows: list[dict]) -> list[dict]:
         return (role, score_sort, overall_sort)
 
     return sorted(rows, key=key)
-
-
-def _build_percentile_table_rows(settings=None) -> tuple[list[dict], list[dict]]:
-    settings = us.normalize(settings)
-    identity = us.shortlist_columns_for("player_stats", settings)
-    rows = []
-    tips = []
-    for entry in profiles.list_percentile_profiles():
-        raw = dict(entry.get("row") or {})
-        item: dict = {"id": entry.get("id") or "", "_key": entry.get("id") or ""}
-        for col in identity:
-            if col == "Feet":
-                item[col] = feet_cell(raw)
-            elif col == "Injury":
-                item[col] = injury_cell(raw.get("Injury"))
-            else:
-                item[col] = _blank(raw.get(col))
-        mins = raw.get("Minutes")
-        if mins in (None, ""):
-            item["Minutes"] = "—"
-        else:
-            try:
-                item["Minutes"] = f"{int(float(mins)):,}"
-            except (TypeError, ValueError):
-                item["Minutes"] = _blank(mins)
-        for pct in PCT_COLS:
-            item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
-        rows.append(item)
-        tips.append(injury_tooltip_entry(raw.get("Injury")))
-    return rows, tips
 
 
 def _filter_role_rows(
@@ -616,6 +844,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-view-mode", data="roles"),
             dcc.Store(id="pf-focus-role", data=[]),
+            dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-player-key", data=None),
             player_modal(prefix="pf"),
             html.H1("Profiles", className="mt-2 mb-3"),
@@ -944,6 +1173,8 @@ def focus_profile_role(n_clicks, current_focus):
     Output("pf-table", "page_current"),
     Output("pf-table", "selected_rows"),
     Output("pf-table", "selected_row_ids"),
+    Output("pf-table", "sort_by"),
+    Output("pf-sort-memory", "data"),
     Output("pf-table-caption", "children"),
     Output("pf-table-empty", "children"),
     Output("pf-table-empty", "hidden"),
@@ -962,8 +1193,10 @@ def focus_profile_role(n_clicks, current_focus):
     Input("pf-pct-search", "value"),
     Input("pf-pct-age", "value"),
     Input("pf-page-size", "value"),
+    Input("pf-table", "sort_by"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
+    State("pf-sort-memory", "data"),
 )
 def refresh_profiles_table(
     view_mode,
@@ -976,8 +1209,10 @@ def refresh_profiles_table(
     pct_search,
     pct_age,
     page_size,
+    sort_by,
     settings,
     theme,
+    sort_memory,
 ):
     settings = us.normalize(settings)
     mode = view_mode or "roles"
@@ -998,15 +1233,13 @@ def refresh_profiles_table(
     else:
         columns = _role_table_columns(settings)
         all_rows, tips = _build_role_table_rows(settings, theme=theme)
-        filtered = _sort_role_rows(
-            _filter_role_rows(
-                all_rows,
-                focus_roles=focus_role,
-                query=search,
-                max_age=age,
-                min_score=min_score_f,
-                hybrids_only=bool(hybrids_only),
-            )
+        filtered = _filter_role_rows(
+            all_rows,
+            focus_roles=focus_role,
+            query=search,
+            max_age=age,
+            min_score=min_score_f,
+            hybrids_only=bool(hybrids_only),
         )
         style_data, style_header = _role_table_styles(theme)
         empty_msg = (
@@ -1022,7 +1255,23 @@ def refresh_profiles_table(
         )
         depth_hidden = not depth_cards
 
-    display_rows = [_strip_internal(row) for row in filtered]
+    col_ids = {col["id"] for col in columns}
+    sort_by = _coerce_sort_by(
+        sort_by,
+        mode,
+        col_ids,
+        triggered_id=ctx.triggered_id,
+        previous=sort_memory,
+    )
+    filtered = _sort_profile_rows(filtered, sort_by, mode=mode)
+
+    display_rows = []
+    for row in filtered:
+        clean = _strip_internal(row)
+        minutes_value = clean.get("Minutes")
+        if not isinstance(minutes_value, str) or not minutes_value.strip():
+            clean["Minutes"] = _minutes_cell(row.get("_minutes_raw"), settings)
+        display_rows.append(clean)
     display_tips = [
         tips[all_rows.index(row)] for row in filtered if row in all_rows
     ]
@@ -1052,6 +1301,8 @@ def refresh_profiles_table(
             0,
             [],
             [],
+            sort_by,
+            sort_by,
             caption,
             html.Div(empty_msg, className="text-muted small"),
             False,
@@ -1072,6 +1323,8 @@ def refresh_profiles_table(
             0,
             [],
             [],
+            sort_by,
+            sort_by,
             caption,
             html.Div(
                 "No profiles match the current filters.",
@@ -1094,6 +1347,8 @@ def refresh_profiles_table(
         0,
         [],
         [],
+        sort_by,
+        sort_by,
         caption,
         None,
         True,

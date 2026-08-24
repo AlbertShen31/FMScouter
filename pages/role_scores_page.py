@@ -100,6 +100,15 @@ import services.ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
 
+
+def _shortlist_row_key(row: dict) -> str:
+    """Stable row id for selection sync (id field, then Name|Club)."""
+    key = str(row.get("id") or row.get("_key") or "").strip()
+    if key:
+        return key
+    return player_row_key(row)
+
+
 register_library_select_callbacks(
     "rs",
     parse_fn=parse_export,
@@ -118,6 +127,7 @@ register_marks_callbacks(
     "rs",
     marked_store="rs-squad-marked",
     clear_button="rs-squad-clear-btn",
+    row_key_fn=_shortlist_row_key,
 )
 register_hist_toggle("rs", use_open_store=True)
 register_role_profile_save_callbacks(
@@ -2232,7 +2242,7 @@ def clear_on_role_mode_change(mode, prev_mode):
             mode,
             no_update,
         )
-    return [], [], None, [], None, None, [], mode, []
+    return [], [], None, [], None, None, no_update, mode, []
 
 
 @callback(
@@ -2764,7 +2774,6 @@ def _subset_table_data_by_keys(
     Input("rs-hybrids-only", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
-    Input("rs-squad-marked", "data"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-page-size", "value"),
@@ -2777,6 +2786,7 @@ def _subset_table_data_by_keys(
     State("rs-table", "data"),
     State("rs-table", "tooltip_data"),
     State("rs-table-cache", "data"),
+    State("rs-squad-marked", "data"),
 )
 def render_shortlist(
     payload,
@@ -2789,7 +2799,6 @@ def render_shortlist(
     hybrids_only,
     set_pieces,
     set_piece_min,
-    squad_marked,
     pos_filter,
     foot_filter,
     page_size,
@@ -2802,6 +2811,7 @@ def render_shortlist(
     table_data,
     tooltip_data_state,
     table_cache,
+    squad_marked,
 ):
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
@@ -2968,9 +2978,6 @@ def render_shortlist(
             style_data, style_header, table_css_rules = _cached_table_chrome(
                 visible_score_cols, settings, theme
             )
-            selected_rows = [
-                key for key in ordered_keys if key in marked_keys
-            ]
             focused = [
                 role for role in _focus_roles(focus_role) if role in view_roles
             ]
@@ -3033,7 +3040,7 @@ def render_shortlist(
                     style_table,
                     page_size,
                     page_current,
-                    selected_rows,
+                    no_update,
                     new_sig,
                     fig,
                     caption,
@@ -3079,7 +3086,7 @@ def render_shortlist(
                     _table_style_table(len(new_data), page_size),
                     page_size,
                     page_current,
-                    selected_rows,
+                    no_update,
                     new_sig,
                     fig,
                     caption,
@@ -3275,8 +3282,6 @@ def render_shortlist(
     # Cache keeps wide score cells for the current row set so column toggles can
     # swap visibility without rebuilding markdown.
     wide_cache = {"data": table_rows, "tips": tooltip_data}
-    page_keys = [str(row.get("id") or "").strip() for row in table_rows]
-    selected_rows = [key for key in page_keys if key in marked_keys]
     extras = []
     if pos_filter != "all":
         extras.append(pos_filter)
@@ -3377,7 +3382,7 @@ def render_shortlist(
         _table_style_table(len(table_rows), page_size),
         page_size,
         out_page,
-        selected_rows,
+        no_update,
         out_sig,
         fig,
         caption,

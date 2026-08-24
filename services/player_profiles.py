@@ -102,6 +102,7 @@ def build_role_row_snapshot(
     role_column: str,
     *,
     percentiles: dict[str, Any] | None = None,
+    minutes: Any = None,
 ) -> dict[str, Any]:
     """One shortlist-style row: identity + this role’s score (+ optional percentiles)."""
     out: dict[str, Any] = {}
@@ -116,23 +117,26 @@ def build_role_row_snapshot(
     out["Role"] = role_column
     out["Score"] = score_f
     out["Eligible"] = bool(scored_row.get(f"{role_column} eligible"))
+    pct_keys = (
+        "overall",
+        "overall_color",
+        "defending",
+        "defending_color",
+        "defending_label",
+        "final_third",
+        "final_third_color",
+        "final_third_label",
+        "possession",
+        "possession_color",
+        "possession_label",
+        "Minutes",
+    )
     if percentiles:
-        for key in (
-            "overall",
-            "overall_color",
-            "defending",
-            "defending_color",
-            "defending_label",
-            "final_third",
-            "final_third_color",
-            "final_third_label",
-            "possession",
-            "possession_color",
-            "possession_label",
-            "Minutes",
-        ):
+        for key in pct_keys:
             if key in percentiles:
                 out[key] = percentiles.get(key)
+    if minutes is not None and out.get("Minutes") in (None, ""):
+        out["Minutes"] = minutes
     return out
 
 
@@ -295,9 +299,9 @@ def expand_role_profile_rows(
         if scored is None:
             continue
         player = role_by_key.get(key)
-        pct = percentile_fields_from_stats_player(
-            stats_by_key.get(key), settings=settings
-        )
+        stats_player = stats_by_key.get(key)
+        pct = percentile_fields_from_stats_player(stats_player, settings=settings)
+        minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
             if eligible_only and not scored.get(f"{role_col} eligible"):
                 continue
@@ -306,7 +310,10 @@ def expand_role_profile_rows(
                     "player_key": key,
                     "role_column": role_col,
                     "row": build_role_row_snapshot(
-                        scored, role_col, percentiles=pct or None
+                        scored,
+                        role_col,
+                        percentiles=pct or None,
+                        minutes=minutes,
                     ),
                     "player": player,
                 }
@@ -320,17 +327,25 @@ def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
         return []
     try:
         import services.upload_cache as upload_cache
+        from scoring.stats_scorer import parse_stats_export
 
         hit = upload_cache.try_stats_players(file_id)
         if hit:
             return hit[0]
         entry = lib.get_file(file_id)
-        if not entry or not entry.get("stats"):
+        if not entry:
             return []
-        from scoring.stats_scorer import parse_stats_export
-
         text, _ = lib.read_text(file_id)
-        return parse_stats_export(text)
+        if not text:
+            return []
+        # Try parsing even when the library flag is stale — combined exports
+        # often include Minutes + per-90 columns for role-score saves.
+        try:
+            return parse_stats_export(text)
+        except ValueError:
+            if not entry.get("stats"):
+                return []
+            raise
     except Exception:
         return []
 
