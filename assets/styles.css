@@ -5816,6 +5816,78 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     margin-top: 0.35rem;
 }
 
+/* Profiles table — same header sort hit targets as Role scores / Player stats */
+#pf-table {
+    position: relative;
+    z-index: 1;
+}
+
+#pf-table .dash-spreadsheet-inner td,
+#pf-table .dash-spreadsheet-inner th {
+    background-color: var(--app-card);
+    color: var(--app-text);
+    border-color: var(--app-line) !important;
+    vertical-align: middle !important;
+}
+
+#pf-table .dash-spreadsheet-inner th {
+    background-color: var(--app-head);
+    color: var(--app-text);
+    cursor: pointer;
+    position: relative !important;
+    user-select: none;
+}
+
+#pf-table .dash-spreadsheet-inner td.dash-cell:hover,
+#pf-table .dash-spreadsheet-inner tr:hover td,
+#pf-table .dash-spreadsheet-inner tr:hover th,
+#pf-table .dash-spreadsheet-inner th:hover,
+#pf-table .dash-spreadsheet-inner th.dash-header:hover,
+#pf-table .dash-spreadsheet-inner td.focused,
+#pf-table .dash-spreadsheet-inner td.cell--selected,
+#pf-table .dash-spreadsheet-inner th.focused,
+#pf-table .dash-spreadsheet-inner th.cell--selected,
+#pf-table .dash-spreadsheet-inner th.dash-header.focused,
+#pf-table .dash-spreadsheet-inner th.dash-header.cell--selected {
+    background-color: var(--table-hover-bg) !important;
+    color: var(--table-hover-fg) !important;
+}
+
+#pf-table .dash-spreadsheet-inner th .column-header-name {
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#pf-table .dash-spreadsheet-inner th .column-header--sort {
+    color: var(--app-accent) !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    box-sizing: border-box;
+    cursor: pointer;
+    z-index: 2;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .column-header-name,
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Role"] .column-header-name {
+    text-align: center !important;
+    width: 100%;
+    white-space: pre-line !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
+#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
+    text-align: center !important;
+}
+
 /* Profiles page */
 .profiles-wrap {
     overflow-x: auto;

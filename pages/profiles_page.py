@@ -7,6 +7,7 @@ from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, 
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 from components.player_detail import role_player_detail_card
 from components.player_modal import player_modal
 from components.player_table import (
@@ -38,7 +39,12 @@ from scoring.role_scorer import (
     score_band,
     to_int,
 )
-from scoring.stats_scorer import category_abbr, minutes_color, minutes_status
+from scoring.stats_scorer import (
+    category_abbr,
+    minutes_color,
+    minutes_status,
+    passes_minutes_filter,
+)
 import services.player_profiles as profiles
 import services.ui_settings as us
 
@@ -47,6 +53,21 @@ register_page(__name__, path="/profiles", name="Profiles")
 VIEW_MODES = (
     ("roles", "Role scores"),
     ("percentiles", "Overall percentiles"),
+)
+
+FILTER_SORT_RESET_IDS = frozenset(
+    {
+        "pf-view-mode",
+        "pf-focus-role",
+        "pf-search",
+        "pf-age",
+        "pf-min-score",
+        "pf-hybrids-only",
+        "pf-pct-search",
+        "pf-pct-age",
+        "pf-minutes-match",
+        "pf-minutes-required",
+    }
 )
 
 PCT_COLS = ("overall", "defending", "final_third", "possession")
@@ -173,9 +194,8 @@ def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
 
 
 def _default_sort_by(mode: str) -> list[dict]:
-    if mode == "percentiles":
-        return [{"column_id": "overall", "direction": "desc"}]
-    return [{"column_id": "Role", "direction": "asc"}]
+    """Empty sort_by → mode default in _sort_profile_rows (roles: role/score/ovr)."""
+    return []
 
 
 def _coerce_sort_by(
@@ -185,9 +205,10 @@ def _coerce_sort_by(
     *,
     triggered_id,
     previous,
+    reset_default: bool = False,
 ) -> list[dict]:
     default = _default_sort_by(mode)
-    if triggered_id == "pf-view-mode":
+    if reset_default or triggered_id == "pf-view-mode":
         return default
     if not sort_by:
         if triggered_id == "pf-table":
@@ -195,11 +216,11 @@ def _coerce_sort_by(
             col = prev.get("column_id")
             if col in column_ids:
                 return [{"column_id": col, "direction": "asc"}]
-        return []
+        return default
     column = (sort_by[0] or {}).get("column_id")
     if column in column_ids:
         return list(sort_by)
-    return []
+    return default
 
 _ROLE_COLUMN_META: dict[str, dict] | None = None
 
@@ -257,6 +278,16 @@ def _minutes_cell(mins_raw, settings) -> str:
         f'<span style="color:{color};font-weight:650;font-variant-numeric:tabular-nums">'
         f"{text}</span>"
     )
+
+
+def _profile_minutes_status(row: dict, minutes_required: float) -> str:
+    raw = row.get("_minutes_raw")
+    if raw in (None, "", "-", "—"):
+        return minutes_status(None, minutes_required)
+    try:
+        return minutes_status(float(raw), minutes_required)
+    except (TypeError, ValueError):
+        return minutes_status(None, minutes_required)
 
 
 def _profile_minutes_raw(entry: dict, raw: dict) -> Any:
@@ -776,6 +807,8 @@ def _filter_role_rows(
     max_age,
     min_score: float,
     hybrids_only: bool,
+    minutes_match: str,
+    minutes_required: float,
 ) -> list[dict]:
     focused = _focus_roles(focus_roles)
     query = (query or "").strip().lower()
@@ -791,6 +824,11 @@ def _filter_role_rows(
         if hybrids_only and "+" not in role_col:
             continue
         if max_age_i < 99 and to_int(row.get("Age")) > max_age_i:
+            continue
+        if not passes_minutes_filter(
+            _profile_minutes_status(row, minutes_required),
+            minutes_match or "any",
+        ):
             continue
         score_raw = row.get("_score_raw")
         if min_score > 0:
@@ -811,7 +849,14 @@ def _filter_role_rows(
     return out
 
 
-def _filter_pct_rows(rows: list[dict], *, query: str, max_age) -> list[dict]:
+def _filter_pct_rows(
+    rows: list[dict],
+    *,
+    query: str,
+    max_age,
+    minutes_match: str,
+    minutes_required: float,
+) -> list[dict]:
     query = (query or "").strip().lower()
     try:
         max_age_i = 99 if max_age is None else int(max_age)
@@ -820,6 +865,11 @@ def _filter_pct_rows(rows: list[dict], *, query: str, max_age) -> list[dict]:
     out = []
     for row in rows:
         if max_age_i < 99 and to_int(row.get("Age")) > max_age_i:
+            continue
+        if not passes_minutes_filter(
+            _profile_minutes_status(row, minutes_required),
+            minutes_match or "any",
+        ):
             continue
         if query:
             blob = (
@@ -836,9 +886,57 @@ def _strip_internal(row: dict) -> dict:
     return {k: v for k, v in row.items() if not k.startswith("_")}
 
 
+def _minutes_filter_panel(mins_req: int) -> html.Div:
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Label("Minutes", className="rs-field-label"),
+                            *help_icon(
+                                f"Default requirement {mins_req} min. "
+                                "Green=meet, yellow=≥half, red=below half.",
+                                "pf-help-minutes",
+                            ),
+                        ],
+                        className="rs-field-label-row",
+                    ),
+                    html.Div(
+                        [
+                            dmc.NumberInput(
+                                id="pf-minutes-required",
+                                value=mins_req,
+                                min=0,
+                                max=20000,
+                                step=90,
+                            ),
+                            dmc.Select(
+                                id="pf-minutes-match",
+                                data=[
+                                    {"label": "Any", "value": "any"},
+                                    {"label": "Half or more", "value": "half"},
+                                    {"label": "Meets requirements", "value": "meet"},
+                                ],
+                                value="any",
+                                clearable=False,
+                                searchable=False,
+                            ),
+                        ],
+                        className="st-minutes-fields",
+                    ),
+                ],
+                className="rs-filter-pos-match st-filter-minutes",
+            ),
+        ],
+        className="rs-shortlist-filters mb-2",
+    )
+
+
 def layout(**_kwargs):
     profiles.ensure_dirs()
     settings = us.load()
+    mins_req = us.default_minutes_required(settings)
     return dbc.Container(
         [
             dcc.Store(id="pf-rev", data=0),
@@ -1016,6 +1114,7 @@ def layout(**_kwargs):
                                 className="rs-shortlist-filters mb-2",
                                 hidden=True,
                             ),
+                            _minutes_filter_panel(mins_req),
                             html.Div(
                                 [
                                     html.Div(
@@ -1099,6 +1198,17 @@ def layout(**_kwargs):
         fluid=True,
         className="rs-page pf-page",
     )
+
+
+@callback(
+    Output("pf-minutes-required", "value"),
+    Input("ui-settings", "data"),
+    State("pf-minutes-required", "value"),
+)
+def sync_pf_minutes_from_settings(settings, minutes_required):
+    settings = us.normalize(settings)
+    default_mins = us.default_minutes_required(settings)
+    return minutes_required if minutes_required is not None else default_mins
 
 
 @callback(
@@ -1192,6 +1302,8 @@ def focus_profile_role(n_clicks, current_focus):
     Input("pf-hybrids-only", "checked"),
     Input("pf-pct-search", "value"),
     Input("pf-pct-age", "value"),
+    Input("pf-minutes-match", "value"),
+    Input("pf-minutes-required", "value"),
     Input("pf-page-size", "value"),
     Input("pf-table", "sort_by"),
     Input("ui-settings", "data"),
@@ -1208,6 +1320,8 @@ def refresh_profiles_table(
     hybrids_only,
     pct_search,
     pct_age,
+    minutes_match,
+    minutes_required,
     page_size,
     sort_by,
     settings,
@@ -1221,11 +1335,28 @@ def refresh_profiles_table(
     except (TypeError, ValueError):
         page_size_i = us.page_size(settings)
     min_score_f = us.parse_score_floor(min_score)
+    minutes_required_f = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
+    triggered = {
+        (item.get("prop_id") or "").split(".")[0]
+        for item in (ctx.triggered or [])
+        if item.get("prop_id")
+    }
+    reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
 
     if mode == "percentiles":
         columns = _percentile_table_columns(settings)
         all_rows, tips = _build_percentile_table_rows(settings)
-        filtered = _filter_pct_rows(all_rows, query=pct_search, max_age=pct_age)
+        filtered = _filter_pct_rows(
+            all_rows,
+            query=pct_search,
+            max_age=pct_age,
+            minutes_match=minutes_match or "any",
+            minutes_required=minutes_required_f,
+        )
         style_data, style_header = _pct_table_styles(theme)
         empty_msg = "No percentile profiles yet. Mark players on Player stats and save."
         depth_cards = []
@@ -1240,6 +1371,8 @@ def refresh_profiles_table(
             max_age=age,
             min_score=min_score_f,
             hybrids_only=bool(hybrids_only),
+            minutes_match=minutes_match or "any",
+            minutes_required=minutes_required_f,
         )
         style_data, style_header = _role_table_styles(theme)
         empty_msg = (
@@ -1256,12 +1389,15 @@ def refresh_profiles_table(
         depth_hidden = not depth_cards
 
     col_ids = {col["id"] for col in columns}
+    if reset_sort:
+        sort_by = []
     sort_by = _coerce_sort_by(
         sort_by,
         mode,
         col_ids,
         triggered_id=ctx.triggered_id,
         previous=sort_memory,
+        reset_default=reset_sort,
     )
     filtered = _sort_profile_rows(filtered, sort_by, mode=mode)
 
