@@ -1123,6 +1123,7 @@ def delete_selected(n_clicks, selected_ids, rev):
     Output("pf-player-modal-title", "children"),
     Output("pf-player-modal-body", "children"),
     Output("pf-player-key", "data"),
+    Output("pf-table", "active_cell"),
     Input("pf-table", "active_cell"),
     Input("pf-player-modal", "is_open"),
     Input("pf-player-modal-close", "n_clicks"),
@@ -1141,22 +1142,23 @@ def open_profile_modal(
 ):
     triggered = ctx.triggered_id
     if triggered == "pf-player-modal":
+        # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
         if not is_open:
-            return False, no_update, no_update, None
-        return no_update, no_update, no_update, no_update
+            return False, no_update, no_update, None, None
+        return no_update, no_update, no_update, no_update, no_update
     if triggered == "pf-player-modal-close":
-        return False, no_update, no_update, None
+        return False, no_update, no_update, None, None
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     row_idx = active_cell.get("row")
     if not isinstance(viewport, list) or row_idx is None:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     try:
         row_idx = int(row_idx)
     except (TypeError, ValueError):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     if row_idx < 0 or row_idx >= len(viewport):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
     profile_id = str(row.get("id") or row.get("_key") or "").strip()
     profile = profiles.get_profile(profile_id) if profile_id else None
@@ -1165,6 +1167,7 @@ def open_profile_modal(
             True,
             str(row.get("Name") or "Player"),
             html.Div("Profile not found.", className="rs-player-missing"),
+            None,
             None,
         )
     player = profile.get("player")
@@ -1181,10 +1184,12 @@ def open_profile_modal(
                 className="rs-player-missing",
             ),
             profile_id,
+            None,
         )
     return (
         True,
         title,
         role_player_detail_card(player, settings),
         profile_id,
+        None,
     )
