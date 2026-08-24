@@ -49,6 +49,30 @@ def _source_label(parsed) -> str:
     return str(parsed.get("filename") or "").strip()
 
 
+def _table_row_key(row) -> str:
+    if not isinstance(row, dict):
+        return ""
+    key = str(row.get("id") or row.get("_key") or "").strip()
+    if key:
+        return key
+    name = str(row.get("Name") or "").strip()
+    club = str(row.get("Club") or "").strip()
+    return f"{name}|{club}" if name else ""
+
+
+def _effective_marked_keys(marked, selected_ids=None, table_data=None) -> list[str]:
+    """Use current table selection immediately, without waiting for marked-store sync."""
+    marked_set = {str(key) for key in as_list(marked) if key}
+    selected = {str(key) for key in (selected_ids or []) if key}
+    if not selected:
+        return sorted(marked_set)
+    page_keys = {_table_row_key(row) for row in (table_data or []) if _table_row_key(row)}
+    if page_keys:
+        marked_set -= page_keys
+    marked_set |= selected
+    return sorted(marked_set)
+
+
 def register_profile_save_callbacks(
     prefix: str,
     *,
@@ -61,9 +85,11 @@ def register_profile_save_callbacks(
         Output(f"{prefix}-profile-save-btn", "disabled"),
         Input(marked_store, "data"),
         Input(parsed_id, "data"),
+        Input(f"{prefix}-table", "selected_row_ids"),
+        State(f"{prefix}-table", "data"),
     )
-    def _preview_marked(marked, parsed):
-        marked_list = as_list(marked)
+    def _preview_marked(marked, parsed, selected_ids, table_data):
+        marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         has_data = bool(parsed_players(parsed) if parsed else [])
         if not marked_list:
             preview = html.P("No players marked yet.", className="text-muted mb-0")
@@ -83,12 +109,14 @@ def register_profile_save_callbacks(
         State(marked_store, "data"),
         State(parsed_id, "data"),
         State("ui-settings", "data"),
+        State(f"{prefix}-table", "selected_row_ids"),
+        State(f"{prefix}-table", "data"),
         prevent_initial_call=True,
     )
-    def _save_marked(n_clicks, marked, parsed, settings):
+    def _save_marked(n_clicks, marked, parsed, settings, selected_ids, table_data):
         if not n_clicks:
             return no_update, no_update
-        marked_list = as_list(marked)
+        marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         players = parsed_players(parsed)
         if not marked_list or not players:
             return no_update, no_update
@@ -148,9 +176,13 @@ def register_role_profile_save_callbacks(
         Input(rows_id, "data"),
         Input(focus_id, "data"),
         Input(hybrids_id, "checked"),
+        Input(f"{prefix}-table", "selected_row_ids"),
+        State(f"{prefix}-table", "data"),
     )
-    def _preview_marked(marked, parsed, payload, focus_role, hybrids_only):
-        marked_list = as_list(marked)
+    def _preview_marked(
+        marked, parsed, payload, focus_role, hybrids_only, selected_ids, table_data
+    ):
+        marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         if not marked_list:
             preview = html.P("No players marked yet.", className="text-muted mb-0")
         else:
@@ -180,14 +212,24 @@ def register_role_profile_save_callbacks(
         State(focus_id, "data"),
         State(hybrids_id, "checked"),
         State("ui-settings", "data"),
+        State(f"{prefix}-table", "selected_row_ids"),
+        State(f"{prefix}-table", "data"),
         prevent_initial_call=True,
     )
     def _save_marked(
-        n_clicks, marked, parsed, payload, focus_role, hybrids_only, settings
+        n_clicks,
+        marked,
+        parsed,
+        payload,
+        focus_role,
+        hybrids_only,
+        settings,
+        selected_ids,
+        table_data,
     ):
         if not n_clicks:
             return no_update, no_update
-        marked_list = as_list(marked)
+        marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         if not marked_list or not payload:
             return no_update, no_update
         try:
