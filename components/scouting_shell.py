@@ -1279,12 +1279,16 @@ def register_marks_callbacks(
     parsed_id: str | None = None,
     row_key_fn: RowKeyFn | None = None,
     clear_on_upload: bool = True,
+    select_all: bool = False,
 ) -> None:
     """Sync DataTable ``selected_row_ids`` with a marked-keys store.
 
     Pages must put a stable ``id`` (and ideally ``_key``) on each table row.
     Marks persist across table refreshes (role/filter changes); checkboxes are
     restored clientside when ``{prefix}-table`` ``data`` changes.
+
+    When ``select_all`` is True, expects a ``{prefix}-select-all`` button that
+    marks (or unmarks) only the rows on the current table page.
     """
     marked_store = marked_store or f"{prefix}-marked"
     clear_button = clear_button or f"{prefix}-clear-marks"
@@ -1362,6 +1366,64 @@ def register_marks_callbacks(
         if not n_clicks:
             return no_update
         return []
+
+    if select_all:
+
+        @callback(
+            Output(f"{prefix}-table", "selected_row_ids", allow_duplicate=True),
+            Output(f"{prefix}-table", "selected_rows"),
+            Input(f"{prefix}-select-all", "n_clicks"),
+            State(f"{prefix}-table", "data"),
+            State(f"{prefix}-table", "page_current"),
+            State(f"{prefix}-table", "page_size"),
+            State(marked_store, "data"),
+            prevent_initial_call=True,
+        )
+        def _select_all_visible(n_clicks, rows, page_current, page_size, marked):
+            if not n_clicks or not rows:
+                return no_update, no_update
+            try:
+                page = int(page_current or 0)
+                size = int(page_size or len(rows) or 50)
+            except (TypeError, ValueError):
+                page, size = 0, len(rows) or 50
+            start = max(0, page * size)
+            end = min(len(rows), start + size)
+            page_rows = rows[start:end]
+            page_ids = [
+                key for row in page_rows if (key := key_fn(row))
+            ]
+            if not page_ids:
+                return no_update, no_update
+
+            marked_set = set(as_list(marked))
+            page_set = set(page_ids)
+            # Toggle: clear this page if every displayed row is already marked.
+            if page_set and page_set.issubset(marked_set):
+                marked_set -= page_set
+            else:
+                marked_set |= page_set
+
+            # Keep selected_row_ids consistent with the full table so mark sync
+            # does not wipe off-page marks.
+            all_selected = [
+                key
+                for row in rows
+                if (key := key_fn(row)) and key in marked_set
+            ]
+            page_indices = [
+                i
+                for i, row in enumerate(page_rows)
+                if key_fn(row) in marked_set
+            ]
+            return all_selected, page_indices
+
+        @callback(
+            Output(f"{prefix}-select-all", "disabled"),
+            Input(f"{prefix}-table", "data"),
+        )
+        def _toggle_select_all_btn(rows):
+            return not bool(rows)
 
     if clear_on_upload:
 

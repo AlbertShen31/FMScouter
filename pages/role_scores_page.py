@@ -140,6 +140,7 @@ register_marks_callbacks(
     marked_store="rs-squad-marked",
     clear_button="rs-squad-clear-btn",
     row_key_fn=_shortlist_row_key,
+    select_all=True,
 )
 register_hist_toggle("rs", use_open_store=True)
 register_role_profile_save_callbacks(
@@ -1258,6 +1259,7 @@ def layout():
                             prefix="rs",
                             clear_button_id="rs-squad-clear-btn",
                             settings=settings,
+                            select_all=True,
                         ),
                         hist_block(
                             "rs",

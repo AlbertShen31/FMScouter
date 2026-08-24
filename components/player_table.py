@@ -729,37 +729,49 @@ def table_caption_row(
     clear_button_id: str,
     clear_label: str = "Clear marked rows",
     settings=None,
+    select_all: bool = False,
 ) -> html.Div:
     """Caption + rows-per-page + clear-marks row used under both tables."""
+    actions: list = [
+        html.Div(
+            [
+                html.Label("Rows per page", className="rs-field-label"),
+                dmc.Select(
+                    id=f"{prefix}-page-size",
+                    data=page_size_select_data(settings),
+                    value=default_page_size_value(settings),
+                    clearable=False,
+                    searchable=False,
+                ),
+            ],
+            className="rs-table-page-size",
+        ),
+    ]
+    if select_all:
+        actions.append(
+            dmc.Button(
+                "Select all",
+                id=f"{prefix}-select-all",
+                size="sm",
+                variant="light",
+                n_clicks=0,
+                disabled=True,
+            )
+        )
+    actions.append(
+        dmc.Button(
+            clear_label,
+            id=clear_button_id,
+            size="sm",
+            variant="light",
+            disabled=True,
+            className="rs-squad-clear-btn",
+        )
+    )
     return html.Div(
         [
             html.Div(id=f"{prefix}-table-caption", className="text-muted"),
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Label("Rows per page", className="rs-field-label"),
-                            dmc.Select(
-                                id=f"{prefix}-page-size",
-                                data=page_size_select_data(settings),
-                                value=default_page_size_value(settings),
-                                clearable=False,
-                                searchable=False,
-                            ),
-                        ],
-                        className="rs-table-page-size",
-                    ),
-                    dmc.Button(
-                        clear_label,
-                        id=clear_button_id,
-                        size="sm",
-                        variant="light",
-                        disabled=True,
-                        className="rs-squad-clear-btn",
-                    ),
-                ],
-                className="rs-table-caption-actions",
-            ),
+            html.Div(actions, className="rs-table-caption-actions"),
         ],
         className="rs-table-caption-row mt-2",
     )
