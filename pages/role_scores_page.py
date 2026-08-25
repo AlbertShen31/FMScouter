@@ -18,17 +18,14 @@ from dash import (
 )
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
-import plotly.graph_objects as go
 
 from components.pack_picker import section_card_header
 from components.player_filters import help_icon, player_filters
 from components.scouting_shell import (
     as_list,
     clicked,
-    hist_block,
     parsed_historical_players,
     pattern_matching_stubs,
-    register_hist_toggle,
     register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
@@ -142,7 +139,6 @@ register_marks_callbacks(
     row_key_fn=_shortlist_row_key,
     select_all=True,
 )
-register_hist_toggle("rs", use_open_store=True)
 register_role_profile_save_callbacks(
     "rs",
     marked_store="rs-squad-marked",
@@ -346,47 +342,6 @@ def _band_legend(settings=None) -> html.Div:
 def _is_dark(theme) -> bool:
     return is_dark_theme(theme)
 
-
-def _chart_layout(theme, *, height=240, showlegend=False) -> dict:
-    dark = _is_dark(theme)
-    font = "#e8eef6" if dark else "#212529"
-    grid = "rgba(255,255,255,0.08)" if dark else "#dee2e6"
-    return dict(
-        height=height,
-        margin=dict(l=40, r=20, t=20, b=40),
-        font=dict(color=font, family="Inter, Segoe UI, sans-serif"),
-        xaxis=dict(title="Score band", gridcolor=grid, zeroline=False, color=font),
-        yaxis=dict(title="Player count", gridcolor=grid, zeroline=False, color=font),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        barmode="group",
-        legend_title_text="Displayed role",
-        showlegend=showlegend,
-    )
-
-
-def _blank_fig(theme):
-    fig = go.Figure()
-    fig.update_layout(**_chart_layout(theme, height=220))
-    return fig
-
-
-def _hist_figure(rows: list[dict], view_roles: list[str], bins: list, theme) -> go.Figure:
-    fig = go.Figure()
-    for role in view_roles:
-        values = [float(row.get(role) or 0) for row in rows]
-        counts = []
-        for _label, lo, hi in bins:
-            if hi == 99:
-                counts.append(sum(1 for v in values if v >= lo))
-            else:
-                counts.append(sum(1 for v in values if lo <= v < hi))
-        fig.add_bar(x=[b[0] for b in bins], y=counts, name=role)
-    fig.update_layout(**_chart_layout(theme, showlegend=len(view_roles) > 1))
-    return fig
-
-
-BLANK_FIG = _blank_fig("dark")
 
 HYBRID_HELP = (
     "Hybrid score = (IP weight × in possession + OOP weight × out of possession) "
@@ -914,7 +869,6 @@ def layout():
         dcc.Store(id="rs-foot-filter", data=""),
         dcc.Store(id="rs-combos", data=[]),
         dcc.Store(id="rs-squad-marked", data=[]),
-        dcc.Store(id="rs-hist-open", data=False),
         dcc.Store(id="rs-focus-role", data=[]),
         dcc.Store(id="rs-set-pieces-prev", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
@@ -1324,14 +1278,6 @@ def layout():
                             clear_button_id="rs-squad-clear-btn",
                             settings=settings,
                             select_all=True,
-                        ),
-                        hist_block(
-                            "rs",
-                            blank_figure=BLANK_FIG,
-                            toggle_title=(
-                                "Score band on the horizontal axis; player count on "
-                                "the vertical axis. One series per displayed role."
-                            ),
                         ),
                     ]
                 ),
@@ -2819,7 +2765,6 @@ def _subset_table_data_by_keys(
     Output("rs-table", "page_current"),
     Output("rs-table", "selected_row_ids"),
     Output("rs-table-cols-sig", "data"),
-    Output("rs-hist", "figure"),
     Output("rs-table-caption", "children"),
     Output("rs-table-empty", "children"),
     Output("rs-table-empty", "hidden"),
@@ -2841,14 +2786,13 @@ def _subset_table_data_by_keys(
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
-    Input("rs-hist-open", "data"),
     Input("ui-settings", "data"),
     Input("rs-hydrated", "data"),
     State("rs-table-cols-sig", "data"),
     State("rs-table", "data"),
     State("rs-table", "tooltip_data"),
     State("rs-table-cache", "data"),
-    Input("rs-squad-marked", "data"),
+    State("rs-squad-marked", "data"),
 )
 def render_shortlist(
     payload,
@@ -2867,7 +2811,6 @@ def render_shortlist(
     page_size,
     sort_by,
     theme,
-    hist_open,
     settings,
     hydrated,
     cols_sig,
@@ -2878,18 +2821,25 @@ def render_shortlist(
 ):
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
-        return (no_update,) * 21
+        return (no_update,) * 20
 
     triggered = {
         (item.get("prop_id") or "").split(".")[0]
         for item in (ctx.triggered or [])
         if item.get("prop_id")
     }
-    # Updating `data` resets DataTable selection and re-fires selected_row_ids as [],
-    # which clears marks. When *only* marks changed, leave row data alone (stats parity).
-    if triggered == {"rs-squad-marked"}:
+    # Page-size only: update pagination without rebuilding every cell.
+    if triggered == {"rs-page-size"}:
+        try:
+            page_size_i = int(page_size or 50)
+        except (TypeError, ValueError):
+            page_size_i = 50
         selected_ids = _marked_selected_ids(table_data, squad_marked)
-        return (no_update,) * 13 + (selected_ids,) + (no_update,) * 7
+        return (
+            (no_update,) * 11
+            + (page_size_i, 0, selected_ids)
+            + (no_update,) * 6
+        )
 
     # Pure header-sort: reorder already-built markdown rows. Avoids re-filtering and
     # rebuilding every score/Feet cell (the main sort lag source).
@@ -2942,7 +2892,6 @@ def render_shortlist(
                 no_update,
                 no_update,
                 no_update,
-                no_update,
                 no_update,  # cache
             )
 
@@ -2960,10 +2909,8 @@ def render_shortlist(
         if cache_tips is None:
             cache_tips = tooltip_data_state
         settings = us.normalize(settings)
-        bins = us.hist_bins(settings)
         hybrids_only = bool(hybrids_only)
         page_size = int(page_size or 50)
-        hist_open = bool(hist_open)
         combos = normalize_combos(payload.get("combos"))
         view_roles = _hybrid_only_roles(
             _resolved_view_roles(payload, focus_role),
@@ -3076,11 +3023,6 @@ def render_shortlist(
                 f"{focus_note}{hybrid_note}{min_note}"
                 f" · {payload.get('filename')}."
             )
-            fig = (
-                _hist_figure(filtered, view_roles, bins, theme)
-                if hist_open
-                else no_update
-            )
             # Same row set + no focus change: only swap visible columns.
             # Focus still needs a data pass so PosEligible highlighting stays correct.
             if (
@@ -3121,7 +3063,6 @@ def render_shortlist(
                     page_current,
                     no_update,
                     new_sig,
-                    fig,
                     caption,
                     empty_panel,
                     not no_matches,
@@ -3169,7 +3110,6 @@ def render_shortlist(
                     page_current,
                     selected_ids,
                     new_sig,
-                    fig,
                     caption,
                     empty_panel,
                     not no_matches,
@@ -3180,7 +3120,6 @@ def render_shortlist(
     settings = us.normalize(settings)
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
-    bins = us.hist_bins(settings)
     historical_by_key = (payload or {}).get("historical_by_key") or {}
     compare = bool(historical_by_key)
     empty_cols = [{"name": "Name", "id": "Name"}]
@@ -3191,7 +3130,6 @@ def render_shortlist(
     page_size = int(page_size or 50)
     empty_table_style = _table_style_table(0, page_size)
     empty_page, empty_sig = _table_page_state(empty_cols, cols_sig)
-    hist_open = bool(hist_open)
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
     if not payload or not payload.get("rows"):
@@ -3211,7 +3149,6 @@ def render_shortlist(
             empty_page,
             [],
             empty_sig,
-            _blank_fig(theme) if hist_open else no_update,
             "Load a saved file and pick at least one role in section 2.",
             None,
             True,
@@ -3246,7 +3183,6 @@ def render_shortlist(
             empty_page,
             [],
             empty_sig,
-            no_update if not hist_open else _blank_fig(theme),
             "Pick at least one role in section 2.",
             None,
             True,
@@ -3301,8 +3237,6 @@ def render_shortlist(
         filtered.append(row)
 
     _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
-
-    fig = _hist_figure(filtered, view_roles, bins, theme) if hist_open else no_update
 
     # Wide row payload (all roles + all set-piece scores) so later focus / set-piece /
     # hybrids toggles can change `columns` without rebuilding markdown cells.
@@ -3470,7 +3404,6 @@ def render_shortlist(
         out_page,
         selected_ids,
         out_sig,
-        fig,
         caption,
         empty_panel,
         not no_matches,

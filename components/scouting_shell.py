@@ -1281,11 +1281,12 @@ def register_marks_callbacks(
     clear_on_upload: bool = True,
     select_all: bool = False,
 ) -> None:
-    """Sync DataTable ``selected_row_ids`` with a marked-keys store.
+    """Sync DataTable selection with a marked-keys store.
 
     Pages must put a stable ``id`` (and ideally ``_key``) on each table row.
-    Marks persist across table refreshes (role/filter changes); checkboxes are
-    restored clientside when ``{prefix}-table`` ``data`` changes.
+    Marks persist across table refreshes (role/filter changes). Checkboxes are
+    restored clientside from the marked store whenever ``data`` or marks change.
+    ``selected_rows`` uses absolute indices into ``data`` (required by Dash).
 
     When ``select_all`` is True, expects a ``{prefix}-select-all`` button that
     marks (or unmarks) only the rows on the current table page.
@@ -1294,22 +1295,22 @@ def register_marks_callbacks(
     clear_button = clear_button or f"{prefix}-clear-marks"
     parsed_id = parsed_id or f"{prefix}-parsed"
     key_fn = row_key_fn or default_row_key
+    table_id = f"{prefix}-table"
 
     @callback(
         Output(marked_store, "data", allow_duplicate=True),
-        Input(f"{prefix}-table", "selected_row_ids"),
-        State(f"{prefix}-table", "data"),
+        Input(table_id, "selected_row_ids"),
+        State(table_id, "data"),
         State(marked_store, "data"),
         prevent_initial_call=True,
     )
     def _sync_marks(selected_ids, table_data, marked):
         table_data = table_data or []
-        keys_on_page = [key_fn(row) for row in table_data]
-        page_set = {key for key in keys_on_page if key}
+        keys_in_data = {key for row in table_data if (key := key_fn(row))}
         marked_set = set(as_list(marked))
-        expected_on_page = {key for key in page_set if key in marked_set}
+        expected = {key for key in keys_in_data if key in marked_set}
         selected = {str(key) for key in (selected_ids or []) if key}
-        if selected == expected_on_page:
+        if selected == expected:
             return no_update
 
         # DataTable emits selected_row_ids=[] after data/column refreshes — never
@@ -1317,43 +1318,90 @@ def register_marks_callbacks(
         if not selected:
             return no_update
 
-        # Page-level merge: update marks for rows on this page only; preserve off-page.
-        marked_set -= page_set
+        # Merge: update marks for rows in the current table data; preserve others.
+        marked_set -= keys_in_data
         marked_set |= selected
         return sorted(marked_set)
 
+    # Restore checkboxes from marked keys. ``selected_rows`` must be absolute
+    # indices into ``data`` (see Dash DataTable + pagination docs / SO 61905396).
+    # Marked is an Input so Clear / Select all update the UI without a data refresh.
     clientside_callback(
         f"""
         function(tableData, marked) {{
             const keys = Array.isArray(marked)
                 ? marked.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
                 : [];
-            if (!Array.isArray(tableData) || !tableData.length) {{
-                return keys.length ? keys : [];
-            }}
-            if (!keys.length) {{
-                return [];
-            }}
             const markedSet = new Set(keys);
             const ids = [];
-            for (let i = 0; i < tableData.length; i++) {{
-                const row = tableData[i] || {{}};
-                let id = String(row.id || row._key || "").trim();
-                if (!id) {{
-                    const name = String(row.Name || "").trim();
-                    const club = String(row.Club || "").trim();
-                    id = name ? name + "|" + club : "";
-                }}
-                if (id && markedSet.has(id)) {{
-                    ids.push(id);
+            const indices = [];
+            if (Array.isArray(tableData) && tableData.length && markedSet.size) {{
+                for (let i = 0; i < tableData.length; i++) {{
+                    const row = tableData[i] || {{}};
+                    let id = String(row.id || row._key || "").trim();
+                    if (!id) {{
+                        const name = String(row.Name || "").trim();
+                        const club = String(row.Club || "").trim();
+                        id = name ? name + "|" + club : "";
+                    }}
+                    if (id && markedSet.has(id)) {{
+                        ids.push(id);
+                        indices.push(i);
+                    }}
                 }}
             }}
-            return ids;
+            return [ids, indices];
         }}
         """,
-        Output(f"{prefix}-table", "selected_row_ids", allow_duplicate=True),
-        Input(f"{prefix}-table", "data"),
-        State(marked_store, "data"),
+        Output(table_id, "selected_row_ids", allow_duplicate=True),
+        Output(table_id, "selected_rows"),
+        Input(table_id, "data"),
+        Input(marked_store, "data"),
+        prevent_initial_call=True,
+    )
+
+    # sort_action="custom" clears programmatic selected_rows (Dash #3030).
+    # Re-apply absolute indices after selection / page changes.
+    clientside_callback(
+        f"""
+        function(selectedIds, pageCurrent, tableData) {{
+            const ids = Array.isArray(selectedIds)
+                ? selectedIds.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
+                : [];
+            const idSet = new Set(ids);
+            const indices = [];
+            if (Array.isArray(tableData) && idSet.size) {{
+                for (let i = 0; i < tableData.length; i++) {{
+                    const row = tableData[i] || {{}};
+                    let id = String(row.id || row._key || "").trim();
+                    if (!id) {{
+                        const name = String(row.Name || "").trim();
+                        const club = String(row.Club || "").trim();
+                        id = name ? name + "|" + club : "";
+                    }}
+                    if (id && idSet.has(id)) {{
+                        indices.push(i);
+                    }}
+                }}
+            }}
+            const tableId = {table_id!r};
+            const paint = function() {{
+                if (window.dash_clientside && window.dash_clientside.set_props) {{
+                    window.dash_clientside.set_props(tableId, {{
+                        selected_rows: indices
+                    }});
+                }}
+            }};
+            paint();
+            setTimeout(paint, 50);
+            setTimeout(paint, 200);
+            return indices;
+        }}
+        """,
+        Output(table_id, "selected_rows", allow_duplicate=True),
+        Input(table_id, "selected_row_ids"),
+        Input(table_id, "page_current"),
+        State(table_id, "data"),
         prevent_initial_call=True,
     )
 
@@ -1370,18 +1418,17 @@ def register_marks_callbacks(
     if select_all:
 
         @callback(
-            Output(f"{prefix}-table", "selected_row_ids", allow_duplicate=True),
-            Output(f"{prefix}-table", "selected_rows"),
+            Output(marked_store, "data", allow_duplicate=True),
             Input(f"{prefix}-select-all", "n_clicks"),
-            State(f"{prefix}-table", "data"),
-            State(f"{prefix}-table", "page_current"),
-            State(f"{prefix}-table", "page_size"),
+            State(table_id, "data"),
+            State(table_id, "page_current"),
+            State(table_id, "page_size"),
             State(marked_store, "data"),
             prevent_initial_call=True,
         )
         def _select_all_visible(n_clicks, rows, page_current, page_size, marked):
             if not n_clicks or not rows:
-                return no_update, no_update
+                return no_update
             try:
                 page = int(page_current or 0)
                 size = int(page_size or len(rows) or 50)
@@ -1389,12 +1436,9 @@ def register_marks_callbacks(
                 page, size = 0, len(rows) or 50
             start = max(0, page * size)
             end = min(len(rows), start + size)
-            page_rows = rows[start:end]
-            page_ids = [
-                key for row in page_rows if (key := key_fn(row))
-            ]
+            page_ids = [key for row in rows[start:end] if (key := key_fn(row))]
             if not page_ids:
-                return no_update, no_update
+                return no_update
 
             marked_set = set(as_list(marked))
             page_set = set(page_ids)
@@ -1403,24 +1447,11 @@ def register_marks_callbacks(
                 marked_set -= page_set
             else:
                 marked_set |= page_set
-
-            # Keep selected_row_ids consistent with the full table so mark sync
-            # does not wipe off-page marks.
-            all_selected = [
-                key
-                for row in rows
-                if (key := key_fn(row)) and key in marked_set
-            ]
-            page_indices = [
-                i
-                for i, row in enumerate(page_rows)
-                if key_fn(row) in marked_set
-            ]
-            return all_selected, page_indices
+            return sorted(marked_set)
 
         @callback(
             Output(f"{prefix}-select-all", "disabled"),
-            Input(f"{prefix}-table", "data"),
+            Input(table_id, "data"),
         )
         def _toggle_select_all_btn(rows):
             return not bool(rows)
