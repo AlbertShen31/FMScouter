@@ -703,26 +703,27 @@ def _entry_looks_like_gk(entry: dict[str, Any] | None) -> bool:
     return False
 
 
-def refresh_goalkeeper_percentiles(settings=None) -> int:
-    """Recompute stored GK percentiles with the adaptive xGP/90 ceiling.
+def refresh_profile_percentiles(settings=None) -> int:
+    """Recompute stored overall/category percentiles with adaptive p100 ceilings.
 
-    Profiles keep snapshot percentiles from save time; after the xGP/90 p100
-    change those snapshots stay stale until refreshed. Returns how many
-    profiles were updated.
+    Profiles keep snapshot percentiles from save time; after adaptive 100th
+    ceilings change those snapshots stay stale until refreshed. Returns how
+    many profiles were updated.
     """
     import services.ui_settings as us
-    from scoring.stats_scorer import adaptive_metric_p100_map, is_gk_group
+    from scoring.stats_scorer import adaptive_metric_p100_map, classify_best_pos
 
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
     index = _read_index()
-    gk_entries = [entry for entry in index if _entry_looks_like_gk(entry)]
-    if not gk_entries:
+    if not index:
         return 0
 
     by_file: dict[str, list[dict[str, Any]]] = {}
     orphan: list[dict[str, Any]] = []
-    for entry in gk_entries:
+    for entry in index:
+        if not isinstance(entry, dict):
+            continue
         file_id = str(entry.get("file_id") or "").strip()
         if file_id:
             by_file.setdefault(file_id, []).append(entry)
@@ -746,7 +747,7 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
     ) -> dict[str, Any] | None:
         embedded = entry.get("stats_player")
         if isinstance(embedded, dict) and (
-            embedded.get("stats") or is_gk_group(embedded.get("pos_group"))
+            embedded.get("stats") is not None or embedded.get("pos_group")
         ):
             return embedded
         by_key = {
@@ -768,8 +769,12 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
         if not isinstance(stats_player, dict):
             return False
         band_player = dict(stats_player)
-        if not is_gk_group(band_player.get("pos_group")):
-            band_player["pos_group"] = "gk"
+        if not band_player.get("pos_group"):
+            row = entry.get("row") or {}
+            band_player["pos_group"] = classify_best_pos(
+                str(row.get("Best Pos") or band_player.get("best_pos") or ""),
+                str(row.get("Position") or band_player.get("position") or ""),
+            )
         pct = percentile_fields_from_stats_player(
             band_player, settings=settings, metric_p100=metric_p100
         )
@@ -808,11 +813,8 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
                 if _apply(entry, cohort, metric_p100):
                     updated += 1
             elif _apply_embedded_only(entry):
-                # Cohort loaded but this keeper wasn't in it — use snapshot.
                 updated += 1
 
-    # No source file: still recompute against the embedded player alone so the
-    # settings ceiling applies; dataset max collapses to that keeper.
     for entry in orphan:
         if _apply_embedded_only(entry):
             updated += 1
@@ -820,6 +822,11 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
     if updated:
         _write_index(index)
     return updated
+
+
+def refresh_goalkeeper_percentiles(settings=None) -> int:
+    """Backward-compatible alias for :func:`refresh_profile_percentiles`."""
+    return refresh_profile_percentiles(settings)
 
 
 def list_profiles() -> list[dict[str, Any]]:

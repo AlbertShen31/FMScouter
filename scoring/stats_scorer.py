@@ -275,8 +275,9 @@ def estimate_percentile(
     """Map a value onto ~0–100 using 20/40/60/80 boundaries.
 
     When ``p100`` is set, values beyond the 80th cut interpolate toward 100 at
-    that ceiling (used for adaptive xGP/90 so the top of the loaded dataset
-    does not all collapse to 100%).
+    that ceiling (adaptive: max/min of the settings-implied 100th and the
+    extreme in the loaded dataset so the top of the file does not all collapse
+    to 100%).
     """
     if len(thresholds) != 4:
         raise ValueError("Expected four percentile thresholds")
@@ -390,15 +391,62 @@ def xg_prevented_p100(
     )
 
 
+def _metric_p100_lookup(
+    metric_p100: dict[str, float] | None,
+    group: str,
+    metric_id: str,
+) -> float | None:
+    """Prefer group-scoped ceiling, then bare metric id."""
+    if not metric_p100:
+        return None
+    for key in (f"{group}:{metric_id}", metric_id):
+        if key not in metric_p100:
+            continue
+        try:
+            return float(metric_p100[key])
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def adaptive_metric_p100_map(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
 ) -> dict[str, float]:
-    """Metric id → adaptive 100th ceiling (currently xGP/90 only)."""
+    """Metric ceilings for the 80→100 span.
+
+    Keys are ``group:metric_id`` (preferred by ``band_metric``) and bare
+    ``metric_id`` (most extreme ceiling across groups that use the metric).
+    Each ceiling is max/min of the settings-implied 100th and the extreme
+    value in ``players``.
+    """
     out: dict[str, float] = {}
-    p100 = xg_prevented_p100(players, threshold_overrides)
-    if p100 is not None:
-        out["xg_prevented"] = float(p100)
+    groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
+    categories = [cat["id"] for cat in view_categories()]
+    for group in groups:
+        for category in categories:
+            for metric_id in metrics_for(group, category, threshold_overrides):
+                p100 = adaptive_metric_p100(
+                    players,
+                    metric_id,
+                    group=group,
+                    category=category,
+                    threshold_overrides=threshold_overrides,
+                )
+                if p100 is None:
+                    continue
+                value = float(p100)
+                out[f"{group}:{metric_id}"] = value
+                hib = bool(
+                    (metric_defs().get(metric_id) or {}).get("higher_is_better", True)
+                )
+                prior = out.get(metric_id)
+                if prior is None:
+                    out[metric_id] = value
+                elif hib:
+                    out[metric_id] = max(prior, value)
+                else:
+                    out[metric_id] = min(prior, value)
     return out
 
 
@@ -661,12 +709,7 @@ def band_metric(
             "higher_is_better": bool(meta.get("higher_is_better", True)),
         }
     hib = bool(meta.get("higher_is_better", True))
-    p100 = None
-    if metric_p100 and metric_id in metric_p100:
-        try:
-            p100 = float(metric_p100[metric_id])
-        except (TypeError, ValueError):
-            p100 = None
+    p100 = _metric_p100_lookup(metric_p100, group, metric_id)
     pct = estimate_percentile(
         float(value),
         list(thresholds),

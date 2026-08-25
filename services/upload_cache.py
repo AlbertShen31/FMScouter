@@ -20,7 +20,7 @@ import services.export_library as lib
 import services.role_config as rc
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v1"
+FORMULA_VERSION = "v2"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 

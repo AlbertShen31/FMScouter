@@ -193,8 +193,9 @@ higher_is_better:
   value ≤ t20  → interpolate toward 0 from t20
   t20 < value ≤ t80 → linear steps 20 → 40 → 60 → 80
   value > t80  → interpolate toward 100 at p100
-                 (default: t80 + |t80|; for xGP/90: max of that and the
-                  dataset max so keepers above the settings cut still spread)
+                 (p100 = max of settings-implied ceiling t80+|t80|
+                  and the dataset max for that metric; lower-is-better
+                  uses min with t80-|t80| / dataset min so top values still spread)
 
 lower_is_better:
   mirror the above (quality improves as values fall)

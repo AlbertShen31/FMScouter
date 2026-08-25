@@ -2914,9 +2914,9 @@ def refresh_profiles_table(
     sort_memory,
 ):
     settings = us.normalize(settings)
-    # Keep GK Ovr / category % in sync with adaptive xGP/90 ceilings.
+    # Keep Ovr / category % in sync with adaptive metric ceilings.
     try:
-        profiles.refresh_goalkeeper_percentiles(settings)
+        profiles.refresh_profile_percentiles(settings)
     except Exception:
         pass
     try:
