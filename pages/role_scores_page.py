@@ -161,6 +161,7 @@ PERSIST_DEFAULTS = {
     "set_pieces": [],
     "hybrids_only": False,
     "pos_match": "yes",
+    "club_filter": "any",
     "focus_role": [],
     "search": "",
     "max_age": "99",
@@ -185,6 +186,7 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
         or _as_list(p.get("focus_role"))
         or p.get("hybrids_only")
         or _normalize_pos_match(p.get("pos_match")) != "yes"
+        or _normalize_club_filter(p.get("club_filter")) != "any"
         or (p.get("role_mode") or "formations") != "formations"
     ):
         return True
@@ -256,11 +258,30 @@ def _changed_or_skip(value, default):
     return value
 
 POS_MATCH_OPTIONS = [
-    {"value": "yes", "label": "Full match only (green)"},
-    {"value": "partial", "label": "At least partial (yellow + green)"},
-    {"value": "no", "label": "Any (includes red)"},
+    {"value": "yes", "label": "Full match only"},
+    {"value": "partial", "label": "At least partial match"},
+    {"value": "no", "label": "Any"},
 ]
 POS_MATCH_VALUES = {opt["value"] for opt in POS_MATCH_OPTIONS}
+
+CLUB_FILTER_OPTIONS = [
+    {"value": "any", "label": "Any"},
+    {"value": "free", "label": "Free agents"},
+    {"value": "club", "label": "Clubs only"},
+]
+CLUB_FILTER_VALUES = {opt["value"] for opt in CLUB_FILTER_OPTIONS}
+_FREE_AGENT_CLUBS = frozenset(
+    {
+        "",
+        "-",
+        "—",
+        "free agent",
+        "free agents",
+        "free transfer",
+        "n/a",
+        "na",
+    }
+)
 
 
 def _normalize_pos_match(value) -> str:
@@ -272,6 +293,23 @@ def _normalize_pos_match(value) -> str:
     if value is False or value == "any":
         return "no"
     return "yes"
+
+
+def _normalize_club_filter(value) -> str:
+    return value if value in CLUB_FILTER_VALUES else "any"
+
+
+def _is_free_agent_row(row: dict) -> bool:
+    club = str(row.get("Club") or "").strip()
+    return club.casefold() in _FREE_AGENT_CLUBS
+
+
+def _passes_club_filter(row: dict, club_filter: str) -> bool:
+    if club_filter == "free":
+        return _is_free_agent_row(row)
+    if club_filter == "club":
+        return not _is_free_agent_row(row)
+    return True
 
 
 def _passes_pos_match(pos_elig: str, pos_match: str) -> bool:
@@ -793,6 +831,7 @@ def _resolved_view_roles(payload: dict | None, focus_roles) -> list[str]:
 def _no_match_placeholder(
     *,
     pos_match: str,
+    club_filter: str,
     pos_filter: str,
     foot_filter: str,
     min_score: float,
@@ -810,6 +849,10 @@ def _no_match_placeholder(
         tips.append(
             "Set Position match to Any — At least partial still hides red (no match)."
         )
+    if club_filter == "free":
+        tips.append("Set Club to Any club or Players with clubs.")
+    elif club_filter == "club":
+        tips.append("Set Club to Any club or Free agents.")
     if pos_filter != "all":
         tips.append("Select All in the position bar above.")
     if foot_filter:
@@ -1170,12 +1213,12 @@ def layout():
                                                             id="rs-min-score-mode",
                                                             data=[
                                                                 {
-                                                                    "label": "Every selected role",
+                                                                    "label": "Every role",
                                                                     "value": "all",
                                                                 },
                                                                 {
                                                                     "label": (
-                                                                        "At least one selected role"
+                                                                        "At least one role"
                                                                     ),
                                                                     "value": "any",
                                                                 },
@@ -1214,9 +1257,32 @@ def layout():
                                             ],
                                             className="rs-filter-pos-match",
                                         ),
+                                        html.Div(
+                                            [
+                                                _field_label(
+                                                    "Club",
+                                                    tip=(
+                                                        "Any club includes free agents. "
+                                                        "Free agents are blank/“-” Club "
+                                                        "values (and Free Agent / Free "
+                                                        "Transfer labels). Players with "
+                                                        "clubs hides those."
+                                                    ),
+                                                    help_id="rs-help-club-filter",
+                                                ),
+                                                dmc.Select(
+                                                    id="rs-club-filter",
+                                                    data=CLUB_FILTER_OPTIONS,
+                                                    value="any",
+                                                    clearable=False,
+                                                    searchable=False,
+                                                ),
+                                            ],
+                                            className="rs-filter-club",
+                                        ),
                                         dmc.Switch(
                                             id="rs-hybrids-only",
-                                            label="Show only hybrid roles",
+                                            label="Show only hybrid",
                                             checked=False,
                                             className="rs-filter-hybrids",
                                         ),
@@ -1879,6 +1945,7 @@ def _depth_panel(
     Input("rs-role-mode", "value"),
     Input("rs-set-pieces", "value"),
     Input("rs-pos-match", "value"),
+    Input("rs-club-filter", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
@@ -1901,6 +1968,7 @@ def save_page_persist(
     role_mode,
     set_pieces,
     pos_match,
+    club_filter,
     hybrids_only,
     focus_role,
     search,
@@ -1926,6 +1994,7 @@ def save_page_persist(
         "set_pieces": _as_list(set_pieces),
         "hybrids_only": bool(hybrids_only),
         "pos_match": _normalize_pos_match(pos_match),
+        "club_filter": _normalize_club_filter(club_filter),
         "focus_role": _as_list(focus_role),
         "search": (search or "").strip(),
         "max_age": str(max_age or "99"),
@@ -1972,6 +2041,7 @@ clientside_callback(
     Output("rs-formation", "value"),
     Output("rs-set-pieces", "value"),
     Output("rs-pos-match", "value"),
+    Output("rs-club-filter", "value"),
     Output("rs-hybrids-only", "checked"),
     Output("rs-focus-role", "data", allow_duplicate=True),
     Output("rs-hydrated", "data"),
@@ -1994,7 +2064,7 @@ clientside_callback(
     prevent_initial_call=True,
 )
 def hydrate_page_persist(persist, hydrated):
-    _skip = (no_update,) * 24
+    _skip = (no_update,) * 25
     if hydrated:
         return _skip
     raw = persist or {}
@@ -2002,7 +2072,7 @@ def hydrate_page_persist(persist, hydrated):
     settings = us.load()
     if not _persist_has_state(raw, settings):
         return (
-            *(no_update,) * 9,
+            *(no_update,) * 10,
             True,
             persist.get("role_mode") or "formations",
             no_update,
@@ -2017,6 +2087,7 @@ def hydrate_page_persist(persist, hydrated):
         pos_match = _normalize_pos_match(persist.get("pos_match"))
     else:
         pos_match = _normalize_pos_match(persist.get("eligible", True))
+    club_filter = _normalize_club_filter(persist.get("club_filter"))
     hybrids_only = bool(persist.get("hybrids_only", False))
     focus = _as_list(persist.get("focus_role"))
     phase = persist.get("phase") or "all"
@@ -2044,6 +2115,7 @@ def hydrate_page_persist(persist, hydrated):
         formation if formation else no_update,
         set_pieces if set_pieces else no_update,
         _changed_or_skip(pos_match, "yes"),
+        _changed_or_skip(club_filter, "any"),
         hybrids_only if hybrids_only else no_update,
         focus if focus else no_update,
         True,
@@ -2760,6 +2832,7 @@ def _subset_table_data_by_keys(
     Input("rs-min-score", "value"),
     Input("rs-min-score-mode", "value"),
     Input("rs-pos-match", "value"),
+    Input("rs-club-filter", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
@@ -2785,6 +2858,7 @@ def render_shortlist(
     min_score,
     min_score_mode,
     pos_match,
+    club_filter,
     hybrids_only,
     set_pieces,
     set_piece_min,
@@ -2917,6 +2991,7 @@ def render_shortlist(
             marked_keys = set(_as_list(squad_marked))
             pos_filter = pos_filter or "all"
             foot_filter = foot_filter or ""
+            club_filter = _normalize_club_filter(club_filter)
             foot_thresholds = settings["foot_thresholds"]
             combo_by_col = _combo_columns_by_label(combos)
 
@@ -2925,6 +3000,8 @@ def render_shortlist(
                 if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
                     continue
                 if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
+                    continue
+                if not _passes_club_filter(row, club_filter):
                     continue
                 pos_elig = (
                     _position_eligibility(row, view_roles, combo_by_col=combo_by_col)
@@ -3017,6 +3094,7 @@ def render_shortlist(
                 empty_panel = (
                     _no_match_placeholder(
                         pos_match=pos_match,
+                        club_filter=club_filter,
                         pos_filter=pos_filter,
                         foot_filter=foot_filter,
                         min_score=min_score,
@@ -3063,6 +3141,7 @@ def render_shortlist(
                 empty_panel = (
                     _no_match_placeholder(
                         pos_match=pos_match,
+                        club_filter=club_filter,
                         pos_filter=pos_filter,
                         foot_filter=foot_filter,
                         min_score=min_score,
@@ -3180,6 +3259,7 @@ def render_shortlist(
     min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
     set_piece_min = us.parse_score_floor(set_piece_min)
     pos_match = _normalize_pos_match(pos_match)
+    club_filter = _normalize_club_filter(club_filter)
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
     combo_by_col = _combo_columns_by_label(combos)
@@ -3189,6 +3269,8 @@ def render_shortlist(
         if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
             continue
         if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
+            continue
+        if not _passes_club_filter(row, club_filter):
             continue
         pos_elig = (
             _position_eligibility(row, view_roles, combo_by_col=combo_by_col) or "no"
@@ -3313,6 +3395,7 @@ def render_shortlist(
     empty_panel = (
         _no_match_placeholder(
             pos_match=pos_match,
+            club_filter=club_filter,
             pos_filter=pos_filter,
             foot_filter=foot_filter,
             min_score=min_score,
