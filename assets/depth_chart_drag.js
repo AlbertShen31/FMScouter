@@ -1,5 +1,13 @@
+/**
+ * Pointer-based depth-chart reordering.
+ *
+ * Rows stay put while dragging (no live DOM reshuffle → no flicker).
+ * A drop line shows the insert gap; commit happens once on pointerup.
+ */
 (function () {
-  var dragRow = null;
+  var state = null;
+  var publishTimer = null;
+  var DRAG_THRESHOLD_PX = 5;
 
   function rowFrom(target) {
     return target && target.closest
@@ -13,115 +21,274 @@
       : null;
   }
 
-  function clearDropMarks(list) {
-    if (!list) return;
-    list.querySelectorAll(".pf-depth-chart-row.is-drop-before, .pf-depth-chart-row.is-drop-after").forEach(function (row) {
-      row.classList.remove("is-drop-before", "is-drop-after");
-    });
-  }
-
-    function publishOrder(list) {
-    if (!list || !window.dash_clientside || !dash_clientside.set_props) {
-      return;
-    }
-    var role = list.getAttribute("data-role") || "";
-    var slot = list.getAttribute("data-slot") || "";
-    var formation = list.getAttribute("data-formation") || "";
-    var ids = Array.prototype.map.call(
-      list.querySelectorAll(".pf-depth-chart-row[data-profile-id]"),
-      function (row) {
+  function collectIds(list) {
+    if (!list) return [];
+    return Array.prototype.map
+      .call(list.querySelectorAll(".pf-depth-chart-row[data-profile-id]"), function (row) {
         return row.getAttribute("data-profile-id");
-      }
-    ).filter(Boolean);
-    if (!role || !ids.length) {
-      return;
-    }
-    dash_clientside.set_props("pf-depth-order", {
-      data: {
-        role: role,
-        slot: slot,
-        formation: formation,
-        ids: ids,
-        ts: Date.now(),
-      },
-    });
+      })
+      .filter(Boolean);
   }
 
-  document.addEventListener("dragstart", function (event) {
-    var row = rowFrom(event.target);
-    if (!row) {
-      return;
+  function sameIds(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
     }
-    if (event.target.closest("button, a, input, textarea, select")) {
-      event.preventDefault();
-      return;
-    }
-    dragRow = row;
-    row.classList.add("is-dragging");
-    try {
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", row.getAttribute("data-profile-id") || "");
-    } catch (_err) {
-      /* older browsers */
-    }
-  });
+    return true;
+  }
 
-  document.addEventListener("dragend", function () {
-    if (dragRow) {
-      dragRow.classList.remove("is-dragging");
-    }
-    document.querySelectorAll(".pf-depth-chart-list").forEach(clearDropMarks);
-    dragRow = null;
-  });
-
-  document.addEventListener("dragover", function (event) {
-    var over = rowFrom(event.target);
-    if (!dragRow || !over || over === dragRow) {
-      return;
-    }
-    var list = listFrom(over);
-    if (!list || list !== listFrom(dragRow)) {
-      return;
-    }
-    event.preventDefault();
-    try {
-      event.dataTransfer.dropEffect = "move";
-    } catch (_err) {
-      /* ignore */
-    }
-    clearDropMarks(list);
-    var rect = over.getBoundingClientRect();
-    var before = event.clientY < rect.top + rect.height / 2;
-    over.classList.add(before ? "is-drop-before" : "is-drop-after");
-  });
-
-  document.addEventListener("drop", function (event) {
-    var over = rowFrom(event.target);
-    if (!dragRow || !over || over === dragRow) {
-      return;
-    }
-    var list = listFrom(over);
-    if (!list || list !== listFrom(dragRow)) {
-      return;
-    }
-    event.preventDefault();
-    var rect = over.getBoundingClientRect();
-    var before = event.clientY < rect.top + rect.height / 2;
-    if (before) {
-      list.insertBefore(dragRow, over);
-    } else if (over.nextSibling) {
-      list.insertBefore(dragRow, over.nextSibling);
-    } else {
-      list.appendChild(dragRow);
-    }
-    clearDropMarks(list);
-    list.querySelectorAll(".pf-depth-chart-row").forEach(function (row, index) {
+  function renumber(list) {
+    if (!list) return;
+    var rows = list.querySelectorAll(".pf-depth-chart-row[data-profile-id]");
+    Array.prototype.forEach.call(rows, function (row, index) {
       var rank = row.querySelector(".pf-depth-chart-rank");
       if (rank) {
         rank.textContent = String(index + 1);
       }
       row.classList.toggle("is-odd", index % 2 === 1);
     });
-    publishOrder(list);
+  }
+
+  function ensureEndZone(list) {
+    if (!list) return null;
+    var end = list.querySelector(".pf-depth-chart-drop-end");
+    if (!end) {
+      end = document.createElement("div");
+      end.className = "pf-depth-chart-drop-end";
+      end.setAttribute("aria-hidden", "true");
+      list.appendChild(end);
+    } else if (end !== list.lastElementChild) {
+      list.appendChild(end);
+    }
+    return end;
+  }
+
+  function ensureDropLine(list) {
+    var line = list.querySelector(".pf-depth-chart-drop-line");
+    if (!line) {
+      line = document.createElement("div");
+      line.className = "pf-depth-chart-drop-line";
+      line.setAttribute("aria-hidden", "true");
+      list.insertBefore(line, list.firstChild);
+    }
+    return line;
+  }
+
+  function hideDropLine(list) {
+    if (!list) return;
+    var line = list.querySelector(".pf-depth-chart-drop-line");
+    if (line) {
+      line.classList.remove("is-visible");
+    }
+  }
+
+  /**
+   * Insert-before node among other rows (drag row excluded from targets).
+   * Returns the end-zone node to append at the bottom.
+   */
+  function resolveInsertBefore(list, dragRow, clientY) {
+    var others = Array.prototype.filter.call(
+      list.querySelectorAll(".pf-depth-chart-row[data-profile-id]"),
+      function (row) {
+        return row !== dragRow;
+      }
+    );
+    for (var i = 0; i < others.length; i += 1) {
+      var rect = others[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height * 0.5) {
+        return others[i];
+      }
+    }
+    return ensureEndZone(list);
+  }
+
+  function placeDropLine(list, insertBefore) {
+    var line = ensureDropLine(list);
+    var listRect = list.getBoundingClientRect();
+    var y;
+    if (
+      insertBefore &&
+      insertBefore.classList &&
+      insertBefore.classList.contains("pf-depth-chart-drop-end")
+    ) {
+      var rows = list.querySelectorAll(".pf-depth-chart-row[data-profile-id]");
+      var last = rows.length ? rows[rows.length - 1] : null;
+      if (last) {
+        y = last.getBoundingClientRect().bottom - listRect.top + list.scrollTop;
+      } else {
+        y = list.scrollTop + 4;
+      }
+    } else if (insertBefore) {
+      y = insertBefore.getBoundingClientRect().top - listRect.top + list.scrollTop;
+    } else {
+      return;
+    }
+    // Center the 4px line on the gap.
+    line.style.top = Math.max(0, y - 2) + "px";
+    line.classList.add("is-visible");
+  }
+
+  function publishOrder(list, startIds) {
+    if (!list || !list.isConnected) return;
+    var role = list.getAttribute("data-role") || "";
+    var slot = list.getAttribute("data-slot");
+    var formation = list.getAttribute("data-formation") || "";
+    var ids = collectIds(list);
+    if (!role || !ids.length) return;
+    if (startIds && sameIds(startIds, ids)) return;
+
+    var payload = {
+      role: role,
+      slot: slot,
+      formation: formation,
+      ids: ids,
+      ts: Date.now(),
+    };
+    var listRef = list;
+
+    function send() {
+      // Abort if Auto-rank / refresh replaced the list after drag ended.
+      if (!listRef.isConnected) {
+        return true;
+      }
+      if (window.dash_clientside && dash_clientside.set_props) {
+        dash_clientside.set_props("pf-depth-order", { data: payload });
+        return true;
+      }
+      return false;
+    }
+
+    if (send()) return;
+    if (publishTimer) clearInterval(publishTimer);
+    var attempts = 0;
+    publishTimer = setInterval(function () {
+      attempts += 1;
+      if (send() || attempts >= 40) {
+        clearInterval(publishTimer);
+        publishTimer = null;
+      }
+    }, 50);
+  }
+
+  function commitInsert(list, dragRow, insertBefore) {
+    if (!list || !dragRow || !insertBefore) return;
+    if (dragRow === insertBefore || dragRow.nextElementSibling === insertBefore) {
+      return;
+    }
+    list.insertBefore(dragRow, insertBefore);
+    renumber(list);
+  }
+
+  function endDrag(publish) {
+    if (!state) return;
+    var list = state.list;
+    var row = state.row;
+    var startIds = state.startIds;
+    var insertBefore = state.insertBefore;
+    try {
+      if (row && state.pointerId != null) {
+        row.releasePointerCapture(state.pointerId);
+      }
+    } catch (_err) {
+      /* already released */
+    }
+    if (row) {
+      row.classList.remove("is-dragging");
+    }
+    document.body.classList.remove("pf-depth-dragging");
+    hideDropLine(list);
+    if (publish && list && insertBefore) {
+      commitInsert(list, row, insertBefore);
+      publishOrder(list, startIds);
+    }
+    state = null;
+  }
+
+  document.addEventListener(
+    "pointerdown",
+    function (event) {
+      if (event.button != null && event.button !== 0) return;
+      if (event.target.closest("button, a, input, textarea, select")) {
+        return;
+      }
+      var row = rowFrom(event.target);
+      if (!row || !row.classList.contains("is-sortable")) return;
+      var list = listFrom(row);
+      if (!list || list.classList.contains("pf-depth-chart-xi")) return;
+
+      state = {
+        row: row,
+        list: list,
+        startIds: collectIds(list),
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        insertBefore: null,
+      };
+      ensureEndZone(list);
+      ensureDropLine(list);
+      try {
+        row.setPointerCapture(event.pointerId);
+      } catch (_err) {
+        /* ignore */
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "pointermove",
+    function (event) {
+      if (!state || event.pointerId !== state.pointerId) return;
+      var dx = event.clientX - state.startX;
+      var dy = event.clientY - state.startY;
+      if (!state.active) {
+        if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+          return;
+        }
+        state.active = true;
+        state.row.classList.add("is-dragging");
+        document.body.classList.add("pf-depth-dragging");
+      }
+      event.preventDefault();
+
+      var insertBefore = resolveInsertBefore(
+        state.list,
+        state.row,
+        event.clientY
+      );
+      // Only redraw the line when the gap changes (avoids indicator chatter).
+      if (insertBefore !== state.insertBefore) {
+        state.insertBefore = insertBefore;
+        placeDropLine(state.list, insertBefore);
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "pointerup",
+    function (event) {
+      if (!state || event.pointerId !== state.pointerId) return;
+      endDrag(state.active);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "pointercancel",
+    function (event) {
+      if (!state || event.pointerId !== state.pointerId) return;
+      endDrag(false);
+    },
+    true
+  );
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && state) {
+      endDrag(false);
+    }
   });
 })();

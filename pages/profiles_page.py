@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 import uuid
 from html import escape as html_escape
 
@@ -1045,6 +1046,7 @@ def _depth_chart_player_row(
                 f"Remove from {slot_label or 'this slot'} only "
                 "(other slots keep this player)"
             ),
+            draggable="false",
             **{
                 "aria-label": (
                     f"Remove {name or 'player'} from "
@@ -1053,11 +1055,15 @@ def _depth_chart_player_row(
             },
         )
     props = {
-        "className": "pf-depth-chart-row" + (" is-odd" if index % 2 else ""),
+        "className": (
+            "pf-depth-chart-row"
+            + (" is-odd" if index % 2 else "")
+            + (" is-sortable" if draggable and profile_id else "")
+        ),
         **({"data-profile-id": profile_id} if profile_id else {}),
     }
-    if draggable and profile_id:
-        props["draggable"] = "true"
+    # Rank in the React key so Auto-rank / reorder remounts rows instead of
+    # Dash reusing {"type": "pf-depth-name", "id": ...} nodes in old order.
     return html.Div(
         [
             html.Div(
@@ -1078,6 +1084,7 @@ def _depth_chart_player_row(
                     n_clicks=0,
                     className="pf-depth-chart-name",
                     title="Open player details",
+                    draggable="false",
                 )
                 if profile_id
                 else html.Span("—", className="pf-depth-chart-name is-empty")
@@ -1101,6 +1108,7 @@ def _depth_chart_player_row(
             ),
             remove_cell,
         ],
+        key=f"pf-drow-{index}-{profile_id or 'x'}",
         **props,
     )
 
@@ -1191,6 +1199,16 @@ def _build_formation_xi_chart(
             html.Div(rows, className="pf-depth-chart-list pf-depth-chart-xi"),
         ],
         className="pf-depth-chart-section",
+    )
+
+
+def _mount_depth_chart(chart, *, epoch: str | int | None = None) -> html.Div:
+    """Wrap chart so Dash must remount after drag DOM mutations / auto-rank."""
+    token = str(epoch if epoch is not None else uuid.uuid4().hex)
+    return html.Div(
+        chart if chart is not None else [],
+        id=f"pf-depth-mount-{token}",
+        className="pf-depth-chart-mount",
     )
 
 
@@ -1321,6 +1339,10 @@ def _build_depth_chart(
         for idx, entry in enumerate(ordered)
     ]
     title_label = f"{slot_label} · {label}" if slot_label else label
+    order_ids = [str(entry.get("id") or "") for entry in ordered if entry.get("id")]
+    order_fp = uuid.uuid5(
+        uuid.NAMESPACE_OID, f"{formation_id}|{slot_index}|{'|'.join(order_ids)}"
+    ).hex[:12]
     return html.Div(
         [
             html.Div(
@@ -1365,7 +1387,21 @@ def _build_depth_chart(
                     ),
                     _depth_chart_col_headers(),
                     html.Div(
-                        rows,
+                        [
+                            html.Div(
+                                className="pf-depth-chart-drop-line",
+                                **{"aria-hidden": "true"},
+                            ),
+                            *rows,
+                            html.Div(
+                                className="pf-depth-chart-drop-end",
+                                **{"aria-hidden": "true"},
+                            ),
+                        ],
+                        # Fingerprint in the id forces a clean remount when order
+                        # changes (auto-rank / remove). Avoids React/DOM desync
+                        # after pointer-drag mutates the list in place.
+                        id=f"pf-depth-list-{slot_index}-{order_fp}",
                         className="pf-depth-chart-list",
                         **{
                             "data-role": column,
@@ -1378,6 +1414,7 @@ def _build_depth_chart(
             )
         ],
         className="pf-depth-chart-sections",
+        key=f"pf-depth-sections-{slot_index}-{order_fp}",
     )
 
 
@@ -2037,6 +2074,7 @@ def layout(**_kwargs):
         [
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-depth-order", data=None),
+            dcc.Store(id="pf-depth-order-guard", data=0),
             dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
             dcc.Store(id="pf-view-mode", data="roles"),
             dcc.Store(id="pf-focus-role", data=[]),
@@ -2633,12 +2671,15 @@ def refresh_profiles_table(
                 )
             ]
         depth_hidden = False
-        chart = _build_depth_chart(
-            focus_roles=focus_role,
-            formation_id=formation_id,
-            formation_slots=formation_slots,
-            settings=settings,
-            theme=theme,
+        chart = _mount_depth_chart(
+            _build_depth_chart(
+                focus_roles=focus_role,
+                formation_id=formation_id,
+                formation_slots=formation_slots,
+                settings=settings,
+                theme=theme,
+            ),
+            epoch=f"r{int(_rev or 0)}-{uuid.uuid4().hex[:8]}",
         )
         chart_hidden = not formation_slots and not focus
 
@@ -2858,50 +2899,159 @@ def delete_selected(n_clicks, selected_ids, rev):
 
 
 @callback(
-    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-table", "data", allow_duplicate=True),
+    Output("pf-table", "tooltip_data", allow_duplicate=True),
+    Output("pf-summary", "children", allow_duplicate=True),
     Output("pf-depth-order", "data"),
     Input("pf-depth-order", "data"),
-    State("pf-rev", "data"),
+    State("pf-formation-select", "value"),
+    State("pf-focus-role", "data"),
+    State("pf-table", "sort_by"),
+    State("pf-depth-order-guard", "data"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
     prevent_initial_call=True,
 )
-def apply_depth_chart_drag(order, rev):
+def apply_depth_chart_drag(
+    order, formation_id, focus_role, sort_by, order_guard, settings, theme
+):
+    """Persist drag order without remounting the depth chart.
+
+    Bumping pf-rev rebuilds pf-depth-chart-body and fights the live DOM
+    reorder (the main source of snap-back / inconsistent drag).
+    """
     if not isinstance(order, dict):
-        return no_update, no_update
+        return no_update, no_update, no_update, no_update
+    # Drop stale publishes that fired after Auto-rank remounted the list.
+    try:
+        guard = float(order_guard or 0)
+        ts = float(order.get("ts") or 0)
+    except (TypeError, ValueError):
+        guard, ts = 0.0, 0.0
+    if guard and ts and ts < guard:
+        return no_update, no_update, no_update, no_update
     role = str(order.get("role") or "").strip()
-    formation_id = str(order.get("formation") or "").strip()
+    formation_id = str(order.get("formation") or formation_id or "").strip()
     ids = [
         str(pid).strip()
         for pid in (order.get("ids") or [])
         if str(pid or "").strip()
     ]
     if not role or not ids:
-        return no_update, None
+        return no_update, no_update, no_update, no_update
     slot_raw = order.get("slot")
     if formation_id and slot_raw is not None and str(slot_raw).strip() != "":
         try:
             slot_index = int(slot_raw)
         except (TypeError, ValueError):
             slot_index = slot_raw
-        profiles.set_slot_order_ids(formation_id, slot_index, ids)
+        previous = profiles.get_slot_order_ids(
+            formation_id, slot_index, role, seed=True
+        )
+        seen = set(ids)
+        merged = list(ids) + [pid for pid in previous if pid not in seen]
+        profiles.set_slot_order_ids(formation_id, slot_index, merged)
     else:
         profiles.set_depth_ranks(role, ids)
-    return int(rev or 0) + 1, None
+
+    settings = us.normalize(settings)
+    formation_slots = _formation_slots(formation_id)
+    focus = _focus_slot(focus_role)
+    tips: list[dict] = []
+    rows: list[dict] = []
+
+    if formation_slots and focus:
+        slot_ordered = profiles.ordered_profiles_for_slot(
+            formation_id, focus.get("slot", -1), focus["role"]
+        )
+        slot_label = focus.get("label") or "—"
+        _starters, multi_starters, conflicted_slots, unique_slots = (
+            _formation_starter_slot_maps(formation_id, formation_slots)
+        )
+        try:
+            focused_slot_index = int(focus.get("slot", -1))
+        except (TypeError, ValueError):
+            focused_slot_index = -1
+        slot_is_conflicted = focused_slot_index in conflicted_slots
+        slot_is_unique = focused_slot_index in unique_slots
+        for index, entry in enumerate(slot_ordered):
+            player_key = _entry_player_key(entry)
+            item, tip = _entry_to_role_table_row(
+                entry,
+                settings=settings,
+                theme=theme,
+                slot_label=slot_label,
+                slot_conflicted=(
+                    slot_is_conflicted or player_key in multi_starters
+                ),
+                slot_unique=(
+                    slot_is_unique and player_key not in multi_starters
+                ),
+                depth_rank=index + 1,
+            )
+            rows.append(item)
+            tips.append(tip)
+        sort_mode = "roles"
+        filtered = list(rows)
+    elif formation_slots:
+        rows, tips = _build_formation_xi_table_rows(
+            formation_slots,
+            formation_id=formation_id,
+            settings=settings,
+            theme=theme,
+        )
+        sort_mode = "formation"
+        filtered = list(rows)
+    else:
+        rows, tips = _build_role_table_rows(settings=settings, theme=theme)
+        filtered = _filter_role_rows(rows, focus_roles=focus_role)
+        sort_mode = "roles"
+
+    filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
+
+    display_rows = []
+    for row in filtered:
+        clean = _strip_internal(row)
+        minutes_value = clean.get("Minutes")
+        if not isinstance(minutes_value, str) or not minutes_value.strip():
+            clean["Minutes"] = _minutes_cell(row.get("_minutes_raw"), settings)
+        display_rows.append(clean)
+    tip_by_id = {
+        str(row.get("id") or ""): tip
+        for row, tip in zip(rows, tips)
+    }
+    display_tips = [tip_by_id.get(str(row.get("id") or ""), {}) for row in filtered]
+
+    depth_cards = _profile_depth_panel(
+        profiles.list_role_profiles(),
+        focus_role,
+        formation_id=formation_id,
+        formation_slots=formation_slots,
+        settings=settings,
+    )
+    # Leave chart DOM alone — it already matches the saved order.
+    return display_rows, display_tips, depth_cards, no_update
 
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-depth-chart-body", "children", allow_duplicate=True),
+    Output("pf-depth-order-guard", "data"),
     Input({"type": "pf-depth-auto-role", "role": ALL, "slot": ALL}, "n_clicks"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
+    State("pf-focus-role", "data"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_role(n_clicks, rev, formation_id):
+def auto_rank_depth_role(n_clicks, rev, formation_id, focus_role, settings, theme):
     if not ctx.triggered_id or not clicked(n_clicks):
-        return no_update
+        return no_update, no_update, no_update
     role = str(ctx.triggered_id.get("role") or "").strip()
     slot_raw = ctx.triggered_id.get("slot")
     if not role:
-        return no_update
+        return no_update, no_update, no_update
     try:
         slot_index = int(slot_raw)
     except (TypeError, ValueError):
@@ -2910,19 +3060,37 @@ def auto_rank_depth_role(n_clicks, rev, formation_id):
         profiles.auto_rank_slot_by_score(formation_id, slot_index, role)
     else:
         profiles.auto_rank_role_by_score(role)
-    return int(rev or 0) + 1
+    formation_slots = _formation_slots(formation_id)
+    next_rev = int(rev or 0) + 1
+    chart = _mount_depth_chart(
+        _build_depth_chart(
+            focus_roles=focus_role,
+            formation_id=formation_id,
+            formation_slots=formation_slots,
+            settings=settings,
+            theme=theme,
+        ),
+        epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
+    )
+    # Invalidate in-flight drag publishes (ts is Date.now() from the browser).
+    return next_rev, chart, int(time.time() * 1000)
 
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-depth-chart-body", "children", allow_duplicate=True),
+    Output("pf-depth-order-guard", "data", allow_duplicate=True),
     Input("pf-depth-auto-all", "n_clicks"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
+    State("pf-focus-role", "data"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_all(n_clicks, rev, formation_id):
+def auto_rank_depth_all(n_clicks, rev, formation_id, focus_role, settings, theme):
     if not n_clicks:
-        return no_update
+        return no_update, no_update, no_update
     slots = _formation_slots(formation_id)
     if slots:
         for slot in slots:
@@ -2931,7 +3099,18 @@ def auto_rank_depth_all(n_clicks, rev, formation_id):
             )
     else:
         profiles.auto_rank_all_roles_by_score()
-    return int(rev or 0) + 1
+    next_rev = int(rev or 0) + 1
+    chart = _mount_depth_chart(
+        _build_depth_chart(
+            focus_roles=focus_role,
+            formation_id=formation_id,
+            formation_slots=slots,
+            settings=settings,
+            theme=theme,
+        ),
+        epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
+    )
+    return next_rev, chart, int(time.time() * 1000)
 
 
 @callback(

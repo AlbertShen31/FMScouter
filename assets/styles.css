@@ -6397,6 +6397,55 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     flex-direction: column;
     gap: 0;
     overflow-x: auto;
+    padding-bottom: 0.35rem;
+    position: relative;
+}
+
+.pf-depth-chart-drop-end {
+    min-height: 1.75rem;
+    margin: 0.1rem 0.85rem 0.25rem;
+    border-radius: 8px;
+    border: 1px dashed transparent;
+    box-sizing: border-box;
+}
+
+.pf-depth-chart-drop-line {
+    position: absolute;
+    left: 0.65rem;
+    right: 0.65rem;
+    height: 4px;
+    margin: 0;
+    padding: 0;
+    border-radius: 999px;
+    background: var(--app-accent);
+    box-shadow:
+        0 0 0 2px rgba(61, 255, 136, 0.35),
+        0 0 12px rgba(61, 255, 136, 0.4);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 6;
+    transition: opacity 0.08s ease;
+}
+
+.pf-depth-chart-drop-line.is-visible {
+    opacity: 1;
+}
+
+html[data-theme="light"] .pf-depth-chart-drop-line,
+body[data-theme="light"] .pf-depth-chart-drop-line {
+    box-shadow:
+        0 0 0 2px rgba(13, 110, 253, 0.28),
+        0 0 10px rgba(13, 110, 253, 0.35);
+}
+
+.pf-depth-chart-drop-end.is-drop-target {
+    border-color: var(--app-accent);
+    background: rgba(61, 255, 136, 0.12);
+}
+
+html[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target,
+body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
+    background: rgba(13, 110, 253, 0.1);
 }
 
 .pf-depth-chart-cols,
@@ -6496,21 +6545,36 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
     line-height: 1;
 }
 
-.pf-depth-chart-row {
+.pf-depth-chart-row.is-sortable {
     cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.pf-depth-chart-row.is-sortable .pf-depth-chart-name {
+    cursor: pointer;
+    touch-action: auto;
+    user-select: auto;
 }
 
 .pf-depth-chart-row.is-dragging {
-    opacity: 0.45;
+    opacity: 0.4;
+    cursor: grabbing;
+    background: var(--app-elev) !important;
+    box-shadow: inset 0 0 0 1px var(--app-accent);
+}
+
+body.pf-depth-dragging {
+    cursor: grabbing !important;
+    user-select: none !important;
+}
+
+body.pf-depth-dragging .pf-depth-chart-row.is-sortable {
     cursor: grabbing;
 }
 
-.pf-depth-chart-row.is-drop-before {
-    box-shadow: inset 0 2px 0 0 var(--app-accent);
-}
-
-.pf-depth-chart-row.is-drop-after {
-    box-shadow: inset 0 -2px 0 0 var(--app-accent);
+body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
+    transition: none;
 }
 
 .pf-depth-chart-row .pf-depth-chart-name {
