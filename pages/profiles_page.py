@@ -29,6 +29,7 @@ from components.player_table import (
     is_dark_theme,
     page_size_select_data,
     player_data_table,
+    rec_grade_style,
     rec_sort_key,
     style_cell,
     style_cell_conditional,
@@ -678,8 +679,65 @@ def _empty_depth_card_stats(meta: dict) -> dict:
         "avg": None,
         "counts": {"elite": 0, "good": 0, "ok": 0, "poor": 0},
         "total": 0,
-        "names": "No saved players",
+        "names": "",
     }
+
+
+_PITCH_LINE_ORDER = ("gk", "def", "mid", "att")
+_PITCH_LINE_LABELS = {
+    "gk": "Goalkeeper",
+    "def": "Defence",
+    "mid": "Midfield",
+    "att": "Attack",
+}
+_POS_TO_PITCH_LINE = {
+    "gk": "gk",
+    "cb": "def",
+    "rb": "def",
+    "lb": "def",
+    "rwb": "def",
+    "lwb": "def",
+    "dm": "mid",
+    "cm": "mid",
+    "am": "mid",
+    "rm": "mid",
+    "lm": "mid",
+    "rw": "att",
+    "lw": "att",
+    "st": "att",
+    # Common slot labels
+    "rcb": "def",
+    "lcb": "def",
+    "fb": "def",
+    "wb": "def",
+    "mc": "mid",
+    "amc": "mid",
+    "dmr": "mid",
+    "dml": "mid",
+    "wm": "mid",
+    "w": "att",
+    "cf": "att",
+}
+
+
+def _slot_pitch_line(slot: dict) -> str:
+    """Map a formation slot to GK / Defence / Midfield / Attack."""
+    for key in ("ip_pos", "oop_pos", "label"):
+        raw = str(slot.get(key) or "").strip().lower()
+        if not raw:
+            continue
+        if raw in _POS_TO_PITCH_LINE:
+            return _POS_TO_PITCH_LINE[raw]
+        group = fm.group_for_position(raw)
+        if group == "gk":
+            return "gk"
+        if group in ("cb", "fb", "wb"):
+            return "def"
+        if group in ("dm", "cm", "am", "wm"):
+            return "mid"
+        if group in ("w", "st"):
+            return "att"
+    return "mid"
 
 
 def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> dict | None:
@@ -763,7 +821,42 @@ def _profile_depth_card(
             for band in ("elite", "good", "ok", "poor")
             if counts[band]
         ]
-    title_bits = [
+    title_bits = []
+    if slot_label:
+        title_bits.append(
+            html.Div(
+                [
+                    html.Span("Slot", className="rs-depth-kicker"),
+                    html.Span(
+                        slot_label,
+                        className="rs-depth-slot"
+                        + _slot_status_class(
+                            conflicted=slot_conflicted, unique=slot_unique
+                        ),
+                        title=(
+                            "Same starter as another formation slot"
+                            if slot_conflicted
+                            else (
+                                "Unique starter for this formation slot"
+                                if slot_unique
+                                else slot_label
+                            )
+                        ),
+                    ),
+                ],
+                className="rs-depth-slot-row",
+            )
+        )
+    title_bits.append(
+        html.Div(
+            [
+                html.Span("Role", className="rs-depth-kicker"),
+                html.Span(role_label, className="rs-depth-name"),
+            ],
+            className="rs-depth-role-row",
+        )
+    )
+    title_bits.append(
         html.Div(
             [
                 _colored_group_abbr(meta.get("group_abbr") or "", css="rs-depth-code"),
@@ -773,34 +866,14 @@ def _profile_depth_card(
                 ),
             ],
             className="rs-depth-meta",
-        ),
-    ]
-    if slot_label:
-        title_bits.insert(
-            0,
-            html.Span(
-                slot_label,
-                className="rs-depth-slot"
-                + _slot_status_class(
-                    conflicted=slot_conflicted, unique=slot_unique
-                ),
-                title=(
-                    "Same starter as another formation slot"
-                    if slot_conflicted
-                    else (
-                        "Unique starter for this formation slot"
-                        if slot_unique
-                        else slot_label
-                    )
-                ),
-            ),
         )
-    title_bits.append(html.Span(role_label, className="rs-depth-name"))
+    )
+    player_label = "player" if total == 1 else "players"
     children = [
         html.Div(title_bits, className="rs-depth-title"),
         html.Div(
             [
-                html.Span("Avg", className="rs-depth-avg-label"),
+                html.Span("Avg score", className="rs-depth-avg-label"),
                 avg_el,
             ],
             className="rs-depth-avg-row",
@@ -824,7 +897,25 @@ def _profile_depth_card(
             ],
             className="rs-depth-tiers",
         ),
-        html.Div(stats["names"], className="rs-depth-players"),
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Span("Top", className="rs-depth-kicker"),
+                        html.Span(
+                            f"{total} {player_label}",
+                            className="rs-depth-count",
+                        ),
+                    ],
+                    className="rs-depth-players-head",
+                ),
+                html.Div(
+                    stats["names"] or ("No saved players" if empty else "—"),
+                    className="rs-depth-players",
+                ),
+            ],
+            className="rs-depth-players-block",
+        ),
     ]
     role_key = _depth_role_key(meta)
     if slot is not None:
@@ -867,24 +958,73 @@ def _profile_depth_panel(
         _starters, _multi, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(formation_id, formation_slots)
         )
-        cards = []
+        by_line: dict[str, list] = {key: [] for key in _PITCH_LINE_ORDER}
         for slot in formation_slots:
             meta = _role_column_meta(slot["column"])
             payload = _profile_depth_card_stats(meta, entries, bands)
             if not payload:
                 payload = _empty_depth_card_stats(meta)
             slot_index = int(slot["index"])
-            cards.append(
-                _profile_depth_card(
-                    payload,
-                    focus_roles,
-                    bands,
-                    slot=slot,
-                    slot_conflicted=slot_index in conflicted_slots,
-                    slot_unique=slot_index in unique_slots,
+            card = _profile_depth_card(
+                payload,
+                focus_roles,
+                bands,
+                slot=slot,
+                slot_conflicted=slot_index in conflicted_slots,
+                slot_unique=slot_index in unique_slots,
+            )
+            by_line.setdefault(_slot_pitch_line(slot), []).append(card)
+        lines = []
+        total_slots = len(formation_slots)
+        for line_id in _PITCH_LINE_ORDER:
+            line_cards = by_line.get(line_id) or []
+            if not line_cards:
+                continue
+            count = len(line_cards)
+            lines.append(
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Span(
+                                    _PITCH_LINE_LABELS.get(line_id, line_id),
+                                    className="pf-depth-line-label",
+                                ),
+                                html.Span(
+                                    f"{count}",
+                                    className="pf-depth-line-count",
+                                    title=f"{count} slot{'s' if count != 1 else ''}",
+                                ),
+                            ],
+                            className="pf-depth-line-head",
+                        ),
+                        html.Div(
+                            line_cards,
+                            className="pf-depth-line-grid",
+                            style={"--pf-line-cols": str(min(max(count, 1), 6))},
+                        ),
+                    ],
+                    className=f"pf-depth-line pf-depth-line-{line_id}",
                 )
             )
-        return cards
+        return [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span("Formation slots", className="pf-depth-board-kicker"),
+                            html.Span(
+                                f"{total_slots} of 11",
+                                className="pf-depth-board-meta",
+                            ),
+                        ],
+                        className="pf-depth-board-head",
+                    ),
+                    html.Div(lines, className="pf-depth-lines"),
+                ],
+                className="pf-depth-board",
+            )
+        ]
 
     if not entries:
         return []
@@ -963,6 +1103,63 @@ def _depth_ovr_cell(percentile, color=None):
     return html.Span(f"{pct_f:.0f}%", className="pf-depth-chart-metric", style=style)
 
 
+def _depth_plain_cell(value, class_name: str) -> html.Span:
+    text = _blank(value)
+    return html.Span(
+        text,
+        className=class_name,
+        title="" if text == "—" else text,
+    )
+
+
+def _depth_mins_cell(value) -> html.Span:
+    if value in (None, "", "-", "—"):
+        return html.Span("—", className="pf-depth-chart-mins")
+    try:
+        mins_f = float(value)
+        if mins_f != mins_f:
+            return html.Span("—", className="pf-depth-chart-mins")
+        text = f"{int(mins_f):,}"
+    except (TypeError, ValueError):
+        text = str(value)
+    return html.Span(text, className="pf-depth-chart-mins", title=text)
+
+
+def _depth_rec_cell(value, theme=None) -> html.Span:
+    text = _blank(value)
+    style = rec_grade_style(text, theme) if text != "—" else None
+    props = {
+        "className": "pf-depth-chart-rec" + (" is-graded" if style else ""),
+        "title": "" if text == "—" else text,
+    }
+    if style:
+        props["style"] = style
+    return html.Span(text, **props)
+
+
+def _depth_role_cell(column: str, theme=None) -> html.Span:
+    label = _role_display_label(column)
+    if label == "—":
+        return html.Span("—", className="pf-depth-chart-role is-empty")
+    meta = _role_column_meta(column)
+    tone = str(meta.get("tone") or "").strip().lower()
+    if tone.startswith("ip"):
+        tone = "ip"
+    elif tone.startswith("oop"):
+        tone = "oop"
+    elif tone in ("combo", "hybrid"):
+        tone = "combo"
+    elif tone != "gk":
+        tone = "gk" if not tone else tone
+    color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
+    return html.Span(
+        label,
+        className=f"pf-depth-chart-role pf-role-{tone}",
+        style={"color": color, "fontWeight": 700},
+        title=meta.get("compact") or meta.get("name") or label,
+    )
+
+
 def _depth_chart_player_row(
     entry: dict | None,
     *,
@@ -972,6 +1169,7 @@ def _depth_chart_player_row(
     theme=None,
     slot_label: str = "",
     slot_index: int | str | None = None,
+    role_column: str = "",
     slot_conflicted: bool = False,
     slot_unique: bool = False,
     draggable: bool = True,
@@ -992,36 +1190,65 @@ def _depth_chart_player_row(
             else slot_label
         )
     )
+    role_col = str(role_column or "").strip()
+
+    def empty_row_cells() -> list:
+        return [
+            html.Div(
+                [
+                    html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
+                    html.Span(str(index + 1), className="pf-depth-chart-rank"),
+                ],
+                className="pf-depth-chart-rank-cell",
+            ),
+            html.Span("—", className="pf-depth-chart-name is-empty"),
+            html.Span("—", className="pf-depth-chart-age"),
+            html.Span("—", className="pf-depth-chart-height"),
+            html.Span("—", className="pf-depth-chart-pos"),
+            html.Span(slot_label or "—", className=slot_class, title=slot_title),
+            _depth_role_cell(role_col, theme=theme)
+            if role_col
+            else html.Span("—", className="pf-depth-chart-role is-empty"),
+            html.Span("—", className="pf-depth-chart-feet"),
+            html.Span("—", className="pf-depth-chart-club"),
+            html.Span("—", className="pf-depth-chart-div"),
+            html.Span("—", className="pf-depth-chart-rec"),
+            html.Span("—", className="pf-depth-chart-injury"),
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-score",
+            ),
+            html.Span("—", className="pf-depth-chart-mins"),
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-ovr",
+            ),
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-def",
+            ),
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-f3",
+            ),
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-poss",
+            ),
+            remove_cell,
+        ]
+
     if entry is None:
         return html.Div(
-            [
-                html.Div(
-                    [
-                        html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
-                        html.Span(str(index + 1), className="pf-depth-chart-rank"),
-                    ],
-                    className="pf-depth-chart-rank-cell",
-                ),
-                html.Span("—", className="pf-depth-chart-name is-empty"),
-                html.Span(slot_label or "—", className=slot_class, title=slot_title),
-                html.Span("—", className="pf-depth-chart-pos"),
-                html.Span("—", className="pf-depth-chart-feet"),
-                html.Span("—", className="pf-depth-chart-club"),
-                html.Span("—", className="pf-depth-chart-div"),
-                html.Div(
-                    html.Span("—", className="pf-depth-chart-metric"),
-                    className="pf-depth-chart-ovr",
-                ),
-                html.Div(
-                    html.Span("—", className="pf-depth-chart-metric"),
-                    className="pf-depth-chart-score",
-                ),
-                remove_cell,
-            ],
+            empty_row_cells(),
             className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
         )
     row = entry.get("row") or {}
     profile_id = str(entry.get("id") or "").strip()
+    if not role_col:
+        role_col = str(
+            entry.get("role_column") or row.get("Role") or ""
+        ).strip()
     name, club = profiles.profile_identity(entry)
     display_rank = index + 1
     position = _blank(row.get("Position"))
@@ -1062,8 +1289,7 @@ def _depth_chart_player_row(
         ),
         **({"data-profile-id": profile_id} if profile_id else {}),
     }
-    # Rank in the React key so Auto-rank / reorder remounts rows instead of
-    # Dash reusing {"type": "pf-depth-name", "id": ...} nodes in old order.
+    injury_html = injury_cell(row.get("Injury"))
     return html.Div(
         [
             html.Div(
@@ -1089,8 +1315,11 @@ def _depth_chart_player_row(
                 if profile_id
                 else html.Span("—", className="pf-depth-chart-name is-empty")
             ),
-            html.Span(slot_label or "—", className=slot_class, title=slot_title),
+            _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
+            _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
             html.Span(position, className="pf-depth-chart-pos", title=position),
+            html.Span(slot_label or "—", className=slot_class, title=slot_title),
+            _depth_role_cell(role_col, theme=theme),
             dcc.Markdown(
                 feet_cell(row),
                 dangerously_allow_html=True,
@@ -1098,13 +1327,36 @@ def _depth_chart_player_row(
             ),
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=division),
+            _depth_rec_cell(row.get("Rec"), theme=theme),
+            (
+                dcc.Markdown(
+                    injury_html,
+                    dangerously_allow_html=True,
+                    className="pf-depth-chart-injury",
+                )
+                if injury_html and injury_html not in ("—", "-", "")
+                else html.Span("—", className="pf-depth-chart-injury")
+            ),
+            html.Div(
+                _depth_score_cell(row.get("Score"), settings, theme=theme),
+                className="pf-depth-chart-score",
+            ),
+            _depth_mins_cell(_profile_minutes_raw(entry, row)),
             html.Div(
                 _depth_ovr_cell(row.get("overall"), row.get("overall_color")),
                 className="pf-depth-chart-ovr",
             ),
             html.Div(
-                _depth_score_cell(row.get("Score"), settings, theme=theme),
-                className="pf-depth-chart-score",
+                _depth_ovr_cell(row.get("defending"), row.get("defending_color")),
+                className="pf-depth-chart-def",
+            ),
+            html.Div(
+                _depth_ovr_cell(row.get("final_third"), row.get("final_third_color")),
+                className="pf-depth-chart-f3",
+            ),
+            html.Div(
+                _depth_ovr_cell(row.get("possession"), row.get("possession_color")),
+                className="pf-depth-chart-poss",
             ),
             remove_cell,
         ],
@@ -1114,17 +1366,27 @@ def _depth_chart_player_row(
 
 
 def _depth_chart_col_headers() -> html.Div:
+    """Mirror Profiles table order; keep Position / Slot / Role grouped."""
     return html.Div(
         [
             html.Span("#", className="pf-depth-chart-rank"),
             html.Span("Name", className="pf-depth-chart-name-label"),
-            html.Span("Slot", className="pf-depth-chart-slot"),
+            html.Span("Age", className="pf-depth-chart-age"),
+            html.Span("Ht", className="pf-depth-chart-height", title="Height"),
             html.Span("Pos", className="pf-depth-chart-pos"),
+            html.Span("Slot", className="pf-depth-chart-slot"),
+            html.Span("Role", className="pf-depth-chart-role"),
             html.Span("Feet", className="pf-depth-chart-feet"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
-            html.Span("Ovr", className="pf-depth-chart-ovr"),
+            html.Span("Rec", className="pf-depth-chart-rec"),
+            html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
             html.Span("Score", className="pf-depth-chart-score"),
+            html.Span("Mins", className="pf-depth-chart-mins"),
+            html.Span("Ovr", className="pf-depth-chart-ovr"),
+            html.Span("Def", className="pf-depth-chart-def"),
+            html.Span("F3", className="pf-depth-chart-f3", title="Final third"),
+            html.Span("Poss", className="pf-depth-chart-poss"),
             html.Span("", className="pf-depth-chart-remove", **{"aria-hidden": "true"}),
         ],
         className="pf-depth-chart-cols",
@@ -1164,6 +1426,7 @@ def _build_formation_xi_chart(
                 theme=theme,
                 slot_label=slot.get("display_label") or slot.get("label") or "",
                 slot_index=slot["index"],
+                role_column=slot.get("column") or "",
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
                 draggable=False,
@@ -1325,6 +1588,7 @@ def _build_depth_chart(
             theme=theme,
             slot_label=slot_label,
             slot_index=slot_index,
+            role_column=column,
             # Slot label reflects this slot’s current starter status; player rows
             # that are starters elsewhere also stay red for quick scanning.
             slot_conflicted=(
@@ -2005,16 +2269,30 @@ def _depth_undo_label(item: dict) -> str:
     return " · ".join(parts) if parts else "Removed player"
 
 
-def _depth_undo_panel(items) -> html.Div:
-    rows = []
+def _depth_undo_items(items) -> list[dict]:
+    out = []
     for item in list(items or [])[:DEPTH_UNDO_MAX]:
         if not isinstance(item, dict):
             continue
         undo_id = str(item.get("undo_id") or "").strip()
         if not undo_id:
             continue
+        out.append(item)
+    return out
+
+
+def _depth_undo_panel(items) -> html.Div:
+    rows = []
+    valid = _depth_undo_items(items)
+    for item in valid:
+        undo_id = str(item.get("undo_id") or "").strip()
         slot_label = str(item.get("slot_label") or item.get("role") or "").strip()
-        meta = f"Slot {slot_label}" if slot_label else "Formation slot"
+        if item.get("source") == "table" or slot_label == "Shortlist":
+            meta = "Deleted from shortlist"
+        elif slot_label:
+            meta = f"Slot {slot_label}"
+        else:
+            meta = "Formation slot"
         rows.append(
             html.Div(
                 [
@@ -2032,7 +2310,8 @@ def _depth_undo_panel(items) -> html.Div:
                         "Restore",
                         id={"type": "pf-depth-undo-restore", "id": undo_id},
                         size="xs",
-                        variant="light",
+                        variant="filled",
+                        color="yellow",
                         n_clicks=0,
                     ),
                 ],
@@ -2040,11 +2319,34 @@ def _depth_undo_panel(items) -> html.Div:
             )
         )
     if not rows:
-        return html.Div(
-            "No recently removed players.",
-            className="text-muted small",
-        )
-    return html.Div(rows, className="pf-depth-undo-list")
+        return html.Div(className="pf-depth-undo-panel is-empty")
+    count = len(rows)
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span("Recently removed", className="pf-depth-undo-title"),
+                            html.Span(
+                                str(count),
+                                className="pf-depth-undo-badge",
+                                **{"aria-label": f"{count} recently removed"},
+                            ),
+                        ],
+                        className="pf-depth-undo-title-row",
+                    ),
+                    html.Span(
+                        "Restore adds a player back to the bottom of the same slot.",
+                        className="pf-depth-undo-hint",
+                    ),
+                ],
+                className="pf-depth-undo-head",
+            ),
+            html.Div(rows, className="pf-depth-undo-list"),
+        ],
+        className="pf-depth-undo-panel",
+    )
 
 
 def _push_depth_undo(undo_items, payload: dict) -> list[dict]:
@@ -2136,38 +2438,65 @@ def layout(**_kwargs):
                                                 [
                                                     html.Div(
                                                         [
-                                                            dmc.Select(
-                                                                id="pf-formation-select",
-                                                                data=fm.pack_options(),
-                                                                value=fm.active_id() or None,
-                                                                placeholder="Select a formation",
-                                                                clearable=False,
-                                                                searchable=True,
-                                                                size="sm",
-                                                                className="pf-formation-dd",
+                                                            html.Label(
+                                                                "Formation",
+                                                                className="rs-field-label",
                                                             ),
-                                                            dcc.Link(
-                                                                "Edit",
-                                                                href="/formations",
-                                                                className="rs-weights-edit",
-                                                                title=(
-                                                                    "Open Formations to create "
-                                                                    "or edit lineups."
-                                                                ),
+                                                            html.Div(
+                                                                [
+                                                                    dmc.Select(
+                                                                        id="pf-formation-select",
+                                                                        data=fm.pack_options(),
+                                                                        value=fm.active_id() or None,
+                                                                        placeholder="Select a formation",
+                                                                        clearable=False,
+                                                                        searchable=True,
+                                                                        size="sm",
+                                                                        className="pf-formation-dd",
+                                                                    ),
+                                                                    dcc.Link(
+                                                                        "Edit",
+                                                                        href="/formations",
+                                                                        className="rs-weights-edit",
+                                                                        title=(
+                                                                            "Open Formations to create "
+                                                                            "or edit lineups."
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                className="pf-formation-row",
                                                             ),
                                                         ],
-                                                        className="pf-formation-row",
+                                                        className="pf-squad-depth-field",
                                                     ),
                                                     html.Div(
-                                                        _band_legend(settings),
-                                                        id="pf-band-legend",
+                                                        [
+                                                            html.Label(
+                                                                "Score bands",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            html.Div(
+                                                                _band_legend(settings),
+                                                                id="pf-band-legend",
+                                                            ),
+                                                        ],
+                                                        className="pf-squad-depth-field",
                                                     ),
-                                                    dmc.Button(
-                                                        "Auto-rank all roles",
-                                                        id="pf-depth-auto-all",
-                                                        size="sm",
-                                                        variant="light",
-                                                        n_clicks=0,
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Ranking",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            dmc.Button(
+                                                                "Auto-rank all roles",
+                                                                id="pf-depth-auto-all",
+                                                                size="sm",
+                                                                variant="light",
+                                                                n_clicks=0,
+                                                            ),
+                                                        ],
+                                                        className="pf-squad-depth-field",
                                                     ),
                                                 ],
                                                 className="pf-squad-depth-actions",
@@ -2193,44 +2522,25 @@ def layout(**_kwargs):
                                                 "Starting XI shows one player per formation slot "
                                                 "(Slot column). Focus a Squad depth card to rank "
                                                 "that slot; drag to reorder; × removes the player "
-                                                "from that slot only. Restore puts them back at "
-                                                "the bottom of that same slot.",
+                                                "from that slot only.",
                                                 className="rs-depth-heading-hint",
                                             ),
                                         ],
                                         className="rs-depth-heading-copy pf-depth-chart-toolbar",
                                     ),
-                                    html.Div(id="pf-depth-chart-body"),
                                     html.Div(
-                                        [
-                                            html.Div(
-                                                [
-                                                    html.Span(
-                                                        "Recently removed",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Last 5 players removed from a formation slot. "
-                                                        "Restore adds them back to the bottom of that "
-                                                        "same slot’s depth (and the table if needed).",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
-                                            ),
-                                            html.Div(
-                                                id="pf-depth-undo-body",
-                                                children=_depth_undo_panel([]),
-                                            ),
-                                        ],
                                         id="pf-depth-undo-wrap",
                                         className="pf-depth-undo-wrap",
+                                        children=_depth_undo_panel([]),
+                                        hidden=True,
                                     ),
+                                    html.Div(id="pf-depth-chart-body"),
                                 ],
                                 id="pf-depth-chart-wrap",
                                 className="pf-depth-chart-wrap mb-3",
                                 hidden=True,
                             ),
+                            html.Div(id="pf-depth-scroll-nudge", hidden=True),
                             html.Div(
                                 [
                                     html.Div(
@@ -2498,6 +2808,32 @@ def focus_profile_role(n_clicks, current_focus, formation_id):
     ):
         return []
     return [{"slot": slot_index, "role": column, "label": label}]
+
+
+clientside_callback(
+    """
+    function(focus) {
+        const hasFocus = Array.isArray(focus) && focus.length > 0;
+        if (!hasFocus) {
+            return window.dash_clientside.no_update;
+        }
+        const scrollToChart = function() {
+            const el = document.getElementById("pf-depth-chart-wrap");
+            if (!el || el.hidden) {
+                return;
+            }
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+        };
+        requestAnimationFrame(scrollToChart);
+        setTimeout(scrollToChart, 80);
+        setTimeout(scrollToChart, 220);
+        return String(Date.now());
+    }
+    """,
+    Output("pf-depth-scroll-nudge", "children"),
+    Input("pf-focus-role", "data"),
+    prevent_initial_call=True,
+)
 
 
 @callback(
@@ -2880,22 +3216,39 @@ def toggle_delete_btn(selected_ids):
 
 
 @callback(
+    Output("pf-depth-undo", "data", allow_duplicate=True),
     Output("pf-rev", "data", allow_duplicate=True),
     Input("pf-delete-selected", "n_clicks"),
     State("pf-table", "selected_row_ids"),
     State("pf-rev", "data"),
+    State("pf-depth-undo", "data"),
+    State("pf-formation-select", "value"),
     prevent_initial_call=True,
 )
-def delete_selected(n_clicks, selected_ids, rev):
+def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id):
     if not n_clicks or not selected_ids:
-        return no_update
+        return no_update, no_update
+    slots = _formation_slots(formation_id)
+    next_undo = list(undo_items or [])
+    deleted = 0
     seen: set[str] = set()
     for row_id in selected_ids:
         profile_id = _resolve_profile_id(row_id)
-        if profile_id and profile_id not in seen:
-            seen.add(profile_id)
-            profiles.delete_profile(profile_id)
-    return int(rev or 0) + 1
+        if not profile_id or profile_id in seen:
+            continue
+        seen.add(profile_id)
+        payload = profiles.delete_profile_with_slot_cleanup(
+            profile_id,
+            formation_id=formation_id,
+            formation_slots=slots,
+        )
+        if not payload:
+            continue
+        next_undo = _push_depth_undo(next_undo, payload)
+        deleted += 1
+    if not deleted:
+        return no_update, no_update
+    return next_undo, int(rev or 0) + 1
 
 
 @callback(
@@ -3164,11 +3517,13 @@ def remove_from_depth_chart(n_clicks, undo_items, rev, formation_id, focus_role)
 
 
 @callback(
-    Output("pf-depth-undo-body", "children"),
+    Output("pf-depth-undo-wrap", "children"),
+    Output("pf-depth-undo-wrap", "hidden"),
     Input("pf-depth-undo", "data"),
 )
 def render_depth_undo(undo_items):
-    return _depth_undo_panel(undo_items)
+    valid = _depth_undo_items(undo_items)
+    return _depth_undo_panel(valid), not bool(valid)
 
 
 @callback(

@@ -6264,10 +6264,229 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 
 .pf-squad-depth-actions {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    align-items: flex-end;
+    gap: 1.25rem 2rem;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    width: 100%;
+    padding-top: 0.35rem;
+}
+
+.pf-squad-depth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.pf-squad-depth-field .rs-field-label {
+    margin: 0;
+}
+
+.pf-squad-depth-field .pf-formation-row {
+    min-width: min(18rem, 100%);
+}
+
+.pf-page #pf-depth-wrap.rs-depth-panel {
+    padding: 16px 18px 18px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--app-card) 92%, var(--app-head));
+}
+
+.pf-page #pf-depth-wrap .rs-depth-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.15rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid var(--app-line);
+}
+
+.pf-page #pf-depth-wrap .rs-depth-heading-copy {
+    gap: 0.4rem;
+    max-width: 56rem;
+}
+
+.pf-page #pf-depth-wrap .rs-depth-heading-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--app-text);
+}
+
+.pf-page #pf-depth-wrap .rs-depth-heading-hint {
+    max-width: 52rem;
+    line-height: 1.45;
+}
+
+.pf-page #pf-summary.rs-depth-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 0.55rem;
+}
+
+.pf-page #pf-summary.rs-depth-grid:has(.pf-depth-board) {
+    display: block;
+}
+
+.pf-depth-board {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-top: 0.15rem;
+}
+
+.pf-depth-board-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.pf-depth-board-kicker {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+}
+
+.pf-depth-board-meta {
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: var(--app-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-depth-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pf-depth-line {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.pf-depth-line-head {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+.pf-depth-line-label {
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--app-text);
+}
+
+.pf-depth-line-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--app-head);
+    border: 1px solid var(--app-line);
+    color: var(--app-muted);
+    font-size: 0.68rem;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-depth-line-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: stretch;
+    gap: 0.75rem 1rem;
+    width: 100%;
+}
+
+.pf-page #pf-summary .rs-depth-card {
+    box-sizing: border-box;
+    width: 210px;
+    max-width: 210px;
+    flex: 0 0 210px;
+    min-width: 0;
+    height: auto;
+    padding: 11px 13px;
+    border-radius: 12px;
+}
+
+.pf-page #pf-summary .rs-depth-kicker {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    line-height: 1.2;
+}
+
+.pf-page #pf-summary .rs-depth-slot-row,
+.pf-page #pf-summary .rs-depth-role-row,
+.pf-page #pf-summary .rs-depth-players-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.pf-page #pf-summary .rs-depth-role-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.pf-page #pf-summary .rs-depth-name {
+    font-size: 12.5px;
+}
+
+.pf-page #pf-summary .rs-depth-count {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--app-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.pf-page #pf-summary .rs-depth-players-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-top: 0.15rem;
+}
+
+.pf-page #pf-summary .rs-depth-players {
+    font-size: 11px;
+    line-height: 1.35;
+    max-height: 2.7em;
+    overflow: hidden;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.pf-page #pf-summary .rs-depth-title {
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+}
+
+@media (max-width: 640px) {
+    .pf-page #pf-summary .rs-depth-card {
+        width: min(210px, calc(50% - 0.5rem));
+        max-width: min(210px, calc(50% - 0.5rem));
+        flex-basis: min(210px, calc(50% - 0.5rem));
+    }
 }
 
 .pf-formation-row {
@@ -6292,20 +6511,79 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-depth-chart-wrap {
-    margin-top: 0.25rem;
+    margin-top: 0.35rem;
+    scroll-margin-top: 4.5rem;
 }
 
 .pf-depth-undo-wrap {
-    margin-top: 0.85rem;
-    padding-top: 0.85rem;
-    border-top: 1px solid var(--app-line);
+    margin: 0 0 0.85rem;
+}
+
+.pf-depth-undo-panel {
+    border: 1px solid color-mix(in srgb, #eab308 45%, var(--app-line));
+    border-left: 3px solid #eab308;
+    border-radius: 12px;
+    background: color-mix(in srgb, #eab308 10%, var(--app-card));
+    padding: 0.75rem 0.9rem 0.85rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.pf-depth-undo-panel.is-empty {
+    display: none;
+}
+
+.pf-depth-undo-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.65rem;
+}
+
+.pf-depth-undo-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pf-depth-undo-title {
+    font-size: 0.8rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-text);
+}
+
+.pf-depth-undo-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, #eab308 55%, #111);
+    color: #111;
+    font-size: 0.72rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+html[data-theme="light"] .pf-depth-undo-badge,
+body[data-theme="light"] .pf-depth-undo-badge {
+    background: #ca8a04;
+    color: #fff;
+}
+
+.pf-depth-undo-hint {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
 }
 
 .pf-depth-undo-list {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-top: 0.55rem;
+    gap: 0.4rem;
 }
 
 .pf-depth-undo-row {
@@ -6313,10 +6591,21 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.55rem 0.75rem;
+    padding: 0.55rem 0.7rem;
     border: 1px solid var(--app-line);
     border-radius: 10px;
-    background: var(--app-card);
+    background: var(--app-head);
+}
+
+html[data-theme="light"] .pf-depth-undo-panel,
+body[data-theme="light"] .pf-depth-undo-panel {
+    background: color-mix(in srgb, #eab308 12%, #fff);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme="light"] .pf-depth-undo-row,
+body[data-theme="light"] .pf-depth-undo-row {
+    background: #fff;
 }
 
 .pf-depth-undo-copy {
@@ -6452,20 +6741,29 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
 .pf-depth-chart-row {
     display: grid;
     grid-template-columns:
-        3.25rem
-        minmax(9rem, 1.5fr)
-        minmax(4.5rem, 0.7fr)
-        minmax(5.5rem, 0.85fr)
-        4.25rem
-        minmax(7rem, 1.05fr)
-        minmax(7.5rem, 1.15fr)
-        4rem
-        4.25rem
-        2.25rem;
-    gap: 0.45rem 0.65rem;
+        2.75rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        2.85rem
+        minmax(7.25rem, 1.15fr)
+        minmax(3.5rem, 0.5fr)
+        minmax(3.85rem, 0.58fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(4.75rem, 0.78fr)
+        2.85rem
+        2.5rem
+        3.35rem
+        2.95rem
+        2.95rem
+        2.95rem
+        2.95rem
+        2.95rem
+        2rem;
+    gap: 0.3rem 0.4rem;
     align-items: center;
-    padding: 0.55rem 0.85rem;
-    min-width: 56rem;
+    padding: 0.5rem 0.7rem;
+    min-width: 74rem;
     box-sizing: border-box;
 }
 
@@ -6481,17 +6779,26 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
 }
 
 .pf-depth-chart-cols .pf-depth-chart-rank,
+.pf-depth-chart-cols .pf-depth-chart-age,
+.pf-depth-chart-cols .pf-depth-chart-height,
 .pf-depth-chart-cols .pf-depth-chart-feet,
-.pf-depth-chart-cols .pf-depth-chart-div,
+.pf-depth-chart-cols .pf-depth-chart-rec,
+.pf-depth-chart-cols .pf-depth-chart-injury,
+.pf-depth-chart-cols .pf-depth-chart-mins,
+.pf-depth-chart-cols .pf-depth-chart-score,
 .pf-depth-chart-cols .pf-depth-chart-ovr,
-.pf-depth-chart-cols .pf-depth-chart-score {
+.pf-depth-chart-cols .pf-depth-chart-def,
+.pf-depth-chart-cols .pf-depth-chart-f3,
+.pf-depth-chart-cols .pf-depth-chart-poss {
     text-align: center;
 }
 
 .pf-depth-chart-cols .pf-depth-chart-name-label,
-.pf-depth-chart-cols .pf-depth-chart-slot,
 .pf-depth-chart-cols .pf-depth-chart-pos,
-.pf-depth-chart-cols .pf-depth-chart-club {
+.pf-depth-chart-cols .pf-depth-chart-slot,
+.pf-depth-chart-cols .pf-depth-chart-role,
+.pf-depth-chart-cols .pf-depth-chart-club,
+.pf-depth-chart-cols .pf-depth-chart-div {
     text-align: left;
     color: var(--app-muted);
 }
@@ -6795,11 +7102,51 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur {
 }
 
 .pf-depth-chart-ovr,
-.pf-depth-chart-score {
+.pf-depth-chart-score,
+.pf-depth-chart-def,
+.pf-depth-chart-f3,
+.pf-depth-chart-poss,
+.pf-depth-chart-age,
+.pf-depth-chart-height,
+.pf-depth-chart-mins,
+.pf-depth-chart-rec,
+.pf-depth-chart-injury {
     text-align: center;
     justify-self: center;
     font-variant-numeric: tabular-nums;
     font-size: 0.92rem;
+}
+
+.pf-depth-chart-pos {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: var(--app-text);
+}
+
+.pf-depth-chart-rec {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.7rem;
+    padding: 0.12rem 0.35rem;
+    border-radius: 6px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.pf-depth-chart-rec.is-graded {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.pf-depth-chart-role {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .pf-depth-chart-metric {
@@ -6829,12 +7176,22 @@ body[data-theme="light"] .pf-depth-chart-section {
         grid-template-columns: 3.25rem minmax(0, 1fr);
         grid-template-areas:
             "rank name"
+            "rank age"
+            "rank height"
             "rank pos"
+            "rank slot"
+            "rank role"
             "rank feet"
             "rank club"
             "rank div"
+            "rank rec"
+            "rank injury"
+            "rank score"
+            "rank mins"
             "rank ovr"
-            "rank score";
+            "rank def"
+            "rank f3"
+            "rank poss";
         min-width: 0;
     }
 
@@ -6847,8 +7204,26 @@ body[data-theme="light"] .pf-depth-chart-section {
         grid-area: name;
     }
 
+    .pf-depth-chart-age {
+        grid-area: age;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-height {
+        grid-area: height;
+        justify-self: start;
+    }
+
     .pf-depth-chart-pos {
         grid-area: pos;
+    }
+
+    .pf-depth-chart-slot {
+        grid-area: slot;
+    }
+
+    .pf-depth-chart-role {
+        grid-area: role;
     }
 
     .pf-depth-chart-feet {
@@ -6865,13 +7240,43 @@ body[data-theme="light"] .pf-depth-chart-section {
         justify-self: start;
     }
 
-    .pf-depth-chart-ovr {
-        grid-area: ovr;
+    .pf-depth-chart-rec {
+        grid-area: rec;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-injury {
+        grid-area: injury;
         justify-self: start;
     }
 
     .pf-depth-chart-score {
         grid-area: score;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-mins {
+        grid-area: mins;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-ovr {
+        grid-area: ovr;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-def {
+        grid-area: def;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-f3 {
+        grid-area: f3;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-poss {
+        grid-area: poss;
         justify-self: start;
     }
 }

@@ -206,6 +206,72 @@ def remove_from_slot_depth(
     }
 
 
+def delete_profile_with_slot_cleanup(
+    profile_id: str,
+    *,
+    formation_id: str | None = None,
+    formation_slots: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Delete a shortlist profile and strip it from formation slot lists.
+
+    Returns an undo payload compatible with ``restore_to_slot_depth``.
+    """
+    pid = str(profile_id or "").strip()
+    if not pid:
+        return None
+    entry = get_profile(pid)
+    if not entry:
+        return None
+    role = _entry_role(entry)
+    pack = str(formation_id or "").strip()
+    slot_refs: list[dict[str, Any]] = []
+    for slot in list(formation_slots or []):
+        if not isinstance(slot, dict):
+            continue
+        slot_role = str(slot.get("column") or role or "").strip()
+        if not pack or not slot_role:
+            continue
+        try:
+            slot_index = slot["index"]
+        except KeyError:
+            continue
+        ids = get_slot_order_ids(pack, slot_index, slot_role, seed=True)
+        if pid not in ids:
+            continue
+        set_slot_order_ids(
+            pack, slot_index, [item for item in ids if item != pid]
+        )
+        slot_refs.append(
+            {
+                "slot": int(_slot_key(slot_index))
+                if _slot_key(slot_index).isdigit()
+                else slot_index,
+                "role": slot_role,
+                "slot_label": str(
+                    slot.get("display_label") or slot.get("label") or ""
+                ).strip(),
+            }
+        )
+    popped = pop_profile(pid)
+    if not popped:
+        return None
+    primary = slot_refs[0] if slot_refs else None
+    return {
+        "formation_id": pack,
+        "slot": primary["slot"] if primary else None,
+        "role": (primary["role"] if primary else role) or role,
+        "slot_label": (
+            primary["slot_label"]
+            if primary and primary.get("slot_label")
+            else "Shortlist"
+        ),
+        "slot_refs": slot_refs,
+        "entries": [popped],
+        "deleted_from_table": True,
+        "source": "table",
+    }
+
+
 def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
     """Restore undo item to the bottom of its formation slot depth."""
     if not isinstance(item, dict):
@@ -214,7 +280,7 @@ def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
     role = str(item.get("role") or "").strip()
     slot_index = item.get("slot")
     entries = list(item.get("entries") or [])
-    if not pack or not role or slot_index is None or not entries:
+    if not entries:
         return []
     if item.get("deleted_from_table"):
         restored = restore_profiles_at_depth_bottom(entries)
@@ -231,14 +297,30 @@ def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
                 restored.append(dict(live))
     if not restored:
         return []
-    ids = get_slot_order_ids(pack, slot_index, role, seed=True)
-    for entry in restored:
-        pid = str(entry.get("id") or "").strip()
-        if not pid:
+
+    refs = [
+        ref
+        for ref in list(item.get("slot_refs") or [])
+        if isinstance(ref, dict) and ref.get("slot") is not None
+    ]
+    if not refs and slot_index is not None and role:
+        refs = [{"slot": slot_index, "role": role}]
+    if not pack or not refs:
+        return restored
+
+    for ref in refs:
+        ref_role = str(ref.get("role") or role or "").strip()
+        ref_slot = ref.get("slot")
+        if not ref_role or ref_slot is None:
             continue
-        ids = [item_id for item_id in ids if item_id != pid]
-        ids.append(pid)
-    set_slot_order_ids(pack, slot_index, ids)
+        ids = get_slot_order_ids(pack, ref_slot, ref_role, seed=True)
+        for entry in restored:
+            pid = str(entry.get("id") or "").strip()
+            if not pid:
+                continue
+            ids = [item_id for item_id in ids if item_id != pid]
+            ids.append(pid)
+        set_slot_order_ids(pack, ref_slot, ids)
     return restored
 
 

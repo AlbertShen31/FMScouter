@@ -463,36 +463,61 @@ def _lerp_channel(a: int, b: int, t: float) -> int:
     return int(round(a + (b - a) * t))
 
 
-def rec_highlight_styles(theme: str | None = None) -> list[dict]:
-    """Color Rec from green (A+) to red (F)."""
+def rec_grade_style(value, theme: str | None = None) -> dict[str, str] | None:
+    """Inline bg/color for a Rec grade (A+…F), matching table highlights."""
+    text = str(value or "").strip()
+    if not text or text in ("-", "—"):
+        return None
+    grades = _rec_grades()
+    try:
+        index = grades.index(text)
+    except ValueError:
+        # Tolerate spaced forms like "A +"
+        compact = re.sub(r"\s+", "", text)
+        try:
+            index = grades.index(compact)
+        except ValueError:
+            return None
     dark = is_dark_theme(theme)
     green_bg = (22, 101, 52) if dark else (220, 252, 231)
     red_bg = (127, 29, 29) if dark else (254, 226, 226)
     green_fg = (74, 222, 128) if dark else (21, 128, 61)
     red_fg = (252, 165, 165) if dark else (185, 28, 28)
+    last = max(len(grades) - 1, 1)
+    t = index / last
+    bg = "#{:02x}{:02x}{:02x}".format(
+        _lerp_channel(green_bg[0], red_bg[0], t),
+        _lerp_channel(green_bg[1], red_bg[1], t),
+        _lerp_channel(green_bg[2], red_bg[2], t),
+    )
+    fg = "#{:02x}{:02x}{:02x}".format(
+        _lerp_channel(green_fg[0], red_fg[0], t),
+        _lerp_channel(green_fg[1], red_fg[1], t),
+        _lerp_channel(green_fg[2], red_fg[2], t),
+    )
+    return {
+        "backgroundColor": bg,
+        "color": fg,
+        "fontWeight": "750",
+    }
+
+
+def rec_highlight_styles(theme: str | None = None) -> list[dict]:
+    """Color Rec from green (A+) to red (F)."""
     rules = []
     grades = _rec_grades()
-    last = max(len(grades) - 1, 1)
-    for index, grade in enumerate(grades):
-        t = index / last
-        bg = "#{:02x}{:02x}{:02x}".format(
-            _lerp_channel(green_bg[0], red_bg[0], t),
-            _lerp_channel(green_bg[1], red_bg[1], t),
-            _lerp_channel(green_bg[2], red_bg[2], t),
-        )
-        fg = "#{:02x}{:02x}{:02x}".format(
-            _lerp_channel(green_fg[0], red_fg[0], t),
-            _lerp_channel(green_fg[1], red_fg[1], t),
-            _lerp_channel(green_fg[2], red_fg[2], t),
-        )
+    for grade in grades:
+        style = rec_grade_style(grade, theme)
+        if not style:
+            continue
         rules.append(
             {
                 "if": {
                     "filter_query": f'{{Rec}} = "{grade}"',
                     "column_id": "Rec",
                 },
-                "backgroundColor": bg,
-                "color": fg,
+                "backgroundColor": style["backgroundColor"],
+                "color": style["color"],
             }
         )
     return rules
