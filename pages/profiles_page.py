@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
@@ -63,6 +64,8 @@ VIEW_MODES = (
     ("roles", "Role scores"),
     ("percentiles", "Overall percentiles"),
 )
+
+DEPTH_UNDO_MAX = 5
 
 FILTER_SORT_RESET_IDS = frozenset(
     {
@@ -840,10 +843,13 @@ def _depth_chart_player_row(
     settings,
     theme=None,
     slot_label: str = "",
+    slot_index: int | str | None = None,
     draggable: bool = True,
+    removable: bool = True,
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
+    remove_cell = html.Span("", className="pf-depth-chart-remove")
     if entry is None:
         return html.Div(
             [
@@ -867,14 +873,14 @@ def _depth_chart_player_row(
                     html.Span("—", className="pf-depth-chart-metric"),
                     className="pf-depth-chart-score",
                 ),
+                remove_cell,
             ],
             className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
         )
     row = entry.get("row") or {}
     profile_id = str(entry.get("id") or "").strip()
     name, club = profiles.profile_identity(entry)
-    rank = _depth_rank_value(entry)
-    display_rank = rank if rank is not None else index + 1
+    display_rank = index + 1
     position = _blank(row.get("Position"))
     if position == "—":
         position = _blank(row.get("Best Pos"))
@@ -883,6 +889,27 @@ def _depth_chart_player_row(
     div_class = "pf-depth-chart-div"
     if tier:
         div_class = f"{div_class} pf-div-{tier}"
+    if removable and profile_id and slot_index is not None:
+        remove_cell = html.Button(
+            "×",
+            id={
+                "type": "pf-depth-remove",
+                "id": profile_id,
+                "slot": str(slot_index),
+            },
+            n_clicks=0,
+            className="pf-depth-chart-remove-btn",
+            title=(
+                f"Remove from {slot_label or 'this slot'} only "
+                "(other slots keep this player)"
+            ),
+            **{
+                "aria-label": (
+                    f"Remove {name or 'player'} from "
+                    f"{slot_label or 'this formation slot'}"
+                )
+            },
+        )
     props = {
         "className": "pf-depth-chart-row" + (" is-odd" if index % 2 else ""),
         **({"data-profile-id": profile_id} if profile_id else {}),
@@ -925,6 +952,7 @@ def _depth_chart_player_row(
                 _depth_score_cell(row.get("Score"), settings, theme=theme),
                 className="pf-depth-chart-score",
             ),
+            remove_cell,
         ],
         **props,
     )
@@ -941,6 +969,7 @@ def _depth_chart_col_headers() -> html.Div:
             html.Span("Division", className="pf-depth-chart-div"),
             html.Span("Ovr", className="pf-depth-chart-ovr"),
             html.Span("Score", className="pf-depth-chart-score"),
+            html.Span("", className="pf-depth-chart-remove", **{"aria-hidden": "true"}),
         ],
         className="pf-depth-chart-cols",
     )
@@ -949,10 +978,11 @@ def _depth_chart_col_headers() -> html.Div:
 def _build_formation_xi_chart(
     slots: list[dict],
     *,
+    formation_id: str | None = None,
     settings=None,
     theme=None,
 ) -> html.Div:
-    """One starter per formation slot (shared role pools seed duplicate slots)."""
+    """One starter per formation slot (slot-specific depth lists)."""
     settings = us.normalize(settings)
     if not slots:
         return html.Div(
@@ -961,7 +991,9 @@ def _build_formation_xi_chart(
         )
     rows = []
     for index, slot in enumerate(slots):
-        ordered = profiles.ordered_profiles_for_role(slot["column"])
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, slot["index"], slot["column"]
+        )
         entry = ordered[0] if ordered else None
         rows.append(
             _depth_chart_player_row(
@@ -971,6 +1003,7 @@ def _build_formation_xi_chart(
                 settings=settings,
                 theme=theme,
                 slot_label=slot.get("display_label") or slot.get("label") or "",
+                slot_index=slot["index"],
                 draggable=False,
             )
         )
@@ -993,8 +1026,8 @@ def _build_formation_xi_chart(
                     ),
                     html.Span(
                         "Top player for each formation slot. "
-                        "Slots that share a role start with the same exported player. "
-                        "Click a Squad depth card to edit that role’s full ranking.",
+                        "Slots that share a role start with the same exported players, "
+                        "then can diverge. Click a Squad depth card to edit that slot.",
                         className="text-muted small",
                     ),
                 ],
@@ -1010,6 +1043,7 @@ def _build_formation_xi_chart(
 def _build_depth_chart(
     *,
     focus_roles=None,
+    formation_id: str | None = None,
     formation_slots: list[dict] | None = None,
     hybrids_only: bool = False,
     settings=None,
@@ -1021,30 +1055,35 @@ def _build_depth_chart(
 
     if not focus:
         if slots:
-            return _build_formation_xi_chart(slots, settings=settings, theme=theme)
+            return _build_formation_xi_chart(
+                slots, formation_id=formation_id, settings=settings, theme=theme
+            )
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
             className="text-muted small",
         )
 
     column = focus["role"]
+    slot_index = focus.get("slot", -1)
     slot_label = focus.get("label") or ""
-    if not slot_label and slots:
+    match = None
+    if slots:
         match = next(
             (
                 item
                 for item in slots
-                if int(item["index"]) == int(focus.get("slot", -1))
+                if int(item["index"]) == int(slot_index)
                 and item["column"] == column
             ),
             None,
         )
         if match:
-            slot_label = match.get("display_label") or match.get("label") or ""
-        else:
+            slot_label = match.get("display_label") or match.get("label") or slot_label
+        elif not slot_label:
             match = next((item for item in slots if item["column"] == column), None)
             if match:
                 slot_label = match.get("display_label") or match.get("label") or ""
+                slot_index = match["index"]
 
     if hybrids_only and "+" not in column:
         return html.Div(
@@ -1053,7 +1092,7 @@ def _build_depth_chart(
         )
 
     meta = _role_column_meta(column)
-    ordered = profiles.ordered_profiles_for_role(column)
+    ordered = profiles.ordered_profiles_for_slot(formation_id, slot_index, column)
     if not ordered:
         return html.Div(
             [
@@ -1101,6 +1140,7 @@ def _build_depth_chart(
             settings=settings,
             theme=theme,
             slot_label=slot_label,
+            slot_index=slot_index,
             draggable=True,
         )
         for idx, entry in enumerate(ordered)
@@ -1136,7 +1176,11 @@ def _build_depth_chart(
                             ),
                             dmc.Button(
                                 "Auto-rank by Score",
-                                id={"type": "pf-depth-auto-role", "role": column},
+                                id={
+                                    "type": "pf-depth-auto-role",
+                                    "role": column,
+                                    "slot": str(slot_index),
+                                },
                                 size="xs",
                                 variant="light",
                                 n_clicks=0,
@@ -1148,7 +1192,11 @@ def _build_depth_chart(
                     html.Div(
                         rows,
                         className="pf-depth-chart-list",
-                        **{"data-role": column},
+                        **{
+                            "data-role": column,
+                            "data-slot": str(slot_index),
+                            "data-formation": str(formation_id or ""),
+                        },
                     ),
                 ],
                 className="pf-depth-chart-section",
@@ -1470,14 +1518,17 @@ def _empty_slot_table_row(slot: dict, *, settings, theme=None) -> tuple[dict, di
 def _build_formation_xi_table_rows(
     slots: list[dict],
     *,
+    formation_id: str | None = None,
     settings=None,
     theme=None,
 ) -> tuple[list[dict], list[dict]]:
-    """One table row per formation slot using the shared role depth pool."""
+    """One table row per formation slot using that slot’s depth list."""
     rows = []
     tips = []
     for slot in slots:
-        ordered = profiles.ordered_profiles_for_role(slot["column"])
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, slot["index"], slot["column"]
+        )
         label = slot.get("display_label") or slot.get("label") or "—"
         if ordered:
             item, tip = _entry_to_role_table_row(
@@ -1656,6 +1707,84 @@ def _minutes_filter_panel(mins_req: int) -> html.Div:
     )
 
 
+def _depth_undo_label(item: dict) -> str:
+    entries = list(item.get("entries") or [])
+    name = ""
+    if entries:
+        name, _club = profiles.profile_identity(entries[0])
+    slot_label = str(item.get("slot_label") or "").strip()
+    role = str(item.get("role") or "").strip()
+    if not role and entries:
+        role = str(
+            entries[0].get("role_column")
+            or (entries[0].get("row") or {}).get("Role")
+            or ""
+        ).strip()
+    parts = [part for part in (name, slot_label or role) if part]
+    return " · ".join(parts) if parts else "Removed player"
+
+
+def _depth_undo_panel(items) -> html.Div:
+    rows = []
+    for item in list(items or [])[:DEPTH_UNDO_MAX]:
+        if not isinstance(item, dict):
+            continue
+        undo_id = str(item.get("undo_id") or "").strip()
+        if not undo_id:
+            continue
+        slot_label = str(item.get("slot_label") or item.get("role") or "").strip()
+        meta = f"Slot {slot_label}" if slot_label else "Formation slot"
+        rows.append(
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                _depth_undo_label(item),
+                                className="pf-depth-undo-name",
+                            ),
+                            html.Span(meta, className="pf-depth-undo-meta"),
+                        ],
+                        className="pf-depth-undo-copy",
+                    ),
+                    dmc.Button(
+                        "Restore",
+                        id={"type": "pf-depth-undo-restore", "id": undo_id},
+                        size="xs",
+                        variant="light",
+                        n_clicks=0,
+                    ),
+                ],
+                className="pf-depth-undo-row",
+            )
+        )
+    if not rows:
+        return html.Div(
+            "No recently removed players.",
+            className="text-muted small",
+        )
+    return html.Div(rows, className="pf-depth-undo-list")
+
+
+def _push_depth_undo(undo_items, payload: dict) -> list[dict]:
+    if not isinstance(payload, dict) or not payload.get("entries"):
+        return list(undo_items or [])
+    item = {
+        "undo_id": uuid.uuid4().hex[:12],
+        **payload,
+    }
+    next_items = [item]
+    for existing in list(undo_items or []):
+        if not isinstance(existing, dict):
+            continue
+        if existing.get("undo_id") == item["undo_id"]:
+            continue
+        next_items.append(existing)
+        if len(next_items) >= DEPTH_UNDO_MAX:
+            break
+    return next_items[:DEPTH_UNDO_MAX]
+
+
 def layout(**_kwargs):
     profiles.ensure_dirs()
     settings = us.load()
@@ -1664,6 +1793,7 @@ def layout(**_kwargs):
         [
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-depth-order", data=None),
+            dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
             dcc.Store(id="pf-view-mode", data="roles"),
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
@@ -1780,14 +1910,40 @@ def layout(**_kwargs):
                                             html.Span(
                                                 "Starting XI shows one player per formation slot "
                                                 "(Slot column). Focus a Squad depth card to rank "
-                                                "that role; drag to reorder. Shared roles share "
-                                                "the same player pool.",
+                                                "that slot; drag to reorder; × removes the player "
+                                                "from that slot only. Restore puts them back at "
+                                                "the bottom of that same slot.",
                                                 className="rs-depth-heading-hint",
                                             ),
                                         ],
                                         className="rs-depth-heading-copy pf-depth-chart-toolbar",
                                     ),
                                     html.Div(id="pf-depth-chart-body"),
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Span(
+                                                        "Recently removed",
+                                                        className="rs-depth-heading-label",
+                                                    ),
+                                                    html.Span(
+                                                        "Last 5 players removed from a formation slot. "
+                                                        "Restore adds them back to the bottom of that "
+                                                        "same slot’s depth (and the table if needed).",
+                                                        className="rs-depth-heading-hint",
+                                                    ),
+                                                ],
+                                                className="rs-depth-heading-copy",
+                                            ),
+                                            html.Div(
+                                                id="pf-depth-undo-body",
+                                                children=_depth_undo_panel([]),
+                                            ),
+                                        ],
+                                        id="pf-depth-undo-wrap",
+                                        className="pf-depth-undo-wrap",
+                                    ),
                                 ],
                                 id="pf-depth-chart-wrap",
                                 className="pf-depth-chart-wrap mb-3",
@@ -2158,16 +2314,32 @@ def refresh_profiles_table(
         columns = _role_table_columns(settings, include_slot=include_slot)
         if formation_slots and not focus:
             all_rows, tips = _build_formation_xi_table_rows(
-                formation_slots, settings=settings, theme=theme
+                formation_slots,
+                formation_id=formation_id,
+                settings=settings,
+                theme=theme,
             )
+            filtered = list(all_rows)
+        elif formation_slots and focus:
+            slot_ordered = profiles.ordered_profiles_for_slot(
+                formation_id, focus.get("slot", -1), focus["role"]
+            )
+            slot_label = focus.get("label") or "—"
+            all_rows = []
+            tips = []
+            for entry in slot_ordered:
+                item, tip = _entry_to_role_table_row(
+                    entry,
+                    settings=settings,
+                    theme=theme,
+                    slot_label=slot_label,
+                )
+                all_rows.append(item)
+                tips.append(tip)
             filtered = list(all_rows)
         else:
             all_rows, tips = _build_role_table_rows(settings, theme=theme)
             filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
-            if focus and include_slot:
-                slot_label = focus.get("label") or "—"
-                for row in filtered:
-                    row["Slot"] = slot_label
         style_data, style_header = _role_table_styles(theme)
         empty_msg = (
             "No role profiles yet. Mark players on Role scores and save — "
@@ -2198,6 +2370,7 @@ def refresh_profiles_table(
         depth_hidden = False
         chart = _build_depth_chart(
             focus_roles=focus_role,
+            formation_id=formation_id,
             formation_slots=formation_slots,
             settings=settings,
             theme=theme,
@@ -2431,6 +2604,7 @@ def apply_depth_chart_drag(order, rev):
     if not isinstance(order, dict):
         return no_update, no_update
     role = str(order.get("role") or "").strip()
+    formation_id = str(order.get("formation") or "").strip()
     ids = [
         str(pid).strip()
         for pid in (order.get("ids") or [])
@@ -2438,23 +2612,40 @@ def apply_depth_chart_drag(order, rev):
     ]
     if not role or not ids:
         return no_update, None
-    profiles.set_depth_ranks(role, ids)
+    slot_raw = order.get("slot")
+    if formation_id and slot_raw is not None and str(slot_raw).strip() != "":
+        try:
+            slot_index = int(slot_raw)
+        except (TypeError, ValueError):
+            slot_index = slot_raw
+        profiles.set_slot_order_ids(formation_id, slot_index, ids)
+    else:
+        profiles.set_depth_ranks(role, ids)
     return int(rev or 0) + 1, None
 
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
-    Input({"type": "pf-depth-auto-role", "role": ALL}, "n_clicks"),
+    Input({"type": "pf-depth-auto-role", "role": ALL, "slot": ALL}, "n_clicks"),
     State("pf-rev", "data"),
+    State("pf-formation-select", "value"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_role(n_clicks, rev):
+def auto_rank_depth_role(n_clicks, rev, formation_id):
     if not ctx.triggered_id or not clicked(n_clicks):
         return no_update
     role = str(ctx.triggered_id.get("role") or "").strip()
+    slot_raw = ctx.triggered_id.get("slot")
     if not role:
         return no_update
-    profiles.auto_rank_role_by_score(role)
+    try:
+        slot_index = int(slot_raw)
+    except (TypeError, ValueError):
+        slot_index = slot_raw
+    if formation_id:
+        profiles.auto_rank_slot_by_score(formation_id, slot_index, role)
+    else:
+        profiles.auto_rank_role_by_score(role)
     return int(rev or 0) + 1
 
 
@@ -2468,12 +2659,103 @@ def auto_rank_depth_role(n_clicks, rev):
 def auto_rank_depth_all(n_clicks, rev, formation_id):
     if not n_clicks:
         return no_update
-    cols = _formation_columns(formation_id)
-    if cols:
-        profiles.auto_rank_all_roles_by_score(cols)
+    slots = _formation_slots(formation_id)
+    if slots:
+        for slot in slots:
+            profiles.auto_rank_slot_by_score(
+                formation_id, slot["index"], slot["column"]
+            )
     else:
         profiles.auto_rank_all_roles_by_score()
     return int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-depth-undo", "data"),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-remove", "id": ALL, "slot": ALL}, "n_clicks"),
+    State("pf-depth-undo", "data"),
+    State("pf-rev", "data"),
+    State("pf-formation-select", "value"),
+    State("pf-focus-role", "data"),
+    prevent_initial_call=True,
+)
+def remove_from_depth_chart(n_clicks, undo_items, rev, formation_id, focus_role):
+    if not ctx.triggered_id or not clicked(n_clicks):
+        return no_update, no_update
+    profile_id = str(ctx.triggered_id.get("id") or "").strip()
+    slot_raw = ctx.triggered_id.get("slot")
+    if not profile_id or slot_raw is None:
+        return no_update, no_update
+    try:
+        slot_index = int(slot_raw)
+    except (TypeError, ValueError):
+        return no_update, no_update
+    role = ""
+    slot_label = ""
+    for slot in _formation_slots(formation_id):
+        if int(slot["index"]) == slot_index:
+            role = slot["column"]
+            slot_label = slot.get("display_label") or slot.get("label") or ""
+            break
+    if not role:
+        focus = _focus_slot(focus_role)
+        if focus and int(focus.get("slot", -1)) == slot_index:
+            role = focus["role"]
+            slot_label = focus.get("label") or ""
+    if not role or not formation_id:
+        return no_update, no_update
+    # Seed sibling slots that share this role first so they keep their own copy.
+    for slot in _formation_slots(formation_id):
+        if slot["column"] == role and int(slot["index"]) != slot_index:
+            profiles.get_slot_order_ids(
+                formation_id, slot["index"], role, seed=True
+            )
+    removed = profiles.remove_from_slot_depth(
+        formation_id, slot_index, profile_id, role
+    )
+    if not removed:
+        return no_update, no_update
+    removed["slot_label"] = slot_label
+    return _push_depth_undo(undo_items, removed), int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-depth-undo-body", "children"),
+    Input("pf-depth-undo", "data"),
+)
+def render_depth_undo(undo_items):
+    return _depth_undo_panel(undo_items)
+
+
+@callback(
+    Output("pf-depth-undo", "data", allow_duplicate=True),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-undo-restore", "id": ALL}, "n_clicks"),
+    State("pf-depth-undo", "data"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def restore_depth_undo(n_clicks, undo_items, rev):
+    if not ctx.triggered_id or not clicked(n_clicks):
+        return no_update, no_update
+    undo_id = str(ctx.triggered_id.get("id") or "").strip()
+    if not undo_id:
+        return no_update, no_update
+    items = list(undo_items or [])
+    match = None
+    remaining = []
+    for item in items:
+        if isinstance(item, dict) and str(item.get("undo_id") or "") == undo_id:
+            match = item
+            continue
+        remaining.append(item)
+    if not match:
+        return no_update, no_update
+    restored = profiles.restore_to_slot_depth(match)
+    if not restored:
+        return remaining, no_update
+    return remaining, int(rev or 0) + 1
 
 
 @callback(

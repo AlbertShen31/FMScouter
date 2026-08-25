@@ -6269,6 +6269,51 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     margin-top: 0.25rem;
 }
 
+.pf-depth-undo-wrap {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--app-line);
+}
+
+.pf-depth-undo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+}
+
+.pf-depth-undo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-card);
+}
+
+.pf-depth-undo-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.pf-depth-undo-name {
+    color: var(--app-text);
+    font-weight: 650;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-depth-undo-meta {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+}
+
 .pf-depth-chart-toolbar {
     display: flex;
     flex-direction: column;
@@ -6339,11 +6384,12 @@ body[data-theme="light"] .up-edit-modal .btn-close {
         minmax(7rem, 1.05fr)
         minmax(7.5rem, 1.15fr)
         4rem
-        4.25rem;
+        4.25rem
+        2.25rem;
     gap: 0.45rem 0.65rem;
     align-items: center;
     padding: 0.55rem 0.85rem;
-    min-width: 50rem;
+    min-width: 52rem;
     box-sizing: border-box;
 }
 
@@ -6481,6 +6527,45 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
 .pf-depth-chart-slot {
     font-weight: 700;
     color: var(--app-accent);
+}
+
+.pf-depth-chart-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    justify-self: center;
+}
+
+.pf-depth-chart-remove-btn {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--app-muted);
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 6px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-depth-chart-remove-btn:hover {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.12);
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+html[data-theme="light"] .pf-depth-chart-remove-btn:hover,
+body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
+    color: #b91c1c;
+    background: rgba(185, 28, 28, 0.1);
+    border-color: rgba(185, 28, 28, 0.28);
 }
 
 .pf-depth-chart-name.is-empty {

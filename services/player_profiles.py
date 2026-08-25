@@ -16,6 +16,8 @@ SAVED_FROM_LABELS = {
     "stats": "Player stats",
 }
 
+SLOT_DEPTH_PATH = PROFILES_DIR / "slot_depth.json"
+
 # Identity fields copied from a scored role shortlist row into the snapshot.
 ROLE_IDENTITY_KEYS = (
     "Name",
@@ -40,6 +42,222 @@ def ensure_dirs() -> None:
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     if not PROFILES_INDEX_PATH.exists():
         PROFILES_INDEX_PATH.write_text("[]\n", encoding="utf-8")
+    if not SLOT_DEPTH_PATH.exists():
+        SLOT_DEPTH_PATH.write_text("{}\n", encoding="utf-8")
+
+
+def _read_slot_depth() -> dict[str, Any]:
+    ensure_dirs()
+    try:
+        data = json.loads(SLOT_DEPTH_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_slot_depth(payload: dict[str, Any]) -> None:
+    ensure_dirs()
+    SLOT_DEPTH_PATH.write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def _slot_key(slot_index: int | str) -> str:
+    try:
+        return str(int(slot_index))
+    except (TypeError, ValueError):
+        return str(slot_index or "").strip()
+
+
+def get_slot_order_ids(
+    formation_id: str | None,
+    slot_index: int | str,
+    role_column: str,
+    *,
+    seed: bool = True,
+) -> list[str]:
+    """Return ordered profile ids for one formation slot (seed from role depth)."""
+    pack = str(formation_id or "").strip()
+    role = str(role_column or "").strip()
+    key = _slot_key(slot_index)
+    if not pack or not role or key == "":
+        return [
+            str(entry.get("id") or "")
+            for entry in ordered_profiles_for_role(role)
+            if str(entry.get("id") or "")
+        ]
+    store = _read_slot_depth()
+    pack_map = store.get(pack) if isinstance(store.get(pack), dict) else {}
+    raw = pack_map.get(key)
+    if isinstance(raw, list):
+        valid = {str(entry.get("id") or "") for entry in list_role_profiles()}
+        return [str(pid).strip() for pid in raw if str(pid or "").strip() in valid]
+    if not seed:
+        return []
+    seeded = [
+        str(entry.get("id") or "")
+        for entry in ordered_profiles_for_role(role)
+        if str(entry.get("id") or "")
+    ]
+    pack_map = dict(pack_map)
+    pack_map[key] = seeded
+    store[pack] = pack_map
+    _write_slot_depth(store)
+    return list(seeded)
+
+
+def set_slot_order_ids(
+    formation_id: str | None,
+    slot_index: int | str,
+    ordered_profile_ids: list[str],
+) -> None:
+    pack = str(formation_id or "").strip()
+    key = _slot_key(slot_index)
+    if not pack or key == "":
+        return
+    store = _read_slot_depth()
+    pack_map = dict(store.get(pack) or {}) if isinstance(store.get(pack), dict) else {}
+    pack_map[key] = [
+        str(pid).strip() for pid in ordered_profile_ids if str(pid or "").strip()
+    ]
+    store[pack] = pack_map
+    _write_slot_depth(store)
+
+
+def ordered_profiles_for_slot(
+    formation_id: str | None,
+    slot_index: int | str,
+    role_column: str,
+) -> list[dict[str, Any]]:
+    """Profiles for one formation slot in that slot’s depth order."""
+    role = str(role_column or "").strip()
+    ids = get_slot_order_ids(formation_id, slot_index, role, seed=True)
+    by_id = {
+        str(entry.get("id") or ""): entry
+        for entry in list_role_profiles()
+        if _entry_role(entry) == role
+    }
+    return [by_id[pid] for pid in ids if pid in by_id]
+
+
+def profile_used_in_formation_slots(
+    formation_id: str | None,
+    profile_id: str,
+    *,
+    except_slot: int | str | None = None,
+) -> bool:
+    pack = str(formation_id or "").strip()
+    pid = str(profile_id or "").strip()
+    if not pack or not pid:
+        return False
+    store = _read_slot_depth()
+    pack_map = store.get(pack) if isinstance(store.get(pack), dict) else {}
+    skip = _slot_key(except_slot) if except_slot is not None else None
+    for key, ids in pack_map.items():
+        if skip is not None and str(key) == skip:
+            continue
+        if not isinstance(ids, list):
+            continue
+        if pid in {str(item).strip() for item in ids}:
+            return True
+    return False
+
+
+def remove_from_slot_depth(
+    formation_id: str | None,
+    slot_index: int | str,
+    profile_id: str,
+    role_column: str,
+) -> dict[str, Any] | None:
+    """Remove a player from one slot’s depth only.
+
+    Deletes the shortlist row only when no other slot in this formation still
+    references the same profile id.
+    """
+    pack = str(formation_id or "").strip()
+    role = str(role_column or "").strip()
+    pid = str(profile_id or "").strip()
+    if not pack or not role or not pid:
+        return None
+    entry = get_profile(pid)
+    if not entry or _entry_role(entry) != role:
+        # Still allow removing a stale id from the slot list.
+        entry = None
+    ids = get_slot_order_ids(pack, slot_index, role, seed=True)
+    if pid not in ids:
+        return None
+    next_ids = [item for item in ids if item != pid]
+    set_slot_order_ids(pack, slot_index, next_ids)
+    deleted_from_table = False
+    snapshot = dict(entry) if entry else {"id": pid, "role_column": role}
+    if entry and not profile_used_in_formation_slots(
+        pack, pid, except_slot=slot_index
+    ):
+        popped = pop_profile(pid)
+        if popped:
+            snapshot = popped
+            deleted_from_table = True
+    return {
+        "formation_id": pack,
+        "slot": int(_slot_key(slot_index)) if _slot_key(slot_index).isdigit() else slot_index,
+        "role": role,
+        "entries": [snapshot],
+        "deleted_from_table": deleted_from_table,
+    }
+
+
+def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Restore undo item to the bottom of its formation slot depth."""
+    if not isinstance(item, dict):
+        return []
+    pack = str(item.get("formation_id") or "").strip()
+    role = str(item.get("role") or "").strip()
+    slot_index = item.get("slot")
+    entries = list(item.get("entries") or [])
+    if not pack or not role or slot_index is None or not entries:
+        return []
+    if item.get("deleted_from_table"):
+        restored = restore_profiles_at_depth_bottom(entries)
+    else:
+        restored = []
+        for raw in entries:
+            if not isinstance(raw, dict):
+                continue
+            pid = str(raw.get("id") or "").strip()
+            live = get_profile(pid) if pid else None
+            if live is None:
+                restored.extend(restore_profiles_at_depth_bottom([raw]))
+            else:
+                restored.append(dict(live))
+    if not restored:
+        return []
+    ids = get_slot_order_ids(pack, slot_index, role, seed=True)
+    for entry in restored:
+        pid = str(entry.get("id") or "").strip()
+        if not pid:
+            continue
+        ids = [item_id for item_id in ids if item_id != pid]
+        ids.append(pid)
+    set_slot_order_ids(pack, slot_index, ids)
+    return restored
+
+
+def auto_rank_slot_by_score(
+    formation_id: str | None,
+    slot_index: int | str,
+    role_column: str,
+) -> int:
+    """Reset one slot’s depth order from role Score ranking."""
+    role = str(role_column or "").strip()
+    if not role:
+        return 0
+    ordered = sorted(
+        [entry for entry in list_role_profiles() if _entry_role(entry) == role],
+        key=_score_name_sort_key,
+    )
+    ids = [str(entry.get("id") or "") for entry in ordered if entry.get("id")]
+    set_slot_order_ids(formation_id, slot_index, ids)
+    return len(ids)
 
 
 def _read_index() -> list[dict[str, Any]]:
@@ -524,20 +742,148 @@ def save_profiles(
 
 
 def delete_profile(profile_id: str) -> bool:
+    return bool(pop_profile(profile_id))
+
+
+def pop_profile(profile_id: str) -> dict[str, Any] | None:
+    """Remove one profile and return a copy for undo."""
+    pid = str(profile_id or "").strip()
+    if not pid:
+        return None
     index = _read_index()
-    removed_role = ""
+    removed: dict[str, Any] | None = None
     kept: list[dict[str, Any]] = []
     for entry in index:
-        if entry.get("id") == profile_id:
-            removed_role = _entry_role(entry)
+        if str(entry.get("id") or "").strip() == pid:
+            removed = dict(entry)
             continue
         kept.append(entry)
-    if len(kept) == len(index):
-        return False
+    if removed is None:
+        return None
     _write_index(kept)
-    if removed_role:
-        compact_depth_ranks(removed_role)
-    return True
+    role = _entry_role(removed)
+    if role:
+        compact_depth_ranks(role)
+    return removed
+
+
+def pop_profiles_for_depth_remove(
+    profile_id: str,
+    *,
+    related_role_columns: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Delete the clicked profile plus same-player profiles in related roles.
+
+    Returns deleted entry copies (for the undo tray). Related roles typically come
+    from the active formation so one remove clears every applicable formation role.
+    """
+    pid = str(profile_id or "").strip()
+    if not pid:
+        return []
+    target = get_profile(pid)
+    if not target:
+        return []
+    player_key = str(target.get("player_key") or "").strip()
+    roles = {
+        str(role).strip()
+        for role in (related_role_columns or [])
+        if str(role or "").strip()
+    }
+    roles.add(_entry_role(target))
+    roles.discard("")
+
+    index = _read_index()
+    removed: list[dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
+    touched_roles: set[str] = set()
+    for entry in index:
+        entry_role = _entry_role(entry)
+        same_player = player_key and str(entry.get("player_key") or "") == player_key
+        if same_player and entry_role in roles:
+            removed.append(dict(entry))
+            if entry_role:
+                touched_roles.add(entry_role)
+            continue
+        if str(entry.get("id") or "").strip() == pid:
+            removed.append(dict(entry))
+            if entry_role:
+                touched_roles.add(entry_role)
+            continue
+        kept.append(entry)
+    if not removed:
+        return []
+    _write_index(kept)
+    for role in sorted(touched_roles):
+        compact_depth_ranks(role)
+    return removed
+
+
+def restore_profiles_at_depth_bottom(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Re-insert profiles and place each at the bottom of its role depth chart."""
+    if not entries:
+        return []
+    index = _read_index()
+    by_key = {profile_upsert_key(entry): entry for entry in index}
+    existing_ids = {str(entry.get("id") or "") for entry in index}
+    restored: list[dict[str, Any]] = []
+    bottom_by_role: dict[str, list[str]] = {}
+
+    for raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        entry = dict(raw)
+        entry.pop("depth_excluded", None)
+        entry.pop("depth_rank", None)
+        player_key = str(entry.get("player_key") or "").strip()
+        if not player_key or not isinstance(entry.get("row"), dict):
+            continue
+        key = profile_upsert_key(entry)
+        existing = by_key.get(key)
+        if existing is not None:
+            # Refresh snapshot but keep living id for rank updates.
+            for field in (
+                "row",
+                "player",
+                "stats_player",
+                "source_label",
+                "saved_from",
+                "saved_at",
+                "note",
+                "file_id",
+                "role_column",
+            ):
+                if field in entry:
+                    existing[field] = entry[field]
+            existing.pop("depth_excluded", None)
+            existing.pop("depth_rank", None)
+            live = existing
+        else:
+            eid = str(entry.get("id") or "").strip()
+            if not eid or eid in existing_ids:
+                entry["id"] = uuid.uuid4().hex[:12]
+            index.append(entry)
+            by_key[key] = entry
+            existing_ids.add(str(entry["id"]))
+            live = entry
+        restored.append(dict(live))
+        role = _entry_role(live)
+        if role:
+            bottom_by_role.setdefault(role, []).append(str(live.get("id") or ""))
+
+    if restored:
+        _write_index(index)
+    for role, append_ids in bottom_by_role.items():
+        ordered = ordered_profiles_for_role(role)
+        ids = [
+            str(entry.get("id") or "")
+            for entry in ordered
+            if str(entry.get("id") or "") and str(entry.get("id") or "") not in append_ids
+        ]
+        for pid in append_ids:
+            if pid and pid not in ids:
+                ids.append(pid)
+        set_depth_ranks(role, ids)
+    return restored
 
 
 def _entry_role(entry: dict[str, Any]) -> str:

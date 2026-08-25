@@ -20,11 +20,13 @@
     });
   }
 
-  function publishOrder(list) {
+    function publishOrder(list) {
     if (!list || !window.dash_clientside || !dash_clientside.set_props) {
       return;
     }
     var role = list.getAttribute("data-role") || "";
+    var slot = list.getAttribute("data-slot") || "";
+    var formation = list.getAttribute("data-formation") || "";
     var ids = Array.prototype.map.call(
       list.querySelectorAll(".pf-depth-chart-row[data-profile-id]"),
       function (row) {
@@ -35,7 +37,13 @@
       return;
     }
     dash_clientside.set_props("pf-depth-order", {
-      data: { role: role, ids: ids, ts: Date.now() },
+      data: {
+        role: role,
+        slot: slot,
+        formation: formation,
+        ids: ids,
+        ts: Date.now(),
+      },
     });
   }
 
