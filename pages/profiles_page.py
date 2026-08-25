@@ -38,6 +38,25 @@ from components.player_table import (
     table_css,
 )
 from components.scouting_shell import clicked
+
+
+def _pattern_click_triggered() -> bool:
+    """True only for a real n_clicks change — not when ALL members remount/unmount."""
+    if not isinstance(ctx.triggered_id, dict):
+        return False
+    if not ctx.triggered:
+        return False
+    item = ctx.triggered[0] or {}
+    prop_id = str(item.get("prop_id") or "")
+    if not prop_id.endswith(".n_clicks"):
+        return False
+    value = item.get("value")
+    if value is None:
+        return False
+    try:
+        return int(value) > 0
+    except (TypeError, ValueError):
+        return False
 from scoring.comparison import score_display
 from scoring.division_tiers import apply_division_tier, classify_division
 from scoring.role_scorer import (
@@ -250,6 +269,16 @@ def _default_sort_by(mode: str) -> list[dict]:
     """Empty sort_by → mode default in _sort_profile_rows (roles: role/score/ovr)."""
     del mode
     return []
+
+
+def _sort_by_signature(sort_by) -> tuple:
+    """Comparable fingerprint so we can avoid echoing sort_by back to the table."""
+    if not sort_by:
+        return ()
+    item = sort_by[0] if isinstance(sort_by, (list, tuple)) else sort_by
+    if not isinstance(item, dict):
+        return ()
+    return (str(item.get("column_id") or ""), str(item.get("direction") or ""))
 
 
 def _coerce_sort_by(
@@ -1794,11 +1823,12 @@ def _build_depth_chart(
                                             "role": column,
                                             "slot": str(slot_index),
                                         },
-                                        size="xs",
-                                        variant="light",
+                                        size="sm",
+                                        variant="filled",
                                         color="red",
                                         n_clicks=0,
                                         disabled=True,
+                                        className="pf-depth-role-btn pf-depth-role-btn-remove",
                                     ),
                                     dmc.Button(
                                         "Auto-rank by Score",
@@ -1807,9 +1837,11 @@ def _build_depth_chart(
                                             "role": column,
                                             "slot": str(slot_index),
                                         },
-                                        size="xs",
-                                        variant="light",
+                                        size="sm",
+                                        variant="filled",
+                                        color="teal",
                                         n_clicks=0,
+                                        className="pf-depth-role-btn pf-depth-role-btn-rank",
                                     ),
                                 ],
                                 className="pf-depth-chart-role-actions",
@@ -2527,8 +2559,10 @@ def layout(**_kwargs):
                                                                 "Auto-rank all roles",
                                                                 id="pf-depth-auto-all",
                                                                 size="sm",
-                                                                variant="light",
+                                                                variant="filled",
+                                                                color="teal",
                                                                 n_clicks=0,
+                                                                className="pf-depth-role-btn pf-depth-role-btn-rank",
                                                             ),
                                                         ],
                                                         className=(
@@ -2880,6 +2914,11 @@ def refresh_profiles_table(
     sort_memory,
 ):
     settings = us.normalize(settings)
+    # Keep GK Ovr / category % in sync with adaptive xGP/90 ceilings.
+    try:
+        profiles.refresh_goalkeeper_percentiles(settings)
+    except Exception:
+        pass
     try:
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
@@ -2973,6 +3012,8 @@ def refresh_profiles_table(
             )
         ]
     depth_hidden = False
+    # Stable mount id per rev — a fresh uuid every refresh remounts the
+    # sortable depth list and can stack with sort_by echo into a React loop.
     chart = _mount_depth_chart(
         _build_depth_chart(
             focus_roles=focus_role,
@@ -2982,21 +3023,31 @@ def refresh_profiles_table(
             theme=theme,
             minutes_required=depth_minutes_f,
         ),
-        epoch=f"r{int(_rev or 0)}-{uuid.uuid4().hex[:8]}",
+        epoch=f"r{int(_rev or 0)}",
     )
     chart_hidden = not formation_slots and not focus
 
     col_ids = {col["id"] for col in columns}
+    sort_in = list(sort_by) if sort_by else []
     if reset_sort:
-        sort_by = []
+        sort_in = []
     sort_by = _coerce_sort_by(
-        sort_by,
+        sort_in,
         sort_mode,
         col_ids,
         triggered_id=ctx.triggered_id,
         previous=sort_memory,
         reset_default=reset_sort,
     )
+    # sort_by is both Input and Output. Echoing it on every pf-rev refresh
+    # re-fires this callback and remounts the depth chart until React hits
+    # "Maximum update depth exceeded".
+    if reset_sort or ctx.triggered_id == "pf-table":
+        sort_output = sort_by
+    elif _sort_by_signature(sort_by) != _sort_by_signature(sort_in):
+        sort_output = sort_by
+    else:
+        sort_output = no_update
     filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
 
     display_rows = []
@@ -3035,7 +3086,7 @@ def refresh_profiles_table(
             0,
             [],
             [],
-            sort_by,
+            sort_output,
             sort_by,
             caption,
             html.Div(empty_msg, className="text-muted small"),
@@ -3059,7 +3110,7 @@ def refresh_profiles_table(
             0,
             [],
             [],
-            sort_by,
+            sort_output,
             sort_by,
             caption,
             html.Div(
@@ -3085,7 +3136,7 @@ def refresh_profiles_table(
         0,
         [],
         [],
-        sort_by,
+        sort_output,
         sort_by,
         caption,
         None,
@@ -3381,7 +3432,7 @@ def apply_depth_chart_drag(
 def auto_rank_depth_role(
     n_clicks, rev, formation_id, focus_role, depth_minutes, settings, theme
 ):
-    if not ctx.triggered_id or not clicked(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update
     role = str(ctx.triggered_id.get("role") or "").strip()
     slot_raw = ctx.triggered_id.get("slot")
@@ -3529,7 +3580,7 @@ def _remove_ids_from_slot(
 def remove_from_depth_chart(
     n_clicks, undo_items, rev, formation_id, focus_role, settings
 ):
-    if not ctx.triggered_id or not clicked(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update
     profile_id = str(ctx.triggered_id.get("id") or "").strip()
     slot_raw = ctx.triggered_id.get("slot")
@@ -3637,7 +3688,7 @@ def remove_selected_from_depth_chart(
     focus_role,
     settings,
 ):
-    if not ctx.triggered_id or not clicked(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update
     slot_raw = ctx.triggered_id.get("slot")
     role = str(ctx.triggered_id.get("role") or "").strip()

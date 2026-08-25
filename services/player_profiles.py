@@ -683,6 +683,145 @@ def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
         return []
 
 
+def _entry_looks_like_gk(entry: dict[str, Any] | None) -> bool:
+    """True when a saved profile is a goalkeeper (stats group or position text)."""
+    from scoring.stats_scorer import is_gk_group
+
+    if not isinstance(entry, dict):
+        return False
+    for key in ("stats_player", "player"):
+        blob = entry.get(key)
+        if isinstance(blob, dict) and is_gk_group(blob.get("pos_group")):
+            return True
+    row = entry.get("row") or {}
+    for field in ("Position", "Best Pos"):
+        text = str(row.get(field) or "").strip().upper()
+        if not text:
+            continue
+        if text == "GK" or text.startswith("GK ") or text.startswith("GK/"):
+            return True
+    return False
+
+
+def refresh_goalkeeper_percentiles(settings=None) -> int:
+    """Recompute stored GK percentiles with the adaptive xGP/90 ceiling.
+
+    Profiles keep snapshot percentiles from save time; after the xGP/90 p100
+    change those snapshots stay stale until refreshed. Returns how many
+    profiles were updated.
+    """
+    import services.ui_settings as us
+    from scoring.stats_scorer import adaptive_metric_p100_map, is_gk_group
+
+    settings = us.normalize(settings)
+    thresh = settings.get("stats_thresholds")
+    index = _read_index()
+    gk_entries = [entry for entry in index if _entry_looks_like_gk(entry)]
+    if not gk_entries:
+        return 0
+
+    by_file: dict[str, list[dict[str, Any]]] = {}
+    orphan: list[dict[str, Any]] = []
+    for entry in gk_entries:
+        file_id = str(entry.get("file_id") or "").strip()
+        if file_id:
+            by_file.setdefault(file_id, []).append(entry)
+        else:
+            orphan.append(entry)
+
+    cohort_cache: dict[str, list[dict[str, Any]]] = {}
+    p100_cache: dict[str, dict[str, float]] = {}
+    updated = 0
+
+    def _cohort(file_id: str) -> tuple[list[dict[str, Any]], dict[str, float]]:
+        if file_id not in cohort_cache:
+            players = load_stats_players_for_file(file_id)
+            cohort_cache[file_id] = players
+            p100_cache[file_id] = adaptive_metric_p100_map(players, thresh)
+        return cohort_cache[file_id], p100_cache[file_id]
+
+    def _stats_for(
+        entry: dict[str, Any],
+        cohort: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        embedded = entry.get("stats_player")
+        if isinstance(embedded, dict) and (
+            embedded.get("stats") or is_gk_group(embedded.get("pos_group"))
+        ):
+            return embedded
+        by_key = {
+            stats_player_key(player): player
+            for player in cohort
+            if stats_player_key(player)
+        }
+        hit = by_key.get(str(entry.get("player_key") or "").strip())
+        if isinstance(hit, dict):
+            return hit
+        return None
+
+    def _apply(
+        entry: dict[str, Any],
+        cohort: list[dict[str, Any]],
+        metric_p100: dict[str, float],
+    ) -> bool:
+        stats_player = _stats_for(entry, cohort)
+        if not isinstance(stats_player, dict):
+            return False
+        band_player = dict(stats_player)
+        if not is_gk_group(band_player.get("pos_group")):
+            band_player["pos_group"] = "gk"
+        pct = percentile_fields_from_stats_player(
+            band_player, settings=settings, metric_p100=metric_p100
+        )
+        if not pct:
+            return False
+        row = dict(entry.get("row") or {})
+        changed = False
+        for key, value in pct.items():
+            if row.get(key) != value:
+                row[key] = value
+                changed = True
+        if not changed:
+            return False
+        entry["row"] = row
+        entry["stats_player"] = band_player
+        return True
+
+    def _apply_embedded_only(entry: dict[str, Any]) -> bool:
+        """Recompute from the snapshot alone when the upload cohort is gone."""
+        stats_player = entry.get("stats_player")
+        if not isinstance(stats_player, dict):
+            return False
+        cohort = [stats_player]
+        metric_p100 = adaptive_metric_p100_map(cohort, thresh)
+        return _apply(entry, cohort, metric_p100)
+
+    for file_id, entries in by_file.items():
+        cohort, metric_p100 = _cohort(file_id)
+        if not cohort:
+            for entry in entries:
+                if _apply_embedded_only(entry):
+                    updated += 1
+            continue
+        for entry in entries:
+            if _stats_for(entry, cohort) is not None:
+                if _apply(entry, cohort, metric_p100):
+                    updated += 1
+            elif _apply_embedded_only(entry):
+                # Cohort loaded but this keeper wasn't in it — use snapshot.
+                updated += 1
+
+    # No source file: still recompute against the embedded player alone so the
+    # settings ceiling applies; dataset max collapses to that keeper.
+    for entry in orphan:
+        if _apply_embedded_only(entry):
+            updated += 1
+
+    if updated:
+        _write_index(index)
+    return updated
+
+
 def list_profiles() -> list[dict[str, Any]]:
     entries = _read_index()
     entries.sort(key=lambda item: item.get("saved_at") or "", reverse=True)

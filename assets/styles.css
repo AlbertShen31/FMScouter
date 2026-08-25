@@ -6718,8 +6718,56 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-depth-chart-role-actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
+}
+
+.pf-depth-role-btn.mantine-Button-root {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.pf-depth-role-btn-remove.mantine-Button-root:not(:disabled) {
+    background: color-mix(in srgb, var(--app-danger) 88%, #000);
+    border: 1px solid color-mix(in srgb, var(--app-danger) 55%, transparent);
+    color: #fff;
+}
+
+.pf-depth-role-btn-remove.mantine-Button-root:not(:disabled):hover {
+    background: var(--app-danger);
+}
+
+.pf-depth-role-btn-rank.mantine-Button-root {
+    background: color-mix(in srgb, var(--app-accent) 22%, var(--app-elev));
+    border: 1px solid color-mix(in srgb, var(--app-accent) 55%, transparent);
+    color: var(--app-text);
+}
+
+.pf-depth-role-btn-rank.mantine-Button-root:hover {
+    background: color-mix(in srgb, var(--app-accent) 34%, var(--app-elev));
+    border-color: var(--app-accent);
+}
+
+html[data-theme="light"] .pf-depth-role-btn-remove.mantine-Button-root:not(:disabled),
+body[data-theme="light"] .pf-depth-role-btn-remove.mantine-Button-root:not(:disabled) {
+    background: #dc2626;
+    border-color: #b91c1c;
+    color: #fff;
+    box-shadow: none;
+}
+
+html[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root,
+body[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root {
+    background: color-mix(in srgb, var(--app-accent) 28%, #fff);
+    border-color: color-mix(in srgb, var(--app-accent) 50%, #64748b);
+    color: #0f172a;
+    box-shadow: none;
+}
+
+html[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root:hover,
+body[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root:hover {
+    background: color-mix(in srgb, var(--app-accent) 42%, #fff);
 }
 
 .pf-depth-chart-role-title {
