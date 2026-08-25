@@ -6407,6 +6407,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
         minmax(9rem, 1.5fr)
         minmax(4.5rem, 0.7fr)
         minmax(5.5rem, 0.85fr)
+        4.25rem
         minmax(7rem, 1.05fr)
         minmax(7.5rem, 1.15fr)
         4rem
@@ -6415,7 +6416,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     gap: 0.45rem 0.65rem;
     align-items: center;
     padding: 0.55rem 0.85rem;
-    min-width: 52rem;
+    min-width: 56rem;
     box-sizing: border-box;
 }
 
@@ -6431,6 +6432,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-depth-chart-cols .pf-depth-chart-rank,
+.pf-depth-chart-cols .pf-depth-chart-feet,
 .pf-depth-chart-cols .pf-depth-chart-div,
 .pf-depth-chart-cols .pf-depth-chart-ovr,
 .pf-depth-chart-cols .pf-depth-chart-score {
@@ -6548,6 +6550,36 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
     word-break: break-word;
     color: var(--app-text);
     text-align: left;
+}
+
+.pf-depth-chart-feet {
+    justify-self: center;
+    text-align: center;
+    line-height: 0;
+    color: var(--app-text);
+}
+
+.pf-depth-chart-feet p {
+    margin: 0 !important;
+}
+
+.pf-depth-chart-feet .rs-feet-cell {
+    display: block;
+    width: 100%;
+    text-align: center;
+    line-height: 0;
+}
+
+.pf-depth-chart-feet .rs-feet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    vertical-align: middle;
+}
+
+.pf-depth-chart-feet .rs-foot-icon {
+    display: block;
 }
 
 .pf-depth-chart-slot {
@@ -6734,6 +6766,7 @@ body[data-theme="light"] .pf-depth-chart-section {
         grid-template-areas:
             "rank name"
             "rank pos"
+            "rank feet"
             "rank club"
             "rank div"
             "rank ovr"
@@ -6752,6 +6785,11 @@ body[data-theme="light"] .pf-depth-chart-section {
 
     .pf-depth-chart-pos {
         grid-area: pos;
+    }
+
+    .pf-depth-chart-feet {
+        grid-area: feet;
+        justify-self: start;
     }
 
     .pf-depth-chart-club {

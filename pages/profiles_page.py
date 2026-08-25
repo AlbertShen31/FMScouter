@@ -1004,6 +1004,7 @@ def _depth_chart_player_row(
                 html.Span("—", className="pf-depth-chart-name is-empty"),
                 html.Span(slot_label or "—", className=slot_class, title=slot_title),
                 html.Span("—", className="pf-depth-chart-pos"),
+                html.Span("—", className="pf-depth-chart-feet"),
                 html.Span("—", className="pf-depth-chart-club"),
                 html.Span("—", className="pf-depth-chart-div"),
                 html.Div(
@@ -1083,6 +1084,11 @@ def _depth_chart_player_row(
             ),
             html.Span(slot_label or "—", className=slot_class, title=slot_title),
             html.Span(position, className="pf-depth-chart-pos", title=position),
+            dcc.Markdown(
+                feet_cell(row),
+                dangerously_allow_html=True,
+                className="pf-depth-chart-feet",
+            ),
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=division),
             html.Div(
@@ -1106,6 +1112,7 @@ def _depth_chart_col_headers() -> html.Div:
             html.Span("Name", className="pf-depth-chart-name-label"),
             html.Span("Slot", className="pf-depth-chart-slot"),
             html.Span("Pos", className="pf-depth-chart-pos"),
+            html.Span("Feet", className="pf-depth-chart-feet"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
             html.Span("Ovr", className="pf-depth-chart-ovr"),
