@@ -678,6 +678,36 @@ def move_depth_rank(profile_id: str, direction: int) -> bool:
     return True
 
 
+def place_depth_rank(profile_id: str, target_rank: int) -> bool:
+    """Move profile to a 1-based rank within its role, then renumber 1…n."""
+    pid = str(profile_id or "").strip()
+    try:
+        want = int(target_rank)
+    except (TypeError, ValueError):
+        return False
+    if not pid or want < 1:
+        return False
+    profile = get_profile(pid)
+    if not profile:
+        return False
+    role = _entry_role(profile)
+    if not role:
+        return False
+    ordered = ordered_profiles_for_role(role)
+    ids = [str(entry.get("id") or "").strip() for entry in ordered]
+    ids = [eid for eid in ids if eid]
+    if pid not in ids:
+        return False
+    current = ids.index(pid) + 1
+    if current == want:
+        return False
+    ids.remove(pid)
+    insert_at = min(max(want, 1), len(ids) + 1) - 1
+    ids.insert(insert_at, pid)
+    set_depth_ranks(role, ids)
+    return True
+
+
 def role_score_from_profile(profile: dict[str, Any]) -> dict[str, Any]:
     row = profile.get("row") or {}
     role = profile.get("role_column") or row.get("Role") or ""

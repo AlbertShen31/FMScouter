@@ -5863,6 +5863,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     position: relative;
     z-index: 0;
     pointer-events: none;
+    box-sizing: border-box;
 }
 
 #pf-table .dash-spreadsheet-inner th .column-header--sort {
@@ -5876,22 +5877,77 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     display: flex !important;
     align-items: center;
     justify-content: flex-end;
-    padding-right: 8px;
+    padding-right: 6px;
     box-sizing: border-box;
     cursor: pointer;
     z-index: 2;
+    /* Overlay only — do not take layout space or shift the title. */
+    pointer-events: auto;
 }
 
-#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) .column-header-name,
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Role"] .column-header-name {
+/* Left-align only Name / Position / Club; center every other header + cell. */
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"] .column-header-name,
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"] .column-header-name,
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"] .column-header-name {
+    text-align: left !important;
+    width: 100%;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) .column-header-name {
     text-align: center !important;
     width: 100%;
     white-space: pre-line !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
 }
 
-#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
-#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
+/* Equal horizontal padding on centered headers/cells so titles match values.
+   Left columns keep a bit more right padding so text clears the sort chevron. */
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"] {
+    text-align: left !important;
+    padding-left: 10px !important;
+    padding-right: 22px !important;
+}
+
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] {
+    text-align: left !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]),
+#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) {
     text-align: center !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+}
+
+#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) .dash-cell-value,
+#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) .markdown,
+#pf-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]) .markdown p {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    text-align: center !important;
+}
+
+/* Let Profiles table use the full shell width; columns keep min widths and grow. */
+#pf-table-shell,
+#pf-table-shell .dash-spreadsheet-container,
+#pf-table-shell .dash-spreadsheet-inner,
+#pf-table-shell .dt-table-container {
+    width: 100% !important;
+    max-width: 100%;
+}
+
+#pf-table-shell .dash-spreadsheet-inner table {
+    width: 100% !important;
+    table-layout: auto;
 }
 
 /* Profiles page */
@@ -6000,8 +6056,8 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 .pf-role-cell {
     font-weight: 600;
-    color: var(--app-text);
     max-width: 10rem;
+    white-space: nowrap;
 }
 .pf-score-val,
 .pf-pct-val {
@@ -6042,7 +6098,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-depth-chart-wrap {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
 }
 
 .pf-depth-chart-toolbar {
@@ -6051,75 +6107,171 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .pf-depth-chart-sections {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
+    display: block;
+    width: 100%;
 }
 
 .pf-depth-chart-section {
-    background: var(--app-card);
     border: 1px solid var(--app-line);
-    border-radius: 10px;
-    padding: 0.75rem 0.85rem 0.85rem;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--app-card);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+    width: 100%;
 }
 
 .pf-depth-chart-role-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.65rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.7rem 1rem;
+    background: var(--app-head);
+    border-bottom: 1px solid var(--app-line);
 }
 
 .pf-depth-chart-role-title {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     min-width: 0;
     flex-wrap: wrap;
 }
 
 .pf-depth-chart-role-name {
     font-weight: 700;
-    color: var(--app-text);
+    font-size: 0.95rem;
 }
 
 .pf-depth-chart-count {
     color: var(--app-muted);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-variant-numeric: tabular-nums;
 }
 
 .pf-depth-chart-list {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0;
+    overflow-x: auto;
+}
+
+.pf-depth-chart-cols,
+.pf-depth-chart-row {
+    display: grid;
+    grid-template-columns:
+        3.25rem
+        minmax(9rem, 1.5fr)
+        minmax(5.5rem, 0.85fr)
+        minmax(7rem, 1.05fr)
+        minmax(7.5rem, 1.15fr)
+        4rem
+        4.25rem;
+    gap: 0.45rem 0.65rem;
+    align-items: center;
+    padding: 0.55rem 0.85rem;
+    min-width: 44rem;
+    box-sizing: border-box;
+}
+
+.pf-depth-chart-cols {
+    background: var(--app-head);
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--app-line);
+    min-height: 38px;
+}
+
+.pf-depth-chart-cols .pf-depth-chart-rank,
+.pf-depth-chart-cols .pf-depth-chart-div,
+.pf-depth-chart-cols .pf-depth-chart-ovr,
+.pf-depth-chart-cols .pf-depth-chart-score {
+    text-align: center;
+}
+
+.pf-depth-chart-cols .pf-depth-chart-name-label,
+.pf-depth-chart-cols .pf-depth-chart-pos,
+.pf-depth-chart-cols .pf-depth-chart-club {
+    text-align: left;
+    color: var(--app-muted);
 }
 
 .pf-depth-chart-row {
-    display: grid;
-    grid-template-columns: 2rem minmax(0, 1.2fr) minmax(0, 0.9fr) 3.25rem auto;
-    gap: 0.4rem;
-    align-items: center;
-    padding: 0.35rem 0.4rem;
-    border-radius: 6px;
-    background: var(--app-input);
-    border: 1px solid transparent;
+    background: var(--app-card);
+    border-bottom: 1px solid var(--app-line);
+    min-height: 38px;
+    vertical-align: middle;
+}
+
+.pf-depth-chart-row.is-odd {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="light"] .pf-depth-chart-row.is-odd,
+body[data-theme="light"] .pf-depth-chart-row.is-odd {
+    background: rgba(0, 0, 0, 0.025);
+}
+
+.pf-depth-chart-row:last-child {
+    border-bottom: none;
 }
 
 .pf-depth-chart-row:hover {
-    border-color: var(--app-line);
+    background: var(--table-hover-bg) !important;
 }
 
 .pf-depth-chart-rank {
-    font-weight: 800;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: var(--app-muted);
+    color: var(--app-text);
     text-align: center;
+    font-size: 0.92rem;
+}
+
+.pf-depth-chart-rank-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    justify-self: center;
+    cursor: grab;
+    user-select: none;
+}
+
+.pf-depth-chart-grip {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+    letter-spacing: -0.12em;
+    line-height: 1;
+}
+
+.pf-depth-chart-row {
+    cursor: grab;
+}
+
+.pf-depth-chart-row.is-dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+}
+
+.pf-depth-chart-row.is-drop-before {
+    box-shadow: inset 0 2px 0 0 var(--app-accent);
+}
+
+.pf-depth-chart-row.is-drop-after {
+    box-shadow: inset 0 -2px 0 0 var(--app-accent);
+}
+
+.pf-depth-chart-row .pf-depth-chart-name {
+    cursor: pointer;
 }
 
 .pf-depth-chart-name {
@@ -6130,92 +6282,161 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     margin: 0;
     text-align: left;
     color: var(--app-accent);
-    font-weight: 650;
+    font-weight: 600;
+    font-size: 0.92rem;
+    line-height: 1.3;
     cursor: pointer;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .pf-depth-chart-name:hover {
-    text-decoration: underline;
+    opacity: 0.9;
 }
 
+.pf-depth-chart-pos,
 .pf-depth-chart-club {
-    color: var(--app-muted);
-    font-size: 0.85rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.pf-depth-chart-score {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-.pf-depth-chart-score p {
-    margin: 0;
-}
-
-.pf-depth-chart-moves {
-    display: flex;
-    gap: 0.2rem;
-}
-
-.pf-depth-chart-move {
-    appearance: none;
-    width: 1.6rem;
-    height: 1.6rem;
-    border-radius: 4px;
-    border: 1px solid var(--app-line);
-    background: var(--app-card);
+    font-size: 0.9rem;
+    line-height: 1.3;
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
     color: var(--app-text);
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
+    text-align: left;
 }
 
-.pf-depth-chart-move:hover:not(:disabled) {
-    border-color: var(--app-accent);
-    color: var(--app-accent);
+.pf-depth-chart-div {
+    font-size: 0.9rem;
+    line-height: 1.3;
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
+    font-weight: 600;
+    max-width: 14rem;
+    text-align: center;
+    justify-self: center;
+    color: var(--app-text);
 }
 
-.pf-depth-chart-move:disabled {
-    opacity: 0.35;
-    cursor: default;
+.pf-depth-chart-div.pf-div-top,
+.pf-depth-chart-div.pf-div-pro,
+.pf-depth-chart-div.pf-div-amateur {
+    display: inline-block;
+    padding: 0.12rem 0.45rem;
+    border-radius: 6px;
+    font-weight: 700;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.pf-depth-chart-div.pf-div-top {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ade80;
+}
+
+.pf-depth-chart-div.pf-div-pro {
+    background: rgba(245, 158, 11, 0.20);
+    color: #fbbf24;
+}
+
+.pf-depth-chart-div.pf-div-amateur {
+    background: rgba(239, 68, 68, 0.20);
+    color: #f87171;
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-top,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-top {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-pro,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-pro {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-amateur,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.pf-depth-chart-ovr,
+.pf-depth-chart-score {
+    text-align: center;
+    justify-self: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.92rem;
+}
+
+.pf-depth-chart-metric {
+    display: inline-block;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
 }
 
 html[data-theme="light"] .pf-depth-chart-section,
 body[data-theme="light"] .pf-depth-chart-section {
     background: var(--app-card);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 @media (max-width: 720px) {
+    .pf-depth-chart-list,
+    .pf-depth-chart-cols,
     .pf-depth-chart-row {
-        grid-template-columns: 2rem minmax(0, 1fr) auto;
-        grid-template-areas:
-            "rank name moves"
-            "rank club score";
+        min-width: 0;
     }
 
-    .pf-depth-chart-rank {
+    .pf-depth-chart-cols {
+        display: none;
+    }
+
+    .pf-depth-chart-row {
+        grid-template-columns: 3.25rem minmax(0, 1fr);
+        grid-template-areas:
+            "rank name"
+            "rank pos"
+            "rank club"
+            "rank div"
+            "rank ovr"
+            "rank score";
+        min-width: 0;
+    }
+
+    .pf-depth-chart-rank-cell {
         grid-area: rank;
+        align-self: start;
     }
 
     .pf-depth-chart-name {
         grid-area: name;
     }
 
+    .pf-depth-chart-pos {
+        grid-area: pos;
+    }
+
     .pf-depth-chart-club {
         grid-area: club;
     }
 
-    .pf-depth-chart-score {
-        grid-area: score;
+    .pf-depth-chart-div {
+        grid-area: div;
+        justify-self: start;
     }
 
-    .pf-depth-chart-moves {
-        grid-area: moves;
+    .pf-depth-chart-ovr {
+        grid-area: ovr;
+        justify-self: start;
+    }
+
+    .pf-depth-chart-score {
+        grid-area: score;
+        justify-self: start;
     }
 }
