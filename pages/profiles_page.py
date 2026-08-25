@@ -83,6 +83,9 @@ def _pct_header_name(col_id: str) -> str:
     if col_id == OVERALL_PCT_COL["id"]:
         return OVERALL_PCT_COL["abbr"]
     text = category_abbr(col_id, group=None, dual_final_third=True)
+    # Keep F3 / GK on one line; other dual labels can still wrap if needed.
+    if col_id == "final_third":
+        return text.replace(" / ", "/")
     return text.replace(" / ", " /\n")
 
 
@@ -940,58 +943,60 @@ def _percentile_table_columns(settings) -> list[dict]:
 # Left-aligned identity columns on Profiles (everything else is centered).
 _PF_LEFT_COLS = ("Name", "Position", "Club")
 
-# Minimum widths sized so uppercase headers + sort padding and cell content fit.
-# No maxWidth — fill_width lets columns grow with the table.
+# Minimum widths: as tight as headers + typical cell content allow.
+# No fixed widths — fill_width can still grow columns into spare space.
 _PF_COL_MIN_WIDTHS: dict[str, str] = {
-    "Name": "160px",
-    "Position": "92px",
-    "Club": "120px",
-    "Division": "108px",
-    "Age": "56px",
-    "Height": "52px",
-    "Feet": "84px",
-    "Rec": "56px",
-    "Injury": "52px",
-    "Nation": "80px",
-    "Inf": "52px",
-    "Best Pos": "56px",
-    "Role": "88px",
-    "Rank": "64px",
-    "Score": "72px",
-    "Minutes": "64px",
-    "overall": "56px",
-    "defending": "56px",
-    "final_third": "64px",
-    "possession": "64px",
+    "Name": "120px",
+    "Position": "72px",
+    "Club": "88px",
+    "Division": "80px",
+    "Age": "42px",
+    "Height": "44px",
+    "Feet": "72px",
+    "Rec": "42px",
+    "Injury": "40px",
+    "Nation": "64px",
+    "Inf": "40px",
+    "Best Pos": "48px",
+    "Role": "56px",
+    "Rank": "48px",
+    "Score": "52px",
+    "Minutes": "48px",
+    "overall": "44px",
+    "defending": "44px",
+    "final_third": "72px",
+    "possession": "48px",
 }
+
+
+_PF_NOWRAP_COLS = ("Name", "Position", "Club", "Division")
 
 
 def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
     """Shared min-width / wrap / align box for Profiles headers and cells."""
     align = "left" if column_id in _PF_LEFT_COLS else "center"
+    nowrap = column_id in _PF_NOWRAP_COLS
     box: dict = {
         "textAlign": align,
-        "minWidth": _PF_COL_MIN_WIDTHS.get(column_id, "64px"),
-        "whiteSpace": "pre-line" if header else "normal",
+        "minWidth": _PF_COL_MIN_WIDTHS.get(column_id, "44px"),
+        "whiteSpace": "nowrap" if nowrap else ("pre-line" if header else "normal"),
         "overflow": "visible",
-        "lineHeight": "1.2",
+        "lineHeight": "1.15",
+        "padding": "6px 4px",
     }
-    # Clear shared identity maxWidth caps so columns can grow with the table.
-    if column_id == "Name":
-        box["maxWidth"] = "280px"
-    elif column_id == "Club":
-        box["maxWidth"] = "220px"
-    elif column_id == "Position":
-        box["maxWidth"] = "180px"
-    else:
+    # Text identity cols grow with content (one line); metrics stay compact.
+    if nowrap:
         box["maxWidth"] = "none"
+        if column_id == "Name":
+            box["padding"] = "6px 10px 6px 6px" if header else "6px 6px"
+    else:
+        box["width"] = _PF_COL_MIN_WIDTHS.get(column_id, "44px")
+        box["maxWidth"] = _PF_COL_MIN_WIDTHS.get(column_id, "44px")
     if header:
-        # Symmetric padding on centered headers so titles line up with cell values
-        # (sort chevron is absolutely positioned and must not shift the label).
         if column_id in _PF_LEFT_COLS:
-            box["padding"] = "10px 22px 10px 10px"
+            box["padding"] = "8px 14px 8px 6px"
         else:
-            box["padding"] = "10px 10px"
+            box["padding"] = "8px 4px"
         if column_id in ("Rank", "Score", "overall", "Age", "Rec"):
             box["fontWeight"] = "700"
         elif column_id not in _PF_LEFT_COLS:
@@ -1006,7 +1011,7 @@ def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
         elif column_id in ("Role", "Division"):
             box["fontWeight"] = "600"
         if column_id == "Feet":
-            box["padding"] = "8px 10px"
+            box["padding"] = "4px 2px"
             box["overflow"] = "visible"
         if column_id == "Injury":
             box["padding"] = "0"

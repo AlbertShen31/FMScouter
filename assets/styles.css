@@ -5936,6 +5936,129 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     text-align: center !important;
 }
 
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="final_third"] {
+    min-width: 72px !important;
+    max-width: 80px !important;
+    width: 72px !important;
+    white-space: nowrap !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="final_third"] .column-header-name {
+    white-space: nowrap !important;
+}
+
+/* Compact Profiles identity / metric columns (override shared shell mins). */
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
+    white-space: nowrap !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"] .dash-cell-value,
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"] .dash-cell-value,
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] .dash-cell-value,
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    max-width: none !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"] {
+    min-width: 120px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"] {
+    min-width: 72px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] {
+    min-width: 88px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
+    min-width: 80px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Age"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Rec"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rank"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Rank"] {
+    min-width: 42px !important;
+    max-width: 52px !important;
+    width: 48px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Height"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Injury"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Injury"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Inf"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Inf"] {
+    min-width: 40px !important;
+    max-width: 52px !important;
+    width: 44px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Feet"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Feet"] {
+    min-width: 72px !important;
+    max-width: 80px !important;
+    width: 72px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Role"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Role"] {
+    min-width: 56px !important;
+    max-width: 88px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Score"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Score"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Minutes"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Minutes"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="overall"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="defending"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="defending"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="possession"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="possession"] {
+    min-width: 44px !important;
+    max-width: 60px !important;
+    width: 52px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header,
+#pf-table .dash-spreadsheet-inner td.dash-cell {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"],
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+}
+
 /* Let Profiles table use the full shell width; columns keep min widths and grow. */
 #pf-table-shell,
 #pf-table-shell .dash-spreadsheet-container,
