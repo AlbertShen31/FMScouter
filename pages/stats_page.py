@@ -1,6 +1,7 @@
 """Player statistics page: Moneyball stats CSV vs MustermannFM benchmarks."""
 from __future__ import annotations
 
+import math
 import re
 
 from dash import (
@@ -303,6 +304,21 @@ def _row_sort_number(row: dict, column_id: str) -> float:
     return _cell_number(row.get(column_id))
 
 
+def _numeric_sort_key(number: float, *, desc: bool = False) -> tuple:
+    """Sort key that keeps missing last and treats signed zero as negative.
+
+    Export values rounded to two decimals can become ``-0.0`` / ``0.0``. Python
+    compares those as equal, so ``-0.00`` would interleave with ``0.00``. Honor
+    the IEEE sign bit as a tie-breaker so truncated negatives sort below true zeros.
+    """
+    if number != number:  # NaN
+        return (1, 0.0, 0.0)
+    primary = -number if desc else number
+    sign = math.copysign(1.0, number)
+    tie = -sign if desc else sign
+    return (0, primary, tie)
+
+
 def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
     if column_id == "Feet" and row is not None:
         return feet_sort_key(row)
@@ -318,9 +334,8 @@ def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
         if row is not None
         else _cell_number(value)
     )
-    if number != number:  # NaN
-        return (1, float("inf"))
-    return (0, number)
+    # Direction applied by list.sort(reverse=...); keep asc key form here.
+    return _numeric_sort_key(number, desc=False)
 
 
 def _is_percentile_sort_column(column_id: str) -> bool:
@@ -341,10 +356,7 @@ def _sort_table_rows(rows: list[dict], sort_by) -> None:
     if _is_percentile_sort_column(column):
         # Encode direction in the key so missing (—) values always sort last.
         def pct_key(row, *, _col=column, _desc=reverse):
-            number = _row_sort_number(row, _col)
-            if number != number:  # NaN / blank
-                return (1, 0.0)
-            return (0, -number if _desc else number)
+            return _numeric_sort_key(_row_sort_number(row, _col), desc=_desc)
 
         rows.sort(key=pct_key)
         return
