@@ -90,6 +90,22 @@ def _pct_header_name(col_id: str) -> str:
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS | {"Role"}
 
 
+def _depth_rank_value(entry_or_row) -> int | None:
+    if not isinstance(entry_or_row, dict):
+        return None
+    raw = entry_or_row.get("depth_rank")
+    if raw in (None, "", "-", "—"):
+        # Table rows stash the parsed rank on _rank_raw.
+        raw = entry_or_row.get("_rank_raw")
+    if raw in (None, "", "-", "—"):
+        return None
+    try:
+        rank = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
 def _strip_cell(value) -> str:
     text = "" if value is None else str(value)
     if "<" in text:
@@ -130,6 +146,11 @@ def _profile_sort_key(column_id: str, row: dict) -> tuple:
         if not text or text in ("-", "—"):
             return (1, "\uffff")
         return (0, text.casefold())
+    if column_id == "Rank":
+        rank = row.get("_rank_raw")
+        if rank is None:
+            return (1, float("inf"))
+        return (0, int(rank))
     if column_id == "Score":
         number = row.get("_score_raw")
     elif column_id == "Minutes":
@@ -172,6 +193,16 @@ def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
         item = sort_by[0]
         column = item.get("column_id")
         reverse = item.get("direction") == "desc"
+        if column == "Rank":
+
+            def rank_key(row, *, _desc=reverse):
+                rank = row.get("_rank_raw")
+                if rank is None:
+                    return (1, 0)
+                return (0, -int(rank) if _desc else int(rank))
+
+            out.sort(key=rank_key)
+            return out
         if _is_percentile_sort_column(column):
 
             def pct_key(row, *, _col=column, _desc=reverse):
@@ -546,6 +577,160 @@ def _profile_depth_panel(
     return [_profile_depth_card(stats, focus_roles, bands) for stats in stats_list]
 
 
+def _depth_chart_player_row(
+    entry: dict,
+    *,
+    index: int,
+    total: int,
+    settings,
+    theme=None,
+) -> html.Div:
+    settings = us.normalize(settings)
+    row = entry.get("row") or {}
+    profile_id = str(entry.get("id") or "").strip()
+    name, club = profiles.profile_identity(entry)
+    rank = _depth_rank_value(entry)
+    score = row.get("Score")
+    score_cell = _score_markdown(score, settings, theme=theme)
+    return html.Div(
+        [
+            html.Span(
+                str(rank) if rank is not None else "—",
+                className="pf-depth-chart-rank",
+            ),
+            html.Button(
+                name or "Player",
+                id={"type": "pf-depth-name", "id": profile_id},
+                n_clicks=0,
+                className="pf-depth-chart-name",
+                title="Open player details",
+            ),
+            html.Span(club or "", className="pf-depth-chart-club"),
+            html.Div(
+                dcc.Markdown(score_cell, dangerously_allow_html=True),
+                className="pf-depth-chart-score",
+            ),
+            html.Div(
+                [
+                    html.Button(
+                        "↑",
+                        id={"type": "pf-depth-move", "id": profile_id, "dir": "up"},
+                        n_clicks=0,
+                        disabled=index <= 0,
+                        className="pf-depth-chart-move",
+                        title="Move up",
+                    ),
+                    html.Button(
+                        "↓",
+                        id={"type": "pf-depth-move", "id": profile_id, "dir": "down"},
+                        n_clicks=0,
+                        disabled=index >= total - 1,
+                        className="pf-depth-chart-move",
+                        title="Move down",
+                    ),
+                ],
+                className="pf-depth-chart-moves",
+            ),
+        ],
+        className="pf-depth-chart-row",
+    )
+
+
+def _build_depth_chart(
+    *,
+    hybrids_only: bool = False,
+    settings=None,
+    theme=None,
+) -> html.Div:
+    settings = us.normalize(settings)
+    entries = profiles.list_role_profiles()
+    roles_seen: dict[str, dict] = {}
+    for entry in entries:
+        role = str(
+            entry.get("role_column") or (entry.get("row") or {}).get("Role") or ""
+        ).strip()
+        if not role:
+            continue
+        if hybrids_only and "+" not in role:
+            continue
+        if role not in roles_seen:
+            roles_seen[role] = _role_column_meta(role)
+    if not roles_seen:
+        return html.Div(
+            "No role profiles yet. Save players from Role scores, then auto-rank "
+            "or reorder them here.",
+            className="text-muted small",
+        )
+
+    sections = []
+    for meta in sorted(
+        roles_seen.values(),
+        key=lambda item: item.get("name") or item["column"],
+    ):
+        column = meta["column"]
+        ordered = profiles.ordered_profiles_for_role(column)
+        if hybrids_only and "+" not in column:
+            continue
+        if not ordered:
+            continue
+        label = meta.get("short_label") or meta.get("name") or column
+        rows = [
+            _depth_chart_player_row(
+                entry,
+                index=idx,
+                total=len(ordered),
+                settings=settings,
+                theme=theme,
+            )
+            for idx, entry in enumerate(ordered)
+        ]
+        sections.append(
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    _colored_group_abbr(
+                                        meta.get("group_abbr") or "",
+                                        css="rs-depth-code",
+                                    ),
+                                    html.Span(
+                                        meta.get("phase") or "",
+                                        className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                                    ),
+                                    html.Span(label, className="pf-depth-chart-role-name"),
+                                    html.Span(
+                                        f"{len(ordered)}",
+                                        className="pf-depth-chart-count",
+                                    ),
+                                ],
+                                className="pf-depth-chart-role-title",
+                            ),
+                            dmc.Button(
+                                "Auto-rank by Score",
+                                id={"type": "pf-depth-auto-role", "role": column},
+                                size="xs",
+                                variant="light",
+                                n_clicks=0,
+                            ),
+                        ],
+                        className="pf-depth-chart-role-head",
+                    ),
+                    html.Div(rows, className="pf-depth-chart-list"),
+                ],
+                className="pf-depth-chart-section",
+            )
+        )
+
+    if not sections:
+        return html.Div(
+            "No role profiles match the current filters.",
+            className="text-muted small",
+        )
+    return html.Div(sections, className="pf-depth-chart-sections")
+
+
 def _role_table_columns(settings) -> list[dict]:
     settings = us.normalize(settings)
     cols = []
@@ -555,6 +740,7 @@ def _role_table_columns(settings) -> list[dict]:
             spec["presentation"] = "markdown"
         cols.append(spec)
     cols.append({"name": "Role", "id": "Role"})
+    cols.append({"name": "Rank", "id": "Rank"})
     cols.append({"name": "Score", "id": "Score", "presentation": "markdown"})
     cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     for pct in PCT_COLS:
@@ -605,6 +791,16 @@ def _table_header_styles(*, include_role: bool = False, include_score: bool = Fa
                 "padding": "10px 8px",
             }
         )
+    rules.append(
+        {
+            "if": {"column_id": "Rank"},
+            "textAlign": "center",
+            "fontWeight": "700",
+            "minWidth": "52px",
+            "width": "56px",
+            "maxWidth": "64px",
+        }
+    )
     metric_cols = ["Minutes", *PCT_COLS]
     if include_score:
         metric_cols = ["Score", *metric_cols]
@@ -636,6 +832,15 @@ def _role_metric_styles() -> list[dict]:
             "maxWidth": "120px",
             "whiteSpace": "normal",
             "lineHeight": "1.2",
+        },
+        {
+            "if": {"column_id": "Rank"},
+            "textAlign": "center",
+            "minWidth": "52px",
+            "width": "56px",
+            "maxWidth": "64px",
+            "fontWeight": "700",
+            "fontVariantNumeric": "tabular-nums",
         },
         {
             "if": {"column_id": "Score"},
@@ -728,10 +933,12 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
             score_f = None
         overall_raw = _raw_float(raw.get("overall"))
         pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
+        rank_raw = _depth_rank_value(entry)
         item: dict = {
             "id": entry.get("id") or "",
             "_key": entry.get("id") or "",
             "_role_column": role_column,
+            "_rank_raw": rank_raw,
             "_score_raw": score_f,
             "_overall_raw": overall_raw,
             **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
@@ -744,6 +951,7 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
             else:
                 item[col] = _blank(raw.get(col))
         item["Role"] = _blank(raw.get("Role"))
+        item["Rank"] = str(rank_raw) if rank_raw is not None else "—"
         item["Score"] = _score_markdown(score_raw, settings, theme=theme)
         mins_raw = _profile_minutes_raw(entry, raw)
         item["_minutes_raw"] = mins_raw
@@ -791,15 +999,17 @@ def _build_percentile_table_rows(settings=None) -> tuple[list[dict], list[dict]]
 
 
 def _sort_role_rows(rows: list[dict]) -> list[dict]:
-    """Role ascending, then Score descending, then overall percentile descending."""
+    """Role asc, Rank asc (unranked last), Score desc, overall percentile desc."""
 
     def key(row: dict):
         role = str(row.get("_role_column") or row.get("Role") or "").casefold()
+        rank = row.get("_rank_raw")
+        rank_sort = (0, int(rank)) if rank is not None else (1, 0)
         score = row.get("_score_raw")
         overall = row.get("_overall_raw")
         score_sort = -float(score) if score is not None else float("inf")
         overall_sort = -float(overall) if overall is not None else float("inf")
-        return (role, score_sort, overall_sort)
+        return (role, rank_sort, score_sort, overall_sort)
 
     return sorted(rows, key=key)
 
@@ -954,7 +1164,8 @@ def layout(**_kwargs):
             html.P(
                 "Saved shortlist rows from Role scores (one row per evaluated role, "
                 "with overall percentiles when the source file has stats) and from "
-                "Player stats. Click a name for the Role scores player modal.",
+                "Player stats. Rank players under Depth chart below the Role scores "
+                "table; click a name for the player modal.",
                 className="text-muted mb-3",
             ),
             dbc.Card(
@@ -1123,76 +1334,117 @@ def layout(**_kwargs):
                             html.Div(
                                 [
                                     html.Div(
-                                        id="pf-table-empty",
-                                        className="rs-table-empty",
-                                        hidden=True,
+                                        [
+                                            html.Div(
+                                                id="pf-table-empty",
+                                                className="rs-table-empty",
+                                                hidden=True,
+                                            ),
+                                            player_data_table(
+                                                prefix="pf",
+                                                page_size=us.page_size(settings),
+                                                style_cell_props=style_cell(
+                                                    text_align="right"
+                                                ),
+                                                style_cell_conditional_rules=style_cell_conditional(),
+                                                style_header_props=style_header(),
+                                                style_header_conditional_rules=style_header_conditional(),
+                                                style_data_conditional_rules=[],
+                                                css=table_css(center_non_identity=True),
+                                                shell_class_name="rs-table-shell mt-2",
+                                            ),
+                                        ],
+                                        className="rs-table-area",
                                     ),
-                                    player_data_table(
-                                        prefix="pf",
-                                        page_size=us.page_size(settings),
-                                        style_cell_props=style_cell(text_align="right"),
-                                        style_cell_conditional_rules=style_cell_conditional(),
-                                        style_header_props=style_header(),
-                                        style_header_conditional_rules=style_header_conditional(),
-                                        style_data_conditional_rules=[],
-                                        css=table_css(center_non_identity=True),
-                                        shell_class_name="rs-table-shell mt-2",
+                                    html.Div(id="pf-table-layout-nudge", hidden=True),
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                id="pf-table-caption",
+                                                className="text-muted",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Rows per page",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            dmc.Select(
+                                                                id="pf-page-size",
+                                                                data=page_size_select_data(
+                                                                    settings
+                                                                ),
+                                                                value=default_page_size_value(
+                                                                    settings
+                                                                ),
+                                                                clearable=False,
+                                                                searchable=False,
+                                                            ),
+                                                        ],
+                                                        className="rs-table-page-size",
+                                                    ),
+                                                    dmc.Button(
+                                                        "Select all",
+                                                        id="pf-select-all",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                        disabled=True,
+                                                    ),
+                                                    dmc.Button(
+                                                        "Delete selected",
+                                                        id="pf-delete-selected",
+                                                        size="sm",
+                                                        variant="light",
+                                                        color="red",
+                                                        n_clicks=0,
+                                                        disabled=True,
+                                                        className="rs-squad-clear-btn",
+                                                    ),
+                                                ],
+                                                className="rs-table-caption-actions",
+                                            ),
+                                        ],
+                                        className="rs-table-caption-row mt-2",
                                     ),
                                 ],
-                                className="rs-table-area",
+                                id="pf-table-host",
                             ),
-                            html.Div(id="pf-table-layout-nudge", hidden=True),
                             html.Div(
                                 [
-                                    html.Div(
-                                        id="pf-table-caption",
-                                        className="text-muted",
-                                    ),
                                     html.Div(
                                         [
                                             html.Div(
                                                 [
-                                                    html.Label(
-                                                        "Rows per page",
-                                                        className="rs-field-label",
+                                                    html.Span(
+                                                        "Depth chart",
+                                                        className="rs-depth-heading-label",
                                                     ),
-                                                    dmc.Select(
-                                                        id="pf-page-size",
-                                                        data=page_size_select_data(
-                                                            settings
-                                                        ),
-                                                        value=default_page_size_value(
-                                                            settings
-                                                        ),
-                                                        clearable=False,
-                                                        searchable=False,
+                                                    html.Span(
+                                                        "Reorder with ↑/↓. Auto-rank sets "
+                                                        "order from saved Score (highest first).",
+                                                        className="rs-depth-heading-hint",
                                                     ),
                                                 ],
-                                                className="rs-table-page-size",
+                                                className="rs-depth-heading-copy",
                                             ),
                                             dmc.Button(
-                                                "Select all",
-                                                id="pf-select-all",
+                                                "Auto-rank all roles",
+                                                id="pf-depth-auto-all",
                                                 size="sm",
                                                 variant="light",
                                                 n_clicks=0,
-                                                disabled=True,
-                                            ),
-                                            dmc.Button(
-                                                "Delete selected",
-                                                id="pf-delete-selected",
-                                                size="sm",
-                                                variant="light",
-                                                color="red",
-                                                n_clicks=0,
-                                                disabled=True,
-                                                className="rs-squad-clear-btn",
                                             ),
                                         ],
-                                        className="rs-table-caption-actions",
+                                        className="pf-depth-chart-toolbar",
                                     ),
+                                    html.Div(id="pf-depth-chart-body"),
                                 ],
-                                className="rs-table-caption-row mt-2",
+                                id="pf-depth-chart-wrap",
+                                className="pf-depth-chart-wrap mt-3",
+                                hidden=True,
                             ),
                         ]
                     ),
@@ -1221,6 +1473,9 @@ def sync_pf_minutes_from_settings(settings, minutes_required):
     Input("pf-view-toggle", "value"),
 )
 def set_view_mode(mode):
+    # Legacy "depth" tab maps back onto Role scores (chart sits under the table).
+    if mode == "depth":
+        return "roles"
     return mode or "roles"
 
 
@@ -1298,6 +1553,8 @@ def focus_profile_role(n_clicks, current_focus):
     Output("pf-delete-selected", "disabled"),
     Output("pf-summary", "children"),
     Output("pf-depth-wrap", "hidden"),
+    Output("pf-depth-chart-body", "children"),
+    Output("pf-depth-chart-wrap", "hidden"),
     Input("pf-view-mode", "data"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
@@ -1352,6 +1609,9 @@ def refresh_profiles_table(
     }
     reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
 
+    if mode == "depth":
+        mode = "roles"
+
     if mode == "percentiles":
         columns = _percentile_table_columns(settings)
         all_rows, tips = _build_percentile_table_rows(settings)
@@ -1366,6 +1626,9 @@ def refresh_profiles_table(
         empty_msg = "No percentile profiles yet. Mark players on Player stats and save."
         depth_cards = []
         depth_hidden = True
+        chart = None
+        chart_hidden = True
+        sort_mode = "percentiles"
     else:
         columns = _role_table_columns(settings)
         all_rows, tips = _build_role_table_rows(settings, theme=theme)
@@ -1392,19 +1655,26 @@ def refresh_profiles_table(
             settings=settings,
         )
         depth_hidden = not depth_cards
+        chart = _build_depth_chart(
+            hybrids_only=bool(hybrids_only),
+            settings=settings,
+            theme=theme,
+        )
+        chart_hidden = False
+        sort_mode = "roles"
 
     col_ids = {col["id"] for col in columns}
     if reset_sort:
         sort_by = []
     sort_by = _coerce_sort_by(
         sort_by,
-        mode,
+        sort_mode,
         col_ids,
         triggered_id=ctx.triggered_id,
         previous=sort_memory,
         reset_default=reset_sort,
     )
-    filtered = _sort_profile_rows(filtered, sort_by, mode=mode)
+    filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
 
     display_rows = []
     for row in filtered:
@@ -1452,6 +1722,8 @@ def refresh_profiles_table(
             True,
             depth_cards,
             depth_hidden,
+            chart,
+            chart_hidden,
         )
     if no_matches:
         return (
@@ -1477,6 +1749,8 @@ def refresh_profiles_table(
             True,
             depth_cards,
             depth_hidden,
+            chart,
+            chart_hidden,
         )
     return (
         columns,
@@ -1498,6 +1772,8 @@ def refresh_profiles_table(
         True,
         depth_cards,
         depth_hidden,
+        chart,
+        chart_hidden,
     )
 
 
@@ -1597,6 +1873,90 @@ def delete_selected(n_clicks, selected_ids, rev):
         if profile_id:
             profiles.delete_profile(str(profile_id))
     return int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-move", "id": ALL, "dir": ALL}, "n_clicks"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def move_depth_chart_row(n_clicks, rev):
+    if not ctx.triggered_id or not clicked(n_clicks):
+        return no_update
+    profile_id = str(ctx.triggered_id.get("id") or "").strip()
+    direction = -1 if ctx.triggered_id.get("dir") == "up" else 1
+    if not profile_id or not profiles.move_depth_rank(profile_id, direction):
+        return no_update
+    return int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-auto-role", "role": ALL}, "n_clicks"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def auto_rank_depth_role(n_clicks, rev):
+    if not ctx.triggered_id or not clicked(n_clicks):
+        return no_update
+    role = str(ctx.triggered_id.get("role") or "").strip()
+    if not role:
+        return no_update
+    profiles.auto_rank_role_by_score(role)
+    return int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input("pf-depth-auto-all", "n_clicks"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def auto_rank_depth_all(n_clicks, rev):
+    if not n_clicks:
+        return no_update
+    profiles.auto_rank_all_roles_by_score()
+    return int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-player-modal", "is_open", allow_duplicate=True),
+    Output("pf-player-modal-title", "children", allow_duplicate=True),
+    Output("pf-player-modal-body", "children", allow_duplicate=True),
+    Output("pf-player-key", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-name", "id": ALL}, "n_clicks"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def open_profile_modal_from_depth(n_clicks, settings, theme):
+    if not ctx.triggered_id or not clicked(n_clicks):
+        return no_update, no_update, no_update, no_update
+    profile_id = str(ctx.triggered_id.get("id") or "").strip()
+    profile = profiles.get_profile(profile_id) if profile_id else None
+    if not profile:
+        return True, "Player", html.Div("Profile not found."), None
+    player = profile.get("player")
+    name = (player or {}).get("name") or profiles.profile_identity(profile)[0] or "Player"
+    role = profile.get("role_column") or (profile.get("row") or {}).get("Role") or ""
+    title = f"{name} · {role}" if role else name
+    if not isinstance(player, dict) or not player:
+        return (
+            True,
+            title,
+            html.Div(
+                "Full player details were not stored with this profile. "
+                "Re-save from Role scores to open the scout modal.",
+                className="rs-player-missing",
+            ),
+            profile_id,
+        )
+    settings = us.normalize(settings)
+    body = _build_profile_modal_body(
+        profile, player, settings=settings, theme=theme, mode="roles"
+    )
+    return True, title, body, profile_id
 
 
 def _resolve_stats_player_for_profile(profile: dict, player: dict) -> dict | None:

@@ -6040,3 +6040,182 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     gap: 0.75rem;
     flex-wrap: wrap;
 }
+
+.pf-depth-chart-wrap {
+    margin-top: 0.5rem;
+}
+
+.pf-depth-chart-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.pf-depth-chart-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.pf-depth-chart-section {
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    padding: 0.75rem 0.85rem 0.85rem;
+}
+
+.pf-depth-chart-role-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+}
+
+.pf-depth-chart-role-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.pf-depth-chart-role-name {
+    font-weight: 700;
+    color: var(--app-text);
+}
+
+.pf-depth-chart-count {
+    color: var(--app-muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-depth-chart-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.pf-depth-chart-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1.2fr) minmax(0, 0.9fr) 3.25rem auto;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 0.35rem 0.4rem;
+    border-radius: 6px;
+    background: var(--app-input);
+    border: 1px solid transparent;
+}
+
+.pf-depth-chart-row:hover {
+    border-color: var(--app-line);
+}
+
+.pf-depth-chart-rank {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--app-muted);
+    text-align: center;
+}
+
+.pf-depth-chart-name {
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    color: var(--app-accent);
+    font-weight: 650;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-depth-chart-name:hover {
+    text-decoration: underline;
+}
+
+.pf-depth-chart-club {
+    color: var(--app-muted);
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-depth-chart-score {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-depth-chart-score p {
+    margin: 0;
+}
+
+.pf-depth-chart-moves {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.pf-depth-chart-move {
+    appearance: none;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 4px;
+    border: 1px solid var(--app-line);
+    background: var(--app-card);
+    color: var(--app-text);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.pf-depth-chart-move:hover:not(:disabled) {
+    border-color: var(--app-accent);
+    color: var(--app-accent);
+}
+
+.pf-depth-chart-move:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+html[data-theme="light"] .pf-depth-chart-section,
+body[data-theme="light"] .pf-depth-chart-section {
+    background: var(--app-card);
+}
+
+@media (max-width: 720px) {
+    .pf-depth-chart-row {
+        grid-template-columns: 2rem minmax(0, 1fr) auto;
+        grid-template-areas:
+            "rank name moves"
+            "rank club score";
+    }
+
+    .pf-depth-chart-rank {
+        grid-area: rank;
+    }
+
+    .pf-depth-chart-name {
+        grid-area: name;
+    }
+
+    .pf-depth-chart-club {
+        grid-area: club;
+    }
+
+    .pf-depth-chart-score {
+        grid-area: score;
+    }
+
+    .pf-depth-chart-moves {
+        grid-area: moves;
+    }
+}

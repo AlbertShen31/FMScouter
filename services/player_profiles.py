@@ -525,10 +525,156 @@ def save_profiles(
 
 def delete_profile(profile_id: str) -> bool:
     index = _read_index()
-    kept = [entry for entry in index if entry.get("id") != profile_id]
+    removed_role = ""
+    kept: list[dict[str, Any]] = []
+    for entry in index:
+        if entry.get("id") == profile_id:
+            removed_role = _entry_role(entry)
+            continue
+        kept.append(entry)
     if len(kept) == len(index):
         return False
     _write_index(kept)
+    if removed_role:
+        compact_depth_ranks(removed_role)
+    return True
+
+
+def _entry_role(entry: dict[str, Any]) -> str:
+    return str(
+        entry.get("role_column") or (entry.get("row") or {}).get("Role") or ""
+    ).strip()
+
+
+def _parse_depth_rank(entry: dict[str, Any]) -> int | None:
+    raw = entry.get("depth_rank")
+    if raw in (None, "", "-", "—"):
+        return None
+    try:
+        rank = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
+def _score_name_sort_key(entry: dict[str, Any]) -> tuple:
+    row = entry.get("row") or {}
+    score = row.get("Score")
+    try:
+        score_f = float(score) if score not in (None, "", "-", "—") else None
+    except (TypeError, ValueError):
+        score_f = None
+    name, _club = profile_identity(entry)
+    return (
+        0 if score_f is not None else 1,
+        -(score_f or 0.0),
+        name.casefold(),
+    )
+
+
+def ordered_profiles_for_role(role_column: str) -> list[dict[str, Any]]:
+    """Ranked profiles first (by depth_rank), then unranked by Score desc."""
+    role = str(role_column or "").strip()
+    if not role:
+        return []
+    entries = [entry for entry in list_role_profiles() if _entry_role(entry) == role]
+    ranked: list[tuple[int, dict[str, Any]]] = []
+    unranked: list[dict[str, Any]] = []
+    for entry in entries:
+        rank = _parse_depth_rank(entry)
+        if rank is None:
+            unranked.append(entry)
+        else:
+            ranked.append((rank, entry))
+    ranked.sort(key=lambda item: (item[0], *_score_name_sort_key(item[1])))
+    unranked.sort(key=_score_name_sort_key)
+    return [entry for _rank, entry in ranked] + unranked
+
+
+def set_depth_ranks(role_column: str, ordered_profile_ids: list[str]) -> None:
+    """Rewrite contiguous 1…n for ``role_column``; clear ranks for omitted ids."""
+    role = str(role_column or "").strip()
+    if not role:
+        return
+    ordered_ids = [str(pid).strip() for pid in ordered_profile_ids if str(pid or "").strip()]
+    id_to_rank = {pid: index + 1 for index, pid in enumerate(ordered_ids)}
+    index = _read_index()
+    for entry in index:
+        if _entry_role(entry) != role:
+            continue
+        eid = str(entry.get("id") or "").strip()
+        if eid in id_to_rank:
+            entry["depth_rank"] = id_to_rank[eid]
+        else:
+            entry.pop("depth_rank", None)
+    _write_index(index)
+
+
+def compact_depth_ranks(role_column: str) -> None:
+    """Renumber existing ranked entries for a role to contiguous 1…n."""
+    role = str(role_column or "").strip()
+    if not role:
+        return
+    ranked = [
+        entry
+        for entry in list_role_profiles()
+        if _entry_role(entry) == role and _parse_depth_rank(entry) is not None
+    ]
+    if not ranked:
+        return
+    ranked.sort(key=lambda entry: (_parse_depth_rank(entry) or 0, *_score_name_sort_key(entry)))
+    set_depth_ranks(role, [str(entry.get("id") or "") for entry in ranked])
+
+
+def auto_rank_role_by_score(role_column: str) -> int:
+    """Set depth_rank 1…n by Score desc (then name). Returns how many ranked."""
+    role = str(role_column or "").strip()
+    if not role:
+        return 0
+    entries = [entry for entry in list_role_profiles() if _entry_role(entry) == role]
+    if not entries:
+        return 0
+    ordered = sorted(entries, key=_score_name_sort_key)
+    set_depth_ranks(role, [str(entry.get("id") or "") for entry in ordered])
+    return len(ordered)
+
+
+def auto_rank_all_roles_by_score() -> int:
+    roles = sorted(
+        {
+            role
+            for entry in list_role_profiles()
+            if (role := _entry_role(entry))
+        }
+    )
+    total = 0
+    for role in roles:
+        total += auto_rank_role_by_score(role)
+    return total
+
+
+def move_depth_rank(profile_id: str, direction: int) -> bool:
+    """Swap with neighbor in display order, then assign contiguous ranks for the role."""
+    pid = str(profile_id or "").strip()
+    if not pid or direction not in (-1, 1):
+        return False
+    profile = get_profile(pid)
+    if not profile:
+        return False
+    role = _entry_role(profile)
+    if not role:
+        return False
+    ordered = ordered_profiles_for_role(role)
+    ids = [str(entry.get("id") or "") for entry in ordered]
+    try:
+        index = ids.index(pid)
+    except ValueError:
+        return False
+    neighbor = index + int(direction)
+    if neighbor < 0 or neighbor >= len(ids):
+        return False
+    ids[index], ids[neighbor] = ids[neighbor], ids[index]
+    set_depth_ranks(role, ids)
     return True
 
 
