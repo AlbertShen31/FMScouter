@@ -31,6 +31,18 @@
     --band-poor-bg: #fee2e2;
     --band-poor-fg: #b91c1c;
     --band-poor-bar: #ef4444;
+    --pers-tier-exemplary-bg: #dcfce7;
+    --pers-tier-exemplary-fg: #15803d;
+    --pers-tier-commendable-bg: #dbeafe;
+    --pers-tier-commendable-fg: #1d4ed8;
+    --pers-tier-acceptable-bg: #e0e7ff;
+    --pers-tier-acceptable-fg: #4338ca;
+    --pers-tier-unpredictable-bg: #fef3c7;
+    --pers-tier-unpredictable-fg: #b45309;
+    --pers-tier-formative-bg: #ffedd5;
+    --pers-tier-formative-fg: #c2410c;
+    --pers-tier-unsuitable-bg: #fee2e2;
+    --pers-tier-unsuitable-fg: #b91c1c;
     --rc-key: #3dff88;
     --rc-green: #c6e35b;
     --rc-blue: #5cadff;
@@ -2411,6 +2423,30 @@ body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="
     color: var(--band-poor-fg);
     padding-right: 10px;
 }
+.rs-legend-chip.pers-tier-exemplary {
+    background: var(--pers-tier-exemplary-bg);
+    color: var(--pers-tier-exemplary-fg);
+}
+.rs-legend-chip.pers-tier-commendable {
+    background: var(--pers-tier-commendable-bg);
+    color: var(--pers-tier-commendable-fg);
+}
+.rs-legend-chip.pers-tier-acceptable {
+    background: var(--pers-tier-acceptable-bg);
+    color: var(--pers-tier-acceptable-fg);
+}
+.rs-legend-chip.pers-tier-unpredictable {
+    background: var(--pers-tier-unpredictable-bg);
+    color: var(--pers-tier-unpredictable-fg);
+}
+.rs-legend-chip.pers-tier-formative {
+    background: var(--pers-tier-formative-bg);
+    color: var(--pers-tier-formative-fg);
+}
+.rs-legend-chip.pers-tier-unsuitable {
+    background: var(--pers-tier-unsuitable-bg);
+    color: var(--pers-tier-unsuitable-fg);
+}
 
 .rs-legend-name { letter-spacing: 0.02em; }
 .rs-legend-op { font-weight: 600; opacity: 0.85; }
@@ -4537,6 +4573,26 @@ body[data-theme="light"] .st-pizza-legend-pct {
     font-size: 12px;
     color: var(--app-text);
     margin-top: -0.15rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+}
+
+.rs-personality-name-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 6px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.rs-personality-tier-label {
+    font-weight: 600;
+    font-size: 11px;
+    opacity: 0.9;
 }
 
 .rs-personality-range {

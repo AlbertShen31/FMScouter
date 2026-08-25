@@ -1,0 +1,86 @@
+{
+  "source": "Steam Community guide: Player Personality and Media Handling Style Guide (FM24)",
+  "tiers": [
+    {
+      "id": "exemplary",
+      "label": "Excellent",
+      "guide_section": "Personalities You Should Be Excited By",
+      "personalities": [
+        "Model Citizen",
+        "Resilient",
+        "Light-Hearted",
+        "Born Leader",
+        "Perfectionist",
+        "Spirited"
+      ]
+    },
+    {
+      "id": "commendable",
+      "label": "Good",
+      "guide_section": "Good Personalities to Have",
+      "personalities": [
+        "Iron Willed",
+        "Model Professional",
+        "Professional",
+        "Charismatic Leader",
+        "Resolute",
+        "Fairly Professional"
+      ]
+    },
+    {
+      "id": "acceptable",
+      "label": "Fair",
+      "guide_section": "Not Bad, but Not Great Personalities",
+      "personalities": [
+        "Honest",
+        "Driven",
+        "Very Ambitious",
+        "Leader",
+        "Devoted / Very Loyal",
+        "Loyal",
+        "Sporting",
+        "Fickle",
+        "Mercenary"
+      ]
+    },
+    {
+      "id": "unpredictable",
+      "label": "Mixed",
+      "guide_section": "Lottery Tier",
+      "personalities": [
+        "Balanced",
+        "Unsporting",
+        "Ambitious",
+        "Fairly Ambitious",
+        "Fairly Loyal",
+        "Fairly Sporting",
+        "Realist",
+        "Determined",
+        "Fairly Determined"
+      ]
+    },
+    {
+      "id": "formative",
+      "label": "Developing",
+      "guide_section": "Mentoring Tier",
+      "personalities": [
+        "Jovial",
+        "Unambitious",
+        "Temperamental",
+        "Low Determination",
+        "Easily Discouraged"
+      ]
+    },
+    {
+      "id": "unsuitable",
+      "label": "Poor",
+      "guide_section": "Terrible Tier",
+      "personalities": [
+        "Spineless",
+        "Slack",
+        "Casual",
+        "Low Self-Belief"
+      ]
+    }
+  ]
+}

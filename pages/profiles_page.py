@@ -1152,7 +1152,9 @@ def _profile_identity_columns(page: str, settings) -> list[str]:
 
 
 def _apply_profile_division(item: dict, raw: dict) -> None:
-    """Ensure Division text + DivisionTier for table highlighting."""
+    """Ensure Division / Personality highlight helper columns."""
+    from scoring.personality_tiers import apply_personality_tier
+
     if "Division" not in item:
         item["Division"] = _blank(raw.get("Division"))
     tier_row = {
@@ -1162,6 +1164,15 @@ def _apply_profile_division(item: dict, raw: dict) -> None:
     }
     apply_division_tier(tier_row)
     item["DivisionTier"] = tier_row.get("DivisionTier") or ""
+
+    pers = item.get("Personality")
+    if pers in (None, "", "-", "—"):
+        pers = raw.get("Personality")
+    if pers not in (None, "", "-", "—") and "Personality" not in item:
+        item["Personality"] = _blank(pers)
+    pers_row = {"Personality": item.get("Personality") or pers}
+    apply_personality_tier(pers_row)
+    item["PersonalityTier"] = pers_row.get("PersonalityTier") or ""
 
 
 def _depth_score_cell(score, settings, theme=None):
@@ -2058,8 +2069,8 @@ def _pct_metric_styles() -> list[dict]:
     return [{"if": {"column_id": col_id}, **_pf_col_box(col_id)} for col_id in col_ids]
 
 
-def _role_table_styles(theme) -> tuple[list, list]:
-    data = identity_data_styles(theme, extra=_role_metric_styles())
+def _role_table_styles(theme, settings=None) -> tuple[list, list]:
+    data = identity_data_styles(theme, settings=settings, extra=_role_metric_styles())
     # Override shared left-align for Division/Nation/Inf — Profiles centers those.
     header = style_header_conditional(
         extra=_table_header_styles(include_role=True, include_score=True)
@@ -2983,7 +2994,7 @@ def refresh_profiles_table(
         all_rows, tips = _build_role_table_rows(settings, theme=theme)
         filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
         sort_mode = "roles"
-    style_data, style_header = _role_table_styles(theme)
+    style_data, style_header = _role_table_styles(theme, settings)
     empty_msg = (
         "No role profiles yet. Mark players on Role scores and save — "
         "one row per evaluated role, including overall percentiles when available."
@@ -3924,6 +3935,7 @@ def _build_profile_modal_body(
         field_styles=field_styles,
         after_identity=segmented,
         bottom=bottom,
+        settings=settings,
     )
 
 

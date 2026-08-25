@@ -181,6 +181,7 @@ def role_player_detail_card(
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
         after_identity=player_role_fit_section(player, settings),
         bottom=player_attributes(player, settings["bands"]),
+        settings=settings,
     )
 
 
@@ -400,6 +401,7 @@ def stats_player_detail_card(
         field_formatters={"minutes": _format_minutes_identity},
         after_identity=after_identity,
         bottom=html.Div(_metrics_values(sections), className="st-player-metrics"),
+        settings=settings,
     )
 
 
@@ -482,6 +484,7 @@ def profile_detail_body(
         identity_player,
         id_prefix="pf",
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
+        settings=settings,
     )
     children.append(identity)
 

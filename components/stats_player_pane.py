@@ -645,6 +645,7 @@ def _player_modal_body(
             _overall_avg_banner(sections, phase_label=pos_group_label(eval_group)),
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
+        settings=settings,
     )
 
 

@@ -148,6 +148,7 @@ app.clientside_callback(
     function(settings) {
         const colors = (settings && settings.colors) || {};
         const badges = (settings && settings.tier_badge_colors) || {};
+        const pers = (settings && settings.personality_tier_colors) || {};
         const root = document.documentElement;
         ["elite", "good", "ok", "poor"].forEach(function(band) {
             const c = colors[band] || {};
@@ -158,6 +159,18 @@ app.clientside_callback(
         if (badges.key) root.style.setProperty("--rc-key", badges.key);
         if (badges.preferred) root.style.setProperty("--rc-green", badges.preferred);
         if (badges.useful) root.style.setProperty("--rc-blue", badges.useful);
+        [
+            "exemplary",
+            "commendable",
+            "acceptable",
+            "unpredictable",
+            "formative",
+            "unsuitable"
+        ].forEach(function(tier) {
+            const c = pers[tier] || {};
+            if (c.bg) root.style.setProperty("--pers-tier-" + tier + "-bg", c.bg);
+            if (c.fg) root.style.setProperty("--pers-tier-" + tier + "-fg", c.fg);
+        });
         return "";
     }
     """,

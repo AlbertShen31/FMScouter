@@ -26,6 +26,15 @@ BUILTIN = "default"
 
 BAND_KEYS = ("elite", "good", "ok", "poor")
 COLOR_PARTS = ("bg", "fg", "bar")
+PERSONALITY_TIER_COLOR_PARTS = ("bg", "fg")
+PERSONALITY_TIER_KEYS = (
+    "exemplary",
+    "commendable",
+    "acceptable",
+    "unpredictable",
+    "formative",
+    "unsuitable",
+)
 TIER_KEYS = ("key", "preferred", "useful")
 HYBRID_KEYS = ("ip", "oop")
 TIER_BADGE_KEYS = ("key", "preferred", "useful")
@@ -170,6 +179,7 @@ PACK_DATA_KEYS = (
     "page_size_options",
     "preferred_theme",
     "tier_badge_colors",
+    "personality_tier_colors",
 )
 
 DEFAULTS: dict[str, Any] = {
@@ -206,6 +216,15 @@ DEFAULTS: dict[str, Any] = {
         "key": "#3dff88",
         "preferred": "#c6e35b",
         "useful": "#5cadff",
+    },
+    # Personality table/modal highlights (guide tiers with formal names).
+    "personality_tier_colors": {
+        "exemplary": {"bg": "#dcfce7", "fg": "#15803d"},
+        "commendable": {"bg": "#dbeafe", "fg": "#1d4ed8"},
+        "acceptable": {"bg": "#e0e7ff", "fg": "#4338ca"},
+        "unpredictable": {"bg": "#fef3c7", "fg": "#b45309"},
+        "formative": {"bg": "#ffedd5", "fg": "#c2410c"},
+        "unsuitable": {"bg": "#fee2e2", "fg": "#b91c1c"},
     },
 }
 
@@ -680,6 +699,20 @@ def normalize_tier_badge_colors(raw=None) -> dict[str, str]:
     }
 
 
+def normalize_personality_tier_colors(raw=None) -> dict[str, dict[str, str]]:
+    src = raw if isinstance(raw, dict) else {}
+    defaults = DEFAULTS["personality_tier_colors"]
+    out: dict[str, dict[str, str]] = {}
+    for tier in PERSONALITY_TIER_KEYS:
+        entry = src.get(tier) if isinstance(src.get(tier), dict) else {}
+        fallback = defaults[tier]
+        out[tier] = {
+            part: _hex_color(entry.get(part), fallback[part])
+            for part in PERSONALITY_TIER_COLOR_PARTS
+        }
+    return out
+
+
 def normalize_default_minutes_required(value) -> int:
     try:
         number = int(float(value))
@@ -745,6 +778,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "preferred_theme": normalize_preferred_theme(raw.get("preferred_theme")),
         "modal_identity_fields": normalize_modal_identity_fields(),
         "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
+        "personality_tier_colors": normalize_personality_tier_colors(
+            raw.get("personality_tier_colors")
+        ),
         # Resolved from the separate stats-threshold pack domain (not stored here).
         "stats_thresholds": stp.load_tree(),
         "stats_threshold_pack_id": stp.active_id(),
@@ -837,6 +873,14 @@ def _default_settings() -> dict[str, Any]:
         merged["tier_badge_colors"] = {
             **base["tier_badge_colors"],
             **(overrides.get("tier_badge_colors") or {}),
+        }
+    if overrides.get("personality_tier_colors"):
+        merged["personality_tier_colors"] = {
+            tier: {
+                **base["personality_tier_colors"].get(tier, {}),
+                **((overrides.get("personality_tier_colors") or {}).get(tier) or {}),
+            }
+            for tier in PERSONALITY_TIER_KEYS
         }
     if "set_piece_profiles" in overrides:
         merged["set_piece_profiles"] = overrides.get("set_piece_profiles")
@@ -1004,7 +1048,14 @@ def css_vars(settings=None) -> dict[str, str]:
     vars_["--rc-key"] = badge["key"]
     vars_["--rc-green"] = badge["preferred"]
     vars_["--rc-blue"] = badge["useful"]
+    for tier, colors in settings["personality_tier_colors"].items():
+        vars_[f"--pers-tier-{tier}-bg"] = colors["bg"]
+        vars_[f"--pers-tier-{tier}-fg"] = colors["fg"]
     return vars_
+
+
+def personality_tier_colors(settings=None) -> dict[str, dict[str, str]]:
+    return copy.deepcopy(normalize(settings)["personality_tier_colors"])
 
 
 def tier_weights(settings=None) -> dict[str, float]:

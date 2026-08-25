@@ -11,6 +11,12 @@ from dash import html
 import dash_bootstrap_components as dbc
 
 from scoring.personality_ranges import attr_help, estimate_hidden_ranges, range_color
+from scoring.personality_tiers import (
+    classify_personality,
+    personality_tier_style,
+    tier_label,
+)
+import services.ui_settings as us
 
 # FM26 Moneyball export: star ratings are unreliable — never show in the UI.
 STAR_ATTRIBUTES_BROKEN = frozenset({"ability", "potential", "world_reputation"})
@@ -325,6 +331,7 @@ def player_personality_section(
     player: dict,
     *,
     id_prefix: str = "rs",
+    settings=None,
 ) -> html.Div | None:
     """Estimated hidden-attribute ranges from Personality + Media Handling."""
     attrs = player.get("attrs") or {}
@@ -337,15 +344,30 @@ def player_personality_section(
     if not estimate["matched"]:
         return None
 
-    subtitle_parts = []
-    if estimate["personality"]:
-        subtitle_parts.append(estimate["personality"])
-    elif player.get("personality"):
-        subtitle_parts.append(str(player.get("personality")))
-    if estimate["media_handling"]:
-        subtitle_parts.append(estimate["media_handling"])
-    elif player.get("media_handling"):
-        subtitle_parts.append(str(player.get("media_handling")))
+    personality_name = estimate["personality"] or player.get("personality")
+    media_name = estimate["media_handling"] or player.get("media_handling")
+    tier = classify_personality(personality_name)
+    colors = us.personality_tier_colors(settings)
+    chip_style = personality_tier_style(tier, colors)
+
+    subtitle_children: list = []
+    if personality_name:
+        chip_bits: list = [str(personality_name)]
+        formal = tier_label(tier)
+        if formal:
+            chip_bits.append(
+                html.Span(formal, className="rs-personality-tier-label")
+            )
+        subtitle_children.append(
+            html.Span(
+                chip_bits,
+                className="rs-personality-name-chip",
+                style=chip_style,
+                title=formal or None,
+            )
+        )
+    if media_name:
+        subtitle_children.append(html.Span(str(media_name)))
 
     items = []
     for attr, info in estimate["hidden"].items():
@@ -412,9 +434,9 @@ def player_personality_section(
     children = [
         html.Div("Personality", className="rs-player-id-section-title"),
     ]
-    if subtitle_parts:
+    if subtitle_children:
         children.append(
-            html.Div(" · ".join(subtitle_parts), className="rs-personality-subtitle")
+            html.Div(subtitle_children, className="rs-personality-subtitle")
         )
     children.append(
         html.Div(items, className="rs-player-identity rs-personality-ranges")
@@ -434,6 +456,7 @@ def player_detail_body(
     field_formatters: Mapping[str, FieldFormatter] | None = None,
     after_identity=None,
     bottom=None,
+    settings=None,
 ) -> html.Div:
     """Shared modal body: identity → international → finance → career → discipline → personality → page content."""
     section_kwargs = {
@@ -452,7 +475,7 @@ def player_detail_body(
         player_finance_section(player, **section_kwargs),
         player_career_section(player, **section_kwargs),
         player_discipline_section(player, **section_kwargs),
-        player_personality_section(player, id_prefix=id_prefix),
+        player_personality_section(player, id_prefix=id_prefix, settings=settings),
     ]
     if after_identity is not None:
         if isinstance(after_identity, (list, tuple)):

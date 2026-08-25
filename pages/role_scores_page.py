@@ -1669,12 +1669,12 @@ def _passes_min_score(row: dict, roles: list[str], min_score: float, mode: str) 
     return all(score >= min_score for score in scores)
 
 
-def _table_base_styles(theme: str | None = None) -> list[dict]:
-    return identity_data_styles(theme, position_eligibility=True)
+def _table_base_styles(theme: str | None = None, settings=None) -> list[dict]:
+    return identity_data_styles(theme, settings=settings, position_eligibility=True)
 
 
 def _score_styles(role_labels: list[str], settings=None, theme: str | None = None) -> list[dict]:
-    rules = _table_base_styles(theme)
+    rules = _table_base_styles(theme, settings)
     rules.extend(_score_column_styles(role_labels))
     return rules
 
@@ -3292,6 +3292,7 @@ def render_shortlist(
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["DivisionTier"] = row.get("DivisionTier") or ""
+        item["PersonalityTier"] = row.get("PersonalityTier") or ""
         if row_key:
             item["id"] = row_key
             item["_key"] = row_key

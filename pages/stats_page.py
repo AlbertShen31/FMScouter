@@ -537,9 +537,11 @@ def _table_css() -> list[dict]:
     return table_css(center_non_identity=True)
 
 
-def _table_base_styles(theme: str | None = None) -> list[dict]:
+def _table_base_styles(theme: str | None = None, settings=None) -> list[dict]:
     return identity_data_styles(
-        theme, extra=_stats_metric_styles() + _KEY_COLUMN_HIDE
+        theme,
+        settings=settings,
+        extra=_stats_metric_styles() + _KEY_COLUMN_HIDE,
     )
 
 
@@ -702,6 +704,9 @@ def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
         row["Left Foot"] = left
         row["Right Foot"] = right
     apply_division_tier(row)
+    from scoring.personality_tiers import apply_personality_tier
+
+    apply_personality_tier(row)
     return row
 
 
@@ -1537,6 +1542,7 @@ def _player_modal_body(
             _overall_avg_banner(sections),
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
+        settings=settings,
     )
 
 
@@ -1974,6 +1980,7 @@ def refresh_table(
     for row in rows:
         item = {col: row.get(col, "—") for col in col_ids}
         item["DivisionTier"] = row.get("DivisionTier") or ""
+        item["PersonalityTier"] = row.get("PersonalityTier") or ""
         key = str(row.get("_key") or "").strip()
         if key:
             item["id"] = key  # DataTable row id (stable across refreshes)
@@ -1983,7 +1990,7 @@ def refresh_table(
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]
     page_size_i = int(page_size or 50)
-    style_data = _table_base_styles(theme)
+    style_data = _table_base_styles(theme, settings)
 
     caption = f"{len(rows):,} players"
     if marked_set:

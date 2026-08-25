@@ -526,6 +526,7 @@ def rec_highlight_styles(theme: str | None = None) -> list[dict]:
 def identity_data_styles(
     theme: str | None = None,
     *,
+    settings=None,
     position_eligibility: bool = False,
     extra: Sequence[dict] | None = None,
 ) -> list[dict]:
@@ -658,6 +659,7 @@ def identity_data_styles(
         )
     rules.extend(rec_highlight_styles(theme))
     rules.extend(division_highlight_styles(theme))
+    rules.extend(personality_highlight_styles(theme, settings=settings))
     if extra:
         rules.extend(extra)
     return rules
@@ -682,6 +684,40 @@ def division_highlight_styles(theme: str | None = None) -> list[dict]:
                 "borderRadius": "6px",
             }
         )
+    return rules
+
+
+def personality_highlight_styles(
+    theme: str | None = None,
+    *,
+    settings=None,
+) -> list[dict]:
+    """Color Personality cells from guide tiers (settings-driven colors)."""
+    del theme  # colors come from UI settings (shared across themes)
+    import services.ui_settings as us
+    from scoring.personality_tiers import TIER_ORDER
+
+    colors = us.personality_tier_colors(settings)
+    rules = []
+    for tier in TIER_ORDER:
+        entry = colors.get(tier) or {}
+        bg = entry.get("bg")
+        fg = entry.get("fg")
+        if not bg and not fg:
+            continue
+        rule: dict = {
+            "if": {
+                "filter_query": f'{{PersonalityTier}} = "{tier}"',
+                "column_id": "Personality",
+            },
+            "fontWeight": "700",
+            "borderRadius": "6px",
+        }
+        if bg:
+            rule["backgroundColor"] = bg
+        if fg:
+            rule["color"] = fg
+        rules.append(rule)
     return rules
 
 

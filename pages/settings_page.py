@@ -9,6 +9,7 @@ import dash_mantine_components as dmc
 
 import services.role_config as rc
 import scoring.role_scorer as rs
+from scoring.personality_tiers import tier_defs
 from scoring.stats_scorer import (
     benchmarks,
     metric_defs,
@@ -133,6 +134,39 @@ def _badge_color_row(tier: str, label: str, color: str) -> html.Div:
             ),
         ],
         className="st-color-row st-badge-color-row",
+    )
+
+
+def _pers_color_row(tier: str, label: str, colors: dict) -> html.Div:
+    return html.Div(
+        [
+            html.Div(label, className="st-color-name"),
+            html.Span(
+                ["Preview", html.Span(className="st-swatch")],
+                className=f"st-preview rs-legend-chip pers-tier-{tier}",
+            ),
+            *[
+                html.Div(
+                    [
+                        html.Label(part.upper(), className="st-mini-label"),
+                        html.Span(
+                            className="st-color-swatch",
+                            style={"backgroundColor": colors[part]},
+                        ),
+                        dmc.TextInput(
+                            id={"type": "st-pers-color", "tier": tier, "part": part},
+                            value=colors[part],
+                            debounce=500,
+                            className="st-color-text",
+                            placeholder="#rrggbb",
+                        ),
+                    ],
+                    className="st-color-field",
+                )
+                for part in us.PERSONALITY_TIER_COLOR_PARTS
+            ],
+        ],
+        className="st-color-row",
     )
 
 
@@ -807,6 +841,33 @@ def _role_panel(settings: dict) -> list:
                             ],
                             className="st-color-list",
                         ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Personality tier colors"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Background and text colors for Personality cells and modal labels. "
+                            "Tiers follow the FM personality guide "
+                            "(Excellent → Poor).",
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            [
+                                _pers_color_row(
+                                    tier["id"],
+                                    tier["label"],
+                                    settings["personality_tier_colors"][tier["id"]],
+                                )
+                                for tier in tier_defs()
+                            ],
+                            className="st-color-list",
+                        ),
                         _section_save_row("st-save-role", "st-status-role"),
                     ]
                 ),
@@ -1058,6 +1119,22 @@ def _badge_values_for(settings: dict, specs) -> list[str]:
     return [colors[spec["id"]["tier"]] for spec in specs]
 
 
+def _pers_colors_from_state(values, specs) -> dict[str, dict[str, str]]:
+    color_map = {tier: {} for tier in us.PERSONALITY_TIER_KEYS}
+    for spec, value in zip(specs or [], values or []):
+        ident = spec["id"]
+        color_map[ident["tier"]][ident["part"]] = value
+    return color_map
+
+
+def _pers_color_values_for(settings: dict, specs) -> list[str]:
+    colors = settings["personality_tier_colors"]
+    return [
+        colors[spec["id"]["tier"]][spec["id"]["part"]]
+        for spec in specs
+    ]
+
+
 def _set_piece_lists_from_state(values, specs) -> dict[str, list]:
     out: dict[str, list] = {}
     for spec, value in zip(specs or [], values or []):
@@ -1089,6 +1166,7 @@ def _role_form_values(
     settings: dict,
     color_specs,
     badge_specs,
+    pers_specs,
     sp_key_specs,
     sp_pref_specs,
     sp_useful_specs,
@@ -1115,6 +1193,7 @@ def _role_form_values(
         hw["ip"],
         hw["oop"],
         _badge_values_for(settings, badge_specs),
+        _pers_color_values_for(settings, pers_specs),
         _sp_values_for(settings, sp_key_specs, "key"),
         _sp_values_for(settings, sp_pref_specs, "preferred"),
         _sp_values_for(settings, sp_useful_specs, "useful"),
@@ -1311,6 +1390,8 @@ def _ui_draft_from_state(
     hybrid_oop,
     badge_values,
     badge_specs,
+    pers_values,
+    pers_specs,
     sp_keys,
     sp_key_specs,
     sp_prefs,
@@ -1344,6 +1425,7 @@ def _ui_draft_from_state(
         },
         "hybrid_weights": {"ip": hybrid_ip, "oop": hybrid_oop},
         "tier_badge_colors": _badge_colors_from_state(badge_values, badge_specs),
+        "personality_tier_colors": _pers_colors_from_state(pers_values, pers_specs),
         "set_piece_profiles": _set_piece_profiles_from_state(key_map, pref_map, useful_map),
         "preferred_theme": preferred_theme,
         "page_size": page_size_default,
@@ -1372,6 +1454,7 @@ def _ui_draft_from_state(
     Output("st-hybrid-ip", "value"),
     Output("st-hybrid-oop", "value"),
     Output({"type": "st-badge-color", "tier": ALL}, "value"),
+    Output({"type": "st-pers-color", "tier": ALL, "part": ALL}, "value"),
     Output({"type": "st-sp-key", "profile": ALL}, "value"),
     Output({"type": "st-sp-preferred", "profile": ALL}, "value"),
     Output({"type": "st-sp-useful", "profile": ALL}, "value"),
@@ -1410,6 +1493,7 @@ def _ui_draft_from_state(
     State("st-hybrid-ip", "value"),
     State("st-hybrid-oop", "value"),
     State({"type": "st-badge-color", "tier": ALL}, "value"),
+    State({"type": "st-pers-color", "tier": ALL, "part": ALL}, "value"),
     State({"type": "st-sp-key", "profile": ALL}, "value"),
     State({"type": "st-sp-preferred", "profile": ALL}, "value"),
     State({"type": "st-sp-useful", "profile": ALL}, "value"),
@@ -1444,6 +1528,7 @@ def handle_ui_settings(
     hybrid_ip,
     hybrid_oop,
     badge_values,
+    pers_values,
     sp_keys,
     sp_prefs,
     sp_usefuls,
@@ -1456,16 +1541,17 @@ def handle_ui_settings(
     percentiles_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 35
+    n_out = 36
     if not triggered:
         return (no_update,) * n_out
 
     states = ctx.states_list or []
     color_specs = states[9] if len(states) > 9 else []
     badge_specs = states[15] if len(states) > 15 else []
-    sp_key_specs = states[16] if len(states) > 16 else []
-    sp_pref_specs = states[17] if len(states) > 17 else []
-    sp_useful_specs = states[18] if len(states) > 18 else []
+    pers_specs = states[16] if len(states) > 16 else []
+    sp_key_specs = states[17] if len(states) > 17 else []
+    sp_pref_specs = states[18] if len(states) > 18 else []
+    sp_useful_specs = states[19] if len(states) > 19 else []
 
     draft = _ui_draft_from_state(
         pack_id,
@@ -1486,6 +1572,8 @@ def handle_ui_settings(
         hybrid_oop,
         badge_values,
         badge_specs,
+        pers_values,
+        pers_specs,
         sp_keys,
         sp_key_specs,
         sp_prefs,
@@ -1571,6 +1659,7 @@ def handle_ui_settings(
         settings,
         color_specs,
         badge_specs,
+        pers_specs,
         sp_key_specs,
         sp_pref_specs,
         sp_useful_specs,
