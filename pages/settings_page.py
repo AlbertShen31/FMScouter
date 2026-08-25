@@ -34,6 +34,16 @@ THRESH_GROUPS = (
     ("fwd", "Forwards"),
 )
 
+# Shared display order for threshold-editor categories (storage ids vary by group).
+_THRESH_CATEGORY_ORDER = {
+    "defending": 0,
+    "gk_def": 0,
+    "final_third": 1,
+    "goalkeeping": 1,
+    "possession": 2,
+    "gk_possession": 2,
+}
+
 SETTINGS_SECTIONS = (
     ("general", "General"),
     ("role-scores", "Role scores"),
@@ -244,18 +254,26 @@ def _section_save_row(save_id: str, status_id: str) -> html.Div:
 
 
 def _category_options(group: str) -> list[dict[str, str]]:
+    """Category choices for the threshold editor, ordered Defending → Final third/GK → Possession."""
     block = benchmarks()["benchmarks"].get(group) or {}
-    labels = {}
+    labels: dict[str, str] = {}
     for domain in ("outfield", "gk"):
         for cat in benchmarks()["categories"].get(domain) or []:
             labels[cat["id"]] = cat["label"]
-    return [
+    options = [
         {"value": cat_id, "label": labels.get(cat_id, cat_id)}
         for cat_id in block.keys()
     ]
+    options.sort(key=lambda opt: _THRESH_CATEGORY_ORDER.get(opt["value"], 99))
+    return options
 
 
 def _default_thresh_category(group: str) -> str:
+    if (group or "").strip().lower() == "gk":
+        return "goalkeeping"
+    for opt in _category_options(group):
+        if opt["value"] in ("defending", "gk_def"):
+            return opt["value"]
     options = _category_options(group)
     return options[0]["value"] if options else "defending"
 
@@ -345,21 +363,22 @@ def _panel(section_id: str, children: list, *, active: bool) -> html.Div:
 
 
 def _general_panel(settings: dict) -> list:
+    bands = settings["bands"]
     default_note = (
-        "Default uses built-in values until you save Role scores changes; those are stored "
+        "Default uses built-in values until you save; those are stored "
         "locally and can be restored with Reset defaults."
         if us.is_builtin(settings.get("id"))
-        else "Named Role scores packs save to their own files."
+        else "Named settings packs save to their own files."
     )
     return [
         _section_heading(
             "General",
-            "Manage the Role scores settings pack, theme, table paging, active "
-            "scoring packs, and player detail modal.",
+            "Shared settings used across Role scores, Player stats, and Profiles: "
+            "packs, appearance, filters, score bands, colors, and minutes.",
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Role scores settings pack"),
+                dbc.CardHeader("Settings pack"),
                 dbc.CardBody(
                     [
                         html.P(default_note, className="text-muted"),
@@ -480,86 +499,33 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Active scoring packs"),
+                dbc.CardHeader("Active scoring weights pack"),
                 dbc.CardBody(
                     [
                         html.P(
-                            "These packs are used on Role scores and Player stats. "
-                            "Edit pack contents on Role configs or Settings → Player stats.",
+                            "Attribute key / preferred / useful weights used on Role scores. "
+                            "Percentile threshold packs are managed under Player stats.",
                             className="text-muted",
                         ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        dmc.Select(
-                                            id="st-role-weights-pack",
-                                            label="Scoring weights",
-                                            data=rc.pack_options(),
-                                            value=rc.active_pack_id(),
-                                            clearable=False,
-                                            searchable=False,
-                                        ),
-                                        html.Small(
-                                            [
-                                                "Attribute key / preferred / useful weights. ",
-                                                dcc.Link("Edit on Role configs", href="/role-config"),
-                                                ".",
-                                            ],
-                                            className="text-muted d-block mt-1",
-                                        ),
-                                    ],
-                                    md=6,
-                                ),
-                                dbc.Col(
-                                    [
-                                        dmc.Select(
-                                            id="st-percentiles-pack",
-                                            label="Percentiles",
-                                            data=stp.pack_options(),
-                                            value=(
-                                                settings.get("stats_threshold_pack_id")
-                                                or stp.active_id()
-                                            ),
-                                            clearable=False,
-                                            searchable=False,
-                                        ),
-                                        html.Small(
-                                            [
-                                                "Benchmark cut-points for estimated percentiles. ",
-                                                dcc.Link(
-                                                    "Edit under Player stats",
-                                                    href="/settings?section=player-stats",
-                                                ),
-                                                ".",
-                                            ],
-                                            className="text-muted d-block mt-1",
-                                        ),
-                                    ],
-                                    md=6,
-                                ),
-                            ],
-                            className="g-3",
+                        dmc.Select(
+                            id="st-role-weights-pack",
+                            label="Scoring weights",
+                            data=rc.pack_options(),
+                            value=rc.active_pack_id(),
+                            clearable=False,
+                            searchable=False,
                         ),
-                        _section_save_row("st-save-general", "st-status-general"),
+                        html.Small(
+                            [
+                                dcc.Link("Edit on Role configs", href="/role-config"),
+                                ".",
+                            ],
+                            className="text-muted d-block mt-1",
+                        ),
                     ]
                 ),
             ],
             className="mb-3",
-        ),
-    ]
-
-
-def _role_panel(settings: dict) -> list:
-    bands = settings["bands"]
-    tier_w = settings["tier_weights"]
-    hybrid_w = settings["hybrid_weights"]
-    badge = settings["tier_badge_colors"]
-    return [
-        _section_heading(
-            "Role scores",
-            "Score bands, colors, histogram, set pieces, age menu, footedness, "
-            "and tier weights (age and footedness are also used on Player stats).",
         ),
         dbc.Card(
             [
@@ -573,8 +539,59 @@ def _role_panel(settings: dict) -> list:
                             debounce=500,
                         ),
                         html.Small(
-                            "Comma-separated maximum ages for the Max age menu. Any is always included.",
+                            "Comma-separated maximum ages for the Max age menu on Role scores "
+                            "and Player stats. Any is always included.",
                             className="text-muted",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Footedness"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Strength scale is 1 (very weak) through 6 (very strong). "
+                            "Each footedness filter uses its own minimum rating for that foot "
+                            "(Role scores and Player stats).",
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            [
+                                dmc.Select(
+                                    id="st-foot-left",
+                                    label="Left foot filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(settings["foot_thresholds"]["left"]),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                                dmc.Select(
+                                    id="st-foot-both",
+                                    label="Both feet filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(settings["foot_thresholds"]["both"]),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                                dmc.Select(
+                                    id="st-foot-right",
+                                    label="Right foot filter",
+                                    data=rs.foot_strength_options(),
+                                    value=str(settings["foot_thresholds"]["right"]),
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                            ],
+                            className="st-foot-thresholds",
+                        ),
+                        html.Small(
+                            id="st-foot-preview",
+                            children=rs.foot_filter_help(settings["foot_thresholds"]),
+                            className="text-muted d-block mt-2",
                         ),
                     ]
                 ),
@@ -587,7 +604,8 @@ def _role_panel(settings: dict) -> list:
                 dbc.CardBody(
                     [
                         html.P(
-                            "Used for squad-depth coloring, table cell colors, and the Poor cutoff.",
+                            "Used for squad-depth coloring, table cell colors, and the Poor cutoff "
+                            "across Role scores and Profiles.",
                             className="text-muted",
                         ),
                         dbc.Row(
@@ -646,6 +664,93 @@ def _role_panel(settings: dict) -> list:
                 ),
             ],
             className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Band colors"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Background and text color table cells and legend chips. "
+                            "Bar is the squad-depth segment. Enter hex colors like #dcfce7.",
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            [
+                                _color_row(band, label, settings["colors"][band])
+                                for band, label in BAND_LABELS
+                            ],
+                            className="st-color-list",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Personality tier colors"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Background and text colors for Personality cells and modal labels. "
+                            "Tiers follow the FM personality guide "
+                            "(Excellent → Poor).",
+                            className="text-muted",
+                        ),
+                        html.Div(
+                            [
+                                _pers_color_row(
+                                    tier["id"],
+                                    tier["label"],
+                                    settings["personality_tier_colors"][tier["id"]],
+                                    tier.get("description") or "",
+                                )
+                                for tier in tier_defs()
+                            ],
+                            className="st-color-list",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader("Minutes requirement"),
+                dbc.CardBody(
+                    [
+                        html.P(
+                            "Default minutes used to seed the Player stats minutes filter "
+                            "(and related Profiles views).",
+                            className="text-muted",
+                        ),
+                        dmc.NumberInput(
+                            id="st-default-minutes",
+                            label="Default minutes required",
+                            value=settings.get("default_minutes_required"),
+                            min=0,
+                            max=20000,
+                            step=90,
+                        ),
+                        _section_save_row("st-save-general", "st-status-general"),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+    ]
+
+
+def _role_panel(settings: dict) -> list:
+    tier_w = settings["tier_weights"]
+    hybrid_w = settings["hybrid_weights"]
+    badge = settings["tier_badge_colors"]
+    return [
+        _section_heading(
+            "Role scores",
+            "Role-only options: scoring weights, set-piece formulas, histogram bins, "
+            "and Role configs badge colors.",
         ),
         dbc.Card(
             [
@@ -729,55 +834,6 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Footedness"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Strength scale is 1 (very weak) through 6 (very strong). "
-                            "Each footedness filter uses its own minimum rating for that foot.",
-                            className="text-muted",
-                        ),
-                        html.Div(
-                            [
-                                dmc.Select(
-                                    id="st-foot-left",
-                                    label="Left foot filter",
-                                    data=rs.foot_strength_options(),
-                                    value=str(settings["foot_thresholds"]["left"]),
-                                    clearable=False,
-                                    searchable=False,
-                                ),
-                                dmc.Select(
-                                    id="st-foot-both",
-                                    label="Both feet filter",
-                                    data=rs.foot_strength_options(),
-                                    value=str(settings["foot_thresholds"]["both"]),
-                                    clearable=False,
-                                    searchable=False,
-                                ),
-                                dmc.Select(
-                                    id="st-foot-right",
-                                    label="Right foot filter",
-                                    data=rs.foot_strength_options(),
-                                    value=str(settings["foot_thresholds"]["right"]),
-                                    clearable=False,
-                                    searchable=False,
-                                ),
-                            ],
-                            className="st-foot-thresholds",
-                        ),
-                        html.Small(
-                            id="st-foot-preview",
-                            children=rs.foot_filter_help(settings["foot_thresholds"]),
-                            className="text-muted d-block mt-2",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
                 dbc.CardHeader("Set-piece formulas"),
                 dbc.CardBody(
                     [
@@ -825,28 +881,6 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Band colors"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Background and text color table cells and legend chips. "
-                            "Bar is the squad-depth segment. Enter hex colors like #dcfce7.",
-                            className="text-muted",
-                        ),
-                        html.Div(
-                            [
-                                _color_row(band, label, settings["colors"][band])
-                                for band, label in BAND_LABELS
-                            ],
-                            className="st-color-list",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
                 dbc.CardHeader("Role config badge colors"),
                 dbc.CardBody(
                     [
@@ -864,34 +898,6 @@ def _role_panel(settings: dict) -> list:
                             ],
                             className="st-color-list",
                         ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
-                dbc.CardHeader("Personality tier colors"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Background and text colors for Personality cells and modal labels. "
-                            "Tiers follow the FM personality guide "
-                            "(Excellent → Poor).",
-                            className="text-muted",
-                        ),
-                        html.Div(
-                            [
-                                _pers_color_row(
-                                    tier["id"],
-                                    tier["label"],
-                                    settings["personality_tier_colors"][tier["id"]],
-                                    tier.get("description") or "",
-                                )
-                                for tier in tier_defs()
-                            ],
-                            className="st-color-list",
-                        ),
                         _section_save_row("st-save-role", "st-status-role"),
                     ]
                 ),
@@ -904,7 +910,7 @@ def _role_panel(settings: dict) -> list:
 def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
     settings = us.normalize(settings)
     tree = thresh_pack["thresholds"]
-    group0 = "mid"
+    group0 = "gk"
     cat0 = _default_thresh_category(group0)
     note = (
         f"{stp.BUILTIN_NAME} is the shipped MustermannFM table. "
@@ -917,29 +923,6 @@ def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
             "Player stats",
             "Percentile cut-points for each statistic (20th / 40th / 60th / 80th). "
             "These drive estimated percentiles on the Player stats page.",
-        ),
-        dbc.Card(
-            [
-                dbc.CardHeader("Minutes requirement"),
-                dbc.CardBody(
-                    [
-                        html.P(
-                            "Default minutes used to seed the Player stats minutes filter. "
-                            "Saved when you Save this section (percentile pack card below).",
-                            className="text-muted",
-                        ),
-                        dmc.NumberInput(
-                            id="st-default-minutes",
-                            label="Default minutes required",
-                            value=settings.get("default_minutes_required"),
-                            min=0,
-                            max=20000,
-                            step=90,
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
         ),
         dbc.Card(
             [
@@ -997,6 +980,7 @@ def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
                     [
                         html.P(
                             "Pick a position group and category, then edit the four cut-points. "
+                            "Categories are ordered Defending, Final third / Goalkeeping, then Possession. "
                             "Save this section to apply the active pack on Player stats.",
                             className="text-muted",
                         ),
@@ -1490,8 +1474,6 @@ def _ui_draft_from_state(
     Output("st-depth-undo-max", "value"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
-    Output("st-percentiles-pack", "data"),
-    Output("st-percentiles-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
     Output("st-status-general", "children"),
     Output("st-status-role", "children"),
@@ -1527,7 +1509,6 @@ def _ui_draft_from_state(
     State("st-default-minutes", "value"),
     State("st-depth-undo-max", "value"),
     State("st-role-weights-pack", "value"),
-    State("st-percentiles-pack", "value"),
     prevent_initial_call=True,
 )
 def handle_ui_settings(
@@ -1562,10 +1543,9 @@ def handle_ui_settings(
     default_minutes,
     depth_undo_max,
     role_weights_pack,
-    percentiles_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 36
+    n_out = 34
     if not triggered:
         return (no_update,) * n_out
 
@@ -1657,14 +1637,9 @@ def handle_ui_settings(
             status_general = f"Saved {settings['name']}."
             update_pack_options = False
         sync_theme = True
-        # Active scoring packs (role weights + percentiles).
+        # Active scoring weights pack.
         if role_weights_pack:
             rc.load_pack(role_weights_pack)
-        if percentiles_pack:
-            pack = stp.load(percentiles_pack)
-            settings["stats_thresholds"] = pack["thresholds"]
-            settings["stats_threshold_pack_id"] = pack["id"]
-            settings = us.save(settings, settings.get("id") or pack_id)
     elif triggered == "st-save-role":
         if us.is_builtin(pack_id):
             settings = us.save(draft, pack_id)
@@ -1693,8 +1668,6 @@ def handle_ui_settings(
     theme_value = settings["preferred_theme"] if sync_theme else no_update
     role_weights_options = rc.pack_options()
     role_weights_value = rc.active_pack_id()
-    percentiles_options = stp.pack_options()
-    percentiles_value = settings.get("stats_threshold_pack_id") or stp.active_id()
     return (
         settings,
         pack_options,
@@ -1702,8 +1675,6 @@ def handle_ui_settings(
         *role_values,
         role_weights_options,
         role_weights_value,
-        percentiles_options,
-        percentiles_value,
         theme_value,
         status_general,
         status_role,
@@ -1719,9 +1690,6 @@ def handle_ui_settings(
     Output("st-thresh-revision", "data"),
     Output("st-status-thresh", "children"),
     Output("st-thresh-new-name", "value"),
-    Output("st-default-minutes", "value", allow_duplicate=True),
-    Output("st-percentiles-pack", "data", allow_duplicate=True),
-    Output("st-percentiles-pack", "value", allow_duplicate=True),
     Input("st-thresh-pack", "value"),
     Input("st-thresh-new", "n_clicks"),
     Input("st-thresh-reset", "n_clicks"),
@@ -1730,7 +1698,6 @@ def handle_ui_settings(
     State("st-thresh-data", "data"),
     State("st-thresh-revision", "data"),
     State("ui-settings", "data"),
-    State("st-default-minutes", "value"),
     prevent_initial_call=True,
 )
 def handle_thresh_packs(
@@ -1742,16 +1709,15 @@ def handle_thresh_packs(
     thresh_data,
     revision,
     ui_settings,
-    default_minutes,
 ):
     triggered = ctx.triggered_id
+    n_out = 7
     if not triggered:
-        return (no_update,) * 10
+        return (no_update,) * n_out
     draft = {"id": pack_id, "thresholds": thresh_data}
     clear_name = no_update
     update_options = True
     bump = True
-    minutes_out = no_update
 
     if triggered == "st-thresh-pack":
         pack = stp.load(pack_id)
@@ -1778,14 +1744,8 @@ def handle_thresh_packs(
         label = str(new_name or "").strip()
         if not label:
             return (
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                "Enter a name to create a new percentile pack.",
-                no_update,
-                no_update,
+                (no_update,) * 5
+                + ("Enter a name to create a new percentile pack.", no_update)
             )
         pack = stp.create_pack(label, draft)
         status = f"Created {pack['name']}."
@@ -1801,20 +1761,14 @@ def handle_thresh_packs(
             status = f"Saved {pack['name']}."
             update_options = False
     else:
-        return (no_update,) * 8
+        return (no_update,) * n_out
 
-    # Refresh ui-settings so Player stats picks up the active tree + minutes default.
+    # Refresh ui-settings so Player stats picks up the active threshold tree.
     settings = us.normalize(ui_settings or {})
     settings["stats_thresholds"] = pack["thresholds"]
     settings["stats_threshold_pack_id"] = pack["id"]
     if triggered == "st-save-thresh":
-        settings["default_minutes_required"] = us.normalize_default_minutes_required(
-            default_minutes
-        )
-        # Persist minutes on the active Role scores settings pack.
         settings = us.save(settings, settings.get("id"))
-        minutes_out = settings["default_minutes_required"]
-        status = f"{status} Minutes default saved."
     settings = _refresh_ui_settings(settings)
     return (
         settings,
@@ -1824,7 +1778,4 @@ def handle_thresh_packs(
         int(revision or 0) + (1 if bump else 0),
         status,
         clear_name,
-        minutes_out,
-        stp.pack_options(),
-        settings.get("stats_threshold_pack_id") or pack["id"],
     )
