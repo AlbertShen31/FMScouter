@@ -46,6 +46,7 @@ def _player_metric_sections(
     *,
     threshold_overrides=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> list[dict]:
     # Present in some threshold packs but unused by Mustermann scoring — omit from
     # modal bars / pizzas / values so charts match the metrics that drive averages.
@@ -67,6 +68,7 @@ def _player_metric_sections(
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+        metric_p0=metric_p0,
             )
             meta = metric_defs()[mid]
             metrics.append(
@@ -529,37 +531,56 @@ def _format_minutes_identity(value) -> str:
     return str(int(num)) if num == int(num) else str(num)
 
 
-def _overall_avg_banner(sections: list[dict]) -> html.Div:
+def _overall_avg_banner(sections: list[dict], *, phase_label: str | None = None) -> html.Div:
     """Modal summary: mean of the three category average percentiles."""
     pcts = [
         float(cat["avg_percentile"])
         for cat in sections
         if cat.get("avg_percentile") is not None
     ]
+    phase = html.Span(
+        f"vs {phase_label}" if phase_label else "",
+        className="pf-percentile-phase-tag",
+    ) if phase_label else None
     if not pcts:
-        return html.Div(
-            [
-                html.Span("Overall", className="st-overall-label"),
-                html.Span("Avg —", className="st-section-avg is-missing"),
-            ],
-            className="st-overall-avg",
-        )
+        children = [
+            html.Span("Overall", className="st-overall-label"),
+            html.Span("Avg —", className="st-section-avg is-missing"),
+        ]
+        if phase is not None:
+            children.append(phase)
+        return html.Div(children, className="st-overall-avg")
     avg = sum(pcts) / len(pcts)
     color = percentile_color(avg)
-    return html.Div(
-        [
-            html.Span("Overall", className="st-overall-label"),
-            html.Span(
-                f"Avg ~{avg:.0f}th",
-                className="st-section-avg",
-                style={"color": color} if color else None,
-                title=(
-                    "Average of Defending, Final third / Goalkeeping, "
-                    "and Possession category averages"
-                ),
+    children = [
+        html.Span("Overall", className="st-overall-label"),
+        html.Span(
+            f"Avg ~{avg:.0f}th",
+            className="st-section-avg",
+            style={"color": color} if color else None,
+            title=(
+                "Average of Defending, Final third / Goalkeeping, "
+                "and Possession category averages"
+                + (f" (banded as {phase_label})" if phase_label else "")
             ),
-        ],
-        className="st-overall-avg",
+        ),
+    ]
+    if phase is not None:
+        children.append(phase)
+    return html.Div(children, className="st-overall-avg")
+
+
+def _percentile_phase_note(eval_group: str) -> html.Div:
+    from scoring.stats_scorer import pos_group_label
+
+    label = pos_group_label(eval_group)
+    return html.Div(
+        f"Percentiles vs {label}",
+        className="pf-percentile-phase-note",
+        title=(
+            f"Overall and category percentiles use {label} benchmark thresholds "
+            "and adaptive 0th/100th bounds from that phase cohort in the loaded file."
+        ),
     )
 
 
@@ -573,8 +594,11 @@ def _player_modal_body(
     threshold_overrides=None,
     settings=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> html.Div:
     settings = us.normalize(settings)
+    from scoring.stats_scorer import pos_group_label
+
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
@@ -584,6 +608,7 @@ def _player_modal_body(
         eval_group,
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -617,7 +642,7 @@ def _player_modal_body(
                 ],
                 className="st-player-switch-block",
             ),
-            _overall_avg_banner(sections),
+            _overall_avg_banner(sections, phase_label=pos_group_label(eval_group)),
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
     )
@@ -632,6 +657,7 @@ def stats_charts_bottom_pane(
     threshold_overrides=None,
     settings=None,
     metric_p100=None,
+    metric_p0=None,
     cohort_players=None,
 ) -> html.Div:
     """Build the charts portion (overall avg + bars/pizzas/values) for a player.
@@ -656,10 +682,16 @@ def stats_charts_bottom_pane(
         except AttributeError:
             threshold_overrides = None
 
-    if metric_p100 is None and cohort_players is not None:
-        from scoring.stats_scorer import adaptive_metric_p100_map
+    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+        from scoring.stats_scorer import adaptive_metric_bound_maps
 
-        metric_p100 = adaptive_metric_p100_map(cohort_players, threshold_overrides)
+        auto_p0, auto_p100 = adaptive_metric_bound_maps(
+            cohort_players, threshold_overrides
+        )
+        if metric_p0 is None:
+            metric_p0 = auto_p0
+        if metric_p100 is None:
+            metric_p100 = auto_p100
 
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
@@ -670,6 +702,7 @@ def stats_charts_bottom_pane(
         eval_group,
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -678,7 +711,14 @@ def stats_charts_bottom_pane(
     else:
         metrics = _metrics_values(sections)
 
+    from scoring.stats_scorer import pos_group_label
+
+    phase_label = pos_group_label(eval_group)
     return html.Div(
-        [_overall_avg_banner(sections), html.Div(metrics, className="st-player-metrics")],
+        [
+            _percentile_phase_note(eval_group),
+            _overall_avg_banner(sections, phase_label=phase_label),
+            html.Div(metrics, className="st-player-metrics"),
+        ],
         className="pf-stats-charts-bottom",
     )

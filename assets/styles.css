@@ -4229,12 +4229,34 @@ body[data-theme="light"] .st-player-seg-btn {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.75rem;
     padding: 0.55rem 0.75rem;
     margin: 0.15rem 0 0.35rem;
     border: 1px solid var(--app-line);
     border-radius: 10px;
     background: color-mix(in srgb, var(--app-elev) 88%, transparent);
+}
+
+.pf-percentile-phase-note {
+    color: var(--app-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0 0 0.45rem;
+}
+
+.pf-percentile-phase-tag {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+html[data-theme="light"] .pf-percentile-phase-note,
+body[data-theme="light"] .pf-percentile-phase-note,
+html[data-theme="light"] .pf-percentile-phase-tag,
+body[data-theme="light"] .pf-percentile-phase-tag {
+    color: var(--app-muted);
 }
 
 .st-overall-label {

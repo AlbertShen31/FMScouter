@@ -190,11 +190,14 @@ depth_avg = mean(selected role scores for that position group)
 For each metric, MustermannFM benchmark tables supply four thresholds (20th / 40th / 60th / 80th).
 
 higher_is_better:
-  value ≤ t20  → interpolate toward 0 from t20
+  value ≤ t20  → interpolate toward 0 at p0
+                 (p0 = min of settings-implied floor t20-|t20|
+                  and the dataset min for that phase group; lower-is-better
+                  uses max with t20+|t20| / dataset max)
   t20 < value ≤ t80 → linear steps 20 → 40 → 60 → 80
   value > t80  → interpolate toward 100 at p100
                  (p100 = max of settings-implied ceiling t80+|t80|
-                  and the dataset max for that metric; lower-is-better
+                  and the dataset max for that phase group; lower-is-better
                   uses min with t80-|t80| / dataset min so top values still spread)
 
 lower_is_better:

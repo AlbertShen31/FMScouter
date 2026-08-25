@@ -3841,6 +3841,16 @@ def _build_profile_modal_body(
 ) -> html.Div:
     """Shared body builder for open and switch callbacks."""
     stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
+    if isinstance(stats_player, dict):
+        from scoring.stats_scorer import resolve_player_pos_group
+
+        stats_player = dict(stats_player)
+        # Prefer identity from the role export when classifying phase.
+        if not stats_player.get("best_pos") and player.get("best_pos"):
+            stats_player["best_pos"] = player.get("best_pos")
+        if not stats_player.get("position") and player.get("position"):
+            stats_player["position"] = player.get("position")
+        stats_player["pos_group"] = resolve_player_pos_group(stats_player)
     display_player = dict(player)
     if isinstance(stats_player, dict):
         for key in (

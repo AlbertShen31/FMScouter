@@ -271,13 +271,13 @@ def estimate_percentile(
     *,
     higher_is_better: bool,
     p100: float | None = None,
+    p0: float | None = None,
 ) -> float:
     """Map a value onto ~0–100 using 20/40/60/80 boundaries.
 
-    When ``p100`` is set, values beyond the 80th cut interpolate toward 100 at
-    that ceiling (adaptive: max/min of the settings-implied 100th and the
-    extreme in the loaded dataset so the top of the file does not all collapse
-    to 100%).
+    Optional ``p0`` / ``p100`` stretch the bottom (0→20) and top (80→100)
+    spans. Adaptive callers pass max/min of the settings-implied floor/ceiling
+    and the extreme in the phase cohort so tails do not collapse.
     """
     if len(thresholds) != 4:
         raise ValueError("Expected four percentile thresholds")
@@ -290,33 +290,37 @@ def estimate_percentile(
             return phi
         return plo + (phi - plo) * ((v - lo) / (hi - lo))
 
-    def top_span(bound: float, ceiling: float | None, *, toward_high: bool) -> float:
-        if ceiling is not None:
-            span = (ceiling - bound) if toward_high else (bound - ceiling)
+    def end_span(bound: float, edge: float | None, *, toward_high: bool) -> float:
+        if edge is not None:
+            span = (edge - bound) if toward_high else (bound - edge)
             if span > 0:
                 return span
         return abs(bound) if bound != 0 else 1.0
 
     if higher_is_better:
         if value <= bounds[0]:
-            # Below 20th — slide toward 0
-            span = abs(bounds[0]) if bounds[0] != 0 else 1.0
-            return max(0.0, 20.0 * (1.0 - (bounds[0] - value) / span))
+            span = end_span(bounds[0], p0, toward_high=False)
+            floor = (bounds[0] - span) if p0 is None else float(p0)
+            if span <= 0:
+                return 0.0 if value < bounds[0] else 20.0
+            return max(0.0, min(20.0, 20.0 * (value - floor) / span))
         for i in range(3):
             if value <= bounds[i + 1]:
                 return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
-        # Above 80th
-        span = top_span(bounds[3], p100, toward_high=True)
+        span = end_span(bounds[3], p100, toward_high=True)
         return min(100.0, 80.0 + 20.0 * min(1.0, (value - bounds[3]) / span))
 
     # Lower is better: thresholds decrease as quality improves
     if value >= bounds[0]:
-        span = abs(bounds[0]) if bounds[0] != 0 else 1.0
-        return max(0.0, 20.0 * (1.0 - (value - bounds[0]) / span))
+        span = end_span(bounds[0], p0, toward_high=True)
+        floor = (bounds[0] + span) if p0 is None else float(p0)
+        if span <= 0:
+            return 0.0 if value > bounds[0] else 20.0
+        return max(0.0, min(20.0, 20.0 * (floor - value) / span))
     for i in range(3):
         if value >= bounds[i + 1]:
             return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
-    span = top_span(bounds[3], p100, toward_high=False)
+    span = end_span(bounds[3], p100, toward_high=False)
     return min(100.0, 80.0 + 20.0 * min(1.0, (bounds[3] - value) / span))
 
 
@@ -327,6 +331,52 @@ def implied_percentile_ceiling(
     t80 = float(thresholds[3])
     span = abs(t80) if t80 != 0 else 1.0
     return t80 + span if higher_is_better else t80 - span
+
+
+def implied_percentile_floor(
+    thresholds: list[float], *, higher_is_better: bool
+) -> float:
+    """Default 0th-percentile value implied by the 20th cut (settings)."""
+    t20 = float(thresholds[0])
+    span = abs(t20) if t20 != 0 else 1.0
+    return t20 - span if higher_is_better else t20 + span
+
+
+def pos_group_label(group: str | None) -> str:
+    """Human label for a stats phase group (Defenders, Midfielders, …)."""
+    key = (group or "").strip().lower()
+    for gid, label, _css in POS_GROUPS:
+        if gid == key:
+            return label
+    return key or "—"
+
+
+def resolve_player_pos_group(player: dict[str, Any] | None) -> str:
+    """Canonical gk/def/mid/fwd for banding — prefer stored group, else classify."""
+    if not player:
+        return "mid"
+    stored = str(player.get("pos_group") or "").strip().lower()
+    if stored in {"gk", "def", "mid", "fwd"}:
+        return stored
+    return classify_best_pos(
+        str(player.get("best_pos") or ""),
+        str(player.get("position") or ""),
+    )
+
+
+def players_in_pos_group(
+    players: list[dict[str, Any]] | None,
+    group: str,
+) -> list[dict[str, Any]]:
+    """Players whose phase group matches ``group`` (gk/def/mid/fwd)."""
+    want = str(group or "").strip().lower()
+    if not want:
+        return list(players or [])
+    return [
+        player
+        for player in (players or [])
+        if resolve_player_pos_group(player) == want
+    ]
 
 
 def metric_extreme_among_players(
@@ -353,6 +403,30 @@ def metric_extreme_among_players(
     return max(values) if higher_is_better else min(values)
 
 
+def metric_floor_among_players(
+    players: list[dict[str, Any]] | None,
+    metric_id: str,
+    *,
+    higher_is_better: bool,
+) -> float | None:
+    """Worst raw metric value among scorable players (adaptive 0th floor)."""
+    values: list[float] = []
+    for player in players or []:
+        raw = scoring_stats(player).get(metric_id)
+        if raw is None:
+            continue
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if number != number:
+            continue
+        values.append(number)
+    if not values:
+        return None
+    return min(values) if higher_is_better else max(values)
+
+
 def adaptive_metric_p100(
     players: list[dict[str, Any]] | None,
     metric_id: str,
@@ -361,7 +435,7 @@ def adaptive_metric_p100(
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
 ) -> float | None:
-    """100th cut: max/min of settings ceiling and the extreme in ``players``."""
+    """100th cut: max/min of settings ceiling and the extreme in the phase cohort."""
     thresholds = resolve_thresholds(
         group, category, metric_id, threshold_overrides=threshold_overrides
     )
@@ -369,12 +443,38 @@ def adaptive_metric_p100(
         return None
     hib = bool((metric_defs().get(metric_id) or {}).get("higher_is_better", True))
     setting = implied_percentile_ceiling(thresholds, higher_is_better=hib)
+    cohort = players_in_pos_group(players, group) or list(players or [])
     observed = metric_extreme_among_players(
-        players, metric_id, higher_is_better=hib
+        cohort, metric_id, higher_is_better=hib
     )
     if observed is None:
         return setting
     return max(setting, observed) if hib else min(setting, observed)
+
+
+def adaptive_metric_p0(
+    players: list[dict[str, Any]] | None,
+    metric_id: str,
+    *,
+    group: str,
+    category: str,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> float | None:
+    """0th cut: min/max of settings floor and the worst value in the phase cohort."""
+    thresholds = resolve_thresholds(
+        group, category, metric_id, threshold_overrides=threshold_overrides
+    )
+    if not thresholds:
+        return None
+    hib = bool((metric_defs().get(metric_id) or {}).get("higher_is_better", True))
+    setting = implied_percentile_floor(thresholds, higher_is_better=hib)
+    cohort = players_in_pos_group(players, group) or list(players or [])
+    observed = metric_floor_among_players(
+        cohort, metric_id, higher_is_better=hib
+    )
+    if observed is None:
+        return setting
+    return min(setting, observed) if hib else max(setting, observed)
 
 
 def xg_prevented_p100(
@@ -391,41 +491,70 @@ def xg_prevented_p100(
     )
 
 
-def _metric_p100_lookup(
-    metric_p100: dict[str, float] | None,
+def _metric_bound_lookup(
+    bound_map: dict[str, float] | None,
     group: str,
     metric_id: str,
 ) -> float | None:
-    """Prefer group-scoped ceiling, then bare metric id."""
-    if not metric_p100:
+    """Prefer group-scoped bound, then bare metric id."""
+    if not bound_map:
         return None
     for key in (f"{group}:{metric_id}", metric_id):
-        if key not in metric_p100:
+        if key not in bound_map:
             continue
         try:
-            return float(metric_p100[key])
+            return float(bound_map[key])
         except (TypeError, ValueError):
             continue
     return None
 
 
-def adaptive_metric_p100_map(
+def _store_group_metric_bound(
+    out: dict[str, float],
+    *,
+    group: str,
+    metric_id: str,
+    value: float,
+    higher_is_better: bool,
+    prefer_max: bool,
+) -> None:
+    """Write ``group:metric`` and merge into bare ``metric`` across groups."""
+    out[f"{group}:{metric_id}"] = value
+    prior = out.get(metric_id)
+    if prior is None:
+        out[metric_id] = value
+        return
+    take_max = prefer_max if higher_is_better else (not prefer_max)
+    out[metric_id] = max(prior, value) if take_max else min(prior, value)
+
+
+def adaptive_metric_bound_maps(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
-) -> dict[str, float]:
-    """Metric ceilings for the 80→100 span.
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Phase-scoped adaptive 0th and 100th maps.
 
-    Keys are ``group:metric_id`` (preferred by ``band_metric``) and bare
-    ``metric_id`` (most extreme ceiling across groups that use the metric).
-    Each ceiling is max/min of the settings-implied 100th and the extreme
-    value in ``players``.
+    Returns ``(p0_map, p100_map)``. Keys are ``group:metric_id`` (preferred by
+    ``band_metric``) and bare ``metric_id``. Extremes use players in that phase
+    group only (Defenders / Midfielders / Forwards / Goalkeepers).
     """
-    out: dict[str, float] = {}
+    p0_out: dict[str, float] = {}
+    p100_out: dict[str, float] = {}
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = [cat["id"] for cat in view_categories()]
     for group in groups:
         for category in categories:
             for metric_id in metrics_for(group, category, threshold_overrides):
+                hib = bool(
+                    (metric_defs().get(metric_id) or {}).get("higher_is_better", True)
+                )
+                p0 = adaptive_metric_p0(
+                    players,
+                    metric_id,
+                    group=group,
+                    category=category,
+                    threshold_overrides=threshold_overrides,
+                )
                 p100 = adaptive_metric_p100(
                     players,
                     metric_id,
@@ -433,21 +562,44 @@ def adaptive_metric_p100_map(
                     category=category,
                     threshold_overrides=threshold_overrides,
                 )
-                if p100 is None:
-                    continue
-                value = float(p100)
-                out[f"{group}:{metric_id}"] = value
-                hib = bool(
-                    (metric_defs().get(metric_id) or {}).get("higher_is_better", True)
-                )
-                prior = out.get(metric_id)
-                if prior is None:
-                    out[metric_id] = value
-                elif hib:
-                    out[metric_id] = max(prior, value)
-                else:
-                    out[metric_id] = min(prior, value)
-    return out
+                if p0 is not None:
+                    # Floor: keep the more extreme (worse) bound across groups.
+                    _store_group_metric_bound(
+                        p0_out,
+                        group=group,
+                        metric_id=metric_id,
+                        value=float(p0),
+                        higher_is_better=hib,
+                        prefer_max=False,
+                    )
+                if p100 is not None:
+                    _store_group_metric_bound(
+                        p100_out,
+                        group=group,
+                        metric_id=metric_id,
+                        value=float(p100),
+                        higher_is_better=hib,
+                        prefer_max=True,
+                    )
+    return p0_out, p100_out
+
+
+def adaptive_metric_p100_map(
+    players: list[dict[str, Any]] | None,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """Backward-compatible 100th-only map (see :func:`adaptive_metric_bound_maps`)."""
+    _p0, p100 = adaptive_metric_bound_maps(players, threshold_overrides)
+    return p100
+
+
+def adaptive_metric_p0_map(
+    players: list[dict[str, Any]] | None,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """Adaptive 0th floor map (see :func:`adaptive_metric_bound_maps`)."""
+    p0, _p100 = adaptive_metric_bound_maps(players, threshold_overrides)
+    return p0
 
 
 def minutes_status(minutes: float | None, required: float) -> str:
@@ -695,6 +847,7 @@ def band_metric(
     *,
     threshold_overrides: dict[str, Any] | None = None,
     metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     meta = metric_defs().get(metric_id) or {}
     thresholds = resolve_thresholds(
@@ -709,12 +862,14 @@ def band_metric(
             "higher_is_better": bool(meta.get("higher_is_better", True)),
         }
     hib = bool(meta.get("higher_is_better", True))
-    p100 = _metric_p100_lookup(metric_p100, group, metric_id)
+    p100 = _metric_bound_lookup(metric_p100, group, metric_id)
+    p0 = _metric_bound_lookup(metric_p0, group, metric_id)
     pct = estimate_percentile(
         float(value),
         list(thresholds),
         higher_is_better=hib,
         p100=p100,
+        p0=p0,
     )
     unit = meta.get("unit")
     if unit == "percent":
@@ -740,6 +895,7 @@ def category_average_band(
     *,
     threshold_overrides: dict[str, Any] | None = None,
     metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Mean estimated percentile across metrics in one category (missing skipped)."""
     pcts: list[float] = []
@@ -751,6 +907,7 @@ def category_average_band(
             (stats or {}).get(mid),
             threshold_overrides=threshold_overrides,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
@@ -776,6 +933,7 @@ def overall_average_band(
     *,
     threshold_overrides: dict[str, Any] | None = None,
     metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Mean of the three category average percentiles (missing categories skipped)."""
     pcts: list[float] = []
@@ -786,6 +944,7 @@ def overall_average_band(
             stats,
             threshold_overrides=threshold_overrides,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
@@ -835,7 +994,7 @@ def format_stat_export_rows(
     ``possession`` / ``all``). Keepers use the mapped GK benchmark blocks.
     """
     category = canonical_category(category)
-    metric_p100 = adaptive_metric_p100_map(players)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players)
     if category == "all":
         cats = labeled_view_categories(group=group, dual_final_third=True)
         fieldnames = [
@@ -879,11 +1038,13 @@ def format_stat_export_rows(
             stats = scoring_stats(p)
             for cat in cats:
                 band = category_average_band(
-                    use_g, cat["id"], stats, metric_p100=metric_p100
+                    use_g, cat["id"], stats, metric_p100=metric_p100,
+                    metric_p0=metric_p0
                 )
                 row[cat["label"]] = band["display"]
             row["Overall average"] = overall_average_band(
-                use_g, stats, metric_p100=metric_p100
+                use_g, stats, metric_p100=metric_p100,
+                    metric_p0=metric_p0
             )["display"]
             rows.append(row)
         return fieldnames, rows
@@ -929,7 +1090,8 @@ def format_stat_export_rows(
             use_g = "gk" if is_gk_group(g) else g
             stats = scoring_stats(p)
             row["Category average"] = category_average_band(
-                use_g, category, stats, metric_p100=metric_p100
+                use_g, category, stats, metric_p100=metric_p100,
+                    metric_p0=metric_p0
             )["display"]
             for mid in metric_ids:
                 label = metric_defs()[mid]["abbr"]
@@ -942,6 +1104,7 @@ def format_stat_export_rows(
                     mid,
                     stats.get(mid),
                     metric_p100=metric_p100,
+                    metric_p0=metric_p0,
                 )
                 row[label] = band["display"]
             rows.append(row)
@@ -982,7 +1145,8 @@ def format_stat_export_rows(
         }
         stats = scoring_stats(p)
         row["Category average"] = category_average_band(
-            group, category, stats, metric_p100=metric_p100
+            group, category, stats, metric_p100=metric_p100,
+                    metric_p0=metric_p0
         )["display"]
         for mid in metric_ids:
             band = band_metric(
@@ -991,6 +1155,7 @@ def format_stat_export_rows(
                 mid,
                 stats.get(mid),
                 metric_p100=metric_p100,
+                    metric_p0=metric_p0,
             )
             row[metric_defs()[mid]["abbr"]] = band["display"]
         rows.append(row)

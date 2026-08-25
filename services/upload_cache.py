@@ -20,7 +20,7 @@ import services.export_library as lib
 import services.role_config as rc
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v2"
+FORMULA_VERSION = "v3"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -266,7 +266,7 @@ def _precompute_stats_percentiles(
 ) -> dict[str, dict[str, dict[str, float]]]:
     """player_key → group → metric_id → percentile."""
     from scoring.stats_scorer import (
-        adaptive_metric_p100_map,
+        adaptive_metric_bound_maps,
         band_metric,
         benchmarks,
         metrics_for,
@@ -276,7 +276,7 @@ def _precompute_stats_percentiles(
 
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = ["defending", "final_third", "possession", "all"]
-    metric_p100 = adaptive_metric_p100_map(players, threshold_tree)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, threshold_tree)
     out: dict[str, dict[str, dict[str, float]]] = {}
     for player in players:
         key = player_key(player)
@@ -304,6 +304,7 @@ def _precompute_stats_percentiles(
                     stats.get(mid),
                     threshold_overrides=threshold_tree,
                     metric_p100=metric_p100,
+                    metric_p0=metric_p0,
                 )
                 pct = band.get("percentile")
                 if pct is not None:

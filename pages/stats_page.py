@@ -65,6 +65,7 @@ from components.scouting_shell import (
 from scoring.comparison import delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
     POS_GROUPS,
+    adaptive_metric_bound_maps,
     adaptive_metric_p100_map,
     band_metric,
     benchmarks,
@@ -735,6 +736,7 @@ def _player_percentile_map(
     category,
     threshold_overrides=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> dict[str, float | None]:
     """Percentiles for comparison columns keyed by table column id."""
     g, cat = _resolve_category(group, category)
@@ -750,6 +752,7 @@ def _player_percentile_map(
             stats,
             threshold_overrides=threshold_overrides,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         ).get("percentile")
         for section in _avg_category_columns(g):
             col_id = section["id"]
@@ -759,6 +762,7 @@ def _player_percentile_map(
                 stats,
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+                metric_p0=metric_p0,
             ).get("percentile")
         return out
     bg, bc = _band_group_cat(player, group, cat)
@@ -771,6 +775,7 @@ def _player_percentile_map(
         stats,
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     ).get("percentile")
     for mid in metrics_for(g, cat, threshold_overrides):
         abbr = metric_defs()[mid]["abbr"]
@@ -783,6 +788,7 @@ def _player_percentile_map(
             stats.get(mid),
             threshold_overrides=threshold_overrides,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         ).get("percentile")
     return out
 
@@ -807,6 +813,7 @@ def _build_rows(
     compare: bool = False,
     hist_percentiles: dict[str, dict[str, float | None]] | None = None,
     metric_p100=None,
+    metric_p0=None,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -842,6 +849,7 @@ def _build_rows(
                     stats,
                     threshold_overrides=threshold_overrides,
                     metric_p100=metric_p100,
+                    metric_p0=metric_p0,
                 )
                 row[OVERALL_COL["id"]] = _percentile_cell(
                     overall_band,
@@ -861,6 +869,7 @@ def _build_rows(
                     stats,
                     threshold_overrides=threshold_overrides,
                     metric_p100=metric_p100,
+                    metric_p0=metric_p0,
                 )
                 row[col_id] = _percentile_cell(
                     band,
@@ -883,6 +892,7 @@ def _build_rows(
                 stats,
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+                metric_p0=metric_p0,
             )
             row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
                 cat_band,
@@ -906,6 +916,7 @@ def _build_rows(
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+                metric_p0=metric_p0,
             )
             row[abbr] = _metric_cell(
                 band,
@@ -948,6 +959,7 @@ def _player_metric_sections(
     *,
     threshold_overrides=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> list[dict]:
     # Present in some threshold packs but unused by Mustermann scoring — omit from
     # modal bars / pizzas / values so charts match the metrics that drive averages.
@@ -969,6 +981,7 @@ def _player_metric_sections(
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+                metric_p0=metric_p0,
             )
             meta = metric_defs()[mid]
             metrics.append(
@@ -1475,6 +1488,7 @@ def _player_modal_body(
     threshold_overrides=None,
     settings=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> html.Div:
     settings = us.normalize(settings)
     view = _normalize_player_view(view)
@@ -1486,6 +1500,7 @@ def _player_modal_body(
         eval_group,
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -1896,12 +1911,12 @@ def refresh_table(
     )
     g, category = _resolve_category(pos, category or "")
     thresh = settings.get("stats_thresholds")
-    metric_p100 = adaptive_metric_p100_map(players, thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
     compare = bool(parsed_historical_players(hist_parsed))
     hist_percentiles: dict[str, dict[str, float | None]] = {}
     if compare:
         hist_players = parsed_historical_players(hist_parsed)
-        hist_p100 = adaptive_metric_p100_map(hist_players, thresh)
+        hist_p0, hist_p100 = adaptive_metric_bound_maps(hist_players, thresh)
         for hp in hist_players:
             pkey = player_key(hp)
             if pkey:
@@ -1911,6 +1926,7 @@ def refresh_table(
                     category=category,
                     threshold_overrides=thresh,
                     metric_p100=hist_p100,
+                    metric_p0=hist_p0,
                 )
 
     filtered = _filter_players(
@@ -1934,6 +1950,7 @@ def refresh_table(
         compare=compare,
         hist_percentiles=hist_percentiles,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
@@ -2078,7 +2095,7 @@ def open_player(
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
     thresh = settings.get("stats_thresholds")
-    metric_p100 = adaptive_metric_p100_map(players, thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
     return (
         True,
         player.get("name"),
@@ -2091,6 +2108,7 @@ def open_player(
             threshold_overrides=thresh,
             settings=settings,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         ),
         key,
         eval_group,
@@ -2138,7 +2156,7 @@ def switch_player_view(
         return view, html.Div("Player not found.")
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    metric_p100 = adaptive_metric_p100_map(_parsed_players(parsed), thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(_parsed_players(parsed), thresh)
     return (
         view,
         _player_modal_body(
@@ -2154,6 +2172,7 @@ def switch_player_view(
             threshold_overrides=thresh,
             settings=settings,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         ),
     )
 
@@ -2187,7 +2206,7 @@ def switch_player_group(
         return no_update, no_update
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    metric_p100 = adaptive_metric_p100_map(_parsed_players(parsed), thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(_parsed_players(parsed), thresh)
     return (
         group,
         _player_modal_body(
@@ -2203,6 +2222,7 @@ def switch_player_group(
             threshold_overrides=thresh,
             settings=settings,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         ),
     )
 

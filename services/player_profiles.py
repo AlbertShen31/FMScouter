@@ -448,6 +448,7 @@ def percentile_fields_from_stats_player(
     *,
     settings=None,
     metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Subset of ``build_stats_row_snapshot`` used when enriching role saves."""
@@ -457,6 +458,7 @@ def percentile_fields_from_stats_player(
         player,
         settings=settings,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
         cohort_players=cohort_players,
     )
     keys = (
@@ -472,6 +474,8 @@ def percentile_fields_from_stats_player(
         "possession",
         "possession_color",
         "possession_label",
+        "percentile_phase",
+        "percentile_phase_label",
     )
     return {k: snap[k] for k in keys if k in snap}
 
@@ -481,15 +485,18 @@ def build_stats_row_snapshot(
     *,
     settings=None,
     metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One shortlist-style row: identity + overall / category percentiles."""
     import services.ui_settings as us
     from scoring.stats_scorer import (
-        adaptive_metric_p100_map,
+        adaptive_metric_bound_maps,
         category_average_band,
         labeled_view_categories,
         overall_average_band,
+        pos_group_label,
+        resolve_player_pos_group,
         scoring_stats,
     )
 
@@ -519,16 +526,28 @@ def build_stats_row_snapshot(
         "defending",
         "final_third",
         "possession",
+        "percentile_phase",
+        "percentile_phase_label",
     }
     out = {k: v for k, v in out.items() if k in keep or k in ("Name", "Club")}
 
     stats = scoring_stats(player)
-    group = player.get("pos_group") or "mid"
+    group = resolve_player_pos_group(player)
+    out["percentile_phase"] = group
+    out["percentile_phase_label"] = pos_group_label(group)
     thresh = settings.get("stats_thresholds")
-    if metric_p100 is None and cohort_players is not None:
-        metric_p100 = adaptive_metric_p100_map(cohort_players, thresh)
+    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+        auto_p0, auto_p100 = adaptive_metric_bound_maps(cohort_players, thresh)
+        if metric_p0 is None:
+            metric_p0 = auto_p0
+        if metric_p100 is None:
+            metric_p100 = auto_p100
     overall = overall_average_band(
-        group, stats, threshold_overrides=thresh, metric_p100=metric_p100
+        group,
+        stats,
+        threshold_overrides=thresh,
+        metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     out["overall"] = overall.get("percentile")
     out["overall_color"] = overall.get("color")
@@ -540,6 +559,7 @@ def build_stats_row_snapshot(
             stats,
             threshold_overrides=thresh,
             metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         out[cat_id] = band.get("percentile")
         out[f"{cat_id}_color"] = band.get("color")
@@ -614,11 +634,11 @@ def expand_role_profile_rows(
         for p in (stats_players or [])
         if stats_player_key(p)
     }
-    from scoring.stats_scorer import adaptive_metric_p100_map
+    from scoring.stats_scorer import adaptive_metric_bound_maps
     import services.ui_settings as us
 
     settings = us.normalize(settings)
-    metric_p100 = adaptive_metric_p100_map(
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
         stats_players, settings.get("stats_thresholds")
     )
 
@@ -630,7 +650,10 @@ def expand_role_profile_rows(
         player = role_by_key.get(key)
         stats_player = stats_by_key.get(key)
         pct = percentile_fields_from_stats_player(
-            stats_player, settings=settings, metric_p100=metric_p100
+            stats_player,
+            settings=settings,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
@@ -704,14 +727,17 @@ def _entry_looks_like_gk(entry: dict[str, Any] | None) -> bool:
 
 
 def refresh_profile_percentiles(settings=None) -> int:
-    """Recompute stored overall/category percentiles with adaptive p100 ceilings.
+    """Recompute stored overall/category percentiles with adaptive p0/p100 bounds.
 
-    Profiles keep snapshot percentiles from save time; after adaptive 100th
-    ceilings change those snapshots stay stale until refreshed. Returns how
-    many profiles were updated.
+    Profiles keep snapshot percentiles from save time; after adaptive floors /
+    ceilings or phase scoping change, those snapshots stay stale until
+    refreshed. Returns how many profiles were updated.
     """
     import services.ui_settings as us
-    from scoring.stats_scorer import adaptive_metric_p100_map, classify_best_pos
+    from scoring.stats_scorer import (
+        adaptive_metric_bound_maps,
+        resolve_player_pos_group,
+    )
 
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
@@ -731,15 +757,18 @@ def refresh_profile_percentiles(settings=None) -> int:
             orphan.append(entry)
 
     cohort_cache: dict[str, list[dict[str, Any]]] = {}
-    p100_cache: dict[str, dict[str, float]] = {}
+    bounds_cache: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
     updated = 0
 
-    def _cohort(file_id: str) -> tuple[list[dict[str, Any]], dict[str, float]]:
+    def _cohort(
+        file_id: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float]]:
         if file_id not in cohort_cache:
             players = load_stats_players_for_file(file_id)
             cohort_cache[file_id] = players
-            p100_cache[file_id] = adaptive_metric_p100_map(players, thresh)
-        return cohort_cache[file_id], p100_cache[file_id]
+            bounds_cache[file_id] = adaptive_metric_bound_maps(players, thresh)
+        p0_map, p100_map = bounds_cache[file_id]
+        return cohort_cache[file_id], p0_map, p100_map
 
     def _stats_for(
         entry: dict[str, Any],
@@ -763,32 +792,37 @@ def refresh_profile_percentiles(settings=None) -> int:
     def _apply(
         entry: dict[str, Any],
         cohort: list[dict[str, Any]],
+        metric_p0: dict[str, float],
         metric_p100: dict[str, float],
     ) -> bool:
         stats_player = _stats_for(entry, cohort)
         if not isinstance(stats_player, dict):
             return False
         band_player = dict(stats_player)
-        if not band_player.get("pos_group"):
-            row = entry.get("row") or {}
-            band_player["pos_group"] = classify_best_pos(
-                str(row.get("Best Pos") or band_player.get("best_pos") or ""),
-                str(row.get("Position") or band_player.get("position") or ""),
-            )
+        row = entry.get("row") or {}
+        # Always re-resolve phase so Ovr/Def/F3/Poss use the right benchmark block.
+        if not band_player.get("best_pos") and row.get("Best Pos"):
+            band_player["best_pos"] = row.get("Best Pos")
+        if not band_player.get("position") and row.get("Position"):
+            band_player["position"] = row.get("Position")
+        band_player["pos_group"] = resolve_player_pos_group(band_player)
         pct = percentile_fields_from_stats_player(
-            band_player, settings=settings, metric_p100=metric_p100
+            band_player,
+            settings=settings,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         if not pct:
             return False
-        row = dict(entry.get("row") or {})
+        next_row = dict(row)
         changed = False
         for key, value in pct.items():
-            if row.get(key) != value:
-                row[key] = value
+            if next_row.get(key) != value:
+                next_row[key] = value
                 changed = True
         if not changed:
             return False
-        entry["row"] = row
+        entry["row"] = next_row
         entry["stats_player"] = band_player
         return True
 
@@ -798,11 +832,11 @@ def refresh_profile_percentiles(settings=None) -> int:
         if not isinstance(stats_player, dict):
             return False
         cohort = [stats_player]
-        metric_p100 = adaptive_metric_p100_map(cohort, thresh)
-        return _apply(entry, cohort, metric_p100)
+        metric_p0, metric_p100 = adaptive_metric_bound_maps(cohort, thresh)
+        return _apply(entry, cohort, metric_p0, metric_p100)
 
     for file_id, entries in by_file.items():
-        cohort, metric_p100 = _cohort(file_id)
+        cohort, metric_p0, metric_p100 = _cohort(file_id)
         if not cohort:
             for entry in entries:
                 if _apply_embedded_only(entry):
@@ -810,7 +844,7 @@ def refresh_profile_percentiles(settings=None) -> int:
             continue
         for entry in entries:
             if _stats_for(entry, cohort) is not None:
-                if _apply(entry, cohort, metric_p100):
+                if _apply(entry, cohort, metric_p0, metric_p100):
                     updated += 1
             elif _apply_embedded_only(entry):
                 updated += 1

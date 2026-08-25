@@ -202,6 +202,7 @@ def _player_metric_sections(
     *,
     threshold_overrides=None,
     metric_p100=None,
+    metric_p0=None,
 ) -> list[dict]:
     skip_metrics = frozenset({"shots_on_target", "conversion_rate"})
     g = _normalize_eval_group(player, eval_group)
@@ -219,6 +220,7 @@ def _player_metric_sections(
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
+                metric_p0=metric_p0,
             )
             meta = metric_defs()[mid]
             metrics.append(
@@ -333,6 +335,7 @@ def stats_player_detail_card(
     minutes_required: float | None = None,
     threshold_overrides=None,
     metric_p100=None,
+    metric_p0=None,
     cohort_players=None,
 ) -> html.Div:
     settings = us.normalize(settings)
@@ -341,19 +344,24 @@ def stats_player_detail_card(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    if metric_p100 is None and cohort_players is not None:
-        from scoring.stats_scorer import adaptive_metric_p100_map
+    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+        from scoring.stats_scorer import adaptive_metric_bound_maps
 
-        metric_p100 = adaptive_metric_p100_map(
+        auto_p0, auto_p100 = adaptive_metric_bound_maps(
             cohort_players,
             threshold_overrides
             if threshold_overrides is not None
             else settings.get("stats_thresholds"),
         )
+        if metric_p0 is None:
+            metric_p0 = auto_p0
+        if metric_p100 is None:
+            metric_p100 = auto_p100
     sections = _player_metric_sections(
         player,
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
+        metric_p0=metric_p0,
     )
     status = minutes_status(player.get("minutes"), minutes_required)
     pcts = [
@@ -535,15 +543,25 @@ def profile_detail_body(
     if show_stats and stats_player and stats_player.get("stats"):
         children.append(html.Hr(className="pf-section-divider"))
         cohort = resolved.get("stats_cohort") or None
+        metric_p0 = None
         metric_p100 = None
         if cohort:
-            from scoring.stats_scorer import adaptive_metric_p100_map
+            from scoring.stats_scorer import adaptive_metric_bound_maps
 
-            metric_p100 = adaptive_metric_p100_map(
+            metric_p0, metric_p100 = adaptive_metric_bound_maps(
                 cohort, settings.get("stats_thresholds")
             )
+        from scoring.stats_scorer import pos_group_label, resolve_player_pos_group
+
+        stats_player = dict(stats_player)
+        stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+        phase = resolve_player_pos_group(stats_player)
+        phase_label = pos_group_label(phase)
         sections = _player_metric_sections(
-            stats_player, metric_p100=metric_p100
+            stats_player,
+            eval_group=phase,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
         )
         pcts = [
             float(m["percentile"])
@@ -557,6 +575,14 @@ def profile_detail_body(
                 [
                     html.Div("Player stats", className="rs-player-id-section-title"),
                     html.Div(
+                        f"Percentiles vs {phase_label}",
+                        className="pf-percentile-phase-note",
+                        title=(
+                            f"Banded with {phase_label} thresholds and adaptive "
+                            "0th/100th bounds from that phase cohort."
+                        ),
+                    ),
+                    html.Div(
                         [
                             html.Div("Overall average", className="st-player-switch-label"),
                             html.Span(
@@ -569,6 +595,10 @@ def profile_detail_body(
                                     if overall_avg is not None
                                     else None
                                 ),
+                            ),
+                            html.Span(
+                                f"vs {phase_label}",
+                                className="pf-percentile-phase-tag",
                             ),
                         ],
                         className="st-overall-avg pf-stats-overall",
