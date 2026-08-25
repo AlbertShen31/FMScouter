@@ -1359,15 +1359,28 @@ def layout(**_kwargs):
                                                     ),
                                                     html.Span(
                                                         "Click a card to focus one role "
-                                                        "(table and depth chart). Click again to clear.",
+                                                        "(table and depth chart). Click again to clear. "
+                                                        "Auto-rank all roles uses Score, then Ovr on ties.",
                                                         className="rs-depth-heading-hint",
                                                     ),
                                                 ],
                                                 className="rs-depth-heading-copy",
                                             ),
                                             html.Div(
-                                                _band_legend(settings),
-                                                id="pf-band-legend",
+                                                [
+                                                    html.Div(
+                                                        _band_legend(settings),
+                                                        id="pf-band-legend",
+                                                    ),
+                                                    dmc.Button(
+                                                        "Auto-rank all roles",
+                                                        id="pf-depth-auto-all",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                    ),
+                                                ],
+                                                className="pf-squad-depth-actions",
                                             ),
                                         ],
                                         className="rs-depth-heading",
@@ -1382,30 +1395,18 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            html.Div(
-                                                [
-                                                    html.Span(
-                                                        "Depth chart",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Shows the role focused in Squad depth. "
-                                                        "Drag rows to reorder. Auto-rank sets "
-                                                        "order from saved Score (highest first).",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
+                                            html.Span(
+                                                "Depth chart",
+                                                className="rs-depth-heading-label",
                                             ),
-                                            dmc.Button(
-                                                "Auto-rank all roles",
-                                                id="pf-depth-auto-all",
-                                                size="sm",
-                                                variant="light",
-                                                n_clicks=0,
+                                            html.Span(
+                                                "Shows the role focused in Squad depth. "
+                                                "Drag rows to reorder. Use Auto-rank by Score "
+                                                "for this role (Score, then Ovr on ties).",
+                                                className="rs-depth-heading-hint",
                                             ),
                                         ],
-                                        className="pf-depth-chart-toolbar",
+                                        className="rs-depth-heading-copy pf-depth-chart-toolbar",
                                     ),
                                     html.Div(id="pf-depth-chart-body"),
                                 ],

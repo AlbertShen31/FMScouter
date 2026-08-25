@@ -558,16 +558,26 @@ def _parse_depth_rank(entry: dict[str, Any]) -> int | None:
 
 
 def _score_name_sort_key(entry: dict[str, Any]) -> tuple:
+    """Sort key: Score desc, then overall % desc, then name. Missing values last."""
     row = entry.get("row") or {}
     score = row.get("Score")
     try:
         score_f = float(score) if score not in (None, "", "-", "—") else None
     except (TypeError, ValueError):
         score_f = None
+    overall = row.get("overall")
+    try:
+        overall_f = (
+            float(overall) if overall not in (None, "", "-", "—") else None
+        )
+    except (TypeError, ValueError):
+        overall_f = None
     name, _club = profile_identity(entry)
     return (
         0 if score_f is not None else 1,
         -(score_f or 0.0),
+        0 if overall_f is not None else 1,
+        -(overall_f or 0.0),
         name.casefold(),
     )
 
@@ -627,7 +637,7 @@ def compact_depth_ranks(role_column: str) -> None:
 
 
 def auto_rank_role_by_score(role_column: str) -> int:
-    """Set depth_rank 1…n by Score desc (then name). Returns how many ranked."""
+    """Set depth_rank 1…n by Score desc, then overall % desc, then name."""
     role = str(role_column or "").strip()
     if not role:
         return 0
