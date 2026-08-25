@@ -6945,6 +6945,13 @@ body[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root:hover {
     font-variant-numeric: tabular-nums;
 }
 
+.pf-depth-chart-xi-avg-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.15rem;
+}
+
 .pf-depth-chart-list {
     display: flex;
     flex-direction: column;

@@ -1573,6 +1573,47 @@ def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> ht
     )
 
 
+def _starting_xi_scores(
+    slots: list[dict],
+    *,
+    formation_id: str | None,
+) -> list[float]:
+    """Role scores for each filled starting slot (#1 in that slot's depth list)."""
+    scores: list[float] = []
+    for slot in slots:
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, slot["index"], slot["column"]
+        )
+        entry = ordered[0] if ordered else None
+        if not entry:
+            continue
+        score = (entry.get("row") or {}).get("Score")
+        try:
+            score_f = float(score) if score not in (None, "", "-", "—") else None
+        except (TypeError, ValueError):
+            score_f = None
+        if score_f is not None:
+            scores.append(score_f)
+    return scores
+
+
+def _starting_xi_avg_chip(scores: list[float], settings) -> html.Span | None:
+    if not scores:
+        return None
+    settings = us.normalize(settings)
+    avg = sum(scores) / len(scores)
+    band = score_band(avg, **settings["bands"])
+    n = len(scores)
+    return html.Span(
+        [
+            html.Span("Avg score", className="rs-depth-avg-label"),
+            html.Span(f"{avg:.1f}", className=f"rs-depth-avg rs-band-{band}"),
+        ],
+        className="pf-depth-chart-xi-avg-wrap",
+        title=f"Average role score across {n} starter{'s' if n != 1 else ''}",
+    )
+
+
 def _build_formation_xi_chart(
     slots: list[dict],
     *,
@@ -1592,6 +1633,8 @@ def _build_formation_xi_chart(
     _starters, multi_starters, conflicted_slots, unique_slots = (
         _formation_starter_slot_maps(formation_id, slots)
     )
+    xi_scores = _starting_xi_scores(slots, formation_id=formation_id)
+    xi_avg_chip = _starting_xi_avg_chip(xi_scores, settings)
     rows = []
     for index, slot in enumerate(slots):
         ordered = profiles.ordered_profiles_for_slot(
@@ -1629,6 +1672,7 @@ def _build_formation_xi_chart(
                                 f"{len(slots)}",
                                 className="pf-depth-chart-count",
                             ),
+                            xi_avg_chip,
                         ],
                         className="pf-depth-chart-role-title",
                     ),
