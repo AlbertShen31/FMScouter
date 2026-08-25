@@ -2064,7 +2064,9 @@ def refresh_table(
     Output("st-player-modal-body", "children"),
     Output("st-player-key", "data"),
     Output("st-player-group", "data"),
+    Output("st-table", "active_cell"),
     Input("st-table", "active_cell"),
+    Input("st-player-modal", "is_open"),
     Input("st-player-modal-close", "n_clicks"),
     State("st-table", "derived_viewport_data"),
     State("st-parsed", "data"),
@@ -2075,22 +2077,36 @@ def refresh_table(
     prevent_initial_call=True,
 )
 def open_player(
-    active_cell, _close, viewport, parsed, minutes_required, theme, view, settings
+    active_cell,
+    is_open,
+    _close,
+    viewport,
+    parsed,
+    minutes_required,
+    theme,
+    view,
+    settings,
 ):
-    if ctx.triggered_id == "st-player-modal-close":
-        return False, no_update, no_update, None, "mid"
+    triggered = ctx.triggered_id
+    if triggered == "st-player-modal":
+        # Backdrop / Escape / header X — clear active_cell so the same name can reopen.
+        if not is_open:
+            return False, no_update, no_update, None, "mid", None
+        return no_update, no_update, no_update, no_update, no_update, no_update
+    if triggered == "st-player-modal-close":
+        return False, no_update, no_update, None, "mid", None
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     rows = viewport or []
     idx = active_cell.get("row")
     if idx is None or idx >= len(rows):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     key = _row_mark_key(rows[idx])
     players = _parsed_players(parsed)
     player = next((p for p in players if player_key(p) == key), None)
     view = _normalize_player_view(view)
     if not player:
-        return True, "Player", html.Div("Player not found."), None, "mid"
+        return True, "Player", html.Div("Player not found."), None, "mid", None
     settings = us.normalize(settings)
     minutes_required = float(
         minutes_required
@@ -2113,6 +2129,7 @@ def open_player(
         ),
         key,
         eval_group,
+        None,
     )
 
 
