@@ -209,7 +209,7 @@
     "pointerdown",
     function (event) {
       if (event.button != null && event.button !== 0) return;
-      if (event.target.closest("button, a, input, textarea, select")) {
+      if (event.target.closest("button, a, input, textarea, select, label, .pf-depth-chart-check")) {
         return;
       }
       var row = rowFrom(event.target);
