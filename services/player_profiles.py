@@ -649,14 +649,17 @@ def auto_rank_role_by_score(role_column: str) -> int:
     return len(ordered)
 
 
-def auto_rank_all_roles_by_score() -> int:
-    roles = sorted(
-        {
-            role
-            for entry in list_role_profiles()
-            if (role := _entry_role(entry))
-        }
-    )
+def auto_rank_all_roles_by_score(role_columns: list[str] | None = None) -> int:
+    if role_columns is not None:
+        roles = [str(role).strip() for role in role_columns if str(role or "").strip()]
+    else:
+        roles = sorted(
+            {
+                role
+                for entry in list_role_profiles()
+                if (role := _entry_role(entry))
+            }
+        )
     total = 0
     for role in roles:
         total += auto_rank_role_by_score(role)

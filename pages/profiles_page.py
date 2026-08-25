@@ -52,6 +52,7 @@ from scoring.stats_scorer import (
     passes_minutes_filter,
     percentile_color,
 )
+import services.formations as fm
 import services.player_profiles as profiles
 import services.ui_settings as us
 from components.stats_player_pane import stats_charts_bottom_pane
@@ -67,6 +68,7 @@ FILTER_SORT_RESET_IDS = frozenset(
     {
         "pf-view-mode",
         "pf-focus-role",
+        "pf-formation-select",
         "pf-pct-search",
         "pf-pct-age",
         "pf-minutes-match",
@@ -403,21 +405,88 @@ def _profile_minutes_raw(entry: dict, raw: dict) -> Any:
     return None
 
 
-def _focus_roles(value) -> list[str]:
-    """Focused Squad depth role columns (at most one)."""
+def _focus_slot(value) -> dict | None:
+    """Focused Squad depth slot: {slot, role, label} (at most one)."""
     if value is None or value == "":
-        return []
+        return None
+    if isinstance(value, dict):
+        role = str(value.get("role") or "").strip()
+        if not role:
+            return None
+        try:
+            slot = int(value.get("slot"))
+        except (TypeError, ValueError):
+            slot = 0
+        return {
+            "slot": slot,
+            "role": role,
+            "label": str(value.get("label") or "").strip(),
+        }
     if isinstance(value, str):
         text = value.strip()
-        return [text] if text else []
-    out: list[str] = []
-    for item in value:
-        text = str(item or "").strip()
-        if text and text not in out:
-            out.append(text)
-        if out:
-            break
-    return out
+        return {"slot": -1, "role": text, "label": ""} if text else None
+    if isinstance(value, (list, tuple)) and value:
+        return _focus_slot(value[0])
+    return None
+
+
+def _focus_roles(value) -> list[str]:
+    """Focused Squad depth role columns (at most one)."""
+    slot = _focus_slot(value)
+    return [slot["role"]] if slot else []
+
+
+def _formation_slots(formation_id: str | None) -> list[dict]:
+    """Filled formation slots in lineup order (up to 11), including duplicates."""
+    if not formation_id or not fm.exists(formation_id):
+        return []
+    formation = fm.load(formation_id, persist=False)
+    slots: list[dict] = []
+    for index, raw in enumerate(formation.get("slots") or []):
+        ip = str(raw.get("ip") or "").strip()
+        oop = str(raw.get("oop") or "").strip()
+        if not ip or not oop:
+            continue
+        column = combo_column(ip, oop)
+        label = str(raw.get("label") or "").strip()
+        if not label:
+            label = str(raw.get("ip_pos") or "POS").strip().upper() or "POS"
+        slots.append(
+            {
+                "index": index,
+                "label": label,
+                "column": column,
+                "ip": ip,
+                "oop": oop,
+                "ip_pos": str(raw.get("ip_pos") or ""),
+                "oop_pos": str(raw.get("oop_pos") or ""),
+            }
+        )
+    label_counts: dict[str, int] = {}
+    for slot in slots:
+        label_counts[slot["label"]] = label_counts.get(slot["label"], 0) + 1
+    label_seen: dict[str, int] = {}
+    for slot in slots:
+        label = slot["label"]
+        label_seen[label] = label_seen.get(label, 0) + 1
+        if label_counts[label] > 1:
+            slot["display_label"] = f"{label} ({label_seen[label]})"
+        else:
+            slot["display_label"] = label
+    return slots
+
+
+def _formation_columns(formation_id: str | None) -> list[str]:
+    """Unique hybrid role columns from a formation, in first-seen slot order."""
+    seen: set[str] = set()
+    columns: list[str] = []
+    for slot in _formation_slots(formation_id):
+        column = slot["column"]
+        if column in seen:
+            continue
+        seen.add(column)
+        columns.append(column)
+    return columns
 
 
 def _colored_group_abbr(abbr: str, *, css: str = "rs-pill-groups"):
@@ -501,6 +570,16 @@ def _depth_role_key(meta: dict) -> str:
     return str(meta.get("id") or meta.get("column") or "_")
 
 
+def _empty_depth_card_stats(meta: dict) -> dict:
+    return {
+        "meta": meta,
+        "avg": None,
+        "counts": {"elite": 0, "good": 0, "ok": 0, "poor": 0},
+        "total": 0,
+        "names": "No saved players",
+    }
+
+
 def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> dict | None:
     column = meta["column"]
     eligible = []
@@ -537,52 +616,77 @@ def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> d
     }
 
 
-def _profile_depth_card(stats: dict, focus_roles, bands: dict) -> html.Button:
+def _profile_depth_card(
+    stats: dict,
+    focus_roles,
+    bands: dict,
+    *,
+    slot: dict | None = None,
+) -> html.Button:
     meta = stats["meta"]
     column = meta["column"]
     avg = stats["avg"]
     counts = stats["counts"]
-    total = stats["total"]
-    active = " active" if column in _focus_roles(focus_roles) else ""
-    label = meta.get("short_label") or meta["name"]
-    children = [
+    total = int(stats["total"] or 0)
+    empty = total <= 0 or avg is None
+    focus = _focus_slot(focus_roles)
+    if slot is not None:
+        active = (
+            " active"
+            if focus
+            and int(focus.get("slot", -1)) == int(slot["index"])
+            and focus.get("role") == column
+            else ""
+        )
+    else:
+        active = " active" if column in _focus_roles(focus_roles) else ""
+    empty_cls = " is-empty" if empty else ""
+    role_label = meta.get("short_label") or meta["name"]
+    slot_label = (slot or {}).get("display_label") or (slot or {}).get("label") or ""
+    if empty:
+        avg_el = html.Span("—", className="rs-depth-avg")
+        bar_children = []
+    else:
+        avg_el = html.Span(
+            f"{float(avg):.1f}",
+            className=f"rs-depth-avg rs-band-{score_band(float(avg), **bands)}",
+        )
+        bar_children = [
+            html.Div(
+                className=f"rs-depth-seg {band}",
+                style={"width": f"{counts[band] / total * 100:.1f}%"},
+            )
+            for band in ("elite", "good", "ok", "poor")
+            if counts[band]
+        ]
+    title_bits = [
         html.Div(
             [
-                html.Div(
-                    [
-                        _colored_group_abbr(meta.get("group_abbr") or "", css="rs-depth-code"),
-                        html.Span(
-                            meta.get("phase") or "",
-                            className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
-                        ),
-                    ],
-                    className="rs-depth-meta",
+                _colored_group_abbr(meta.get("group_abbr") or "", css="rs-depth-code"),
+                html.Span(
+                    meta.get("phase") or "",
+                    className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
                 ),
-                html.Span(label, className="rs-depth-name"),
             ],
-            className="rs-depth-title",
+            className="rs-depth-meta",
         ),
+    ]
+    if slot_label:
+        title_bits.insert(
+            0,
+            html.Span(slot_label, className="rs-depth-slot"),
+        )
+    title_bits.append(html.Span(role_label, className="rs-depth-name"))
+    children = [
+        html.Div(title_bits, className="rs-depth-title"),
         html.Div(
             [
                 html.Span("Avg", className="rs-depth-avg-label"),
-                html.Span(
-                    f"{avg:.1f}",
-                    className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
-                ),
+                avg_el,
             ],
             className="rs-depth-avg-row",
         ),
-        html.Div(
-            [
-                html.Div(
-                    className=f"rs-depth-seg {band}",
-                    style={"width": f"{counts[band] / total * 100:.1f}%"},
-                )
-                for band in ("elite", "good", "ok", "poor")
-                if counts[band]
-            ],
-            className="rs-depth-bar",
-        ),
+        html.Div(bar_children, className="rs-depth-bar"),
         html.Div(
             [
                 html.Div(
@@ -603,13 +707,22 @@ def _profile_depth_card(stats: dict, focus_roles, bands: dict) -> html.Button:
         ),
         html.Div(stats["names"], className="rs-depth-players"),
     ]
+    role_key = _depth_role_key(meta)
+    if slot is not None:
+        button_id = {
+            "type": "pf-depth",
+            "slot": str(slot["index"]),
+            "role": role_key,
+        }
+    else:
+        button_id = {"type": "pf-depth", "slot": "_", "role": role_key}
     return html.Button(
         children,
-        id={"type": "pf-depth", "role": _depth_role_key(meta)},
+        id=button_id,
         n_clicks=0,
-        className="rs-depth-card" + active,
+        className="rs-depth-card" + active + empty_cls,
         title=meta.get("compact") or meta["name"],
-        **{"data-rs-role": column},
+        **{"data-rs-role": column, "data-rs-slot": str((slot or {}).get("index", ""))},
     )
 
 
@@ -617,19 +730,37 @@ def _profile_depth_panel(
     entries: list[dict],
     focus_roles,
     *,
-    hybrids_only: bool = False,
+    formation_slots: list[dict] | None = None,
     settings=None,
 ) -> list:
-    if not entries:
-        return []
     settings = us.normalize(settings)
     bands = settings["bands"]
+
+    if formation_slots is not None:
+        if not formation_slots:
+            return [
+                html.Div(
+                    "This formation has no filled IP+OOP slots. Edit it on Formations.",
+                    className="text-muted small",
+                )
+            ]
+        cards = []
+        for slot in formation_slots:
+            meta = _role_column_meta(slot["column"])
+            payload = _profile_depth_card_stats(meta, entries, bands)
+            if not payload:
+                payload = _empty_depth_card_stats(meta)
+            cards.append(
+                _profile_depth_card(payload, focus_roles, bands, slot=slot)
+            )
+        return cards
+
+    if not entries:
+        return []
     roles_seen: dict[str, dict] = {}
     for entry in entries:
         role = str(entry.get("role_column") or (entry.get("row") or {}).get("Role") or "").strip()
         if not role:
-            continue
-        if hybrids_only and "+" not in role:
             continue
         if role not in roles_seen:
             roles_seen[role] = _role_column_meta(role)
@@ -702,15 +833,43 @@ def _depth_ovr_cell(percentile, color=None):
 
 
 def _depth_chart_player_row(
-    entry: dict,
+    entry: dict | None,
     *,
     index: int,
     total: int,
     settings,
     theme=None,
+    slot_label: str = "",
+    draggable: bool = True,
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
+    if entry is None:
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
+                        html.Span(str(index + 1), className="pf-depth-chart-rank"),
+                    ],
+                    className="pf-depth-chart-rank-cell",
+                ),
+                html.Span("—", className="pf-depth-chart-name is-empty"),
+                html.Span(slot_label or "—", className="pf-depth-chart-slot", title=slot_label),
+                html.Span("—", className="pf-depth-chart-pos"),
+                html.Span("—", className="pf-depth-chart-club"),
+                html.Span("—", className="pf-depth-chart-div"),
+                html.Div(
+                    html.Span("—", className="pf-depth-chart-metric"),
+                    className="pf-depth-chart-ovr",
+                ),
+                html.Div(
+                    html.Span("—", className="pf-depth-chart-metric"),
+                    className="pf-depth-chart-score",
+                ),
+            ],
+            className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
+        )
     row = entry.get("row") or {}
     profile_id = str(entry.get("id") or "").strip()
     name, club = profiles.profile_identity(entry)
@@ -724,22 +883,37 @@ def _depth_chart_player_row(
     div_class = "pf-depth-chart-div"
     if tier:
         div_class = f"{div_class} pf-div-{tier}"
+    props = {
+        "className": "pf-depth-chart-row" + (" is-odd" if index % 2 else ""),
+        **({"data-profile-id": profile_id} if profile_id else {}),
+    }
+    if draggable and profile_id:
+        props["draggable"] = "true"
     return html.Div(
         [
             html.Div(
                 [
-                    html.Span("⋮⋮", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
+                    html.Span(
+                        "⋮⋮" if draggable else "",
+                        className="pf-depth-chart-grip",
+                        **{"aria-hidden": "true"},
+                    ),
                     html.Span(str(display_rank), className="pf-depth-chart-rank"),
                 ],
                 className="pf-depth-chart-rank-cell",
             ),
-            html.Button(
-                name or "Player",
-                id={"type": "pf-depth-name", "id": profile_id},
-                n_clicks=0,
-                className="pf-depth-chart-name",
-                title="Open player details",
+            (
+                html.Button(
+                    name or "Player",
+                    id={"type": "pf-depth-name", "id": profile_id},
+                    n_clicks=0,
+                    className="pf-depth-chart-name",
+                    title="Open player details",
+                )
+                if profile_id
+                else html.Span("—", className="pf-depth-chart-name is-empty")
             ),
+            html.Span(slot_label or "—", className="pf-depth-chart-slot", title=slot_label),
             html.Span(position, className="pf-depth-chart-pos", title=position),
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=division),
@@ -752,9 +926,7 @@ def _depth_chart_player_row(
                 className="pf-depth-chart-score",
             ),
         ],
-        className="pf-depth-chart-row" + (" is-odd" if index % 2 else ""),
-        draggable="true",
-        **{"data-profile-id": profile_id},
+        **props,
     )
 
 
@@ -763,6 +935,7 @@ def _depth_chart_col_headers() -> html.Div:
         [
             html.Span("#", className="pf-depth-chart-rank"),
             html.Span("Name", className="pf-depth-chart-name-label"),
+            html.Span("Slot", className="pf-depth-chart-slot"),
             html.Span("Pos", className="pf-depth-chart-pos"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
@@ -773,75 +946,168 @@ def _depth_chart_col_headers() -> html.Div:
     )
 
 
+def _build_formation_xi_chart(
+    slots: list[dict],
+    *,
+    settings=None,
+    theme=None,
+) -> html.Div:
+    """One starter per formation slot (shared role pools seed duplicate slots)."""
+    settings = us.normalize(settings)
+    if not slots:
+        return html.Div(
+            "This formation has no filled IP+OOP slots.",
+            className="text-muted small",
+        )
+    rows = []
+    for index, slot in enumerate(slots):
+        ordered = profiles.ordered_profiles_for_role(slot["column"])
+        entry = ordered[0] if ordered else None
+        rows.append(
+            _depth_chart_player_row(
+                entry,
+                index=index,
+                total=len(slots),
+                settings=settings,
+                theme=theme,
+                slot_label=slot.get("display_label") or slot.get("label") or "",
+                draggable=False,
+            )
+        )
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                "Starting XI",
+                                className="pf-depth-chart-role-name",
+                            ),
+                            html.Span(
+                                f"{len(slots)}",
+                                className="pf-depth-chart-count",
+                            ),
+                        ],
+                        className="pf-depth-chart-role-title",
+                    ),
+                    html.Span(
+                        "Top player for each formation slot. "
+                        "Slots that share a role start with the same exported player. "
+                        "Click a Squad depth card to edit that role’s full ranking.",
+                        className="text-muted small",
+                    ),
+                ],
+                className="pf-depth-chart-role-head",
+            ),
+            _depth_chart_col_headers(),
+            html.Div(rows, className="pf-depth-chart-list pf-depth-chart-xi"),
+        ],
+        className="pf-depth-chart-section",
+    )
+
+
 def _build_depth_chart(
     *,
     focus_roles=None,
+    formation_slots: list[dict] | None = None,
     hybrids_only: bool = False,
     settings=None,
     theme=None,
 ) -> html.Div:
     settings = us.normalize(settings)
-    focused = _focus_roles(focus_roles)
-    if not focused:
+    focus = _focus_slot(focus_roles)
+    slots = list(formation_slots or [])
+
+    if not focus:
+        if slots:
+            return _build_formation_xi_chart(slots, settings=settings, theme=theme)
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
             className="text-muted small",
         )
 
-    entries = profiles.list_role_profiles()
-    roles_seen: dict[str, dict] = {}
-    for entry in entries:
-        role = str(
-            entry.get("role_column") or (entry.get("row") or {}).get("Role") or ""
-        ).strip()
-        if not role:
-            continue
-        if role not in focused:
-            continue
-        if hybrids_only and "+" not in role:
-            continue
-        if role not in roles_seen:
-            roles_seen[role] = _role_column_meta(role)
-    if not roles_seen:
+    column = focus["role"]
+    slot_label = focus.get("label") or ""
+    if not slot_label and slots:
+        match = next(
+            (
+                item
+                for item in slots
+                if int(item["index"]) == int(focus.get("slot", -1))
+                and item["column"] == column
+            ),
+            None,
+        )
+        if match:
+            slot_label = match.get("display_label") or match.get("label") or ""
+        else:
+            match = next((item for item in slots if item["column"] == column), None)
+            if match:
+                slot_label = match.get("display_label") or match.get("label") or ""
+
+    if hybrids_only and "+" not in column:
         return html.Div(
             "No saved profiles for the focused role.",
             className="text-muted small",
         )
 
-    sections = []
-    for column in focused:
-        meta = roles_seen.get(column)
-        if not meta:
-            continue
-        ordered = profiles.ordered_profiles_for_role(column)
-        if hybrids_only and "+" not in column:
-            continue
-        if not ordered:
-            continue
-        label = _role_display_label(column)
-        if label == "—":
-            label = meta.get("short_label") or meta.get("name") or column
-        tone = str(meta.get("tone") or "").strip().lower()
-        if tone.startswith("ip"):
-            tone = "ip"
-        elif tone.startswith("oop"):
-            tone = "oop"
-        elif tone in ("combo", "hybrid") or "+" in column:
-            tone = "combo"
-        elif tone != "gk":
-            tone = "gk" if not tone else tone
-        role_color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
-        rows = [
-            _depth_chart_player_row(
-                entry,
-                index=idx,
-                total=len(ordered),
-                settings=settings,
-                theme=theme,
-            )
-            for idx, entry in enumerate(ordered)
-        ]
-        sections.append(
+    meta = _role_column_meta(column)
+    ordered = profiles.ordered_profiles_for_role(column)
+    if not ordered:
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Span(
+                                    slot_label or _role_display_label(column),
+                                    className="pf-depth-chart-role-name",
+                                ),
+                                html.Span("0", className="pf-depth-chart-count"),
+                            ],
+                            className="pf-depth-chart-role-title",
+                        ),
+                    ],
+                    className="pf-depth-chart-role-head",
+                ),
+                html.Div(
+                    "No saved profiles for this formation slot’s role.",
+                    className="text-muted small px-3 pb-3",
+                ),
+            ],
+            className="pf-depth-chart-section",
+        )
+
+    label = _role_display_label(column)
+    if label == "—":
+        label = meta.get("short_label") or meta.get("name") or column
+    tone = str(meta.get("tone") or "").strip().lower()
+    if tone.startswith("ip"):
+        tone = "ip"
+    elif tone.startswith("oop"):
+        tone = "oop"
+    elif tone in ("combo", "hybrid") or "+" in column:
+        tone = "combo"
+    elif tone != "gk":
+        tone = "gk" if not tone else tone
+    role_color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
+    rows = [
+        _depth_chart_player_row(
+            entry,
+            index=idx,
+            total=len(ordered),
+            settings=settings,
+            theme=theme,
+            slot_label=slot_label,
+            draggable=True,
+        )
+        for idx, entry in enumerate(ordered)
+    ]
+    title_label = f"{slot_label} · {label}" if slot_label else label
+    return html.Div(
+        [
             html.Div(
                 [
                     html.Div(
@@ -857,7 +1123,7 @@ def _build_depth_chart(
                                         className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
                                     ),
                                     html.Span(
-                                        label,
+                                        title_label,
                                         className=f"pf-depth-chart-role-name pf-role-{tone}",
                                         style={"color": role_color},
                                     ),
@@ -887,17 +1153,12 @@ def _build_depth_chart(
                 ],
                 className="pf-depth-chart-section",
             )
-        )
-
-    if not sections:
-        return html.Div(
-            "No saved profiles for the focused role.",
-            className="text-muted small",
-        )
-    return html.Div(sections, className="pf-depth-chart-sections")
+        ],
+        className="pf-depth-chart-sections",
+    )
 
 
-def _role_table_columns(settings) -> list[dict]:
+def _role_table_columns(settings, *, include_slot: bool = False) -> list[dict]:
     settings = us.normalize(settings)
     cols = []
     for col in _profile_identity_columns("role_scores", settings):
@@ -905,6 +1166,8 @@ def _role_table_columns(settings) -> list[dict]:
         if col in ("Feet", "Injury"):
             spec["presentation"] = "markdown"
         cols.append(spec)
+    if include_slot:
+        cols.append({"name": "Slot", "id": "Slot"})
     cols.append({"name": "Role", "id": "Role", "presentation": "markdown"})
     cols.append({"name": "Rank", "id": "Rank"})
     cols.append({"name": "Score", "id": "Score", "presentation": "markdown"})
@@ -958,6 +1221,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Nation": "64px",
     "Inf": "40px",
     "Best Pos": "48px",
+    "Slot": "56px",
     "Role": "56px",
     "Rank": "48px",
     "Score": "52px",
@@ -969,7 +1233,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
 }
 
 
-_PF_NOWRAP_COLS = ("Name", "Position", "Club", "Division")
+_PF_NOWRAP_COLS = ("Name", "Position", "Club", "Division", "Slot")
 
 
 def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
@@ -1035,7 +1299,7 @@ def _table_header_styles(*, include_role: bool = False, include_score: bool = Fa
         *PCT_COLS,
     ]
     if include_role:
-        col_ids.extend(["Role", "Rank"])
+        col_ids.extend(["Slot", "Role", "Rank"])
     if include_score:
         col_ids.append("Score")
     # De-dupe while preserving order
@@ -1060,6 +1324,7 @@ def _role_metric_styles() -> list[dict]:
         "Nation",
         "Inf",
         "Best Pos",
+        "Slot",
         "Role",
         "Rank",
         "Score",
@@ -1102,55 +1367,141 @@ def _pct_table_styles(theme) -> tuple[list, list]:
     return data, header
 
 
-def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[dict]]:
+def _resolve_profile_id(row_id) -> str:
+    """Map table/depth row ids back to a stored profile id."""
+    text = str(row_id or "").strip()
+    if not text or text.endswith("-empty"):
+        return ""
+    if text.startswith("slot-"):
+        # slot-{index}-{profile_id}
+        parts = text.split("-", 2)
+        if len(parts) < 3:
+            return ""
+        pid = parts[2].strip()
+        return "" if pid in ("empty", "player", "") else pid
+    return text
+
+
+def _entry_to_role_table_row(
+    entry: dict,
+    *,
+    settings,
+    theme=None,
+    slot_label: str = "—",
+    row_id: str | None = None,
+) -> tuple[dict, dict]:
+    """Build one profiles table row from a role profile entry."""
     settings = us.normalize(settings)
     identity = _profile_identity_columns("role_scores", settings)
+    raw = dict(entry.get("row") or {})
+    if not raw.get("Role"):
+        raw["Role"] = entry.get("role_column") or ""
+    role_column = str(raw.get("Role") or entry.get("role_column") or "").strip()
+    score_raw = raw.get("Score")
+    try:
+        score_f = (
+            float(score_raw) if score_raw not in (None, "", "-", "—") else None
+        )
+    except (TypeError, ValueError):
+        score_f = None
+    overall_raw = _raw_float(raw.get("overall"))
+    pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
+    rank_raw = _depth_rank_value(entry)
+    profile_id = str(entry.get("id") or "").strip()
+    item: dict = {
+        "id": row_id or profile_id,
+        "_key": row_id or profile_id,
+        "_profile_id": profile_id,
+        "_role_column": role_column,
+        "_rank_raw": rank_raw,
+        "_score_raw": score_f,
+        "_overall_raw": overall_raw,
+        **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
+    }
+    for col in identity:
+        if col == "Feet":
+            item[col] = feet_cell(raw)
+        elif col == "Injury":
+            item[col] = injury_cell(raw.get("Injury"))
+        else:
+            item[col] = _blank(raw.get(col))
+    _apply_profile_division(item, raw)
+    item["Slot"] = slot_label or "—"
+    item["Role"] = _role_cell_markdown(role_column, theme=theme)
+    item["Rank"] = str(rank_raw) if rank_raw is not None else "—"
+    item["Score"] = _score_markdown(score_raw, settings, theme=theme)
+    mins_raw = _profile_minutes_raw(entry, raw)
+    item["_minutes_raw"] = mins_raw
+    item["Minutes"] = _minutes_cell(mins_raw, settings)
+    for pct in PCT_COLS:
+        item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
+    return item, injury_tooltip_entry(raw.get("Injury"))
+
+
+def _empty_slot_table_row(slot: dict, *, settings, theme=None) -> tuple[dict, dict]:
+    settings = us.normalize(settings)
+    identity = _profile_identity_columns("role_scores", settings)
+    column = slot["column"]
+    label = slot.get("display_label") or slot.get("label") or "—"
+    item: dict = {
+        "id": f"slot-{slot['index']}-empty",
+        "_key": f"slot-{slot['index']}-empty",
+        "_profile_id": "",
+        "_role_column": column,
+        "_rank_raw": None,
+        "_score_raw": None,
+        "_overall_raw": None,
+        **{f"_{pct}_raw": None for pct in PCT_COLS},
+        "Slot": label,
+        "Role": _role_cell_markdown(column, theme=theme),
+        "Rank": "—",
+        "Score": "—",
+        "Minutes": "—",
+        "_minutes_raw": None,
+    }
+    for col in identity:
+        item[col] = "—"
+    item["Division"] = "—"
+    for pct in PCT_COLS:
+        item[pct] = "—"
+    return item, {}
+
+
+def _build_formation_xi_table_rows(
+    slots: list[dict],
+    *,
+    settings=None,
+    theme=None,
+) -> tuple[list[dict], list[dict]]:
+    """One table row per formation slot using the shared role depth pool."""
+    rows = []
+    tips = []
+    for slot in slots:
+        ordered = profiles.ordered_profiles_for_role(slot["column"])
+        label = slot.get("display_label") or slot.get("label") or "—"
+        if ordered:
+            item, tip = _entry_to_role_table_row(
+                ordered[0],
+                settings=settings,
+                theme=theme,
+                slot_label=label,
+                row_id=f"slot-{slot['index']}-{ordered[0].get('id') or 'player'}",
+            )
+        else:
+            item, tip = _empty_slot_table_row(slot, settings=settings, theme=theme)
+        rows.append(item)
+        tips.append(tip)
+    return rows, tips
+
+
+def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[dict]]:
+    settings = us.normalize(settings)
     rows = []
     tips = []
     for entry in profiles.list_role_profiles():
-        raw = dict(entry.get("row") or {})
-        if not raw.get("Role"):
-            raw["Role"] = entry.get("role_column") or ""
-        role_column = str(raw.get("Role") or entry.get("role_column") or "").strip()
-        score_raw = raw.get("Score")
-        try:
-            score_f = (
-                float(score_raw)
-                if score_raw not in (None, "", "-", "—")
-                else None
-            )
-        except (TypeError, ValueError):
-            score_f = None
-        overall_raw = _raw_float(raw.get("overall"))
-        pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
-        rank_raw = _depth_rank_value(entry)
-        item: dict = {
-            "id": entry.get("id") or "",
-            "_key": entry.get("id") or "",
-            "_role_column": role_column,
-            "_rank_raw": rank_raw,
-            "_score_raw": score_f,
-            "_overall_raw": overall_raw,
-            **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
-        }
-        for col in identity:
-            if col == "Feet":
-                item[col] = feet_cell(raw)
-            elif col == "Injury":
-                item[col] = injury_cell(raw.get("Injury"))
-            else:
-                item[col] = _blank(raw.get(col))
-        _apply_profile_division(item, raw)
-        item["Role"] = _role_cell_markdown(role_column, theme=theme)
-        item["Rank"] = str(rank_raw) if rank_raw is not None else "—"
-        item["Score"] = _score_markdown(score_raw, settings, theme=theme)
-        mins_raw = _profile_minutes_raw(entry, raw)
-        item["_minutes_raw"] = mins_raw
-        item["Minutes"] = _minutes_cell(mins_raw, settings)
-        for pct in PCT_COLS:
-            item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
+        item, tip = _entry_to_role_table_row(entry, settings=settings, theme=theme)
         rows.append(item)
-        tips.append(injury_tooltip_entry(raw.get("Injury")))
+        tips.append(tip)
     return rows, tips
 
 
@@ -1315,6 +1666,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-depth-order", data=None),
             dcc.Store(id="pf-view-mode", data="roles"),
             dcc.Store(id="pf-focus-role", data=[]),
+            dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-player-key", data=None),
             player_modal(prefix="pf"),
@@ -1322,8 +1674,8 @@ def layout(**_kwargs):
             html.P(
                 "Saved shortlist rows from Role scores (one row per evaluated role, "
                 "with overall percentiles when the source file has stats) and from "
-                "Player stats. Select a role in Squad depth to rank players in the "
-                "Depth chart; click a name for the player modal.",
+                "Player stats. Pick a formation for Squad depth, focus a role to rank "
+                "players in the Depth chart, and click a name for the player modal.",
                 className="text-muted mb-3",
             ),
             dbc.Card(
@@ -1358,9 +1710,11 @@ def layout(**_kwargs):
                                                         className="rs-depth-heading-label",
                                                     ),
                                                     html.Span(
-                                                        "Click a card to focus one role "
-                                                        "(table and depth chart). Click again to clear. "
-                                                        "Auto-rank all roles uses Score, then Ovr on ties.",
+                                                        "One card per formation position (up to 11). "
+                                                        "Slots that share a role start with the same "
+                                                        "exported players. Click a card to edit that "
+                                                        "role’s depth; click again to return to the XI. "
+                                                        "Auto-rank uses Score, then Ovr on ties.",
                                                         className="rs-depth-heading-hint",
                                                     ),
                                                 ],
@@ -1368,6 +1722,30 @@ def layout(**_kwargs):
                                             ),
                                             html.Div(
                                                 [
+                                                    html.Div(
+                                                        [
+                                                            dmc.Select(
+                                                                id="pf-formation-select",
+                                                                data=fm.pack_options(),
+                                                                value=fm.active_id() or None,
+                                                                placeholder="Select a formation",
+                                                                clearable=False,
+                                                                searchable=True,
+                                                                size="sm",
+                                                                className="pf-formation-dd",
+                                                            ),
+                                                            dcc.Link(
+                                                                "Edit",
+                                                                href="/formations",
+                                                                className="rs-weights-edit",
+                                                                title=(
+                                                                    "Open Formations to create "
+                                                                    "or edit lineups."
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        className="pf-formation-row",
+                                                    ),
                                                     html.Div(
                                                         _band_legend(settings),
                                                         id="pf-band-legend",
@@ -1400,9 +1778,10 @@ def layout(**_kwargs):
                                                 className="rs-depth-heading-label",
                                             ),
                                             html.Span(
-                                                "Shows the role focused in Squad depth. "
-                                                "Drag rows to reorder. Use Auto-rank by Score "
-                                                "for this role (Score, then Ovr on ties).",
+                                                "Starting XI shows one player per formation slot "
+                                                "(Slot column). Focus a Squad depth card to rank "
+                                                "that role; drag to reorder. Shared roles share "
+                                                "the same player pool.",
                                                 className="rs-depth-heading-hint",
                                             ),
                                         ],
@@ -1600,25 +1979,87 @@ def sync_age_options(settings, pct_age):
 
 
 @callback(
+    Output("pf-formation-select", "data"),
+    Output("pf-formation-select", "value"),
+    Output("pf-formation", "data", allow_duplicate=True),
+    Input("pf-formation", "data"),
+    prevent_initial_call="initial_duplicate",
+)
+def hydrate_pf_formation(stored):
+    options = fm.pack_options()
+    ids = {opt["value"] for opt in options}
+    if stored in ids:
+        return options, stored, no_update
+    active = fm.active_id()
+    value = active if active in ids else (options[0]["value"] if options else None)
+    return options, value, value
+
+
+@callback(
+    Output("pf-formation", "data", allow_duplicate=True),
     Output("pf-focus-role", "data", allow_duplicate=True),
-    Input({"type": "pf-depth", "role": ALL}, "n_clicks"),
+    Input("pf-formation-select", "value"),
+    State("pf-formation", "data"),
     State("pf-focus-role", "data"),
     prevent_initial_call=True,
 )
-def focus_profile_role(n_clicks, current_focus):
+def persist_pf_formation(value, stored, focus):
+    if value and fm.exists(value):
+        fm.load(value, persist=True)
+    slots = _formation_slots(value)
+    focused = _focus_slot(focus)
+    next_focus = no_update
+    if focused:
+        match = next(
+            (
+                slot
+                for slot in slots
+                if int(slot["index"]) == int(focused.get("slot", -1))
+                and slot["column"] == focused.get("role")
+            ),
+            None,
+        )
+        if not match:
+            next_focus = []
+    if value == stored:
+        return no_update, next_focus
+    return value, next_focus
+
+
+@callback(
+    Output("pf-focus-role", "data", allow_duplicate=True),
+    Input({"type": "pf-depth", "slot": ALL, "role": ALL}, "n_clicks"),
+    State("pf-focus-role", "data"),
+    State("pf-formation-select", "value"),
+    prevent_initial_call=True,
+)
+def focus_profile_role(n_clicks, current_focus, formation_id):
     if not ctx.triggered_id or not clicked(n_clicks):
         return no_update
-    role = ctx.triggered_id["role"]
-    if role == "_":
+    role = str(ctx.triggered_id.get("role") or "").strip()
+    slot_raw = str(ctx.triggered_id.get("slot") or "").strip()
+    if role == "_" or slot_raw == "_":
         return no_update
-    column = _depth_id_column(role)
+    column = _depth_id_column(role) or role
     if not column:
         return no_update
-    selected = _focus_roles(current_focus)
-    # Single-select: click again to clear, otherwise replace.
-    if column in selected:
+    try:
+        slot_index = int(slot_raw)
+    except (TypeError, ValueError):
+        slot_index = -1
+    label = ""
+    for slot in _formation_slots(formation_id):
+        if int(slot["index"]) == slot_index and slot["column"] == column:
+            label = slot.get("display_label") or slot.get("label") or ""
+            break
+    current = _focus_slot(current_focus)
+    if (
+        current
+        and int(current.get("slot", -1)) == slot_index
+        and current.get("role") == column
+    ):
         return []
-    return [column]
+    return [{"slot": slot_index, "role": column, "label": label}]
 
 
 @callback(
@@ -1646,6 +2087,7 @@ def focus_profile_role(n_clicks, current_focus):
     Input("pf-view-mode", "data"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
+    Input("pf-formation-select", "value"),
     Input("pf-pct-search", "value"),
     Input("pf-pct-age", "value"),
     Input("pf-minutes-match", "value"),
@@ -1660,6 +2102,7 @@ def refresh_profiles_table(
     view_mode,
     _rev,
     focus_role,
+    formation_id,
     pct_search,
     pct_age,
     minutes_match,
@@ -1709,28 +2152,57 @@ def refresh_profiles_table(
         chart_hidden = True
         sort_mode = "percentiles"
     else:
-        columns = _role_table_columns(settings)
-        all_rows, tips = _build_role_table_rows(settings, theme=theme)
-        filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+        formation_slots = _formation_slots(formation_id)
+        focus = _focus_slot(focus_role)
+        include_slot = bool(formation_slots)
+        columns = _role_table_columns(settings, include_slot=include_slot)
+        if formation_slots and not focus:
+            all_rows, tips = _build_formation_xi_table_rows(
+                formation_slots, settings=settings, theme=theme
+            )
+            filtered = list(all_rows)
+        else:
+            all_rows, tips = _build_role_table_rows(settings, theme=theme)
+            filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+            if focus and include_slot:
+                slot_label = focus.get("label") or "—"
+                for row in filtered:
+                    row["Slot"] = slot_label
         style_data, style_header = _role_table_styles(theme)
         empty_msg = (
             "No role profiles yet. Mark players on Role scores and save — "
             "one row per evaluated role, including overall percentiles when available."
         )
         entries = profiles.list_role_profiles()
-        depth_cards = _profile_depth_panel(
-            entries,
-            focus_role,
-            settings=settings,
-        )
-        depth_hidden = not depth_cards
-        focused = _focus_roles(focus_role)[:1]
+        if formation_id and fm.exists(formation_id):
+            depth_cards = _profile_depth_panel(
+                entries,
+                focus_role,
+                formation_slots=formation_slots,
+                settings=settings,
+            )
+        elif fm.pack_options():
+            depth_cards = [
+                html.Div(
+                    "Select a formation to build Squad depth.",
+                    className="text-muted small",
+                )
+            ]
+        else:
+            depth_cards = [
+                html.Div(
+                    "Save a formation on the Formations page to build Squad depth.",
+                    className="text-muted small",
+                )
+            ]
+        depth_hidden = False
         chart = _build_depth_chart(
-            focus_roles=focused,
+            focus_roles=focus_role,
+            formation_slots=formation_slots,
             settings=settings,
             theme=theme,
         )
-        chart_hidden = not focused
+        chart_hidden = not formation_slots and not focus
         sort_mode = "roles"
 
     col_ids = {col["id"] for col in columns}
@@ -1939,9 +2411,12 @@ def toggle_delete_btn(selected_ids):
 def delete_selected(n_clicks, selected_ids, rev):
     if not n_clicks or not selected_ids:
         return no_update
-    for profile_id in selected_ids:
-        if profile_id:
-            profiles.delete_profile(str(profile_id))
+    seen: set[str] = set()
+    for row_id in selected_ids:
+        profile_id = _resolve_profile_id(row_id)
+        if profile_id and profile_id not in seen:
+            seen.add(profile_id)
+            profiles.delete_profile(profile_id)
     return int(rev or 0) + 1
 
 
@@ -1987,12 +2462,17 @@ def auto_rank_depth_role(n_clicks, rev):
     Output("pf-rev", "data", allow_duplicate=True),
     Input("pf-depth-auto-all", "n_clicks"),
     State("pf-rev", "data"),
+    State("pf-formation-select", "value"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_all(n_clicks, rev):
+def auto_rank_depth_all(n_clicks, rev, formation_id):
     if not n_clicks:
         return no_update
-    profiles.auto_rank_all_roles_by_score()
+    cols = _formation_columns(formation_id)
+    if cols:
+        profiles.auto_rank_all_roles_by_score(cols)
+    else:
+        profiles.auto_rank_all_roles_by_score()
     return int(rev or 0) + 1
 
 
@@ -2189,7 +2669,9 @@ def open_profile_modal(
     if row_idx < 0 or row_idx >= len(viewport):
         return no_update, no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
-    profile_id = str(row.get("id") or row.get("_key") or "").strip()
+    profile_id = str(
+        row.get("_profile_id") or _resolve_profile_id(row.get("id") or row.get("_key"))
+    ).strip()
     profile = profiles.get_profile(profile_id) if profile_id else None
     if not profile:
         return (

@@ -2533,6 +2533,22 @@ body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="
     word-break: break-word;
     min-width: 0;
 }
+
+.rs-depth-slot {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--app-accent) 35%, var(--app-line));
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    line-height: 1.3;
+}
 .rs-depth-code {
     font-size: 11px;
     font-weight: 700;
@@ -6228,6 +6244,27 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     justify-content: flex-end;
 }
 
+.pf-formation-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: min(16rem, 100%);
+}
+
+.pf-formation-dd {
+    flex: 1 1 12rem;
+    min-width: 10rem;
+}
+
+.rs-depth-card.is-empty {
+    opacity: 0.72;
+}
+
+.rs-depth-card.is-empty .rs-depth-players {
+    color: var(--app-muted);
+    font-style: italic;
+}
+
 .pf-depth-chart-wrap {
     margin-top: 0.25rem;
 }
@@ -6297,6 +6334,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     grid-template-columns:
         3.25rem
         minmax(9rem, 1.5fr)
+        minmax(4.5rem, 0.7fr)
         minmax(5.5rem, 0.85fr)
         minmax(7rem, 1.05fr)
         minmax(7.5rem, 1.15fr)
@@ -6305,7 +6343,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     gap: 0.45rem 0.65rem;
     align-items: center;
     padding: 0.55rem 0.85rem;
-    min-width: 44rem;
+    min-width: 50rem;
     box-sizing: border-box;
 }
 
@@ -6328,6 +6366,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-depth-chart-cols .pf-depth-chart-name-label,
+.pf-depth-chart-cols .pf-depth-chart-slot,
 .pf-depth-chart-cols .pf-depth-chart-pos,
 .pf-depth-chart-cols .pf-depth-chart-club {
     text-align: left;
@@ -6428,7 +6467,8 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
 }
 
 .pf-depth-chart-pos,
-.pf-depth-chart-club {
+.pf-depth-chart-club,
+.pf-depth-chart-slot {
     font-size: 0.9rem;
     line-height: 1.3;
     white-space: normal;
@@ -6436,6 +6476,20 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
     word-break: break-word;
     color: var(--app-text);
     text-align: left;
+}
+
+.pf-depth-chart-slot {
+    font-weight: 700;
+    color: var(--app-accent);
+}
+
+.pf-depth-chart-name.is-empty {
+    color: var(--app-muted);
+    font-style: italic;
+}
+
+.pf-depth-chart-row.is-empty {
+    opacity: 0.85;
 }
 
 .pf-depth-chart-div {
