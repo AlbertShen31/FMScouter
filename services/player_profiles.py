@@ -369,6 +369,43 @@ def split_player_key(key: str) -> tuple[str, str]:
     return text, ""
 
 
+def _norm_player_name(value: Any) -> str:
+    return str(value or "").strip().casefold()
+
+
+def _index_by_player_name(
+    items: list[Any],
+    *,
+    name_of,
+) -> dict[str, list[Any]]:
+    """Group file rows/players by casefolded name (club transfers keep the same name)."""
+    out: dict[str, list[Any]] = {}
+    for item in items:
+        name = _norm_player_name(name_of(item))
+        if not name:
+            continue
+        out.setdefault(name, []).append(item)
+    return out
+
+
+def _pick_name_match(
+    candidates: list[Any],
+    *,
+    preferred_club: str = "",
+    club_of,
+) -> Any | None:
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    club = _norm_player_name(preferred_club)
+    if club:
+        for item in candidates:
+            if _norm_player_name(club_of(item)) == club:
+                return item
+    return candidates[0]
+
+
 def profile_identity(profile: dict[str, Any]) -> tuple[str, str]:
     row = profile.get("row") or {}
     name = str(row.get("Name") or "").strip()
@@ -863,6 +900,304 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
     return refresh_profile_percentiles(settings)
 
 
+def _column_to_role_id() -> dict[str, str]:
+    import config.role_weights.fm26_role_weight_config as pc
+    from scoring.role_scorer import column_label
+
+    return {column_label(role_id): role_id for role_id in pc.all_positions}
+
+
+def _resolve_profile_role_column(
+    role_column: str,
+    *,
+    column_map: dict[str, str] | None = None,
+) -> tuple[list[str], dict[str, str] | None]:
+    """Map a stored Role column to base role ids and an optional hybrid combo."""
+    from scoring.role_scorer import combo_column
+
+    col = str(role_column or "").strip()
+    if not col:
+        return [], None
+    by_col = column_map if column_map is not None else _column_to_role_id()
+    role_id = by_col.get(col)
+    if role_id:
+        return [role_id], None
+    if "+" not in col:
+        return [], None
+    left, _, right = col.partition("+")
+    ip = by_col.get(left.strip())
+    oop = by_col.get(right.strip())
+    if not ip or not oop:
+        return [], None
+    # Prefer the canonical combo column label when rebuilding scores.
+    expected = combo_column(ip, oop)
+    if expected != col and expected not in by_col:
+        # Still accept the stored label; apply_combos writes meta["column"].
+        pass
+    return [ip, oop], {"ip": ip, "oop": oop}
+
+
+def _load_role_score_bundle(
+    file_id: str,
+    *,
+    role_ids: list[str],
+    combos: list[dict[str, str]],
+    settings,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return ``(role_players, scored_rows)`` for the library file."""
+    import services.ui_settings as us
+    import services.upload_cache as upload_cache
+    from scoring.role_scorer import apply_combos, parse_export, score_players
+
+    settings = us.normalize(settings)
+    hybrid_w = us.hybrid_weights(settings)
+    role_players: list[dict[str, Any]] | None = None
+    scored: list[dict[str, Any]] | None = None
+
+    hit = upload_cache.try_role_players(file_id)
+    if hit:
+        role_players, _cache = hit
+        scored = upload_cache.cached_role_rows(file_id)
+
+    if role_players is None or scored is None:
+        entry = lib.get_file(file_id)
+        if not entry:
+            raise FileNotFoundError("Saved file not found.")
+        if not entry.get("role_scores"):
+            return [], []
+        text, _ = lib.read_text(file_id)
+        role_players = parse_export(text)
+        needed = list(dict.fromkeys(role_ids))
+        for item in combos:
+            for rid in (item.get("ip"), item.get("oop")):
+                if rid and rid not in needed:
+                    needed.append(rid)
+        if not needed:
+            import config.role_weights.fm26_role_weight_config as pc
+
+            needed = list(pc.all_positions.keys())
+        scored = score_players(
+            role_players,
+            needed,
+            tier_weights=us.tier_weights(settings),
+            set_piece_profiles=us.set_piece_profiles(settings),
+        )
+
+    if combos:
+        scored = apply_combos(
+            [dict(row) for row in scored],
+            combos,
+            ip_weight=hybrid_w["ip"],
+            oop_weight=hybrid_w["oop"],
+        )
+    return role_players or [], scored or []
+
+
+def replace_profiles_from_saved_file(
+    file_id: str,
+    *,
+    settings=None,
+) -> dict[str, Any]:
+    """Replace profile personal info, role scores, and percentiles from a library file.
+
+    Matches existing profiles by player **name** only (club can change mid-season).
+    When several file rows share a name, prefers the profile's current club if present.
+    Role profiles keep their ``role_column`` and profile ``id`` (depth/slots stay valid).
+    Players missing from the file are left unchanged and reported under ``missing``.
+    """
+    import services.ui_settings as us
+    from scoring.stats_scorer import adaptive_metric_bound_maps
+
+    file_id = str(file_id or "").strip()
+    if not file_id:
+        raise ValueError("Choose a saved file.")
+    entry = lib.get_file(file_id)
+    if not entry:
+        raise FileNotFoundError("Saved file not found.")
+
+    settings = us.normalize(settings)
+    source_label = lib.display_label(entry)
+    role_entries = list_role_profiles()
+    pct_entries = list_percentile_profiles()
+    if not role_entries and not pct_entries:
+        raise ValueError("No saved profiles to update.")
+
+    column_map = _column_to_role_id()
+    role_ids: list[str] = []
+    combos: list[dict[str, str]] = []
+    combo_seen: set[tuple[str, str]] = set()
+    unresolved_roles: list[str] = []
+    for prof in role_entries:
+        col = str(prof.get("role_column") or (prof.get("row") or {}).get("Role") or "").strip()
+        ids, combo = _resolve_profile_role_column(col, column_map=column_map)
+        if not ids:
+            if col:
+                unresolved_roles.append(col)
+            continue
+        for rid in ids:
+            if rid not in role_ids:
+                role_ids.append(rid)
+        if combo:
+            key = (combo["ip"], combo["oop"])
+            if key not in combo_seen:
+                combo_seen.add(key)
+                combos.append(combo)
+
+    role_players, scored_rows = _load_role_score_bundle(
+        file_id,
+        role_ids=role_ids,
+        combos=combos,
+        settings=settings,
+    )
+    stats_players = load_stats_players_for_file(file_id)
+
+    scored_by_name = _index_by_player_name(
+        scored_rows,
+        name_of=lambda row: row.get("Name"),
+    )
+    role_by_name = _index_by_player_name(
+        role_players,
+        name_of=lambda player: player.get("name"),
+    )
+    stats_by_name = _index_by_player_name(
+        stats_players,
+        name_of=lambda player: player.get("name"),
+    )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        stats_players, settings.get("stats_thresholds")
+    )
+
+    items: list[dict[str, Any]] = []
+    missing: list[str] = []
+    seen_missing: set[str] = set()
+
+    def _mark_missing(label: str) -> None:
+        text = str(label or "").strip()
+        if text and text not in seen_missing:
+            seen_missing.add(text)
+            missing.append(text)
+
+    def _profile_name_club(prof: dict[str, Any]) -> tuple[str, str]:
+        return profile_identity(prof)
+
+    for prof in role_entries:
+        player_key_value = str(prof.get("player_key") or "").strip()
+        role_col = str(
+            prof.get("role_column") or (prof.get("row") or {}).get("Role") or ""
+        ).strip()
+        if not player_key_value or not role_col:
+            continue
+        name, club = _profile_name_club(prof)
+        name_key = _norm_player_name(name)
+        if not name_key:
+            continue
+        scored = _pick_name_match(
+            scored_by_name.get(name_key) or [],
+            preferred_club=club,
+            club_of=lambda row: row.get("Club"),
+        )
+        player = _pick_name_match(
+            role_by_name.get(name_key) or [],
+            preferred_club=club,
+            club_of=lambda p: p.get("club"),
+        )
+        stats_player = _pick_name_match(
+            stats_by_name.get(name_key) or [],
+            preferred_club=club,
+            club_of=lambda p: p.get("club"),
+        )
+        if scored is None:
+            _mark_missing(name or player_key_value)
+            continue
+        if role_col not in scored:
+            continue
+        scored_row = dict(scored)
+        if player and player.get("personality") not in (None, "", "-"):
+            scored_row["Personality"] = player.get("personality")
+        if player and player.get("media_handling") not in (None, "", "-"):
+            scored_row["Media Handling"] = player.get("media_handling")
+        pct = percentile_fields_from_stats_player(
+            stats_player,
+            settings=settings,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
+            cohort_players=stats_players,
+        )
+        minutes = stats_player.get("minutes") if stats_player else None
+        items.append(
+            {
+                "player_key": player_key_value,
+                "role_column": role_col,
+                "row": build_role_row_snapshot(
+                    scored_row,
+                    role_col,
+                    percentiles=pct or None,
+                    minutes=minutes,
+                ),
+                "player": player,
+                "stats_player": stats_player,
+                "file_id": file_id,
+            }
+        )
+
+    for prof in pct_entries:
+        player_key_value = str(prof.get("player_key") or "").strip()
+        if not player_key_value:
+            continue
+        name, club = _profile_name_club(prof)
+        name_key = _norm_player_name(name)
+        if not name_key:
+            continue
+        stats_player = _pick_name_match(
+            stats_by_name.get(name_key) or [],
+            preferred_club=club,
+            club_of=lambda p: p.get("club"),
+        )
+        if stats_player is None:
+            _mark_missing(name or player_key_value)
+            continue
+        items.append(
+            {
+                "player_key": player_key_value,
+                "role_column": "",
+                "row": build_stats_row_snapshot(
+                    stats_player,
+                    settings=settings,
+                    metric_p100=metric_p100,
+                    metric_p0=metric_p0,
+                    cohort_players=stats_players,
+                ),
+                "player": _pick_name_match(
+                    role_by_name.get(name_key) or [],
+                    preferred_club=club,
+                    club_of=lambda p: p.get("club"),
+                ),
+                "stats_player": stats_player,
+                "file_id": file_id,
+            }
+        )
+
+    if not items:
+        raise ValueError(
+            "No saved profiles matched players in that file by name. "
+            "Renamed players will not match."
+        )
+
+    saved_from = "role_scores" if role_entries else "stats"
+    saved = save_profile_rows(
+        items,
+        saved_from=saved_from,
+        source_label=source_label,
+    )
+    return {
+        "updated": len(saved),
+        "missing": missing,
+        "unresolved_roles": sorted(set(unresolved_roles)),
+        "source_label": source_label,
+        "file_id": file_id,
+    }
+
+
 def list_profiles() -> list[dict[str, Any]]:
     entries = _read_index()
     entries.sort(key=lambda item: item.get("saved_at") or "", reverse=True)
@@ -930,6 +1265,12 @@ def save_profile_rows(
             existing["saved_at"] = now
             existing["saved_from"] = saved_from
             existing["row"] = row
+            # Keep player_key aligned with the latest Name|Club (club transfers).
+            refreshed_key = player_row_key(row)
+            if refreshed_key and refreshed_key != existing.get("player_key"):
+                by_key.pop(pair, None)
+                existing["player_key"] = refreshed_key
+                by_key[(refreshed_key, role_column)] = existing
             if isinstance(player, dict):
                 existing["player"] = player
             if isinstance(stats_player, dict):

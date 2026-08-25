@@ -74,6 +74,7 @@ from scoring.stats_scorer import (
     minutes_status,
     percentile_color,
 )
+import services.export_library as lib
 import services.formations as fm
 import services.player_profiles as profiles
 import services.ui_settings as us
@@ -2477,7 +2478,8 @@ def layout(**_kwargs):
                 "Saved shortlist rows from Role scores (one row per evaluated role, "
                 "with overall percentiles when the source file has stats). Pick a "
                 "formation for Squad depth, focus a role to rank players in the Depth "
-                "chart, and click a name for the player modal.",
+                "chart, and click a name for the player modal. Use Update from saved file "
+                "to replace personal info, role scores, and percentiles from a library export.",
                 className="text-muted mb-3",
             ),
             dbc.Card(
@@ -2485,6 +2487,41 @@ def layout(**_kwargs):
                     dbc.CardHeader("Saved players"),
                     dbc.CardBody(
                         [
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            dmc.Select(
+                                                id="pf-replace-file",
+                                                label="Update from saved file",
+                                                data=lib.select_options(page="role_scores"),
+                                                value=None,
+                                                clearable=True,
+                                                searchable=True,
+                                                placeholder="Choose a library export",
+                                            ),
+                                            dmc.Button(
+                                                "Replace profile data",
+                                                id="pf-replace-btn",
+                                                size="sm",
+                                                n_clicks=0,
+                                                disabled=True,
+                                            ),
+                                        ],
+                                        className="pf-replace-controls",
+                                    ),
+                                    html.Small(
+                                        "Replaces personal info, role scores, and percentiles "
+                                        "for saved profiles that match by player name in the file "
+                                        "(club changes are fine). Depth ranking and profile ids "
+                                        "are kept. Compute the file on Uploads first when the "
+                                        "label says Stale.",
+                                        className="text-muted d-block mt-1",
+                                    ),
+                                    html.Div(id="pf-replace-status", className="mt-2"),
+                                ],
+                                className="pf-replace-bar mb-3",
+                            ),
                             html.Div(
                                 [
                                     html.Div(
@@ -3242,6 +3279,77 @@ def select_all_profiles(n_clicks, rows, selected_ids, page_current, page_size):
 )
 def toggle_delete_btn(selected_ids):
     return not bool(selected_ids)
+
+
+@callback(
+    Output("pf-replace-btn", "disabled"),
+    Input("pf-replace-file", "value"),
+)
+def toggle_replace_btn(file_id):
+    return not bool(file_id)
+
+
+@callback(
+    Output("pf-replace-file", "data"),
+    Input("pf-rev", "data"),
+)
+def refresh_replace_file_options(_rev):
+    return lib.select_options(page="role_scores")
+
+
+@callback(
+    Output("pf-replace-status", "children"),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Input("pf-replace-btn", "n_clicks"),
+    State("pf-replace-file", "value"),
+    State("ui-settings", "data"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def replace_profiles_from_file(n_clicks, file_id, settings, rev):
+    if not n_clicks or not file_id:
+        return no_update, no_update
+    try:
+        result = profiles.replace_profiles_from_saved_file(
+            file_id,
+            settings=settings,
+        )
+    except Exception as exc:
+        return (
+            html.Div(str(exc), className="text-danger small"),
+            no_update,
+        )
+    updated = int(result.get("updated") or 0)
+    missing = list(result.get("missing") or [])
+    unresolved = list(result.get("unresolved_roles") or [])
+    label = result.get("source_label") or "saved file"
+    parts = [
+        html.Span(
+            f"Updated {updated} profile{'s' if updated != 1 else ''} from {label}.",
+            className="text-success",
+        )
+    ]
+    if missing:
+        sample = ", ".join(missing[:5])
+        extra = f" (+{len(missing) - 5} more)" if len(missing) > 5 else ""
+        parts.append(
+            html.Div(
+                f"Not found in file ({len(missing)}): {sample}{extra}",
+                className="text-muted small mt-1",
+            )
+        )
+    if unresolved:
+        parts.append(
+            html.Div(
+                f"Skipped unknown roles: {', '.join(unresolved[:5])}",
+                className="text-muted small mt-1",
+            )
+        )
+    try:
+        next_rev = int(rev or 0) + 1
+    except (TypeError, ValueError):
+        next_rev = 1
+    return html.Div(parts), next_rev
 
 
 @callback(
