@@ -45,6 +45,7 @@ def _player_metric_sections(
     eval_group: str | None = None,
     *,
     threshold_overrides=None,
+    metric_p100=None,
 ) -> list[dict]:
     # Present in some threshold packs but unused by Mustermann scoring — omit from
     # modal bars / pizzas / values so charts match the metrics that drive averages.
@@ -65,6 +66,7 @@ def _player_metric_sections(
                 mid,
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
+                metric_p100=metric_p100,
             )
             meta = metric_defs()[mid]
             metrics.append(
@@ -570,6 +572,7 @@ def _player_modal_body(
     theme: str | None = "dark",
     threshold_overrides=None,
     settings=None,
+    metric_p100=None,
 ) -> html.Div:
     settings = us.normalize(settings)
     view = _normalize_player_view(view)
@@ -577,7 +580,10 @@ def _player_modal_body(
         eval_group, player.get("pos_group") or "mid", player=player
     )
     sections = _player_metric_sections(
-        player, eval_group, threshold_overrides=threshold_overrides
+        player,
+        eval_group,
+        threshold_overrides=threshold_overrides,
+        metric_p100=metric_p100,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -625,6 +631,8 @@ def stats_charts_bottom_pane(
     eval_group: str | None = None,
     threshold_overrides=None,
     settings=None,
+    metric_p100=None,
+    cohort_players=None,
 ) -> html.Div:
     """Build the charts portion (overall avg + bars/pizzas/values) for a player.
 
@@ -648,12 +656,20 @@ def stats_charts_bottom_pane(
         except AttributeError:
             threshold_overrides = None
 
+    if metric_p100 is None and cohort_players is not None:
+        from scoring.stats_scorer import adaptive_metric_p100_map
+
+        metric_p100 = adaptive_metric_p100_map(cohort_players, threshold_overrides)
+
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
     sections = _player_metric_sections(
-        player, eval_group, threshold_overrides=threshold_overrides
+        player,
+        eval_group,
+        threshold_overrides=threshold_overrides,
+        metric_p100=metric_p100,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)

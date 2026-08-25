@@ -132,7 +132,9 @@ def register_profile_save_callbacks(
                         "player_key": key,
                         "role_column": "",
                         "row": profiles.build_stats_row_snapshot(
-                            player, settings=settings
+                            player,
+                            settings=settings,
+                            cohort_players=players,
                         ),
                     }
                 )

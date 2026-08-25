@@ -447,11 +447,18 @@ def percentile_fields_from_stats_player(
     player: dict[str, Any] | None,
     *,
     settings=None,
+    metric_p100: dict[str, float] | None = None,
+    cohort_players: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Subset of ``build_stats_row_snapshot`` used when enriching role saves."""
     if not player:
         return {}
-    snap = build_stats_row_snapshot(player, settings=settings)
+    snap = build_stats_row_snapshot(
+        player,
+        settings=settings,
+        metric_p100=metric_p100,
+        cohort_players=cohort_players,
+    )
     keys = (
         "Minutes",
         "overall",
@@ -473,10 +480,13 @@ def build_stats_row_snapshot(
     player: dict[str, Any],
     *,
     settings=None,
+    metric_p100: dict[str, float] | None = None,
+    cohort_players: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One shortlist-style row: identity + overall / category percentiles."""
     import services.ui_settings as us
     from scoring.stats_scorer import (
+        adaptive_metric_p100_map,
         category_average_band,
         labeled_view_categories,
         overall_average_band,
@@ -515,13 +525,21 @@ def build_stats_row_snapshot(
     stats = scoring_stats(player)
     group = player.get("pos_group") or "mid"
     thresh = settings.get("stats_thresholds")
-    overall = overall_average_band(group, stats, threshold_overrides=thresh)
+    if metric_p100 is None and cohort_players is not None:
+        metric_p100 = adaptive_metric_p100_map(cohort_players, thresh)
+    overall = overall_average_band(
+        group, stats, threshold_overrides=thresh, metric_p100=metric_p100
+    )
     out["overall"] = overall.get("percentile")
     out["overall_color"] = overall.get("color")
     for section in labeled_view_categories(group=group, dual_final_third=False):
         cat_id = section["id"]
         band = category_average_band(
-            group, cat_id, stats, threshold_overrides=thresh
+            group,
+            cat_id,
+            stats,
+            threshold_overrides=thresh,
+            metric_p100=metric_p100,
         )
         out[cat_id] = band.get("percentile")
         out[f"{cat_id}_color"] = band.get("color")
@@ -596,6 +614,13 @@ def expand_role_profile_rows(
         for p in (stats_players or [])
         if stats_player_key(p)
     }
+    from scoring.stats_scorer import adaptive_metric_p100_map
+    import services.ui_settings as us
+
+    settings = us.normalize(settings)
+    metric_p100 = adaptive_metric_p100_map(
+        stats_players, settings.get("stats_thresholds")
+    )
 
     out: list[dict[str, Any]] = []
     for key in player_keys:
@@ -604,7 +629,9 @@ def expand_role_profile_rows(
             continue
         player = role_by_key.get(key)
         stats_player = stats_by_key.get(key)
-        pct = percentile_fields_from_stats_player(stats_player, settings=settings)
+        pct = percentile_fields_from_stats_player(
+            stats_player, settings=settings, metric_p100=metric_p100
+        )
         minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
             if eligible_only and not scored.get(f"{role_col} eligible"):
@@ -815,7 +842,9 @@ def save_profiles(
             {
                 "player_key": key,
                 "role_column": "",
-                "row": build_stats_row_snapshot(player, settings=settings),
+                "row": build_stats_row_snapshot(
+                    player, settings=settings, cohort_players=players
+                ),
             }
         )
     return save_profile_rows(

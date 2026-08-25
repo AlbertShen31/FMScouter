@@ -3665,29 +3665,30 @@ def open_profile_modal_from_depth(n_clicks, settings, theme):
     return True, title, body, profile_id
 
 
-def _resolve_stats_player_for_profile(profile: dict, player: dict) -> dict | None:
-    """Return a full stats player (minutes + stats) for the Profiles modal if available."""
+def _resolve_stats_player_for_profile(
+    profile: dict, player: dict
+) -> tuple[dict | None, list[dict] | None]:
+    """Return (stats player, cohort) for the Profiles modal if available."""
     from scoring.stats_scorer import player_key as stats_player_key
+
+    file_id = str(profile.get("file_id") or "").strip()
+    stat_players = profiles.load_stats_players_for_file(file_id) if file_id else None
 
     embedded = profile.get("stats_player")
     if isinstance(embedded, dict) and embedded.get("stats"):
-        return embedded
+        return embedded, stat_players
 
-    file_id = str(profile.get("file_id") or "").strip()
-    if not file_id:
-        return None
-    stat_players = profiles.load_stats_players_for_file(file_id)
     if not stat_players:
-        return None
+        return None, None
     name = (player.get("name") or "").strip()
     club = (player.get("club") or "").strip()
     target_key = stats_player_key({"name": name, "club": club})
     if not target_key:
-        return None
+        return None, stat_players
     for sp in stat_players:
         if stats_player_key(sp) == target_key:
-            return sp
-    return None
+            return sp, stat_players
+    return None, stat_players
 
 
 def _build_profile_modal_body(
@@ -3699,7 +3700,7 @@ def _build_profile_modal_body(
     mode: str = "roles",
 ) -> html.Div:
     """Shared body builder for open and switch callbacks."""
-    stats_player = _resolve_stats_player_for_profile(profile, player)
+    stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
     display_player = dict(player)
     if isinstance(stats_player, dict):
         for key in (
@@ -3751,6 +3752,7 @@ def _build_profile_modal_body(
                 theme=theme,
                 view="bars",
                 threshold_overrides=settings.get("stats_thresholds"),
+                cohort_players=stats_cohort,
             )
         else:
             stats_content = html.P(

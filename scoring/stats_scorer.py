@@ -265,8 +265,19 @@ def percentile_color(percentile: float | None) -> str | None:
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
 
 
-def estimate_percentile(value: float, thresholds: list[float], *, higher_is_better: bool) -> float:
-    """Map a value onto ~0–100 using 20/40/60/80 boundaries."""
+def estimate_percentile(
+    value: float,
+    thresholds: list[float],
+    *,
+    higher_is_better: bool,
+    p100: float | None = None,
+) -> float:
+    """Map a value onto ~0–100 using 20/40/60/80 boundaries.
+
+    When ``p100`` is set, values beyond the 80th cut interpolate toward 100 at
+    that ceiling (used for adaptive xGP/90 so the top of the loaded dataset
+    does not all collapse to 100%).
+    """
     if len(thresholds) != 4:
         raise ValueError("Expected four percentile thresholds")
     t20, t40, t60, t80 = (float(x) for x in thresholds)
@@ -278,6 +289,13 @@ def estimate_percentile(value: float, thresholds: list[float], *, higher_is_bett
             return phi
         return plo + (phi - plo) * ((v - lo) / (hi - lo))
 
+    def top_span(bound: float, ceiling: float | None, *, toward_high: bool) -> float:
+        if ceiling is not None:
+            span = (ceiling - bound) if toward_high else (bound - ceiling)
+            if span > 0:
+                return span
+        return abs(bound) if bound != 0 else 1.0
+
     if higher_is_better:
         if value <= bounds[0]:
             # Below 20th — slide toward 0
@@ -287,7 +305,7 @@ def estimate_percentile(value: float, thresholds: list[float], *, higher_is_bett
             if value <= bounds[i + 1]:
                 return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
         # Above 80th
-        span = abs(bounds[3]) if bounds[3] != 0 else 1.0
+        span = top_span(bounds[3], p100, toward_high=True)
         return min(100.0, 80.0 + 20.0 * min(1.0, (value - bounds[3]) / span))
 
     # Lower is better: thresholds decrease as quality improves
@@ -297,8 +315,91 @@ def estimate_percentile(value: float, thresholds: list[float], *, higher_is_bett
     for i in range(3):
         if value >= bounds[i + 1]:
             return lerp(value, bounds[i], bounds[i + 1], points[i], points[i + 1])
-    span = abs(bounds[3]) if bounds[3] != 0 else 1.0
+    span = top_span(bounds[3], p100, toward_high=False)
     return min(100.0, 80.0 + 20.0 * min(1.0, (bounds[3] - value) / span))
+
+
+def implied_percentile_ceiling(
+    thresholds: list[float], *, higher_is_better: bool
+) -> float:
+    """Default 100th-percentile value implied by the 80th cut (settings)."""
+    t80 = float(thresholds[3])
+    span = abs(t80) if t80 != 0 else 1.0
+    return t80 + span if higher_is_better else t80 - span
+
+
+def metric_extreme_among_players(
+    players: list[dict[str, Any]] | None,
+    metric_id: str,
+    *,
+    higher_is_better: bool,
+) -> float | None:
+    """Best raw metric value among scorable players in the loaded set."""
+    values: list[float] = []
+    for player in players or []:
+        raw = scoring_stats(player).get(metric_id)
+        if raw is None:
+            continue
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if number != number:
+            continue
+        values.append(number)
+    if not values:
+        return None
+    return max(values) if higher_is_better else min(values)
+
+
+def adaptive_metric_p100(
+    players: list[dict[str, Any]] | None,
+    metric_id: str,
+    *,
+    group: str,
+    category: str,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> float | None:
+    """100th cut: max/min of settings ceiling and the extreme in ``players``."""
+    thresholds = resolve_thresholds(
+        group, category, metric_id, threshold_overrides=threshold_overrides
+    )
+    if not thresholds:
+        return None
+    hib = bool((metric_defs().get(metric_id) or {}).get("higher_is_better", True))
+    setting = implied_percentile_ceiling(thresholds, higher_is_better=hib)
+    observed = metric_extreme_among_players(
+        players, metric_id, higher_is_better=hib
+    )
+    if observed is None:
+        return setting
+    return max(setting, observed) if hib else min(setting, observed)
+
+
+def xg_prevented_p100(
+    players: list[dict[str, Any]] | None,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> float | None:
+    """Adaptive 100th ceiling for GK xGP/90 (settings vs loaded dataset)."""
+    return adaptive_metric_p100(
+        players,
+        "xg_prevented",
+        group="gk",
+        category="final_third",
+        threshold_overrides=threshold_overrides,
+    )
+
+
+def adaptive_metric_p100_map(
+    players: list[dict[str, Any]] | None,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """Metric id → adaptive 100th ceiling (currently xGP/90 only)."""
+    out: dict[str, float] = {}
+    p100 = xg_prevented_p100(players, threshold_overrides)
+    if p100 is not None:
+        out["xg_prevented"] = float(p100)
+    return out
 
 
 def minutes_status(minutes: float | None, required: float) -> str:
@@ -545,6 +646,7 @@ def band_metric(
     value: float | None,
     *,
     threshold_overrides: dict[str, Any] | None = None,
+    metric_p100: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     meta = metric_defs().get(metric_id) or {}
     thresholds = resolve_thresholds(
@@ -559,7 +661,18 @@ def band_metric(
             "higher_is_better": bool(meta.get("higher_is_better", True)),
         }
     hib = bool(meta.get("higher_is_better", True))
-    pct = estimate_percentile(float(value), list(thresholds), higher_is_better=hib)
+    p100 = None
+    if metric_p100 and metric_id in metric_p100:
+        try:
+            p100 = float(metric_p100[metric_id])
+        except (TypeError, ValueError):
+            p100 = None
+    pct = estimate_percentile(
+        float(value),
+        list(thresholds),
+        higher_is_better=hib,
+        p100=p100,
+    )
     unit = meta.get("unit")
     if unit == "percent":
         display = f"{value:.1f}%"
@@ -583,6 +696,7 @@ def category_average_band(
     stats: dict[str, Any] | None,
     *,
     threshold_overrides: dict[str, Any] | None = None,
+    metric_p100: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Mean estimated percentile across metrics in one category (missing skipped)."""
     pcts: list[float] = []
@@ -593,6 +707,7 @@ def category_average_band(
             mid,
             (stats or {}).get(mid),
             threshold_overrides=threshold_overrides,
+            metric_p100=metric_p100,
         )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
@@ -617,12 +732,17 @@ def overall_average_band(
     stats: dict[str, Any] | None,
     *,
     threshold_overrides: dict[str, Any] | None = None,
+    metric_p100: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Mean of the three category average percentiles (missing categories skipped)."""
     pcts: list[float] = []
     for cat in view_categories():
         band = category_average_band(
-            group, cat["id"], stats, threshold_overrides=threshold_overrides
+            group,
+            cat["id"],
+            stats,
+            threshold_overrides=threshold_overrides,
+            metric_p100=metric_p100,
         )
         if band.get("percentile") is not None:
             pcts.append(float(band["percentile"]))
@@ -672,6 +792,7 @@ def format_stat_export_rows(
     ``possession`` / ``all``). Keepers use the mapped GK benchmark blocks.
     """
     category = canonical_category(category)
+    metric_p100 = adaptive_metric_p100_map(players)
     if category == "all":
         cats = labeled_view_categories(group=group, dual_final_third=True)
         fieldnames = [
@@ -714,9 +835,13 @@ def format_stat_export_rows(
             use_g = "gk" if is_gk_group(g) else g
             stats = scoring_stats(p)
             for cat in cats:
-                band = category_average_band(use_g, cat["id"], stats)
+                band = category_average_band(
+                    use_g, cat["id"], stats, metric_p100=metric_p100
+                )
                 row[cat["label"]] = band["display"]
-            row["Overall average"] = overall_average_band(use_g, stats)["display"]
+            row["Overall average"] = overall_average_band(
+                use_g, stats, metric_p100=metric_p100
+            )["display"]
             rows.append(row)
         return fieldnames, rows
 
@@ -761,14 +886,20 @@ def format_stat_export_rows(
             use_g = "gk" if is_gk_group(g) else g
             stats = scoring_stats(p)
             row["Category average"] = category_average_band(
-                use_g, category, stats
+                use_g, category, stats, metric_p100=metric_p100
             )["display"]
             for mid in metric_ids:
                 label = metric_defs()[mid]["abbr"]
                 if mid not in metrics_for(use_g, category):
                     row[label] = "—"
                     continue
-                band = band_metric(use_g, category, mid, stats.get(mid))
+                band = band_metric(
+                    use_g,
+                    category,
+                    mid,
+                    stats.get(mid),
+                    metric_p100=metric_p100,
+                )
                 row[label] = band["display"]
             rows.append(row)
         return fieldnames, rows
@@ -808,10 +939,16 @@ def format_stat_export_rows(
         }
         stats = scoring_stats(p)
         row["Category average"] = category_average_band(
-            group, category, stats
+            group, category, stats, metric_p100=metric_p100
         )["display"]
         for mid in metric_ids:
-            band = band_metric(group, category, mid, stats.get(mid))
+            band = band_metric(
+                group,
+                category,
+                mid,
+                stats.get(mid),
+                metric_p100=metric_p100,
+            )
             row[metric_defs()[mid]["abbr"]] = band["display"]
         rows.append(row)
     return fieldnames, rows

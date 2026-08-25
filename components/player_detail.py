@@ -201,6 +201,7 @@ def _player_metric_sections(
     eval_group: str | None = None,
     *,
     threshold_overrides=None,
+    metric_p100=None,
 ) -> list[dict]:
     skip_metrics = frozenset({"shots_on_target", "conversion_rate"})
     g = _normalize_eval_group(player, eval_group)
@@ -217,6 +218,7 @@ def _player_metric_sections(
                 mid,
                 stats.get(mid),
                 threshold_overrides=threshold_overrides,
+                metric_p100=metric_p100,
             )
             meta = metric_defs()[mid]
             metrics.append(
@@ -330,6 +332,8 @@ def stats_player_detail_card(
     *,
     minutes_required: float | None = None,
     threshold_overrides=None,
+    metric_p100=None,
+    cohort_players=None,
 ) -> html.Div:
     settings = us.normalize(settings)
     minutes_required = (
@@ -337,7 +341,20 @@ def stats_player_detail_card(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    sections = _player_metric_sections(player, threshold_overrides=threshold_overrides)
+    if metric_p100 is None and cohort_players is not None:
+        from scoring.stats_scorer import adaptive_metric_p100_map
+
+        metric_p100 = adaptive_metric_p100_map(
+            cohort_players,
+            threshold_overrides
+            if threshold_overrides is not None
+            else settings.get("stats_thresholds"),
+        )
+    sections = _player_metric_sections(
+        player,
+        threshold_overrides=threshold_overrides,
+        metric_p100=metric_p100,
+    )
     status = minutes_status(player.get("minutes"), minutes_required)
     pcts = [
         float(m["percentile"])
@@ -517,7 +534,17 @@ def profile_detail_body(
 
     if show_stats and stats_player and stats_player.get("stats"):
         children.append(html.Hr(className="pf-section-divider"))
-        sections = _player_metric_sections(stats_player)
+        cohort = resolved.get("stats_cohort") or None
+        metric_p100 = None
+        if cohort:
+            from scoring.stats_scorer import adaptive_metric_p100_map
+
+            metric_p100 = adaptive_metric_p100_map(
+                cohort, settings.get("stats_thresholds")
+            )
+        sections = _player_metric_sections(
+            stats_player, metric_p100=metric_p100
+        )
         pcts = [
             float(m["percentile"])
             for cat in sections
