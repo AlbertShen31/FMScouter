@@ -387,7 +387,17 @@ def _role_cell_markdown(column: str, theme=None) -> str:
     )
 
 
-def _minutes_cell(mins_raw, settings) -> str:
+def _resolve_minutes_required(value, settings=None) -> float:
+    settings = us.normalize(settings)
+    if value is not None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pass
+    return float(us.default_minutes_required(settings))
+
+
+def _minutes_cell(mins_raw, settings, *, minutes_required=None) -> str:
     if mins_raw in (None, "", "-", "—", "undefined", "null", "None"):
         return "—"
     try:
@@ -396,9 +406,8 @@ def _minutes_cell(mins_raw, settings) -> str:
         return _blank(mins_raw)
     if mins_f != mins_f:  # NaN
         return "—"
-    settings = us.normalize(settings)
-    minutes_required = us.default_minutes_required(settings)
-    status = minutes_status(mins_f, minutes_required)
+    required = _resolve_minutes_required(minutes_required, settings)
+    status = minutes_status(mins_f, required)
     text = f"{int(mins_f):,}"
     color = minutes_color(status)
     if not color:
@@ -1072,7 +1081,7 @@ def _apply_profile_division(item: dict, raw: dict) -> None:
 
 
 def _depth_score_cell(score, settings, theme=None):
-    """Colored score span matching the Profiles table bands."""
+    """Score pill using the same band colors as the Profiles table."""
     if score is None or score in ("", "-", "—"):
         return html.Span("—", className="pf-depth-chart-metric")
     settings = us.normalize(settings)
@@ -1081,15 +1090,15 @@ def _depth_score_cell(score, settings, theme=None):
         band = score_band(score_f, **settings["bands"])
     except (TypeError, ValueError):
         return html.Span(str(score), className="pf-depth-chart-metric")
-    color = us.band_text_colors(settings, theme=theme).get(band)
-    style = {"fontWeight": 750, "fontVariantNumeric": "tabular-nums"}
-    if color:
-        style["color"] = color
-    return html.Span(f"{score_f:.1f}", className="pf-depth-chart-metric", style=style)
+    return html.Span(
+        f"{score_f:.1f}",
+        className=f"pf-depth-chart-score-pill is-{band}",
+        title=f"Score {score_f:.1f} ({band})",
+    )
 
 
-def _depth_ovr_cell(percentile, color=None):
-    """Colored overall percentile span matching the Profiles table."""
+def _depth_ovr_cell(percentile, color=None, *, pill: bool = False):
+    """Colored overall percentile; optional pill when ``pill`` is True."""
     if percentile is None or percentile in ("", "-", "—"):
         return html.Span("—", className="pf-depth-chart-metric")
     try:
@@ -1097,6 +1106,22 @@ def _depth_ovr_cell(percentile, color=None):
     except (TypeError, ValueError):
         return html.Span(str(percentile), className="pf-depth-chart-metric")
     tint = color or percentile_color(pct_f)
+    if pill:
+        if pct_f >= 80:
+            tier = "high"
+        elif pct_f >= 60:
+            tier = "mid-high"
+        elif pct_f >= 40:
+            tier = "mid"
+        else:
+            tier = "low"
+        style = {"color": tint} if tint else None
+        return html.Span(
+            f"{pct_f:.0f}%",
+            className=f"pf-depth-chart-ovr-pill is-{tier}",
+            style=style,
+            title=f"Overall {pct_f:.0f}%",
+        )
     style = {"fontWeight": 750, "fontVariantNumeric": "tabular-nums"}
     if tint:
         style["color"] = tint
@@ -1112,7 +1137,8 @@ def _depth_plain_cell(value, class_name: str) -> html.Span:
     )
 
 
-def _depth_mins_cell(value) -> html.Span:
+def _depth_mins_cell(value, settings=None, *, minutes_required=None) -> html.Span:
+    """Mins cell colored like the Profiles table (meet / half / fail)."""
     if value in (None, "", "-", "—"):
         return html.Span("—", className="pf-depth-chart-mins")
     try:
@@ -1121,8 +1147,22 @@ def _depth_mins_cell(value) -> html.Span:
             return html.Span("—", className="pf-depth-chart-mins")
         text = f"{int(mins_f):,}"
     except (TypeError, ValueError):
-        text = str(value)
-    return html.Span(text, className="pf-depth-chart-mins", title=text)
+        return html.Span(str(value), className="pf-depth-chart-mins", title=str(value))
+    required = _resolve_minutes_required(minutes_required, settings)
+    status = minutes_status(mins_f, required)
+    tint = minutes_color(status)
+    style = {
+        "fontWeight": 650,
+        "fontVariantNumeric": "tabular-nums",
+    }
+    if tint:
+        style["color"] = tint
+    return html.Span(
+        text,
+        className=f"pf-depth-chart-mins is-{status}",
+        style=style,
+        title=f"{text} mins · limit {int(required):,} ({status})",
+    )
 
 
 def _depth_rec_cell(value, theme=None) -> html.Span:
@@ -1174,9 +1214,11 @@ def _depth_chart_player_row(
     slot_unique: bool = False,
     draggable: bool = True,
     removable: bool = True,
+    minutes_required=None,
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
+    mins_limit = _resolve_minutes_required(minutes_required, settings)
     remove_cell = html.Span("", className="pf-depth-chart-remove")
     slot_class = "pf-depth-chart-slot" + _slot_status_class(
         conflicted=slot_conflicted, unique=slot_unique
@@ -1341,9 +1383,15 @@ def _depth_chart_player_row(
                 _depth_score_cell(row.get("Score"), settings, theme=theme),
                 className="pf-depth-chart-score",
             ),
-            _depth_mins_cell(_profile_minutes_raw(entry, row)),
+            _depth_mins_cell(
+                _profile_minutes_raw(entry, row),
+                settings,
+                minutes_required=mins_limit,
+            ),
             html.Div(
-                _depth_ovr_cell(row.get("overall"), row.get("overall_color")),
+                _depth_ovr_cell(
+                    row.get("overall"), row.get("overall_color"), pill=True
+                ),
                 className="pf-depth-chart-ovr",
             ),
             html.Div(
@@ -1399,9 +1447,11 @@ def _build_formation_xi_chart(
     formation_id: str | None = None,
     settings=None,
     theme=None,
+    minutes_required=None,
 ) -> html.Div:
     """One starter per formation slot (slot-specific depth lists)."""
     settings = us.normalize(settings)
+    mins_limit = _resolve_minutes_required(minutes_required, settings)
     if not slots:
         return html.Div(
             "This formation has no filled IP+OOP slots.",
@@ -1430,6 +1480,7 @@ def _build_formation_xi_chart(
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
                 draggable=False,
+                minutes_required=mins_limit,
             )
         )
     return html.Div(
@@ -1483,15 +1534,21 @@ def _build_depth_chart(
     hybrids_only: bool = False,
     settings=None,
     theme=None,
+    minutes_required=None,
 ) -> html.Div:
     settings = us.normalize(settings)
+    mins_limit = _resolve_minutes_required(minutes_required, settings)
     focus = _focus_slot(focus_roles)
     slots = list(formation_slots or [])
 
     if not focus:
         if slots:
             return _build_formation_xi_chart(
-                slots, formation_id=formation_id, settings=settings, theme=theme
+                slots,
+                formation_id=formation_id,
+                settings=settings,
+                theme=theme,
+                minutes_required=mins_limit,
             )
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
@@ -1599,6 +1656,7 @@ def _build_depth_chart(
                 slot_is_unique and _entry_player_key(entry) not in multi_starters
             ),
             draggable=True,
+            minutes_required=mins_limit,
         )
         for idx, entry in enumerate(ordered)
     ]
@@ -1916,6 +1974,7 @@ def _entry_to_role_table_row(
     slot_unique: bool = False,
     row_id: str | None = None,
     depth_rank: int | None = None,
+    minutes_required=None,
 ) -> tuple[dict, dict]:
     """Build one profiles table row from a role profile entry."""
     settings = us.normalize(settings)
@@ -1972,7 +2031,9 @@ def _entry_to_role_table_row(
     item["Score"] = _score_markdown(score_raw, settings, theme=theme)
     mins_raw = _profile_minutes_raw(entry, raw)
     item["_minutes_raw"] = mins_raw
-    item["Minutes"] = _minutes_cell(mins_raw, settings)
+    item["Minutes"] = _minutes_cell(
+        mins_raw, settings, minutes_required=minutes_required
+    )
     for pct in PCT_COLS:
         item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
     return item, injury_tooltip_entry(raw.get("Injury"))
@@ -2514,27 +2575,63 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            html.Span(
-                                                "Depth chart",
-                                                className="rs-depth-heading-label",
+                                            html.Div(
+                                                [
+                                                    html.Span(
+                                                        "Depth chart",
+                                                        className="rs-depth-heading-label",
+                                                    ),
+                                                    html.Span(
+                                                        "Starting XI shows one player per formation slot "
+                                                        "(Slot column). Focus a Squad depth card to rank "
+                                                        "that slot; drag to reorder; × removes the player "
+                                                        "from that slot only.",
+                                                        className="rs-depth-heading-hint",
+                                                    ),
+                                                ],
+                                                className="rs-depth-heading-copy",
                                             ),
-                                            html.Span(
-                                                "Starting XI shows one player per formation slot "
-                                                "(Slot column). Focus a Squad depth card to rank "
-                                                "that slot; drag to reorder; × removes the player "
-                                                "from that slot only.",
-                                                className="rs-depth-heading-hint",
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Minutes",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            *help_icon(
+                                                                "Green = meets limit, yellow = ≥ half, "
+                                                                "red = below half. Applies to Mins color "
+                                                                "in the depth chart and Role scores table.",
+                                                                "pf-help-depth-minutes",
+                                                            ),
+                                                        ],
+                                                        className="rs-field-label-row",
+                                                    ),
+                                                    dmc.NumberInput(
+                                                        id="pf-depth-minutes-required",
+                                                        value=mins_req,
+                                                        min=0,
+                                                        max=20000,
+                                                        step=90,
+                                                        size="sm",
+                                                    ),
+                                                ],
+                                                className=(
+                                                    "pf-squad-depth-field "
+                                                    "pf-depth-minutes-field"
+                                                ),
                                             ),
                                         ],
-                                        className="rs-depth-heading-copy pf-depth-chart-toolbar",
+                                        className="pf-depth-chart-toolbar",
                                     ),
+                                    html.Div(id="pf-depth-chart-body"),
                                     html.Div(
                                         id="pf-depth-undo-wrap",
                                         className="pf-depth-undo-wrap",
                                         children=_depth_undo_panel([]),
                                         hidden=True,
                                     ),
-                                    html.Div(id="pf-depth-chart-body"),
                                 ],
                                 id="pf-depth-chart-wrap",
                                 className="pf-depth-chart-wrap mb-3",
@@ -2677,13 +2774,17 @@ def layout(**_kwargs):
 
 @callback(
     Output("pf-minutes-required", "value"),
+    Output("pf-depth-minutes-required", "value"),
     Input("ui-settings", "data"),
     State("pf-minutes-required", "value"),
+    State("pf-depth-minutes-required", "value"),
 )
-def sync_pf_minutes_from_settings(settings, minutes_required):
+def sync_pf_minutes_from_settings(settings, minutes_required, depth_minutes):
     settings = us.normalize(settings)
     default_mins = us.default_minutes_required(settings)
-    return minutes_required if minutes_required is not None else default_mins
+    filter_mins = minutes_required if minutes_required is not None else default_mins
+    depth_mins = depth_minutes if depth_minutes is not None else default_mins
+    return filter_mins, depth_mins
 
 
 @callback(
@@ -2866,6 +2967,7 @@ clientside_callback(
     Input("pf-pct-age", "value"),
     Input("pf-minutes-match", "value"),
     Input("pf-minutes-required", "value"),
+    Input("pf-depth-minutes-required", "value"),
     Input("pf-page-size", "value"),
     Input("pf-table", "sort_by"),
     Input("ui-settings", "data"),
@@ -2881,6 +2983,7 @@ def refresh_profiles_table(
     pct_age,
     minutes_match,
     minutes_required,
+    depth_minutes_required,
     page_size,
     sort_by,
     settings,
@@ -2893,11 +2996,8 @@ def refresh_profiles_table(
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
         page_size_i = us.page_size(settings)
-    minutes_required_f = float(
-        minutes_required
-        if minutes_required is not None
-        else us.default_minutes_required(settings)
-    )
+    minutes_required_f = _resolve_minutes_required(minutes_required, settings)
+    depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
     triggered = {
         (item.get("prop_id") or "").split(".")[0]
         for item in (ctx.triggered or [])
@@ -3014,6 +3114,7 @@ def refresh_profiles_table(
                 formation_slots=formation_slots,
                 settings=settings,
                 theme=theme,
+                minutes_required=depth_minutes_f,
             ),
             epoch=f"r{int(_rev or 0)}-{uuid.uuid4().hex[:8]}",
         )
@@ -3032,12 +3133,15 @@ def refresh_profiles_table(
     )
     filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
 
+    color_mins = (
+        minutes_required_f if mode == "percentiles" else depth_minutes_f
+    )
     display_rows = []
     for row in filtered:
         clean = _strip_internal(row)
-        minutes_value = clean.get("Minutes")
-        if not isinstance(minutes_value, str) or not minutes_value.strip():
-            clean["Minutes"] = _minutes_cell(row.get("_minutes_raw"), settings)
+        clean["Minutes"] = _minutes_cell(
+            row.get("_minutes_raw"), settings, minutes_required=color_mins
+        )
         display_rows.append(clean)
     display_tips = [
         tips[all_rows.index(row)] for row in filtered if row in all_rows
@@ -3261,12 +3365,20 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id):
     State("pf-focus-role", "data"),
     State("pf-table", "sort_by"),
     State("pf-depth-order-guard", "data"),
+    State("pf-depth-minutes-required", "value"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def apply_depth_chart_drag(
-    order, formation_id, focus_role, sort_by, order_guard, settings, theme
+    order,
+    formation_id,
+    focus_role,
+    sort_by,
+    order_guard,
+    depth_minutes,
+    settings,
+    theme,
 ):
     """Persist drag order without remounting the depth chart.
 
@@ -3308,6 +3420,7 @@ def apply_depth_chart_drag(
         profiles.set_depth_ranks(role, ids)
 
     settings = us.normalize(settings)
+    depth_minutes_f = _resolve_minutes_required(depth_minutes, settings)
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
     tips: list[dict] = []
@@ -3341,6 +3454,7 @@ def apply_depth_chart_drag(
                     slot_is_unique and player_key not in multi_starters
                 ),
                 depth_rank=index + 1,
+                minutes_required=depth_minutes_f,
             )
             rows.append(item)
             tips.append(tip)
@@ -3365,9 +3479,9 @@ def apply_depth_chart_drag(
     display_rows = []
     for row in filtered:
         clean = _strip_internal(row)
-        minutes_value = clean.get("Minutes")
-        if not isinstance(minutes_value, str) or not minutes_value.strip():
-            clean["Minutes"] = _minutes_cell(row.get("_minutes_raw"), settings)
+        clean["Minutes"] = _minutes_cell(
+            row.get("_minutes_raw"), settings, minutes_required=depth_minutes_f
+        )
         display_rows.append(clean)
     tip_by_id = {
         str(row.get("id") or ""): tip
@@ -3394,11 +3508,14 @@ def apply_depth_chart_drag(
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("pf-depth-minutes-required", "value"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_role(n_clicks, rev, formation_id, focus_role, settings, theme):
+def auto_rank_depth_role(
+    n_clicks, rev, formation_id, focus_role, depth_minutes, settings, theme
+):
     if not ctx.triggered_id or not clicked(n_clicks):
         return no_update, no_update, no_update
     role = str(ctx.triggered_id.get("role") or "").strip()
@@ -3422,6 +3539,7 @@ def auto_rank_depth_role(n_clicks, rev, formation_id, focus_role, settings, them
             formation_slots=formation_slots,
             settings=settings,
             theme=theme,
+            minutes_required=depth_minutes,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -3437,11 +3555,14 @@ def auto_rank_depth_role(n_clicks, rev, formation_id, focus_role, settings, them
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("pf-depth-minutes-required", "value"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_all(n_clicks, rev, formation_id, focus_role, settings, theme):
+def auto_rank_depth_all(
+    n_clicks, rev, formation_id, focus_role, depth_minutes, settings, theme
+):
     if not n_clicks:
         return no_update, no_update, no_update
     slots = _formation_slots(formation_id)
@@ -3460,6 +3581,7 @@ def auto_rank_depth_all(n_clicks, rev, formation_id, focus_role, settings, theme
             formation_slots=slots,
             settings=settings,
             theme=theme,
+            minutes_required=depth_minutes,
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )

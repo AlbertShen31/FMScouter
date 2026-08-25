@@ -6516,7 +6516,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-depth-undo-wrap {
-    margin: 0 0 0.85rem;
+    margin: 0.85rem 0 0;
 }
 
 .pf-depth-undo-panel {
@@ -6631,10 +6631,26 @@ body[data-theme="light"] .pf-depth-undo-row {
 
 .pf-depth-chart-toolbar {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 1.5rem;
+    flex-wrap: wrap;
     margin-bottom: 0.75rem;
+}
+
+.pf-depth-chart-toolbar .rs-depth-heading-copy {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.pf-depth-minutes-field {
+    flex: 0 0 auto;
+    min-width: 7.5rem;
+}
+
+.pf-depth-minutes-field .mantine-NumberInput-root {
+    width: 7.5rem;
 }
 
 .pf-depth-chart-sections {
@@ -7139,6 +7155,114 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur {
 
 .pf-depth-chart-rec.is-graded {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.pf-depth-chart-mins.is-meet,
+.pf-depth-chart-mins.is-half,
+.pf-depth-chart-mins.is-fail {
+    font-weight: 650;
+}
+
+.pf-depth-chart-score-pill,
+.pf-depth-chart-ovr-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.35rem;
+    padding: 0.12rem 0.4rem;
+    border-radius: 6px;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.pf-depth-chart-score-pill.is-elite {
+    background: color-mix(in srgb, var(--band-elite-bar) 22%, transparent);
+    color: var(--band-elite-bar);
+}
+
+.pf-depth-chart-score-pill.is-good {
+    background: color-mix(in srgb, var(--band-good-bar) 22%, transparent);
+    color: var(--band-good-bar);
+}
+
+.pf-depth-chart-score-pill.is-ok {
+    background: color-mix(in srgb, var(--band-ok-bar) 22%, transparent);
+    color: var(--band-ok-bar);
+}
+
+.pf-depth-chart-score-pill.is-poor {
+    background: color-mix(in srgb, var(--band-poor-bar) 22%, transparent);
+    color: var(--band-poor-bar);
+}
+
+html[data-theme="light"] .pf-depth-chart-score-pill.is-elite,
+body[data-theme="light"] .pf-depth-chart-score-pill.is-elite {
+    background: var(--band-elite-bg);
+    color: var(--band-elite-fg);
+}
+
+html[data-theme="light"] .pf-depth-chart-score-pill.is-good,
+body[data-theme="light"] .pf-depth-chart-score-pill.is-good {
+    background: var(--band-good-bg);
+    color: var(--band-good-fg);
+}
+
+html[data-theme="light"] .pf-depth-chart-score-pill.is-ok,
+body[data-theme="light"] .pf-depth-chart-score-pill.is-ok {
+    background: var(--band-ok-bg);
+    color: var(--band-ok-fg);
+}
+
+html[data-theme="light"] .pf-depth-chart-score-pill.is-poor,
+body[data-theme="light"] .pf-depth-chart-score-pill.is-poor {
+    background: var(--band-poor-bg);
+    color: var(--band-poor-fg);
+}
+
+.pf-depth-chart-ovr-pill.is-high {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ade80;
+}
+
+.pf-depth-chart-ovr-pill.is-mid-high {
+    background: rgba(132, 204, 22, 0.18);
+    color: #a3e635;
+}
+
+.pf-depth-chart-ovr-pill.is-mid {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.pf-depth-chart-ovr-pill.is-low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+html[data-theme="light"] .pf-depth-chart-ovr-pill.is-high,
+body[data-theme="light"] .pf-depth-chart-ovr-pill.is-high {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+html[data-theme="light"] .pf-depth-chart-ovr-pill.is-mid-high,
+body[data-theme="light"] .pf-depth-chart-ovr-pill.is-mid-high {
+    background: #ecfccb;
+    color: #4d7c0f;
+}
+
+html[data-theme="light"] .pf-depth-chart-ovr-pill.is-mid,
+body[data-theme="light"] .pf-depth-chart-ovr-pill.is-mid {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+html[data-theme="light"] .pf-depth-chart-ovr-pill.is-low,
+body[data-theme="light"] .pf-depth-chart-ovr-pill.is-low {
+    background: #fee2e2;
+    color: #b91c1c;
 }
 
 .pf-depth-chart-role {
