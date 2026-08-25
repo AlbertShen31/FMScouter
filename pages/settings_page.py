@@ -121,52 +121,70 @@ def _badge_color_row(tier: str, label: str, color: str) -> html.Div:
     return html.Div(
         [
             html.Div(label, className="st-color-name"),
-            html.Span(
-                className="st-color-swatch",
-                style={"backgroundColor": color},
-            ),
-            dmc.TextInput(
-                id={"type": "st-badge-color", "tier": tier},
-                value=color,
-                debounce=500,
-                className="st-color-text",
-                placeholder="#rrggbb",
+            html.Div(
+                [
+                    html.Span(
+                        className="st-color-swatch",
+                        style={"backgroundColor": color},
+                    ),
+                    dmc.TextInput(
+                        id={"type": "st-badge-color", "tier": tier},
+                        value=color,
+                        debounce=500,
+                        className="st-color-text",
+                        placeholder="#rrggbb",
+                    ),
+                ],
+                className="st-color-controls",
             ),
         ],
         className="st-color-row st-badge-color-row",
     )
 
 
-def _pers_color_row(tier: str, label: str, colors: dict) -> html.Div:
+def _pers_color_row(tier: str, label: str, colors: dict, description: str = "") -> html.Div:
     return html.Div(
         [
-            html.Div(label, className="st-color-name"),
-            html.Span(
-                ["Preview", html.Span(className="st-swatch")],
-                className=f"st-preview rs-legend-chip pers-tier-{tier}",
+            html.Div(
+                [
+                    html.Div(label, className="st-color-name"),
+                    html.Div(description, className="st-pers-tier-desc")
+                    if description
+                    else None,
+                ],
+                className="st-pers-tier-meta",
             ),
-            *[
-                html.Div(
-                    [
-                        html.Label(part.upper(), className="st-mini-label"),
-                        html.Span(
-                            className="st-color-swatch",
-                            style={"backgroundColor": colors[part]},
-                        ),
-                        dmc.TextInput(
-                            id={"type": "st-pers-color", "tier": tier, "part": part},
-                            value=colors[part],
-                            debounce=500,
-                            className="st-color-text",
-                            placeholder="#rrggbb",
-                        ),
+            html.Div(
+                [
+                    html.Span(
+                        ["Preview", html.Span(className="st-swatch")],
+                        className=f"st-preview rs-legend-chip pers-tier-{tier}",
+                    ),
+                    *[
+                        html.Div(
+                            [
+                                html.Label(part.upper(), className="st-mini-label"),
+                                html.Span(
+                                    className="st-color-swatch",
+                                    style={"backgroundColor": colors[part]},
+                                ),
+                                dmc.TextInput(
+                                    id={"type": "st-pers-color", "tier": tier, "part": part},
+                                    value=colors[part],
+                                    debounce=500,
+                                    className="st-color-text",
+                                    placeholder="#rrggbb",
+                                ),
+                            ],
+                            className="st-color-field",
+                        )
+                        for part in us.PERSONALITY_TIER_COLOR_PARTS
                     ],
-                    className="st-color-field",
-                )
-                for part in us.PERSONALITY_TIER_COLOR_PARTS
-            ],
+                ],
+                className="st-color-controls",
+            ),
         ],
-        className="st-color-row",
+        className="st-color-row st-pers-color-row",
     )
 
 
@@ -174,30 +192,35 @@ def _color_row(band: str, label: str, colors: dict) -> html.Div:
     return html.Div(
         [
             html.Div(label, className="st-color-name"),
-            html.Span(
-                ["Preview", html.Span(className="st-swatch")],
-                className=f"st-preview rs-legend-chip {band}",
-            ),
-            *[
-                html.Div(
-                    [
-                        html.Label(part.upper(), className="st-mini-label"),
-                        html.Span(
-                            className="st-color-swatch",
-                            style={"backgroundColor": colors[part]},
-                        ),
-                        dmc.TextInput(
-                            id={"type": "st-color", "band": band, "part": part},
-                            value=colors[part],
-                            debounce=500,
-                            className="st-color-text",
-                            placeholder="#rrggbb",
-                        ),
+            html.Div(
+                [
+                    html.Span(
+                        ["Preview", html.Span(className="st-swatch")],
+                        className=f"st-preview rs-legend-chip {band}",
+                    ),
+                    *[
+                        html.Div(
+                            [
+                                html.Label(part.upper(), className="st-mini-label"),
+                                html.Span(
+                                    className="st-color-swatch",
+                                    style={"backgroundColor": colors[part]},
+                                ),
+                                dmc.TextInput(
+                                    id={"type": "st-color", "band": band, "part": part},
+                                    value=colors[part],
+                                    debounce=500,
+                                    className="st-color-text",
+                                    placeholder="#rrggbb",
+                                ),
+                            ],
+                            className="st-color-field",
+                        )
+                        for part in us.COLOR_PARTS
                     ],
-                    className="st-color-field",
-                )
-                for part in us.COLOR_PARTS
-            ],
+                ],
+                className="st-color-controls",
+            ),
         ],
         className="st-color-row",
     )
@@ -863,6 +886,7 @@ def _role_panel(settings: dict) -> list:
                                     tier["id"],
                                     tier["label"],
                                     settings["personality_tier_colors"][tier["id"]],
+                                    tier.get("description") or "",
                                 )
                                 for tier in tier_defs()
                             ],

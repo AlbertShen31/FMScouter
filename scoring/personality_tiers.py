@@ -70,6 +70,7 @@ def _tier_meta() -> dict[str, dict[str, str]]:
             "id": tid,
             "label": str(tier.get("label") or tid.title()),
             "guide_section": str(tier.get("guide_section") or ""),
+            "description": str(tier.get("description") or "").strip(),
         }
     return out
 
@@ -102,6 +103,12 @@ def tier_label(tier_id: str | None) -> str:
     if not tier_id:
         return ""
     return (_tier_meta().get(str(tier_id)) or {}).get("label") or str(tier_id)
+
+
+def tier_description(tier_id: str | None) -> str:
+    if not tier_id:
+        return ""
+    return (_tier_meta().get(str(tier_id)) or {}).get("description") or ""
 
 
 def classify_personality(label: str | None) -> PersonalityTierId:

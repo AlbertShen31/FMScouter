@@ -14,6 +14,7 @@ from scoring.personality_ranges import attr_help, estimate_hidden_ranges, range_
 from scoring.personality_tiers import (
     classify_personality,
     personality_tier_style,
+    tier_description,
     tier_label,
 )
 import services.ui_settings as us
@@ -354,16 +355,18 @@ def player_personality_section(
     if personality_name:
         chip_bits: list = [str(personality_name)]
         formal = tier_label(tier)
+        desc = tier_description(tier)
         if formal:
             chip_bits.append(
                 html.Span(formal, className="rs-personality-tier-label")
             )
+        tip = " — ".join(part for part in (formal, desc) if part) or None
         subtitle_children.append(
             html.Span(
                 chip_bits,
                 className="rs-personality-name-chip",
                 style=chip_style,
-                title=formal or None,
+                title=tip,
             )
         )
     if media_name:
@@ -438,6 +441,9 @@ def player_personality_section(
         children.append(
             html.Div(subtitle_children, className="rs-personality-subtitle")
         )
+    desc = tier_description(tier) if tier else ""
+    if desc:
+        children.append(html.Div(desc, className="rs-personality-tier-desc"))
     children.append(
         html.Div(items, className="rs-player-identity rs-personality-ranges")
     )

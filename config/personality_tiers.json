@@ -5,6 +5,7 @@
       "id": "exemplary",
       "label": "Excellent",
       "guide_section": "Personalities You Should Be Excited By",
+      "description": "The best of the best — standout personalities with strong hidden attributes.",
       "personalities": [
         "Model Citizen",
         "Resilient",
@@ -18,6 +19,7 @@
       "id": "commendable",
       "label": "Good",
       "guide_section": "Good Personalities to Have",
+      "description": "Still above average, but not as strong as Excellent. Some have notable weaknesses.",
       "personalities": [
         "Iron Willed",
         "Model Professional",
@@ -31,6 +33,7 @@
       "id": "acceptable",
       "label": "Fair",
       "guide_section": "Not Bad, but Not Great Personalities",
+      "description": "Better than average, but not especially exciting to have.",
       "personalities": [
         "Honest",
         "Driven",
@@ -47,6 +50,7 @@
       "id": "unpredictable",
       "label": "Mixed",
       "guide_section": "Lottery Tier",
+      "description": "More of a dice roll than a sure thing — one or two strong traits, with the rest left to fortune.",
       "personalities": [
         "Balanced",
         "Unsporting",
@@ -63,6 +67,7 @@
       "id": "formative",
       "label": "Developing",
       "guide_section": "Mentoring Tier",
+      "description": "Have shortcomings that need mentoring. With the right group, they can improve into better personalities over time.",
       "personalities": [
         "Jovial",
         "Unambitious",
@@ -75,6 +80,7 @@
       "id": "unsuitable",
       "label": "Poor",
       "guide_section": "Terrible Tier",
+      "description": "Very weak personalities to avoid. Especially disappointing on youth-intake players.",
       "personalities": [
         "Spineless",
         "Slack",

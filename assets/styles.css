@@ -3890,10 +3890,11 @@ body:has(.rc-page) .navbar {
 }
 
 .st-color-row {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(7rem, 1fr) auto;
     align-items: center;
-    gap: 12px 16px;
+    column-gap: 16px;
+    row-gap: 8px;
     padding: 10px 12px;
     border: 1px solid var(--app-line);
     border-radius: 10px;
@@ -3901,12 +3902,61 @@ body:has(.rc-page) .navbar {
 }
 
 .st-color-name {
-    min-width: 52px;
+    min-width: 0;
     font-weight: 700;
+}
+
+.st-color-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px 12px;
+    justify-self: end;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.st-pers-color-row {
+    grid-template-columns: minmax(12rem, 1.35fr) auto;
+    align-items: start;
+}
+
+.st-pers-tier-meta {
+    min-width: 0;
+}
+
+.st-pers-color-row .st-color-controls {
+    padding-top: 0.1rem;
+}
+
+.st-pers-tier-desc {
+    margin-top: 0.2rem;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 400;
+    color: var(--app-muted);
+}
+
+.st-badge-color-row {
+    grid-template-columns: minmax(5rem, 8rem) auto;
+}
+
+@media (max-width: 720px) {
+    .st-color-row,
+    .st-pers-color-row,
+    .st-badge-color-row {
+        grid-template-columns: 1fr;
+    }
+
+    .st-color-controls {
+        justify-self: stretch;
+    }
 }
 
 .st-preview {
     cursor: default;
+    flex-shrink: 0;
 }
 
 .st-swatch {
@@ -3926,6 +3976,7 @@ body:has(.rc-page) .navbar {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
 }
 
 .st-mini-label {
@@ -3945,7 +3996,7 @@ body:has(.rc-page) .navbar {
 }
 
 .st-color-text {
-    width: 6.5rem;
+    width: 5.75rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
 }
@@ -4593,6 +4644,13 @@ body[data-theme="light"] .st-pizza-legend-pct {
     font-weight: 600;
     font-size: 11px;
     opacity: 0.9;
+}
+
+.rs-personality-tier-desc {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--app-muted);
+    margin-top: -0.1rem;
 }
 
 .rs-personality-range {
