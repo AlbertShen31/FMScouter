@@ -6524,25 +6524,52 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     border-left: 3px solid #eab308;
     border-radius: 12px;
     background: color-mix(in srgb, #eab308 10%, var(--app-card));
-    padding: 0.75rem 0.9rem 0.85rem;
+    padding: 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+    overflow: hidden;
 }
 
 .pf-depth-undo-panel.is-empty {
     display: none;
 }
 
-.pf-depth-undo-head {
+.pf-depth-undo-summary {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    margin-bottom: 0.65rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    background: color-mix(in srgb, #eab308 14%, var(--app-head));
+}
+
+.pf-depth-undo-summary::-webkit-details-marker {
+    display: none;
+}
+
+.pf-depth-undo-summary::before {
+    content: "▸";
+    flex-shrink: 0;
+    width: 1rem;
+    font-size: 0.72rem;
+    color: var(--app-muted);
+    transition: transform 0.15s ease;
+}
+
+.pf-depth-undo-panel[open] > .pf-depth-undo-summary::before {
+    transform: rotate(90deg);
+}
+
+.pf-depth-undo-panel[open] > .pf-depth-undo-summary {
+    border-bottom: 1px solid color-mix(in srgb, #eab308 35%, var(--app-line));
 }
 
 .pf-depth-undo-title-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
 }
 
 .pf-depth-undo-title {
@@ -6574,6 +6601,13 @@ body[data-theme="light"] .pf-depth-undo-badge {
     color: #fff;
 }
 
+.pf-depth-undo-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.7rem 0.9rem 0.85rem;
+}
+
 .pf-depth-undo-hint {
     color: var(--app-muted);
     font-size: 0.78rem;
@@ -6601,6 +6635,11 @@ html[data-theme="light"] .pf-depth-undo-panel,
 body[data-theme="light"] .pf-depth-undo-panel {
     background: color-mix(in srgb, #eab308 12%, #fff);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme="light"] .pf-depth-undo-summary,
+body[data-theme="light"] .pf-depth-undo-summary {
+    background: color-mix(in srgb, #eab308 10%, #fff);
 }
 
 html[data-theme="light"] .pf-depth-undo-row,

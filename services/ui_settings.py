@@ -165,6 +165,7 @@ PACK_DATA_KEYS = (
     "hybrid_weights",
     "set_piece_profiles",
     "default_minutes_required",
+    "depth_undo_max",
     "page_size",
     "page_size_options",
     "preferred_theme",
@@ -193,6 +194,7 @@ DEFAULTS: dict[str, Any] = {
         "scopes": dict(DEFAULT_SHORTLIST_SCOPES),
     },
     "default_minutes_required": 900,
+    "depth_undo_max": 10,
     "page_size": 50,
     "page_size_options": [25, 50, 100],
     "preferred_theme": "dark",
@@ -686,6 +688,14 @@ def normalize_default_minutes_required(value) -> int:
     return max(0, min(20000, number))
 
 
+def normalize_depth_undo_max(value) -> int:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        number = int(DEFAULTS["depth_undo_max"])
+    return max(1, min(50, number))
+
+
 def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) -> dict[str, Any]:
     raw = raw or {}
     ages = parse_number_list(raw.get("age_tiers", DEFAULTS["age_tiers"]), integer=True)
@@ -729,6 +739,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "default_minutes_required": normalize_default_minutes_required(
             raw.get("default_minutes_required")
         ),
+        "depth_undo_max": normalize_depth_undo_max(raw.get("depth_undo_max")),
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
         "page_size_options": page_opts,
         "preferred_theme": normalize_preferred_theme(raw.get("preferred_theme")),
@@ -1031,6 +1042,11 @@ def page_size_options(settings=None) -> list[str]:
 def default_minutes_required(settings=None) -> int:
     """Minutes threshold from UI settings (defaults to 900)."""
     return int(normalize(settings)["default_minutes_required"])
+
+
+def depth_undo_max(settings=None) -> int:
+    """Max recently-removed depth/shortlist items kept for restore."""
+    return int(normalize(settings)["depth_undo_max"])
 
 
 def modal_identity_fields(settings=None) -> dict[str, Any]:

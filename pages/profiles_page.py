@@ -68,7 +68,8 @@ VIEW_MODES = (
     ("percentiles", "Overall percentiles"),
 )
 
-DEPTH_UNDO_MAX = 5
+DEPTH_UNDO_MAX_DEFAULT = 10
+
 
 FILTER_SORT_RESET_IDS = frozenset(
     {
@@ -2313,6 +2314,10 @@ def _minutes_filter_panel(mins_req: int) -> html.Div:
     )
 
 
+def _depth_undo_limit(settings=None) -> int:
+    return us.depth_undo_max(settings)
+
+
 def _depth_undo_label(item: dict) -> str:
     entries = list(item.get("entries") or [])
     name = ""
@@ -2330,9 +2335,14 @@ def _depth_undo_label(item: dict) -> str:
     return " · ".join(parts) if parts else "Removed player"
 
 
-def _depth_undo_items(items) -> list[dict]:
+def _depth_undo_items(items, *, limit: int | None = None) -> list[dict]:
+    max_items = (
+        us.normalize_depth_undo_max(limit)
+        if limit is not None
+        else DEPTH_UNDO_MAX_DEFAULT
+    )
     out = []
-    for item in list(items or [])[:DEPTH_UNDO_MAX]:
+    for item in list(items or [])[:max_items]:
         if not isinstance(item, dict):
             continue
         undo_id = str(item.get("undo_id") or "").strip()
@@ -2342,9 +2352,9 @@ def _depth_undo_items(items) -> list[dict]:
     return out
 
 
-def _depth_undo_panel(items) -> html.Div:
+def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
     rows = []
-    valid = _depth_undo_items(items)
+    valid = _depth_undo_items(items, limit=limit)
     for item in valid:
         undo_id = str(item.get("undo_id") or "").strip()
         slot_label = str(item.get("slot_label") or item.get("role") or "").strip()
@@ -2382,37 +2392,45 @@ def _depth_undo_panel(items) -> html.Div:
     if not rows:
         return html.Div(className="pf-depth-undo-panel is-empty")
     count = len(rows)
-    return html.Div(
+    return html.Details(
         [
+            html.Summary(
+                html.Div(
+                    [
+                        html.Span("Recently removed", className="pf-depth-undo-title"),
+                        html.Span(
+                            str(count),
+                            className="pf-depth-undo-badge",
+                            **{"aria-label": f"{count} recently removed"},
+                        ),
+                    ],
+                    className="pf-depth-undo-title-row",
+                ),
+                className="pf-depth-undo-summary",
+            ),
             html.Div(
                 [
-                    html.Div(
-                        [
-                            html.Span("Recently removed", className="pf-depth-undo-title"),
-                            html.Span(
-                                str(count),
-                                className="pf-depth-undo-badge",
-                                **{"aria-label": f"{count} recently removed"},
-                            ),
-                        ],
-                        className="pf-depth-undo-title-row",
-                    ),
                     html.Span(
                         "Restore adds a player back to the bottom of the same slot.",
                         className="pf-depth-undo-hint",
                     ),
+                    html.Div(rows, className="pf-depth-undo-list"),
                 ],
-                className="pf-depth-undo-head",
+                className="pf-depth-undo-body",
             ),
-            html.Div(rows, className="pf-depth-undo-list"),
         ],
         className="pf-depth-undo-panel",
     )
 
 
-def _push_depth_undo(undo_items, payload: dict) -> list[dict]:
+def _push_depth_undo(undo_items, payload: dict, *, limit: int | None = None) -> list[dict]:
     if not isinstance(payload, dict) or not payload.get("entries"):
         return list(undo_items or [])
+    max_items = (
+        us.normalize_depth_undo_max(limit)
+        if limit is not None
+        else DEPTH_UNDO_MAX_DEFAULT
+    )
     item = {
         "undo_id": uuid.uuid4().hex[:12],
         **payload,
@@ -2424,9 +2442,9 @@ def _push_depth_undo(undo_items, payload: dict) -> list[dict]:
         if existing.get("undo_id") == item["undo_id"]:
             continue
         next_items.append(existing)
-        if len(next_items) >= DEPTH_UNDO_MAX:
+        if len(next_items) >= max_items:
             break
-    return next_items[:DEPTH_UNDO_MAX]
+    return next_items[:max_items]
 
 
 def layout(**_kwargs):
@@ -3327,12 +3345,14 @@ def toggle_delete_btn(selected_ids):
     State("pf-rev", "data"),
     State("pf-depth-undo", "data"),
     State("pf-formation-select", "value"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id):
+def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, settings):
     if not n_clicks or not selected_ids:
         return no_update, no_update
     slots = _formation_slots(formation_id)
+    limit = _depth_undo_limit(settings)
     next_undo = list(undo_items or [])
     deleted = 0
     seen: set[str] = set()
@@ -3348,7 +3368,7 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id):
         )
         if not payload:
             continue
-        next_undo = _push_depth_undo(next_undo, payload)
+        next_undo = _push_depth_undo(next_undo, payload, limit=limit)
         deleted += 1
     if not deleted:
         return no_update, no_update
@@ -3596,9 +3616,12 @@ def auto_rank_depth_all(
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def remove_from_depth_chart(n_clicks, undo_items, rev, formation_id, focus_role):
+def remove_from_depth_chart(
+    n_clicks, undo_items, rev, formation_id, focus_role, settings
+):
     if not ctx.triggered_id or not clicked(n_clicks):
         return no_update, no_update
     profile_id = str(ctx.triggered_id.get("id") or "").strip()
@@ -3635,17 +3658,22 @@ def remove_from_depth_chart(n_clicks, undo_items, rev, formation_id, focus_role)
     if not removed:
         return no_update, no_update
     removed["slot_label"] = slot_label
-    return _push_depth_undo(undo_items, removed), int(rev or 0) + 1
+    return (
+        _push_depth_undo(undo_items, removed, limit=_depth_undo_limit(settings)),
+        int(rev or 0) + 1,
+    )
 
 
 @callback(
     Output("pf-depth-undo-wrap", "children"),
     Output("pf-depth-undo-wrap", "hidden"),
     Input("pf-depth-undo", "data"),
+    Input("ui-settings", "data"),
 )
-def render_depth_undo(undo_items):
-    valid = _depth_undo_items(undo_items)
-    return _depth_undo_panel(valid), not bool(valid)
+def render_depth_undo(undo_items, settings):
+    limit = _depth_undo_limit(settings)
+    valid = _depth_undo_items(undo_items, limit=limit)
+    return _depth_undo_panel(valid, limit=limit), not bool(valid)
 
 
 @callback(

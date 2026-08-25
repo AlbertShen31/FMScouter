@@ -393,14 +393,27 @@ def _general_panel(settings: dict) -> list:
                                         debounce=500,
                                         placeholder="25, 50, 100",
                                     ),
-                                    md=6,
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-depth-undo-max",
+                                        label="Recently removed limit",
+                                        value=settings.get("depth_undo_max"),
+                                        min=1,
+                                        max=50,
+                                        step=1,
+                                    ),
+                                    md=3,
                                 ),
                             ],
                             className="g-3",
                         ),
                         html.Small(
                             "Preferred theme applies on Save (and when loading a pack). "
-                            "Page size options are comma-separated; the default must be one of them.",
+                            "Page size options are comma-separated; the default must be one of them. "
+                            "Recently removed limit is how many Profiles depth/shortlist deletes "
+                            "stay available to restore (1–50).",
                             className="text-muted d-block mt-2",
                         ),
                     ]
@@ -1110,6 +1123,7 @@ def _role_form_values(
         str(settings["page_size"]),
         us.format_page_size_options(settings),
         settings["default_minutes_required"],
+        settings["depth_undo_max"],
     )
 
 
@@ -1307,6 +1321,7 @@ def _ui_draft_from_state(
     page_size_default,
     page_size_options,
     default_minutes,
+    depth_undo_max,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
     pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
@@ -1334,6 +1349,7 @@ def _ui_draft_from_state(
         "page_size": page_size_default,
         "page_size_options": page_size_options,
         "default_minutes_required": default_minutes,
+        "depth_undo_max": depth_undo_max,
     }
 
 
@@ -1364,6 +1380,7 @@ def _ui_draft_from_state(
     Output("st-page-size-default", "value"),
     Output("st-page-size-options", "value"),
     Output("st-default-minutes", "value"),
+    Output("st-depth-undo-max", "value"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("st-percentiles-pack", "data"),
@@ -1400,6 +1417,7 @@ def _ui_draft_from_state(
     State("st-page-size-default", "value"),
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),
+    State("st-depth-undo-max", "value"),
     State("st-role-weights-pack", "value"),
     State("st-percentiles-pack", "value"),
     prevent_initial_call=True,
@@ -1433,11 +1451,12 @@ def handle_ui_settings(
     page_size_default,
     page_size_options,
     default_minutes,
+    depth_undo_max,
     role_weights_pack,
     percentiles_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 34
+    n_out = 35
     if not triggered:
         return (no_update,) * n_out
 
@@ -1477,6 +1496,7 @@ def handle_ui_settings(
         page_size_default,
         page_size_options,
         default_minutes,
+        depth_undo_max,
     )
     status_general = no_update
     status_role = no_update
@@ -1507,7 +1527,7 @@ def handle_ui_settings(
         label = str(new_name or "").strip()
         if not label:
             return (
-                (no_update,) * 27
+                (no_update,) * (n_out - 3)
                 + ("Enter a name to create a new settings file.", no_update, no_update)
             )
         settings = us.create_pack(label, draft)
