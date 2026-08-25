@@ -6209,20 +6209,57 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-squad-depth-actions {
-    display: flex;
-    align-items: flex-end;
-    gap: 1.25rem 2rem;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: minmax(22rem, 1fr) auto minmax(8rem, 1fr);
+    align-items: end;
+    column-gap: 1.5rem;
+    row-gap: 1.25rem;
     width: 100%;
-    padding-top: 0.35rem;
+    padding-top: 0.65rem;
 }
 
 .pf-squad-depth-field {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.5rem;
     min-width: 0;
+}
+
+.pf-squad-depth-formation {
+    justify-self: start;
+}
+
+.pf-squad-depth-bands {
+    justify-self: center;
+    text-align: center;
+}
+
+.pf-squad-depth-bands .rs-depth-legend {
+    justify-content: center;
+}
+
+.pf-squad-depth-ranking {
+    justify-self: end;
+    align-items: flex-end;
+    text-align: right;
+}
+
+@media (max-width: 900px) {
+    .pf-squad-depth-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .pf-squad-depth-formation,
+    .pf-squad-depth-bands,
+    .pf-squad-depth-ranking {
+        justify-self: stretch;
+        align-items: stretch;
+        text-align: left;
+    }
+
+    .pf-squad-depth-bands .rs-depth-legend {
+        justify-content: flex-start;
+    }
 }
 
 .pf-squad-depth-field .rs-field-label {
@@ -6230,7 +6267,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 .pf-squad-depth-field .pf-formation-row {
-    min-width: min(18rem, 100%);
+    min-width: min(24rem, 100%);
 }
 
 .pf-page #pf-depth-wrap.rs-depth-panel {
@@ -6242,9 +6279,9 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 .pf-page #pf-depth-wrap .rs-depth-heading {
     flex-direction: column;
     align-items: stretch;
-    gap: 1.15rem;
-    margin-bottom: 1.25rem;
-    padding-bottom: 1.15rem;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.35rem;
     border-bottom: 1px solid var(--app-line);
 }
 
@@ -6439,12 +6476,27 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    min-width: min(16rem, 100%);
+    min-width: min(24rem, 100%);
+    width: max(22rem, 100%);
+    max-width: 100%;
 }
 
 .pf-formation-dd {
-    flex: 1 1 12rem;
-    min-width: 10rem;
+    flex: 1 1 auto;
+    min-width: 18rem;
+    width: 100%;
+}
+
+.pf-formation-dd .mantine-Select-root,
+.pf-formation-dd .mantine-Select-wrapper,
+.pf-formation-dd .mantine-Input-input {
+    width: 100%;
+    min-width: 0;
+}
+
+.pf-formation-dd .mantine-Input-input {
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .rs-depth-card.is-empty {

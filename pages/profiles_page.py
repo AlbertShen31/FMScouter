@@ -2496,7 +2496,10 @@ def layout(**_kwargs):
                                                                 className="pf-formation-row",
                                                             ),
                                                         ],
-                                                        className="pf-squad-depth-field",
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-squad-depth-formation"
+                                                        ),
                                                     ),
                                                     html.Div(
                                                         [
@@ -2509,7 +2512,10 @@ def layout(**_kwargs):
                                                                 id="pf-band-legend",
                                                             ),
                                                         ],
-                                                        className="pf-squad-depth-field",
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-squad-depth-bands"
+                                                        ),
                                                     ),
                                                     html.Div(
                                                         [
@@ -2525,7 +2531,10 @@ def layout(**_kwargs):
                                                                 n_clicks=0,
                                                             ),
                                                         ],
-                                                        className="pf-squad-depth-field",
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-squad-depth-ranking"
+                                                        ),
                                                     ),
                                                 ],
                                                 className="pf-squad-depth-actions",
