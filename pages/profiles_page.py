@@ -1,4 +1,4 @@
-"""Saved player profiles from Role scores and Player stats."""
+"""Saved player profiles from Role scores."""
 from __future__ import annotations
 
 import re
@@ -53,7 +53,6 @@ from scoring.stats_scorer import (
     category_abbr,
     minutes_color,
     minutes_status,
-    passes_minutes_filter,
     percentile_color,
 )
 import services.formations as fm
@@ -63,23 +62,13 @@ from components.stats_player_pane import stats_charts_bottom_pane
 
 register_page(__name__, path="/profiles", name="Profiles")
 
-VIEW_MODES = (
-    ("roles", "Role scores"),
-    ("percentiles", "Overall percentiles"),
-)
-
 DEPTH_UNDO_MAX_DEFAULT = 10
 
 
 FILTER_SORT_RESET_IDS = frozenset(
     {
-        "pf-view-mode",
         "pf-focus-role",
         "pf-formation-select",
-        "pf-pct-search",
-        "pf-pct-age",
-        "pf-minutes-match",
-        "pf-minutes-required",
     }
 )
 
@@ -254,17 +243,12 @@ def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
         )
     if mode == "roles":
         return _sort_role_rows(out)
-    out.sort(
-        key=lambda row: (
-            1 if row.get("_overall_raw") is None else 0,
-            -(float(row.get("_overall_raw") or 0)),
-        )
-    )
     return out
 
 
 def _default_sort_by(mode: str) -> list[dict]:
     """Empty sort_by → mode default in _sort_profile_rows (roles: role/score/ovr)."""
+    del mode
     return []
 
 
@@ -278,7 +262,7 @@ def _coerce_sort_by(
     reset_default: bool = False,
 ) -> list[dict]:
     default = _default_sort_by(mode)
-    if reset_default or triggered_id == "pf-view-mode":
+    if reset_default:
         return default
     if not sort_by:
         if triggered_id == "pf-table":
@@ -417,16 +401,6 @@ def _minutes_cell(mins_raw, settings, *, minutes_required=None) -> str:
         f'<span style="color:{color};font-weight:650;font-variant-numeric:tabular-nums">'
         f"{text}</span>"
     )
-
-
-def _profile_minutes_status(row: dict, minutes_required: float) -> str:
-    raw = row.get("_minutes_raw")
-    if raw in (None, "", "-", "—"):
-        return minutes_status(None, minutes_required)
-    try:
-        return minutes_status(float(raw), minutes_required)
-    except (TypeError, ValueError):
-        return minutes_status(None, minutes_required)
 
 
 def _profile_minutes_raw(entry: dict, raw: dict) -> Any:
@@ -1823,26 +1797,6 @@ def _role_table_columns(settings, *, include_slot: bool = False) -> list[dict]:
     return cols
 
 
-def _percentile_table_columns(settings) -> list[dict]:
-    settings = us.normalize(settings)
-    cols = []
-    for col in _profile_identity_columns("player_stats", settings):
-        spec = {"name": identity_header_name(col), "id": col}
-        if col in ("Feet", "Injury"):
-            spec["presentation"] = "markdown"
-        cols.append(spec)
-    cols.append({"name": "Mins", "id": "Minutes"})
-    for pct in PCT_COLS:
-        cols.append(
-            {
-                "name": _pct_header_name(pct),
-                "id": pct,
-                "presentation": "markdown",
-            }
-        )
-    return cols
-
-
 # Left-aligned identity columns on Profiles (everything else is centered).
 _PF_LEFT_COLS = ("Name", "Position", "Club")
 
@@ -1998,12 +1952,6 @@ def _role_table_styles(theme) -> tuple[list, list]:
     header = style_header_conditional(
         extra=_table_header_styles(include_role=True, include_score=True)
     )
-    return data, header
-
-
-def _pct_table_styles(theme) -> tuple[list, list]:
-    data = identity_data_styles(theme, extra=_pct_metric_styles())
-    header = style_header_conditional(extra=_table_header_styles())
     return data, header
 
 
@@ -2220,42 +2168,6 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
     return rows, tips
 
 
-def _build_percentile_table_rows(settings=None) -> tuple[list[dict], list[dict]]:
-    settings = us.normalize(settings)
-    identity = _profile_identity_columns("player_stats", settings)
-    rows = []
-    tips = []
-    for entry in profiles.list_percentile_profiles():
-        raw = dict(entry.get("row") or {})
-        pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
-        item: dict = {
-            "id": entry.get("id") or "",
-            "_key": entry.get("id") or "",
-            "_overall_raw": pct_raw["overall"],
-            **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
-        }
-        for col in identity:
-            if col == "Feet":
-                item[col] = feet_cell(raw)
-            elif col == "Injury":
-                item[col] = injury_cell(raw.get("Injury"))
-            else:
-                item[col] = _blank(raw.get(col))
-        _apply_profile_division(item, raw)
-        mins = raw.get("Minutes")
-        mins_raw = _raw_float(mins)
-        item["_minutes_raw"] = mins_raw
-        if mins_raw is None:
-            item["Minutes"] = "—"
-        else:
-            item["Minutes"] = f"{int(mins_raw):,}"
-        for pct in PCT_COLS:
-            item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
-        rows.append(item)
-        tips.append(injury_tooltip_entry(raw.get("Injury")))
-    return rows, tips
-
-
 def _sort_role_rows(rows: list[dict]) -> list[dict]:
     """Role asc, Rank asc (unranked last), Score desc, overall percentile desc."""
 
@@ -2285,90 +2197,8 @@ def _filter_role_rows(rows: list[dict], *, focus_roles) -> list[dict]:
     return out
 
 
-def _filter_pct_rows(
-    rows: list[dict],
-    *,
-    query: str,
-    max_age,
-    minutes_match: str,
-    minutes_required: float,
-) -> list[dict]:
-    query = (query or "").strip().lower()
-    try:
-        max_age_i = 99 if max_age is None else int(max_age)
-    except (TypeError, ValueError):
-        max_age_i = 99
-    out = []
-    for row in rows:
-        if max_age_i < 99 and to_int(row.get("Age")) > max_age_i:
-            continue
-        if not passes_minutes_filter(
-            _profile_minutes_status(row, minutes_required),
-            minutes_match or "any",
-        ):
-            continue
-        if query:
-            blob = (
-                f"{row.get('Name','')} {row.get('Club','')} "
-                f"{row.get('Position','')} {row.get('Division','')}".lower()
-            )
-            if query not in blob:
-                continue
-        out.append(row)
-    return out
-
-
 def _strip_internal(row: dict) -> dict:
     return {k: v for k, v in row.items() if not k.startswith("_")}
-
-
-def _minutes_filter_panel(mins_req: int) -> html.Div:
-    return html.Div(
-        [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Label("Minutes", className="rs-field-label"),
-                            *help_icon(
-                                f"Default requirement {mins_req} min. "
-                                "Green=meet, yellow=≥half, red=below half.",
-                                "pf-help-minutes",
-                            ),
-                        ],
-                        className="rs-field-label-row",
-                    ),
-                    html.Div(
-                        [
-                            dmc.NumberInput(
-                                id="pf-minutes-required",
-                                value=mins_req,
-                                min=0,
-                                max=20000,
-                                step=90,
-                            ),
-                            dmc.Select(
-                                id="pf-minutes-match",
-                                data=[
-                                    {"label": "Any", "value": "any"},
-                                    {"label": "Half or more", "value": "half"},
-                                    {"label": "Meets requirements", "value": "meet"},
-                                ],
-                                value="any",
-                                clearable=False,
-                                searchable=False,
-                            ),
-                        ],
-                        className="st-minutes-fields",
-                    ),
-                ],
-                className="rs-filter-pos-match st-filter-minutes",
-            ),
-        ],
-        id="pf-minutes-filters",
-        className="rs-shortlist-filters mb-2",
-        hidden=True,
-    )
 
 
 def _depth_undo_limit(settings=None) -> int:
@@ -2514,7 +2344,6 @@ def layout(**_kwargs):
             dcc.Store(id="pf-depth-order", data=None),
             dcc.Store(id="pf-depth-order-guard", data=0),
             dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
-            dcc.Store(id="pf-view-mode", data="roles"),
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
@@ -2523,30 +2352,14 @@ def layout(**_kwargs):
             html.H1("Profiles", className="mt-2 mb-3"),
             html.P(
                 "Saved shortlist rows from Role scores (one row per evaluated role, "
-                "with overall percentiles when the source file has stats) and from "
-                "Player stats. Pick a formation for Squad depth, focus a role to rank "
-                "players in the Depth chart, and click a name for the player modal.",
+                "with overall percentiles when the source file has stats). Pick a "
+                "formation for Squad depth, focus a role to rank players in the Depth "
+                "chart, and click a name for the player modal.",
                 className="text-muted mb-3",
             ),
             dbc.Card(
                 [
-                    dbc.CardHeader(
-                        html.Div(
-                            [
-                                html.Span("Saved players", className="me-3"),
-                                dmc.SegmentedControl(
-                                    id="pf-view-toggle",
-                                    value="roles",
-                                    data=[
-                                        {"label": label, "value": value}
-                                        for value, label in VIEW_MODES
-                                    ],
-                                    size="sm",
-                                ),
-                            ],
-                            className="pf-view-header",
-                        )
-                    ),
+                    dbc.CardHeader("Saved players"),
                     dbc.CardBody(
                         [
                             html.Div(
@@ -2718,48 +2531,6 @@ def layout(**_kwargs):
                                     html.Div(
                                         [
                                             html.Div(
-                                                [
-                                                    html.Label(
-                                                        "Search",
-                                                        className="rs-field-label",
-                                                    ),
-                                                    dmc.TextInput(
-                                                        id="pf-pct-search",
-                                                        placeholder="Name, club, position",
-                                                    ),
-                                                ],
-                                                className="rs-filter-search",
-                                            ),
-                                            html.Div(
-                                                [
-                                                    html.Label(
-                                                        "Max age",
-                                                        className="rs-field-label",
-                                                    ),
-                                                    dmc.Select(
-                                                        id="pf-pct-age",
-                                                        data=us.age_options(settings),
-                                                        value="99",
-                                                        clearable=False,
-                                                        searchable=False,
-                                                    ),
-                                                ],
-                                                className="rs-filter-age",
-                                            ),
-                                        ],
-                                        className="rs-shortlist-filters-row",
-                                    ),
-                                ],
-                                id="pf-pct-filters",
-                                className="rs-shortlist-filters mb-2",
-                                hidden=True,
-                            ),
-                            _minutes_filter_panel(mins_req),
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.Div(
                                                 id="pf-table-empty",
                                                 className="rs-table-empty",
                                                 hidden=True,
@@ -2848,58 +2619,22 @@ def layout(**_kwargs):
 
 
 @callback(
-    Output("pf-minutes-required", "value"),
     Output("pf-depth-minutes-required", "value"),
     Input("ui-settings", "data"),
-    State("pf-minutes-required", "value"),
     State("pf-depth-minutes-required", "value"),
 )
-def sync_pf_minutes_from_settings(settings, minutes_required, depth_minutes):
+def sync_pf_minutes_from_settings(settings, depth_minutes):
     settings = us.normalize(settings)
     default_mins = us.default_minutes_required(settings)
-    filter_mins = minutes_required if minutes_required is not None else default_mins
-    depth_mins = depth_minutes if depth_minutes is not None else default_mins
-    return filter_mins, depth_mins
+    return depth_minutes if depth_minutes is not None else default_mins
 
 
 @callback(
-    Output("pf-view-mode", "data"),
-    Input("pf-view-toggle", "value"),
-)
-def set_view_mode(mode):
-    # Legacy "depth" tab maps back onto Role scores (chart sits under Squad depth).
-    if mode == "depth":
-        return "roles"
-    return mode or "roles"
-
-
-@callback(
-    Output("pf-pct-filters", "hidden"),
-    Output("pf-minutes-filters", "hidden"),
-    Input("pf-view-mode", "data"),
-)
-def toggle_filter_panels(view_mode):
-    # Role scores: no extra filters (Squad depth focus only). Percentiles keeps search/age/mins.
-    roles = (view_mode or "roles") == "roles"
-    return roles, roles
-
-
-@callback(
-    Output("pf-pct-age", "data"),
-    Output("pf-pct-age", "value", allow_duplicate=True),
     Output("pf-band-legend", "children"),
     Input("ui-settings", "data"),
-    State("pf-pct-age", "value"),
-    prevent_initial_call="initial_duplicate",
 )
-def sync_age_options(settings, pct_age):
-    settings = us.normalize(settings)
-    ages = us.age_options(settings)
-    return (
-        ages,
-        us.clamp_choice(pct_age, ages, "99"),
-        _band_legend(settings),
-    )
+def sync_band_legend(settings):
+    return _band_legend(us.normalize(settings))
 
 
 @callback(
@@ -3034,14 +2769,9 @@ clientside_callback(
     Output("pf-depth-wrap", "hidden"),
     Output("pf-depth-chart-body", "children"),
     Output("pf-depth-chart-wrap", "hidden"),
-    Input("pf-view-mode", "data"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
     Input("pf-formation-select", "value"),
-    Input("pf-pct-search", "value"),
-    Input("pf-pct-age", "value"),
-    Input("pf-minutes-match", "value"),
-    Input("pf-minutes-required", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-page-size", "value"),
     Input("pf-table", "sort_by"),
@@ -3050,14 +2780,9 @@ clientside_callback(
     State("pf-sort-memory", "data"),
 )
 def refresh_profiles_table(
-    view_mode,
     _rev,
     focus_role,
     formation_id,
-    pct_search,
-    pct_age,
-    minutes_match,
-    minutes_required,
     depth_minutes_required,
     page_size,
     sort_by,
@@ -3066,12 +2791,10 @@ def refresh_profiles_table(
     sort_memory,
 ):
     settings = us.normalize(settings)
-    mode = view_mode or "roles"
     try:
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
         page_size_i = us.page_size(settings)
-    minutes_required_f = _resolve_minutes_required(minutes_required, settings)
     depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
     triggered = {
         (item.get("prop_id") or "").split(".")[0]
@@ -3080,120 +2803,99 @@ def refresh_profiles_table(
     }
     reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
 
-    if mode == "depth":
-        mode = "roles"
-
-    if mode == "percentiles":
-        columns = _percentile_table_columns(settings)
-        all_rows, tips = _build_percentile_table_rows(settings)
-        filtered = _filter_pct_rows(
-            all_rows,
-            query=pct_search,
-            max_age=pct_age,
-            minutes_match=minutes_match or "any",
-            minutes_required=minutes_required_f,
+    formation_slots = _formation_slots(formation_id)
+    focus = _focus_slot(focus_role)
+    include_slot = bool(formation_slots)
+    columns = _role_table_columns(settings, include_slot=include_slot)
+    if formation_slots and not focus:
+        all_rows, tips = _build_formation_xi_table_rows(
+            formation_slots,
+            formation_id=formation_id,
+            settings=settings,
+            theme=theme,
         )
-        style_data, style_header = _pct_table_styles(theme)
-        empty_msg = "No percentile profiles yet. Mark players on Player stats and save."
-        depth_cards = []
-        depth_hidden = True
-        chart = None
-        chart_hidden = True
-        sort_mode = "percentiles"
+        filtered = list(all_rows)
+        sort_mode = "formation"
+    elif formation_slots and focus:
+        slot_ordered = profiles.ordered_profiles_for_slot(
+            formation_id, focus.get("slot", -1), focus["role"]
+        )
+        slot_label = focus.get("label") or "—"
+        _starters, multi_starters, conflicted_slots, unique_slots = (
+            _formation_starter_slot_maps(formation_id, formation_slots)
+        )
+        try:
+            focused_slot_index = int(focus.get("slot", -1))
+        except (TypeError, ValueError):
+            focused_slot_index = -1
+        slot_is_conflicted = focused_slot_index in conflicted_slots
+        slot_is_unique = focused_slot_index in unique_slots
+        all_rows = []
+        tips = []
+        for index, entry in enumerate(slot_ordered):
+            player_key = _entry_player_key(entry)
+            item, tip = _entry_to_role_table_row(
+                entry,
+                settings=settings,
+                theme=theme,
+                slot_label=slot_label,
+                slot_conflicted=(
+                    slot_is_conflicted or player_key in multi_starters
+                ),
+                slot_unique=(
+                    slot_is_unique and player_key not in multi_starters
+                ),
+                depth_rank=index + 1,
+            )
+            all_rows.append(item)
+            tips.append(tip)
+        filtered = list(all_rows)
+        sort_mode = "roles"
     else:
-        formation_slots = _formation_slots(formation_id)
-        focus = _focus_slot(focus_role)
-        include_slot = bool(formation_slots)
-        columns = _role_table_columns(settings, include_slot=include_slot)
-        if formation_slots and not focus:
-            all_rows, tips = _build_formation_xi_table_rows(
-                formation_slots,
-                formation_id=formation_id,
-                settings=settings,
-                theme=theme,
-            )
-            filtered = list(all_rows)
-            sort_mode = "formation"
-        elif formation_slots and focus:
-            slot_ordered = profiles.ordered_profiles_for_slot(
-                formation_id, focus.get("slot", -1), focus["role"]
-            )
-            slot_label = focus.get("label") or "—"
-            _starters, multi_starters, conflicted_slots, unique_slots = (
-                _formation_starter_slot_maps(formation_id, formation_slots)
-            )
-            try:
-                focused_slot_index = int(focus.get("slot", -1))
-            except (TypeError, ValueError):
-                focused_slot_index = -1
-            slot_is_conflicted = focused_slot_index in conflicted_slots
-            slot_is_unique = focused_slot_index in unique_slots
-            all_rows = []
-            tips = []
-            for index, entry in enumerate(slot_ordered):
-                player_key = _entry_player_key(entry)
-                item, tip = _entry_to_role_table_row(
-                    entry,
-                    settings=settings,
-                    theme=theme,
-                    slot_label=slot_label,
-                    slot_conflicted=(
-                        slot_is_conflicted or player_key in multi_starters
-                    ),
-                    slot_unique=(
-                        slot_is_unique and player_key not in multi_starters
-                    ),
-                    depth_rank=index + 1,
-                )
-                all_rows.append(item)
-                tips.append(tip)
-            filtered = list(all_rows)
-            sort_mode = "roles"
-        else:
-            all_rows, tips = _build_role_table_rows(settings, theme=theme)
-            filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
-            sort_mode = "roles"
-        style_data, style_header = _role_table_styles(theme)
-        empty_msg = (
-            "No role profiles yet. Mark players on Role scores and save — "
-            "one row per evaluated role, including overall percentiles when available."
+        all_rows, tips = _build_role_table_rows(settings, theme=theme)
+        filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+        sort_mode = "roles"
+    style_data, style_header = _role_table_styles(theme)
+    empty_msg = (
+        "No role profiles yet. Mark players on Role scores and save — "
+        "one row per evaluated role, including overall percentiles when available."
+    )
+    entries = profiles.list_role_profiles()
+    if formation_id and fm.exists(formation_id):
+        depth_cards = _profile_depth_panel(
+            entries,
+            focus_role,
+            formation_id=formation_id,
+            formation_slots=formation_slots,
+            settings=settings,
         )
-        entries = profiles.list_role_profiles()
-        if formation_id and fm.exists(formation_id):
-            depth_cards = _profile_depth_panel(
-                entries,
-                focus_role,
-                formation_id=formation_id,
-                formation_slots=formation_slots,
-                settings=settings,
+    elif fm.pack_options():
+        depth_cards = [
+            html.Div(
+                "Select a formation to build Squad depth.",
+                className="text-muted small",
             )
-        elif fm.pack_options():
-            depth_cards = [
-                html.Div(
-                    "Select a formation to build Squad depth.",
-                    className="text-muted small",
-                )
-            ]
-        else:
-            depth_cards = [
-                html.Div(
-                    "Save a formation on the Formations page to build Squad depth.",
-                    className="text-muted small",
-                )
-            ]
-        depth_hidden = False
-        chart = _mount_depth_chart(
-            _build_depth_chart(
-                focus_roles=focus_role,
-                formation_id=formation_id,
-                formation_slots=formation_slots,
-                settings=settings,
-                theme=theme,
-                minutes_required=depth_minutes_f,
-            ),
-            epoch=f"r{int(_rev or 0)}-{uuid.uuid4().hex[:8]}",
-        )
-        chart_hidden = not formation_slots and not focus
+        ]
+    else:
+        depth_cards = [
+            html.Div(
+                "Save a formation on the Formations page to build Squad depth.",
+                className="text-muted small",
+            )
+        ]
+    depth_hidden = False
+    chart = _mount_depth_chart(
+        _build_depth_chart(
+            focus_roles=focus_role,
+            formation_id=formation_id,
+            formation_slots=formation_slots,
+            settings=settings,
+            theme=theme,
+            minutes_required=depth_minutes_f,
+        ),
+        epoch=f"r{int(_rev or 0)}-{uuid.uuid4().hex[:8]}",
+    )
+    chart_hidden = not formation_slots and not focus
 
     col_ids = {col["id"] for col in columns}
     if reset_sort:
@@ -3208,14 +2910,11 @@ def refresh_profiles_table(
     )
     filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
 
-    color_mins = (
-        minutes_required_f if mode == "percentiles" else depth_minutes_f
-    )
     display_rows = []
     for row in filtered:
         clean = _strip_internal(row)
         clean["Minutes"] = _minutes_cell(
-            row.get("_minutes_raw"), settings, minutes_required=color_mins
+            row.get("_minutes_raw"), settings, minutes_required=depth_minutes_f
         )
         display_rows.append(clean)
     display_tips = [

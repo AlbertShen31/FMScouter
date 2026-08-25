@@ -18,9 +18,9 @@ def profile_save_panel(*, prefix: str, section_number: int) -> dbc.Card:
             dbc.CardBody(
                 [
                     html.P(
-                        "Mark players in the shortlist, then save them here. From Role "
-                        "scores, one profile row is created per evaluated role — each "
-                        "save stores that shortlist row only (not the whole file).",
+                        "Mark players in the shortlist, then save them here. One profile "
+                        "row is created per evaluated role — each save stores that "
+                        "shortlist row only (not the whole file).",
                         className="text-muted small mb-3",
                     ),
                     html.Div(id=f"{prefix}-profile-preview", className="pf-save-preview"),

@@ -24,7 +24,6 @@ import plotly.graph_objects as go
 from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division
 from components.player_filters import help_icon, player_filters, player_filters_host
-from components.profile_save import profile_save_panel, register_profile_save_callbacks
 from components.player_modal import player_detail_body, player_modal
 from components.player_table import (
     IDENTITY_TEXT_COLS,
@@ -53,11 +52,9 @@ from scoring.role_scorer import (
 )
 from components.scouting_shell import (
     clicked,
-    hist_block,
     parsed_historical_players,
     parsed_players,
     pattern_matching_stubs,
-    register_hist_toggle,
     register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
@@ -124,15 +121,6 @@ CATEGORY_AVG_COL = {
     "abbr": "% AVG",
 }
 
-BLANK_FIG = go.Figure()
-BLANK_FIG.update_layout(
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    margin=dict(l=40, r=20, t=20, b=40),
-    height=240,
-)
-
 register_library_select_callbacks(
     "st",
     parse_fn=parse_stats_export,
@@ -147,13 +135,6 @@ register_marks_callbacks(
     "st",
     marked_store="st-marked",
     clear_button="st-clear-marks",
-)
-register_hist_toggle("st", use_open_store=False)
-register_profile_save_callbacks(
-    "st",
-    marked_store="st-marked",
-    parsed_id="st-parsed",
-    saved_from="stats",
 )
 
 ST_PERSIST_DEFAULTS = {
@@ -1752,13 +1733,11 @@ def layout(**_kwargs):
                                         clear_button_id="st-clear-marks",
                                         settings=settings,
                                     ),
-                                    hist_block("st", blank_figure=BLANK_FIG),
                                 ]
                             ),
                         ],
                         className="mb-3 rs-section-card",
                     ),
-                    profile_save_panel(prefix="st", section_number=3),
                     shortlist_busy_overlay("st"),
                 ],
                 id="st-main",
@@ -1843,7 +1822,6 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Output("st-sort-memory", "data"),
     Output("st-table-caption", "children"),
     Output("st-clear-marks", "disabled"),
-    Output("st-hist", "figure"),
     Input("st-parsed", "data"),
     Input("st-data-rev", "data"),
     Input("st-pos", "data"),
@@ -1962,63 +1940,6 @@ def refresh_table(
     if marked_set:
         caption += f" · {len(marked_set)} marked"
 
-    fig = BLANK_FIG
-    if category == "all" and filtered:
-        avg_cats = _avg_category_columns(pos)
-        first = avg_cats[0] if avg_cats else None
-        values = []
-        if first:
-            for p in filtered:
-                bg, bc = _band_group_cat(p, pos, category)
-                if bg is None or bc is None:
-                    continue
-                use_g = g if _bench_group_for_filter(pos) else bg
-                band = category_average_band(
-                    use_g,
-                    first["id"],
-                    scoring_stats(p),
-                    threshold_overrides=thresh,
-                )
-                if band.get("percentile") is not None:
-                    values.append(float(band["percentile"]))
-        if values and first:
-            fig = go.Figure(
-                data=[go.Histogram(x=values, nbinsx=20, marker_color="#3b82f6")]
-            )
-            fig.update_layout(
-                template="plotly_dark" if (theme or "dark") != "light" else "plotly_white",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=40, r=20, t=30, b=40),
-                height=240,
-                title=dict(text=f"{first['label']} avg percentile", font=dict(size=12)),
-                xaxis_title="Percentile",
-                yaxis_title="Players",
-            )
-    else:
-        mids = metrics_for(g, category, thresh)
-        if mids and filtered:
-            mid = mids[0]
-            values = [
-                float(v)
-                for p in filtered
-                if (v := scoring_stats(p).get(mid)) is not None
-            ]
-            if values:
-                fig = go.Figure(
-                    data=[go.Histogram(x=values, nbinsx=20, marker_color="#3b82f6")]
-                )
-                fig.update_layout(
-                    template="plotly_dark" if (theme or "dark") != "light" else "plotly_white",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(l=40, r=20, t=30, b=40),
-                    height=240,
-                    title=dict(text=metric_defs()[mid]["label"], font=dict(size=12)),
-                    xaxis_title=metric_defs()[mid]["abbr"],
-                    yaxis_title="Players",
-                )
-
     foot_filter = foot or ""
     triggered = {
         (t.get("prop_id") or "").split(".")[0]
@@ -2043,7 +1964,6 @@ def refresh_table(
             no_update,
             caption,
             not bool(marked_set),
-            no_update,
         )
     reset_page = bool(triggered & {"st-parsed", "st-data-rev"})
     return (
@@ -2066,7 +1986,6 @@ def refresh_table(
         sort_by,
         caption,
         not bool(marked_set),
-        fig,
     )
 
 
