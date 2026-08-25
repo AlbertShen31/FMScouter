@@ -2549,6 +2549,32 @@ body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="
     padding: 0.1rem 0.45rem;
     line-height: 1.3;
 }
+
+.rs-depth-slot.is-multi-slot {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.14);
+    border-color: rgba(248, 113, 113, 0.4);
+}
+
+html[data-theme="light"] .rs-depth-slot.is-multi-slot,
+body[data-theme="light"] .rs-depth-slot.is-multi-slot {
+    color: #b91c1c;
+    background: rgba(185, 28, 28, 0.1);
+    border-color: rgba(185, 28, 28, 0.3);
+}
+
+.rs-depth-slot.is-unique-slot {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.14);
+    border-color: rgba(74, 222, 128, 0.4);
+}
+
+html[data-theme="light"] .rs-depth-slot.is-unique-slot,
+body[data-theme="light"] .rs-depth-slot.is-unique-slot {
+    color: #15803d;
+    background: rgba(21, 128, 61, 0.1);
+    border-color: rgba(21, 128, 61, 0.3);
+}
 .rs-depth-code {
     font-size: 11px;
     font-weight: 700;
@@ -6527,6 +6553,44 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
 .pf-depth-chart-slot {
     font-weight: 700;
     color: var(--app-accent);
+}
+
+.pf-depth-chart-slot.is-multi-slot {
+    color: #f87171;
+}
+
+html[data-theme="light"] .pf-depth-chart-slot.is-multi-slot,
+body[data-theme="light"] .pf-depth-chart-slot.is-multi-slot {
+    color: #b91c1c;
+}
+
+.pf-depth-chart-slot.is-unique-slot {
+    color: #4ade80;
+}
+
+html[data-theme="light"] .pf-depth-chart-slot.is-unique-slot,
+body[data-theme="light"] .pf-depth-chart-slot.is-unique-slot {
+    color: #15803d;
+}
+
+.pf-slot-cell.is-multi-slot {
+    color: #f87171 !important;
+    font-weight: 700;
+}
+
+html[data-theme="light"] .pf-slot-cell.is-multi-slot,
+body[data-theme="light"] .pf-slot-cell.is-multi-slot {
+    color: #b91c1c !important;
+}
+
+.pf-slot-cell.is-unique-slot {
+    color: #4ade80 !important;
+    font-weight: 700;
+}
+
+html[data-theme="light"] .pf-slot-cell.is-unique-slot,
+body[data-theme="light"] .pf-slot-cell.is-unique-slot {
+    color: #15803d !important;
 }
 
 .pf-depth-chart-remove {

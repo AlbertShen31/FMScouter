@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from html import escape as html_escape
 
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
@@ -200,6 +201,21 @@ def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
         item = sort_by[0]
         column = item.get("column_id")
         reverse = item.get("direction") == "desc"
+        if column == "Slot":
+
+            def slot_key(row, *, _desc=reverse):
+                order = row.get("_slot_order")
+                if order is None:
+                    label = str(row.get("Slot") or "").casefold()
+                    return (1, 0, label)
+                try:
+                    value = int(order)
+                except (TypeError, ValueError):
+                    return (1, 0, str(order))
+                return (0, -value if _desc else value, "")
+
+            out.sort(key=slot_key)
+            return out
         if column == "Rank":
 
             def rank_key(row, *, _desc=reverse):
@@ -225,6 +241,14 @@ def _sort_profile_rows(rows: list[dict], sort_by, *, mode: str) -> list[dict]:
             reverse=reverse,
         )
         return out
+    if mode == "formation":
+        return sorted(
+            out,
+            key=lambda row: (
+                1 if row.get("_slot_order") is None else 0,
+                int(row.get("_slot_order") or 0),
+            ),
+        )
     if mode == "roles":
         return _sort_role_rows(out)
     out.sort(
@@ -479,6 +503,80 @@ def _formation_slots(formation_id: str | None) -> list[dict]:
     return slots
 
 
+def _entry_player_key(entry: dict | None) -> str:
+    if not isinstance(entry, dict):
+        return ""
+    key = str(entry.get("player_key") or "").strip()
+    if key:
+        return key
+    name, club = profiles.profile_identity(entry)
+    if name:
+        return f"{name}|{club}"
+    return str(entry.get("id") or "").strip()
+
+
+def _formation_starter_slot_maps(
+    formation_id: str | None,
+    slots: list[dict],
+) -> tuple[dict[int, str], set[str], set[int], set[int]]:
+    """Starter player keys per slot, plus multi/unique starter slot indexes.
+
+    Conflicts are based on each slot’s current #1 only, so they update when the
+    Starting XI changes (remove, restore, reorder, auto-rank).
+    """
+    starters: dict[int, str] = {}
+    key_slots: dict[str, set[int]] = {}
+    for slot in slots:
+        index = int(slot["index"])
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, index, slot["column"]
+        )
+        key = _entry_player_key(ordered[0]) if ordered else ""
+        starters[index] = key
+        if key:
+            key_slots.setdefault(key, set()).add(index)
+    multi_starters = {key for key, indexes in key_slots.items() if len(indexes) > 1}
+    conflicted_slots = {
+        index
+        for index, key in starters.items()
+        if key and key in multi_starters
+    }
+    unique_slots = {
+        index
+        for index, key in starters.items()
+        if key and key not in multi_starters
+    }
+    return starters, multi_starters, conflicted_slots, unique_slots
+
+
+def _slot_status_class(*, conflicted: bool = False, unique: bool = False) -> str:
+    if conflicted:
+        return " is-multi-slot"
+    if unique:
+        return " is-unique-slot"
+    return ""
+
+
+def _slot_cell_markdown(
+    label: str,
+    *,
+    conflicted: bool = False,
+    unique: bool = False,
+) -> str:
+    text = html_escape(str(label or "—"))
+    if conflicted:
+        return (
+            f'<span class="pf-slot-cell is-multi-slot" '
+            f'style="color:#f87171;font-weight:700">{text}</span>'
+        )
+    if unique:
+        return (
+            f'<span class="pf-slot-cell is-unique-slot" '
+            f'style="color:#4ade80;font-weight:700">{text}</span>'
+        )
+    return f'<span class="pf-slot-cell">{text}</span>'
+
+
 def _formation_columns(formation_id: str | None) -> list[str]:
     """Unique hybrid role columns from a formation, in first-seen slot order."""
     seen: set[str] = set()
@@ -625,6 +723,8 @@ def _profile_depth_card(
     bands: dict,
     *,
     slot: dict | None = None,
+    slot_conflicted: bool = False,
+    slot_unique: bool = False,
 ) -> html.Button:
     meta = stats["meta"]
     column = meta["column"]
@@ -677,7 +777,22 @@ def _profile_depth_card(
     if slot_label:
         title_bits.insert(
             0,
-            html.Span(slot_label, className="rs-depth-slot"),
+            html.Span(
+                slot_label,
+                className="rs-depth-slot"
+                + _slot_status_class(
+                    conflicted=slot_conflicted, unique=slot_unique
+                ),
+                title=(
+                    "Same starter as another formation slot"
+                    if slot_conflicted
+                    else (
+                        "Unique starter for this formation slot"
+                        if slot_unique
+                        else slot_label
+                    )
+                ),
+            ),
         )
     title_bits.append(html.Span(role_label, className="rs-depth-name"))
     children = [
@@ -733,6 +848,7 @@ def _profile_depth_panel(
     entries: list[dict],
     focus_roles,
     *,
+    formation_id: str | None = None,
     formation_slots: list[dict] | None = None,
     settings=None,
 ) -> list:
@@ -747,14 +863,25 @@ def _profile_depth_panel(
                     className="text-muted small",
                 )
             ]
+        _starters, _multi, conflicted_slots, unique_slots = (
+            _formation_starter_slot_maps(formation_id, formation_slots)
+        )
         cards = []
         for slot in formation_slots:
             meta = _role_column_meta(slot["column"])
             payload = _profile_depth_card_stats(meta, entries, bands)
             if not payload:
                 payload = _empty_depth_card_stats(meta)
+            slot_index = int(slot["index"])
             cards.append(
-                _profile_depth_card(payload, focus_roles, bands, slot=slot)
+                _profile_depth_card(
+                    payload,
+                    focus_roles,
+                    bands,
+                    slot=slot,
+                    slot_conflicted=slot_index in conflicted_slots,
+                    slot_unique=slot_index in unique_slots,
+                )
             )
         return cards
 
@@ -844,12 +971,26 @@ def _depth_chart_player_row(
     theme=None,
     slot_label: str = "",
     slot_index: int | str | None = None,
+    slot_conflicted: bool = False,
+    slot_unique: bool = False,
     draggable: bool = True,
     removable: bool = True,
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
     remove_cell = html.Span("", className="pf-depth-chart-remove")
+    slot_class = "pf-depth-chart-slot" + _slot_status_class(
+        conflicted=slot_conflicted, unique=slot_unique
+    )
+    slot_title = (
+        "Same starter as another formation slot"
+        if slot_conflicted
+        else (
+            "Unique starter for this formation slot"
+            if slot_unique
+            else slot_label
+        )
+    )
     if entry is None:
         return html.Div(
             [
@@ -861,7 +1002,7 @@ def _depth_chart_player_row(
                     className="pf-depth-chart-rank-cell",
                 ),
                 html.Span("—", className="pf-depth-chart-name is-empty"),
-                html.Span(slot_label or "—", className="pf-depth-chart-slot", title=slot_label),
+                html.Span(slot_label or "—", className=slot_class, title=slot_title),
                 html.Span("—", className="pf-depth-chart-pos"),
                 html.Span("—", className="pf-depth-chart-club"),
                 html.Span("—", className="pf-depth-chart-div"),
@@ -940,7 +1081,7 @@ def _depth_chart_player_row(
                 if profile_id
                 else html.Span("—", className="pf-depth-chart-name is-empty")
             ),
-            html.Span(slot_label or "—", className="pf-depth-chart-slot", title=slot_label),
+            html.Span(slot_label or "—", className=slot_class, title=slot_title),
             html.Span(position, className="pf-depth-chart-pos", title=position),
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=division),
@@ -989,12 +1130,16 @@ def _build_formation_xi_chart(
             "This formation has no filled IP+OOP slots.",
             className="text-muted small",
         )
+    _starters, multi_starters, conflicted_slots, unique_slots = (
+        _formation_starter_slot_maps(formation_id, slots)
+    )
     rows = []
     for index, slot in enumerate(slots):
         ordered = profiles.ordered_profiles_for_slot(
             formation_id, slot["index"], slot["column"]
         )
         entry = ordered[0] if ordered else None
+        slot_index = int(slot["index"])
         rows.append(
             _depth_chart_player_row(
                 entry,
@@ -1004,6 +1149,8 @@ def _build_formation_xi_chart(
                 theme=theme,
                 slot_label=slot.get("display_label") or slot.get("label") or "",
                 slot_index=slot["index"],
+                slot_conflicted=slot_index in conflicted_slots,
+                slot_unique=slot_index in unique_slots,
                 draggable=False,
             )
         )
@@ -1093,6 +1240,18 @@ def _build_depth_chart(
 
     meta = _role_column_meta(column)
     ordered = profiles.ordered_profiles_for_slot(formation_id, slot_index, column)
+    if slots:
+        _starters, multi_starters, conflicted_slots, unique_slots = (
+            _formation_starter_slot_maps(formation_id, slots)
+        )
+    else:
+        multi_starters, conflicted_slots, unique_slots = set(), set(), set()
+    try:
+        focused_slot_index = int(slot_index)
+    except (TypeError, ValueError):
+        focused_slot_index = -1
+    slot_is_conflicted = focused_slot_index in conflicted_slots
+    slot_is_unique = focused_slot_index in unique_slots
     if not ordered:
         return html.Div(
             [
@@ -1141,6 +1300,15 @@ def _build_depth_chart(
             theme=theme,
             slot_label=slot_label,
             slot_index=slot_index,
+            # Slot label reflects this slot’s current starter status; player rows
+            # that are starters elsewhere also stay red for quick scanning.
+            slot_conflicted=(
+                slot_is_conflicted
+                or _entry_player_key(entry) in multi_starters
+            ),
+            slot_unique=(
+                slot_is_unique and _entry_player_key(entry) not in multi_starters
+            ),
             draggable=True,
         )
         for idx, entry in enumerate(ordered)
@@ -1215,7 +1383,7 @@ def _role_table_columns(settings, *, include_slot: bool = False) -> list[dict]:
             spec["presentation"] = "markdown"
         cols.append(spec)
     if include_slot:
-        cols.append({"name": "Slot", "id": "Slot"})
+        cols.append({"name": "Slot", "id": "Slot", "presentation": "markdown"})
     cols.append({"name": "Role", "id": "Role", "presentation": "markdown"})
     cols.append({"name": "Rank", "id": "Rank"})
     cols.append({"name": "Score", "id": "Score", "presentation": "markdown"})
@@ -1436,6 +1604,8 @@ def _entry_to_role_table_row(
     settings,
     theme=None,
     slot_label: str = "—",
+    slot_conflicted: bool = False,
+    slot_unique: bool = False,
     row_id: str | None = None,
 ) -> tuple[dict, dict]:
     """Build one profiles table row from a role profile entry."""
@@ -1474,7 +1644,11 @@ def _entry_to_role_table_row(
         else:
             item[col] = _blank(raw.get(col))
     _apply_profile_division(item, raw)
-    item["Slot"] = slot_label or "—"
+    item["Slot"] = _slot_cell_markdown(
+        slot_label or "—",
+        conflicted=slot_conflicted,
+        unique=slot_unique,
+    )
     item["Role"] = _role_cell_markdown(role_column, theme=theme)
     item["Rank"] = str(rank_raw) if rank_raw is not None else "—"
     item["Score"] = _score_markdown(score_raw, settings, theme=theme)
@@ -1486,7 +1660,14 @@ def _entry_to_role_table_row(
     return item, injury_tooltip_entry(raw.get("Injury"))
 
 
-def _empty_slot_table_row(slot: dict, *, settings, theme=None) -> tuple[dict, dict]:
+def _empty_slot_table_row(
+    slot: dict,
+    *,
+    settings,
+    theme=None,
+    slot_conflicted: bool = False,
+    slot_unique: bool = False,
+) -> tuple[dict, dict]:
     settings = us.normalize(settings)
     identity = _profile_identity_columns("role_scores", settings)
     column = slot["column"]
@@ -1500,7 +1681,9 @@ def _empty_slot_table_row(slot: dict, *, settings, theme=None) -> tuple[dict, di
         "_score_raw": None,
         "_overall_raw": None,
         **{f"_{pct}_raw": None for pct in PCT_COLS},
-        "Slot": label,
+        "Slot": _slot_cell_markdown(
+            label, conflicted=slot_conflicted, unique=slot_unique
+        ),
         "Role": _role_cell_markdown(column, theme=theme),
         "Rank": "—",
         "Score": "—",
@@ -1525,21 +1708,36 @@ def _build_formation_xi_table_rows(
     """One table row per formation slot using that slot’s depth list."""
     rows = []
     tips = []
+    _starters, multi_starters, conflicted_slots, unique_slots = (
+        _formation_starter_slot_maps(formation_id, slots)
+    )
     for slot in slots:
         ordered = profiles.ordered_profiles_for_slot(
             formation_id, slot["index"], slot["column"]
         )
         label = slot.get("display_label") or slot.get("label") or "—"
+        slot_index = int(slot["index"])
+        conflicted = slot_index in conflicted_slots
+        unique = slot_index in unique_slots
         if ordered:
             item, tip = _entry_to_role_table_row(
                 ordered[0],
                 settings=settings,
                 theme=theme,
                 slot_label=label,
+                slot_conflicted=conflicted,
+                slot_unique=unique,
                 row_id=f"slot-{slot['index']}-{ordered[0].get('id') or 'player'}",
             )
         else:
-            item, tip = _empty_slot_table_row(slot, settings=settings, theme=theme)
+            item, tip = _empty_slot_table_row(
+                slot,
+                settings=settings,
+                theme=theme,
+                slot_conflicted=conflicted,
+                slot_unique=unique,
+            )
+        item["_slot_order"] = slot_index
         rows.append(item)
         tips.append(tip)
     return rows, tips
@@ -2320,26 +2518,45 @@ def refresh_profiles_table(
                 theme=theme,
             )
             filtered = list(all_rows)
+            sort_mode = "formation"
         elif formation_slots and focus:
             slot_ordered = profiles.ordered_profiles_for_slot(
                 formation_id, focus.get("slot", -1), focus["role"]
             )
             slot_label = focus.get("label") or "—"
+            _starters, multi_starters, conflicted_slots, unique_slots = (
+                _formation_starter_slot_maps(formation_id, formation_slots)
+            )
+            try:
+                focused_slot_index = int(focus.get("slot", -1))
+            except (TypeError, ValueError):
+                focused_slot_index = -1
+            slot_is_conflicted = focused_slot_index in conflicted_slots
+            slot_is_unique = focused_slot_index in unique_slots
             all_rows = []
             tips = []
             for entry in slot_ordered:
+                player_key = _entry_player_key(entry)
                 item, tip = _entry_to_role_table_row(
                     entry,
                     settings=settings,
                     theme=theme,
                     slot_label=slot_label,
+                    slot_conflicted=(
+                        slot_is_conflicted or player_key in multi_starters
+                    ),
+                    slot_unique=(
+                        slot_is_unique and player_key not in multi_starters
+                    ),
                 )
                 all_rows.append(item)
                 tips.append(tip)
             filtered = list(all_rows)
+            sort_mode = "roles"
         else:
             all_rows, tips = _build_role_table_rows(settings, theme=theme)
             filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+            sort_mode = "roles"
         style_data, style_header = _role_table_styles(theme)
         empty_msg = (
             "No role profiles yet. Mark players on Role scores and save — "
@@ -2350,6 +2567,7 @@ def refresh_profiles_table(
             depth_cards = _profile_depth_panel(
                 entries,
                 focus_role,
+                formation_id=formation_id,
                 formation_slots=formation_slots,
                 settings=settings,
             )
@@ -2376,7 +2594,6 @@ def refresh_profiles_table(
             theme=theme,
         )
         chart_hidden = not formation_slots and not focus
-        sort_mode = "roles"
 
     col_ids = {col["id"] for col in columns}
     if reset_sort:
