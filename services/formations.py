@@ -70,7 +70,8 @@ DEFAULT_SLOT_POSITIONS = (
     "lw",
     "st",
 )
-DEFAULT_SLOT_LABELS = tuple(SLOT_POSITION_LABEL[pos] for pos in DEFAULT_SLOT_POSITIONS)
+# Positions that already encode a flank — duplicates keep numbered labels.
+_SIDED_POSITION_IDS = frozenset({"rb", "lb", "rwb", "lwb", "rm", "lm", "rw", "lw"})
 
 
 def position_options() -> list[dict]:
@@ -109,7 +110,52 @@ def _valid_oop(role_id: str) -> bool:
     return role_id in pc.all_positions and phase_tone(pc.all_positions[role_id].get("phase")) == "oop"
 
 
-def _slot(raw, index: int) -> dict[str, str]:
+def _side_variant_labels(base: str, count: int, *, sided: bool) -> list[str]:
+    """Default display codes for N slots sharing the same IP position.
+
+    Central roles (CB/DM/CM/…): RCB/LCB, or RCB/CB/LCB for three.
+    Already-flanked roles (RB/LW/…): numbered when duplicated.
+    """
+    if count <= 1:
+        return [base]
+    if sided:
+        return [f"{base} ({i + 1})" for i in range(count)]
+    if count == 2:
+        return [f"R{base}", f"L{base}"]
+    if count == 3:
+        return [f"R{base}", base, f"L{base}"]
+    labels = [f"R{base}"]
+    mid = count - 2
+    if mid == 1:
+        labels.append(base)
+    else:
+        for i in range(mid):
+            labels.append(f"{base} ({i + 1})")
+    labels.append(f"L{base}")
+    return labels
+
+
+def auto_slot_labels(ip_positions: list[str | None]) -> list[str]:
+    """Resolved default labels for a lineup of IP positions (order preserved)."""
+    positions = [
+        _normalize_pos(pos, DEFAULT_SLOT_POSITIONS[i] if i < MAX_SLOTS else "cm")
+        for i, pos in enumerate(ip_positions)
+    ]
+    groups: dict[str, list[int]] = {}
+    for index, pos in enumerate(positions):
+        groups.setdefault(pos, []).append(index)
+    labels = [""] * len(positions)
+    for pos, indexes in groups.items():
+        base = SLOT_POSITION_LABEL.get(pos, pos.upper())
+        variants = _side_variant_labels(
+            base, len(indexes), sided=pos in _SIDED_POSITION_IDS
+        )
+        for offset, index in enumerate(indexes):
+            labels[index] = variants[offset]
+    return labels
+
+
+def _parse_slot(raw, index: int) -> dict[str, str]:
     payload = raw if isinstance(raw, dict) else {}
     fallback = DEFAULT_SLOT_POSITIONS[index] if 0 <= index < MAX_SLOTS else "cm"
     ip_pos = _normalize_pos(payload.get("ip_pos") or payload.get("label"), fallback)
@@ -121,7 +167,6 @@ def _slot(raw, index: int) -> dict[str, str]:
     if not _valid_oop(oop):
         oop = ""
     return {
-        "label": SLOT_POSITION_LABEL.get(ip_pos, ip_pos.upper()),
         "ip_pos": ip_pos,
         "oop_pos": oop_pos,
         "ip": ip,
@@ -167,7 +212,21 @@ def blank(name: str = "New formation") -> dict[str, Any]:
 def normalize(raw, pack_id: str | None = None, name: str | None = None) -> dict[str, Any]:
     payload = raw if isinstance(raw, dict) else {}
     slots_raw = list(payload.get("slots") or [])
-    slots = [_slot(slots_raw[i] if i < len(slots_raw) else {}, i) for i in range(MAX_SLOTS)]
+    parsed = [
+        _parse_slot(slots_raw[i] if i < len(slots_raw) else {}, i)
+        for i in range(MAX_SLOTS)
+    ]
+    autos = auto_slot_labels([slot["ip_pos"] for slot in parsed])
+    slots = [
+        {
+            "label": autos[index],
+            "ip_pos": slot["ip_pos"],
+            "oop_pos": slot["oop_pos"],
+            "ip": slot["ip"],
+            "oop": slot["oop"],
+        }
+        for index, slot in enumerate(parsed)
+    ]
     chosen_id = pack_id if pack_id is not None else str(payload.get("id") or "")
     label = name if name is not None else str(payload.get("name") or chosen_id or "New formation")
     return {

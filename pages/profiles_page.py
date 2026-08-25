@@ -667,7 +667,7 @@ def _empty_depth_card_stats(meta: dict) -> dict:
     }
 
 
-_PITCH_LINE_ORDER = ("gk", "def", "mid", "att")
+_PITCH_LINE_ORDER = ("att", "mid", "def", "gk")
 _PITCH_LINE_LABELS = {
     "gk": "Goalkeeper",
     "def": "Defence",
@@ -698,15 +698,56 @@ _POS_TO_PITCH_LINE = {
     "amc": "mid",
     "dmr": "mid",
     "dml": "mid",
+    "ram": "mid",
+    "lam": "mid",
+    "rcm": "mid",
+    "lcm": "mid",
+    "rdm": "mid",
+    "ldm": "mid",
     "wm": "mid",
     "w": "att",
     "cf": "att",
+    "rst": "att",
+    "lst": "att",
 }
+_LEFT_IP_POS = frozenset({"lb", "lwb", "lm", "lw"})
+_RIGHT_IP_POS = frozenset({"rb", "rwb", "rm", "rw"})
+# Slot codes that encode a flank (auto RCB/LCB or IP labels like LB/RW).
+_LEFT_SLOT_CODES = frozenset(
+    {
+        "L",
+        "LB",
+        "LWB",
+        "LCB",
+        "LDM",
+        "LCM",
+        "LAM",
+        "LM",
+        "LW",
+        "LST",
+        "DML",
+    }
+)
+_RIGHT_SLOT_CODES = frozenset(
+    {
+        "R",
+        "RB",
+        "RWB",
+        "RCB",
+        "RDM",
+        "RCM",
+        "RAM",
+        "RM",
+        "RW",
+        "RST",
+        "DMR",
+    }
+)
 
 
 def _slot_pitch_line(slot: dict) -> str:
     """Map a formation slot to GK / Defence / Midfield / Attack."""
-    for key in ("ip_pos", "oop_pos", "label"):
+    for key in ("ip_pos", "oop_pos", "label", "display_label"):
         raw = str(slot.get(key) or "").strip().lower()
         if not raw:
             continue
@@ -722,6 +763,35 @@ def _slot_pitch_line(slot: dict) -> str:
         if group in ("w", "st"):
             return "att"
     return "mid"
+
+
+def _normalize_slot_code(value: str | None) -> str:
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    # Drop CB (1)-style suffixes from older duplicate labels.
+    return re.sub(r"\s*\(\d+\)\s*$", "", text).strip()
+
+
+def _slot_flank_side(slot: dict) -> int:
+    """Horizontal pitch side: -1 left, 0 centre, 1 right (attack at top).
+
+    Callers should sort by ``(side, -slot_index)`` so a lower slot number sits
+    further to the right within the same flank.
+    """
+    for key in ("display_label", "label"):
+        code = _normalize_slot_code(slot.get(key))
+        if code in _LEFT_SLOT_CODES:
+            return -1
+        if code in _RIGHT_SLOT_CODES:
+            return 1
+    for key in ("ip_pos", "oop_pos"):
+        pos = str(slot.get(key) or "").strip().lower()
+        if pos in _LEFT_IP_POS or pos in {"lcb", "ldm", "lcm", "lam", "lst", "dml"}:
+            return -1
+        if pos in _RIGHT_IP_POS or pos in {"rcb", "rdm", "rcm", "ram", "rst", "dmr"}:
+            return 1
+    return 0
 
 
 def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> dict | None:
@@ -942,7 +1012,9 @@ def _profile_depth_panel(
         _starters, _multi, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(formation_id, formation_slots)
         )
-        by_line: dict[str, list] = {key: [] for key in _PITCH_LINE_ORDER}
+        by_line: dict[str, list[tuple[int, int, object]]] = {
+            key: [] for key in _PITCH_LINE_ORDER
+        }
         for slot in formation_slots:
             meta = _role_column_meta(slot["column"])
             payload = _profile_depth_card_stats(meta, entries, bands)
@@ -957,11 +1029,19 @@ def _profile_depth_panel(
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
             )
-            by_line.setdefault(_slot_pitch_line(slot), []).append(card)
+            line_id = _slot_pitch_line(slot)
+            by_line.setdefault(line_id, []).append(
+                (_slot_flank_side(slot), slot_index, card)
+            )
         lines = []
         total_slots = len(formation_slots)
         for line_id in _PITCH_LINE_ORDER:
-            line_cards = by_line.get(line_id) or []
+            # Left → centre → right; within a flank, lower slot # sits further right.
+            ranked = sorted(
+                by_line.get(line_id) or [],
+                key=lambda item: (item[0], -item[1]),
+            )
+            line_cards = [item[2] for item in ranked]
             if not line_cards:
                 continue
             count = len(line_cards)

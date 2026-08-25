@@ -3967,7 +3967,14 @@ body:has(.rc-page) .navbar {
 
 .fm-slot-row {
     display: grid;
-    grid-template-columns: 36px minmax(88px, 0.55fr) minmax(88px, 0.55fr) minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(90px, 0.65fr);
+    grid-template-columns:
+        36px
+        minmax(52px, 0.4fr)
+        minmax(88px, 0.55fr)
+        minmax(88px, 0.55fr)
+        minmax(0, 1.35fr)
+        minmax(0, 1.35fr)
+        minmax(90px, 0.65fr);
     gap: 10px;
     align-items: center;
 }
@@ -3994,8 +4001,16 @@ body:has(.rc-page) .navbar {
 }
 
 .fm-slot-pos,
-.fm-slot-label,
 .fm-slot-role {
+    min-width: 0;
+}
+
+.fm-slot-label {
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    color: var(--app-text);
+    font-variant-numeric: tabular-nums;
     min-width: 0;
 }
 
@@ -4028,6 +4043,7 @@ body:has(.rc-page) .navbar {
     }
 
     .fm-slot-pos,
+    .fm-slot-label,
     .fm-slot-role,
     .fm-slot-preview {
         grid-column: 2;

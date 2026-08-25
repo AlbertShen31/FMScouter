@@ -11,15 +11,23 @@ from scoring.role_scorer import combo_meta, role_options
 register_page(__name__, path="/formations", name="Formations")
 
 POS_OPTIONS = fm.position_options()
+_FORM_OUTPUT_COUNT = 13
 
 
 def _slot_row(index: int, slot: dict) -> html.Div:
     ip_pos = slot.get("ip_pos") or fm.DEFAULT_SLOT_POSITIONS[index]
     oop_pos = slot.get("oop_pos") or None
     ip_group, oop_group = fm.role_filter_groups(ip_pos, oop_pos)
+    label = str(slot.get("label") or "").strip() or "—"
     return html.Div(
         [
             html.Span(str(index + 1), className="fm-slot-index"),
+            html.Span(
+                label,
+                id={"type": "fm-slot-label", "index": index},
+                className="fm-slot-label",
+                title="Auto slot name from IP positions",
+            ),
             dmc.Select(
                 id={"type": "fm-slot-ip-pos", "index": index},
                 data=POS_OPTIONS,
@@ -134,8 +142,10 @@ def layout():
         [
             html.H1("Formations"),
             html.P(
-                "Save up to 11 hybrid roles. IP position filters both role lists unless you "
-                "set a separate OOP position. Save writes a new file if none is selected.",
+                "Save up to 11 hybrid roles. Slot names update from IP positions "
+                "(duplicate CBs become RCB/LCB). IP position filters both role lists "
+                "unless you set a separate OOP position. Save writes a new file if none "
+                "is selected.",
                 className="text-muted",
             ),
             dbc.Card(
@@ -254,6 +264,7 @@ def layout():
                             html.Div(
                                 [
                                     html.Span("#", className="fm-slot-index"),
+                                    html.Span("Slot", className="fm-slot-col-label"),
                                     html.Span("IP position", className="fm-slot-col-label"),
                                     html.Span("OOP position", className="fm-slot-col-label"),
                                     html.Span("In possession role", className="fm-slot-col-label"),
@@ -308,6 +319,21 @@ def filter_slot_roles(ip_pos, oop_pos, ips, oops):
         ip_data.append(role_options(phase="IP", group=ip_group, keep=keep_ip) or [])
         oop_data.append(role_options(phase="OOP", group=oop_group, keep=keep_oop) or [])
     return ip_data, oop_data
+
+
+@callback(
+    Output({"type": "fm-slot-label", "index": ALL}, "children"),
+    Input({"type": "fm-slot-ip-pos", "index": ALL}, "value"),
+)
+def update_slot_labels(ip_pos):
+    specs = ctx.inputs_list[0] if ctx.inputs_list else []
+    pos_map = _by_index(specs, ip_pos)
+    positions = [
+        pos_map.get(index) or fm.DEFAULT_SLOT_POSITIONS[index]
+        for index in range(fm.MAX_SLOTS)
+    ]
+    autos = fm.auto_slot_labels(positions)
+    return [autos[spec["id"]["index"]] for spec in specs]
 
 
 @callback(
@@ -379,7 +405,7 @@ def handle_formations(
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return (no_update,) * 13
+        return (no_update,) * _FORM_OUTPUT_COUNT
 
     def finish(formation, status):
         return _form_outputs(formation, status)
@@ -423,4 +449,4 @@ def handle_formations(
         label = draft.get("name") or pack_id
         fm.delete(pack_id)
         return finish(fm.blank(), f"Deleted {label}. Editing a new formation.")
-    return (no_update,) * 13
+    return (no_update,) * _FORM_OUTPUT_COUNT
