@@ -1614,6 +1614,7 @@ def _entry_to_role_table_row(
     slot_conflicted: bool = False,
     slot_unique: bool = False,
     row_id: str | None = None,
+    depth_rank: int | None = None,
 ) -> tuple[dict, dict]:
     """Build one profiles table row from a role profile entry."""
     settings = us.normalize(settings)
@@ -1631,7 +1632,16 @@ def _entry_to_role_table_row(
         score_f = None
     overall_raw = _raw_float(raw.get("overall"))
     pct_raw = {pct: _raw_float(raw.get(pct)) for pct in PCT_COLS}
-    rank_raw = _depth_rank_value(entry)
+    # Prefer explicit slot/list position; fall back to persisted depth_rank.
+    if depth_rank is not None:
+        try:
+            rank_raw = int(depth_rank)
+        except (TypeError, ValueError):
+            rank_raw = None
+        if rank_raw is not None and rank_raw <= 0:
+            rank_raw = None
+    else:
+        rank_raw = _depth_rank_value(entry)
     profile_id = str(entry.get("id") or "").strip()
     item: dict = {
         "id": row_id or profile_id,
@@ -1735,6 +1745,7 @@ def _build_formation_xi_table_rows(
                 slot_conflicted=conflicted,
                 slot_unique=unique,
                 row_id=f"slot-{slot['index']}-{ordered[0].get('id') or 'player'}",
+                depth_rank=1,
             )
         else:
             item, tip = _empty_slot_table_row(
@@ -1754,10 +1765,38 @@ def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[
     settings = us.normalize(settings)
     rows = []
     tips = []
+    # Prefer list position within each role so Rank stays filled even when
+    # persisted depth_rank was never written (slot-depth is source of truth).
+    by_role: dict[str, list[dict]] = {}
     for entry in profiles.list_role_profiles():
-        item, tip = _entry_to_role_table_row(entry, settings=settings, theme=theme)
-        rows.append(item)
-        tips.append(tip)
+        role = str(entry.get("role_column") or "").strip()
+        by_role.setdefault(role, []).append(entry)
+    for role, role_entries in by_role.items():
+        ordered = (
+            profiles.ordered_profiles_for_role(role) if role else list(role_entries)
+        )
+        seen = set()
+        for index, entry in enumerate(ordered):
+            pid = str(entry.get("id") or "").strip()
+            if pid:
+                seen.add(pid)
+            item, tip = _entry_to_role_table_row(
+                entry,
+                settings=settings,
+                theme=theme,
+                depth_rank=index + 1,
+            )
+            rows.append(item)
+            tips.append(tip)
+        for entry in role_entries:
+            pid = str(entry.get("id") or "").strip()
+            if pid and pid in seen:
+                continue
+            item, tip = _entry_to_role_table_row(
+                entry, settings=settings, theme=theme
+            )
+            rows.append(item)
+            tips.append(tip)
     return rows, tips
 
 
@@ -2542,7 +2581,7 @@ def refresh_profiles_table(
             slot_is_unique = focused_slot_index in unique_slots
             all_rows = []
             tips = []
-            for entry in slot_ordered:
+            for index, entry in enumerate(slot_ordered):
                 player_key = _entry_player_key(entry)
                 item, tip = _entry_to_role_table_row(
                     entry,
@@ -2555,6 +2594,7 @@ def refresh_profiles_table(
                     slot_unique=(
                         slot_is_unique and player_key not in multi_starters
                     ),
+                    depth_rank=index + 1,
                 )
                 all_rows.append(item)
                 tips.append(tip)
