@@ -6116,58 +6116,6 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 /* Profiles page */
-.profiles-wrap {
-    overflow-x: auto;
-}
-.profiles-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-}
-.profiles-table th,
-.profiles-table td {
-    padding: 0.55rem 0.65rem;
-    border-bottom: 1px solid var(--app-line);
-    vertical-align: middle;
-}
-.profiles-table th {
-    color: var(--app-muted);
-    font-weight: 600;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-.profiles-table tbody tr:hover {
-    background: color-mix(in srgb, var(--app-card) 88%, var(--app-accent));
-}
-.pf-name-link {
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--app-accent);
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-}
-.pf-name-link:hover {
-    text-decoration: underline;
-}
-.pf-source-cell {
-    max-width: 14rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.pf-note-cell {
-    max-width: 12rem;
-    color: var(--app-muted);
-}
-.pf-row-actions {
-    display: flex;
-    gap: 0.25rem;
-    justify-content: flex-end;
-    white-space: nowrap;
-}
 .pf-source-row {
     display: flex;
     align-items: center;
@@ -6213,21 +6161,10 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     align-items: baseline;
     justify-content: flex-end;
 }
-.pf-view-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
 .pf-role-cell {
     font-weight: 600;
     max-width: 10rem;
     white-space: nowrap;
-}
-.pf-score-val,
-.pf-pct-val {
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
 }
 .pf-modal-role-score-row {
     display: flex;
@@ -6253,13 +6190,6 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 .pf-modal-role-elig.is-no {
     color: #f87171;
-}
-.pf-table-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
 }
 
 .pf-squad-depth-actions {
@@ -6789,16 +6719,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
         0 0 10px rgba(13, 110, 253, 0.35);
 }
 
-.pf-depth-chart-drop-end.is-drop-target {
-    border-color: var(--app-accent);
-    background: rgba(61, 255, 136, 0.12);
-}
-
-html[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target,
-body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
-    background: rgba(13, 110, 253, 0.1);
-}
-
 .pf-depth-chart-cols,
 .pf-depth-chart-row {
     display: grid;
@@ -6812,7 +6732,7 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
         minmax(3.85rem, 0.58fr)
         3.5rem
         minmax(4.75rem, 0.78fr)
-        minmax(4.75rem, 0.78fr)
+        minmax(7rem, 0.95fr)
         2.85rem
         2.5rem
         3.35rem
@@ -6825,7 +6745,7 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 75rem;
+    min-width: 77rem;
     box-sizing: border-box;
 }
 
@@ -6838,6 +6758,33 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
     text-transform: uppercase;
     border-bottom: 1px solid var(--app-line);
     min-height: 38px;
+}
+
+/* Keep every header label muted + same size — cell rules set body colors/sizes. */
+.pf-depth-chart-cols .pf-depth-chart-rank,
+.pf-depth-chart-cols .pf-depth-chart-feet,
+.pf-depth-chart-cols .pf-depth-chart-slot,
+.pf-depth-chart-cols .pf-depth-chart-div,
+.pf-depth-chart-cols .pf-depth-chart-pos,
+.pf-depth-chart-cols .pf-depth-chart-name-label,
+.pf-depth-chart-cols .pf-depth-chart-role,
+.pf-depth-chart-cols .pf-depth-chart-club,
+.pf-depth-chart-cols .pf-depth-chart-age,
+.pf-depth-chart-cols .pf-depth-chart-height,
+.pf-depth-chart-cols .pf-depth-chart-rec,
+.pf-depth-chart-cols .pf-depth-chart-injury,
+.pf-depth-chart-cols .pf-depth-chart-mins,
+.pf-depth-chart-cols .pf-depth-chart-score,
+.pf-depth-chart-cols .pf-depth-chart-ovr,
+.pf-depth-chart-cols .pf-depth-chart-def,
+.pf-depth-chart-cols .pf-depth-chart-f3,
+.pf-depth-chart-cols .pf-depth-chart-poss {
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
 }
 
 .pf-depth-chart-cols .pf-depth-chart-rank,
@@ -6862,7 +6809,6 @@ body[data-theme="light"] .pf-depth-chart-drop-end.is-drop-target {
 .pf-depth-chart-cols .pf-depth-chart-club,
 .pf-depth-chart-cols .pf-depth-chart-div {
     text-align: left;
-    color: var(--app-muted);
 }
 
 .pf-depth-chart-row {
@@ -7008,7 +6954,6 @@ body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
     justify-self: center;
     text-align: center;
     line-height: 0;
-    color: var(--app-text);
 }
 
 .pf-depth-chart-feet p {
@@ -7130,7 +7075,9 @@ body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
     line-height: 1.3;
     white-space: normal;
     overflow: visible;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
     font-weight: 600;
     max-width: 14rem;
     text-align: center;
