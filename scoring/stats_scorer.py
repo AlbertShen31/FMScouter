@@ -57,8 +57,43 @@ def benchmarks() -> dict[str, Any]:
     return json.loads(DATA_PATH.read_text(encoding="utf-8"))
 
 
+def _with_per90_label(text: str) -> str:
+    """Full name: ``{metric} per 90`` when not already marked."""
+    raw = str(text or "").strip()
+    if not raw:
+        return raw
+    lower = raw.lower()
+    if "per 90" in lower:
+        return raw
+    if lower.endswith("/90"):
+        raw = raw[:-3].rstrip()
+    return f"{raw} per 90"
+
+
+def _with_per90_abbr(text: str) -> str:
+    """Short header: ``{abbr}/90`` when not already marked."""
+    raw = str(text or "").strip()
+    if not raw:
+        return raw
+    lower = raw.lower()
+    if lower.endswith("/90"):
+        return raw
+    if "per 90" in lower:
+        raw = raw[: lower.rfind("per 90")].rstrip()
+    return f"{raw}/90"
+
+
+@lru_cache(maxsize=1)
 def metric_defs() -> dict[str, dict[str, Any]]:
-    return benchmarks()["metrics"]
+    """Metric metadata with per-90 rates marked in label and abbr."""
+    out: dict[str, dict[str, Any]] = {}
+    for mid, meta in benchmarks()["metrics"].items():
+        item = dict(meta)
+        if item.get("unit") == "per90":
+            item["label"] = _with_per90_label(str(item.get("label") or mid))
+            item["abbr"] = _with_per90_abbr(str(item.get("abbr") or mid))
+        out[mid] = item
+    return out
 
 
 def is_gk_group(group: str | None) -> bool:
