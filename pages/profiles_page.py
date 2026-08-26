@@ -87,6 +87,7 @@ DEPTH_UNDO_MAX_DEFAULT = 10
 # Skip reloading stats cohorts when library + percentile-related settings
 # have not changed since the last refresh in this process.
 _PF_PCT_FP: str | None = None
+_PF_PCT_LOCK = __import__("threading").Lock()
 
 
 FILTER_SORT_RESET_IDS = frozenset(
@@ -117,11 +118,14 @@ def _ensure_profile_percentiles(settings) -> None:
     fp = _percentile_settings_fingerprint(settings)
     if fp == _PF_PCT_FP:
         return
-    try:
-        profiles.refresh_profile_percentiles(settings)
-    except Exception:
-        pass
-    _PF_PCT_FP = fp
+    with _PF_PCT_LOCK:
+        if fp == _PF_PCT_FP:
+            return
+        try:
+            profiles.refresh_profile_percentiles(settings)
+        except Exception:
+            pass
+        _PF_PCT_FP = fp
 
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
@@ -617,16 +621,72 @@ def _profiles_busy_overlay(overlay_id: str, label: str, *, on: bool = False) -> 
     )
 
 
+class _PfProfileCache:
+    """Per-request memo for role-profile index and slot/role order lists."""
+
+    __slots__ = ("_entries", "_ordered_slot", "_ordered_role")
+
+    def __init__(self, entries: list[dict] | None = None):
+        self._entries = entries
+        self._ordered_slot: dict[tuple[str, str, str], list[dict]] = {}
+        self._ordered_role: dict[str, list[dict]] = {}
+
+    def list_role_profiles(self) -> list[dict]:
+        if self._entries is None:
+            self._entries = profiles.list_role_profiles()
+        return self._entries
+
+    def ordered_for_slot(
+        self,
+        formation_id: str | None,
+        slot_index,
+        role_column: str,
+    ) -> list[dict]:
+        key = (
+            str(formation_id or ""),
+            str(slot_index),
+            str(role_column or ""),
+        )
+        hit = self._ordered_slot.get(key)
+        if hit is not None:
+            return hit
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id,
+            slot_index,
+            role_column,
+            entries=self.list_role_profiles(),
+        )
+        self._ordered_slot[key] = ordered
+        return ordered
+
+    def ordered_for_role(self, role_column: str) -> list[dict]:
+        role = str(role_column or "")
+        hit = self._ordered_role.get(role)
+        if hit is not None:
+            return hit
+        ordered = profiles.ordered_profiles_for_role(
+            role, entries=self.list_role_profiles()
+        )
+        self._ordered_role[role] = ordered
+        return ordered
+
+
 def _formation_xi_entry(
     formation_id: str | None,
     slot: dict,
     *,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> dict | None:
     """Profile at the selected XI rank for one formation slot, if any."""
-    ordered = profiles.ordered_profiles_for_slot(
-        formation_id, slot["index"], slot["column"]
-    )
+    if cache is not None:
+        ordered = cache.ordered_for_slot(
+            formation_id, slot["index"], slot["column"]
+        )
+    else:
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, slot["index"], slot["column"]
+        )
     index = _xi_rank_index(xi_view)
     if index < 0 or index >= len(ordered):
         return None
@@ -638,6 +698,7 @@ def _formation_starter_slot_maps(
     slots: list[dict],
     *,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> tuple[dict[int, str], set[str], set[int], set[int]]:
     """XI player keys per slot, plus multi/unique slot indexes.
 
@@ -649,9 +710,14 @@ def _formation_starter_slot_maps(
     key_slots: dict[str, set[int]] = {}
     for slot in slots:
         index = int(slot["index"])
-        ordered = profiles.ordered_profiles_for_slot(
-            formation_id, index, slot["column"]
-        )
+        if cache is not None:
+            ordered = cache.ordered_for_slot(
+                formation_id, index, slot["column"]
+            )
+        else:
+            ordered = profiles.ordered_profiles_for_slot(
+                formation_id, index, slot["column"]
+            )
         entry = ordered[rank_i] if len(ordered) > rank_i else None
         key = _entry_player_key(entry) if entry else ""
         starters[index] = key
@@ -1134,6 +1200,7 @@ def _profile_depth_panel(
     formation_slots: list[dict] | None = None,
     settings=None,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> list:
     settings = us.normalize(settings)
     bands = settings["bands"]
@@ -1148,7 +1215,7 @@ def _profile_depth_panel(
             ]
         _starters, _multi, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(
-                formation_id, formation_slots, xi_view=xi_view
+                formation_id, formation_slots, xi_view=xi_view, cache=cache
             )
         )
         by_line: dict[str, list[tuple[int, int, object]]] = {
@@ -1717,11 +1784,14 @@ def _starting_xi_scores(
     *,
     formation_id: str | None,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> list[float]:
     """Role scores for each filled XI slot at the selected depth rank."""
     scores: list[float] = []
     for slot in slots:
-        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
+        entry = _formation_xi_entry(
+            formation_id, slot, xi_view=xi_view, cache=cache
+        )
         if not entry:
             continue
         score = (entry.get("row") or {}).get("Score")
@@ -1762,6 +1832,7 @@ def _build_formation_xi_chart(
     theme=None,
     minutes_required=None,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> html.Div:
     """One player per formation slot at the selected XI depth rank."""
     settings = us.normalize(settings)
@@ -1775,20 +1846,27 @@ def _build_formation_xi_chart(
             className="text-muted small",
         )
     _starters, multi_starters, conflicted_slots, unique_slots = (
-        _formation_starter_slot_maps(formation_id, slots, xi_view=xi_view)
+        _formation_starter_slot_maps(
+            formation_id, slots, xi_view=xi_view, cache=cache
+        )
     )
     xi_scores = _starting_xi_scores(
-        slots, formation_id=formation_id, xi_view=xi_view
+        slots, formation_id=formation_id, xi_view=xi_view, cache=cache
     )
     xi_avg_chip = _starting_xi_avg_chip(xi_scores, settings, xi_view=xi_view)
     filled = sum(
         1
         for slot in slots
-        if _formation_xi_entry(formation_id, slot, xi_view=xi_view) is not None
+        if _formation_xi_entry(
+            formation_id, slot, xi_view=xi_view, cache=cache
+        )
+        is not None
     )
     rows = []
     for index, slot in enumerate(slots):
-        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
+        entry = _formation_xi_entry(
+            formation_id, slot, xi_view=xi_view, cache=cache
+        )
         slot_index = int(slot["index"])
         rows.append(
             _depth_chart_player_row(
@@ -1864,6 +1942,7 @@ def _build_depth_chart(
     theme=None,
     minutes_required=None,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
@@ -1880,6 +1959,7 @@ def _build_depth_chart(
                 theme=theme,
                 minutes_required=mins_limit,
                 xi_view=xi_view,
+                cache=cache,
             )
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
@@ -1915,11 +1995,16 @@ def _build_depth_chart(
         )
 
     meta = _role_column_meta(column)
-    ordered = profiles.ordered_profiles_for_slot(formation_id, slot_index, column)
+    if cache is not None:
+        ordered = cache.ordered_for_slot(formation_id, slot_index, column)
+    else:
+        ordered = profiles.ordered_profiles_for_slot(
+            formation_id, slot_index, column
+        )
     if slots:
         _starters, multi_starters, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(
-                formation_id, slots, xi_view=xi_view
+                formation_id, slots, xi_view=xi_view, cache=cache
             )
         )
     else:
@@ -2417,6 +2502,7 @@ def _build_formation_xi_table_rows(
     settings=None,
     theme=None,
     xi_view=None,
+    cache: _PfProfileCache | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """One table row per formation slot using that slot’s selected XI rank."""
     rows = []
@@ -2424,10 +2510,14 @@ def _build_formation_xi_table_rows(
     xi_view = _normalize_xi_view(xi_view)
     xi_rank = _xi_rank(xi_view)
     _starters, multi_starters, conflicted_slots, unique_slots = (
-        _formation_starter_slot_maps(formation_id, slots, xi_view=xi_view)
+        _formation_starter_slot_maps(
+            formation_id, slots, xi_view=xi_view, cache=cache
+        )
     )
     for slot in slots:
-        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
+        entry = _formation_xi_entry(
+            formation_id, slot, xi_view=xi_view, cache=cache
+        )
         label = slot.get("display_label") or slot.get("label") or "—"
         slot_index = int(slot["index"])
         conflicted = slot_index in conflicted_slots
@@ -2457,20 +2547,33 @@ def _build_formation_xi_table_rows(
     return rows, tips
 
 
-def _build_role_table_rows(settings=None, theme=None) -> tuple[list[dict], list[dict]]:
+def _build_role_table_rows(
+    settings=None,
+    theme=None,
+    *,
+    cache: _PfProfileCache | None = None,
+) -> tuple[list[dict], list[dict]]:
     settings = us.normalize(settings)
     rows = []
     tips = []
     # Prefer list position within each role so Rank stays filled even when
     # persisted depth_rank was never written (slot-depth is source of truth).
     by_role: dict[str, list[dict]] = {}
-    for entry in profiles.list_role_profiles():
+    entries = (
+        cache.list_role_profiles()
+        if cache is not None
+        else profiles.list_role_profiles()
+    )
+    for entry in entries:
         role = str(entry.get("role_column") or "").strip()
         by_role.setdefault(role, []).append(entry)
     for role, role_entries in by_role.items():
-        ordered = (
-            profiles.ordered_profiles_for_role(role) if role else list(role_entries)
-        )
+        if not role:
+            ordered = list(role_entries)
+        elif cache is not None:
+            ordered = cache.ordered_for_role(role)
+        else:
+            ordered = profiles.ordered_profiles_for_role(role)
         seen = set()
         for index, entry in enumerate(ordered):
             pid = str(entry.get("id") or "").strip()
@@ -2527,6 +2630,56 @@ def _filter_role_rows(rows: list[dict], *, focus_roles) -> list[dict]:
 
 def _strip_internal(row: dict) -> dict:
     return {k: v for k, v in row.items() if not k.startswith("_")}
+
+
+def _table_row_cache_blob(rows, tips, sort_mode: str) -> dict:
+    return {
+        "rows": list(rows or []),
+        "tips": list(tips or []),
+        "sort_mode": sort_mode or "roles",
+    }
+
+
+def _display_from_cached_rows(
+    rows: list[dict],
+    tips: list[dict],
+    *,
+    settings,
+    minutes_required,
+) -> tuple[list[dict], list[dict]]:
+    display_rows = []
+    for row in rows:
+        clean = _strip_internal(row)
+        clean["Minutes"] = _minutes_cell(
+            row.get("_minutes_raw"), settings, minutes_required=minutes_required
+        )
+        display_rows.append(clean)
+    return display_rows, list(tips or [])
+
+
+def _remint_theme_rows(rows: list[dict], *, settings, theme) -> list[dict]:
+    """Refresh Role / Score markdown colors without rebuilding from profiles."""
+    out = []
+    for row in rows:
+        item = dict(row)
+        role_col = str(item.get("_role_column") or "").strip()
+        if role_col:
+            item["Role"] = _role_cell_markdown(role_col, theme=theme)
+        item["Score"] = _score_markdown(
+            item.get("_score_raw"), settings, theme=theme
+        )
+        out.append(item)
+    return out
+
+
+def _reorder_tips_for_rows(
+    rows: list[dict], tips: list[dict], ordered_rows: list[dict]
+) -> list[dict]:
+    tip_by_id = {
+        str(row.get("id") or ""): tip
+        for row, tip in zip(rows, tips)
+    }
+    return [tip_by_id.get(str(row.get("id") or ""), {}) for row in ordered_rows]
 
 
 def _depth_undo_limit(settings=None) -> int:
@@ -2678,6 +2831,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
+            dcc.Store(id="pf-table-row-cache", data=None),
             dcc.Store(id="pf-player-key", data=None),
             player_modal(prefix="pf"),
             html.H1("Profiles", className="mt-2 mb-3"),
@@ -3495,10 +3649,11 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Table: keep spinner on for initial hydrate / library rev rebuilds.
+# Table: spinner for hydrate / library / formation / XI / focus rebuilds
+# (sort & page-size stay quiet — usually fast).
 clientside_callback(
     """
-    function(rev, hydrated) {
+    function(rev, hydrated, formation, xiView, focus) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -3509,6 +3664,9 @@ clientside_callback(
     Output("pf-table-busy", "className"),
     Input("pf-rev", "data"),
     Input("pf-hydrated", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-xi-view", "data"),
+    Input("pf-focus-role", "data"),
     prevent_initial_call=True,
 )
 
@@ -3572,10 +3730,7 @@ clientside_callback(
     Output("pf-table-shell", "hidden"),
     Output("pf-select-all", "disabled"),
     Output("pf-delete-selected", "disabled"),
-    Output("pf-summary", "children"),
-    Output("pf-depth-wrap", "hidden"),
-    Output("pf-depth-chart-body", "children"),
-    Output("pf-depth-chart-wrap", "hidden"),
+    Output("pf-table-row-cache", "data"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
     Input("pf-xi-view", "data"),
@@ -3587,6 +3742,7 @@ clientside_callback(
     Input("theme", "data"),
     Input("pf-hydrated", "data"),
     State("pf-sort-memory", "data"),
+    State("pf-table-row-cache", "data"),
 )
 def refresh_profiles_table(
     _rev,
@@ -3600,16 +3756,13 @@ def refresh_profiles_table(
     theme,
     hydrated,
     sort_memory,
+    row_cache,
 ):
-    # Shell paints first; wait for hydrate tick before the heavy rebuild.
+    """Rebuild the profiles DataTable only (not squad depth / depth chart)."""
     if not hydrated:
-        return (no_update,) * 21
+        return (no_update,) * 18
 
     settings = us.normalize(settings)
-    xi_view = _normalize_xi_view(xi_view)
-    # Keep Ovr / category % in sync with adaptive metric ceilings — but only
-    # when library or percentile-related settings actually changed.
-    _ensure_profile_percentiles(settings)
     try:
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
@@ -3620,7 +3773,135 @@ def refresh_profiles_table(
         for item in (ctx.triggered or [])
         if item.get("prop_id")
     }
+    triggered_props = {
+        item.get("prop_id", "") for item in (ctx.triggered or []) if item.get("prop_id")
+    }
+    cache_blob = row_cache if isinstance(row_cache, dict) else {}
+    cached_rows = cache_blob.get("rows") or []
+    cached_tips = cache_blob.get("tips") or []
+    cached_mode = cache_blob.get("sort_mode") or "roles"
+
+    # Page-size only: pagination without rebuilding cells.
+    if triggered == {"pf-page-size"}:
+        return (
+            (no_update,) * 5
+            + (page_size_i, 0)
+            + (no_update,) * 11
+        )
+
+    # Pure header-sort: reorder cached full rows (keeps _rank_raw etc.).
+    if triggered_props == {"pf-table.sort_by"} and cached_rows:
+        formation_slots = _formation_slots(formation_id)
+        columns = _role_table_columns(
+            settings, include_slot=bool(formation_slots)
+        )
+        col_ids = {col["id"] for col in columns}
+        sort_in = list(sort_by) if sort_by else []
+        sort_by = _coerce_sort_by(
+            sort_in,
+            cached_mode,
+            col_ids,
+            triggered_id=ctx.triggered_id,
+            previous=sort_memory,
+            reset_default=False,
+        )
+        ordered = _sort_profile_rows(cached_rows, sort_by, mode=cached_mode)
+        ordered_tips = _reorder_tips_for_rows(cached_rows, cached_tips, ordered)
+        display_rows, display_tips = _display_from_cached_rows(
+            ordered,
+            ordered_tips,
+            settings=settings,
+            minutes_required=depth_minutes_f,
+        )
+        return (
+            no_update,
+            display_rows,
+            display_tips,
+            no_update,
+            no_update,
+            no_update,
+            0,
+            [],
+            [],
+            sort_by,
+            sort_by,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            _table_row_cache_blob(ordered, ordered_tips, cached_mode),
+        )
+
+    # Theme only: restyle + remint Role/Score colors from cache.
+    if triggered == {"theme"} and cached_rows:
+        style_data, style_header = _role_table_styles(theme, settings)
+        reminted = _remint_theme_rows(
+            cached_rows, settings=settings, theme=theme
+        )
+        display_rows, display_tips = _display_from_cached_rows(
+            reminted,
+            cached_tips,
+            settings=settings,
+            minutes_required=depth_minutes_f,
+        )
+        return (
+            no_update,
+            display_rows,
+            display_tips,
+            style_data,
+            style_header,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            _table_row_cache_blob(reminted, cached_tips, cached_mode),
+        )
+
+    # Minutes threshold only: recolor Mins cells from cached _minutes_raw.
+    if triggered == {"pf-depth-minutes-required"} and cached_rows:
+        display_rows, display_tips = _display_from_cached_rows(
+            cached_rows,
+            cached_tips,
+            settings=settings,
+            minutes_required=depth_minutes_f,
+        )
+        return (
+            no_update,
+            display_rows,
+            display_tips,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+
+    xi_view = _normalize_xi_view(xi_view)
+    # Keep Ovr / category % in sync with adaptive metric ceilings — but only
+    # when library or percentile-related settings actually changed.
+    _ensure_profile_percentiles(settings)
     reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
+    profile_cache = _PfProfileCache()
 
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
@@ -3633,17 +3914,21 @@ def refresh_profiles_table(
             settings=settings,
             theme=theme,
             xi_view=xi_view,
+            cache=profile_cache,
         )
         filtered = list(all_rows)
         sort_mode = "formation"
     elif formation_slots and focus:
-        slot_ordered = profiles.ordered_profiles_for_slot(
+        slot_ordered = profile_cache.ordered_for_slot(
             formation_id, focus.get("slot", -1), focus["role"]
         )
         slot_label = focus.get("label") or "—"
         _starters, multi_starters, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(
-                formation_id, formation_slots, xi_view=xi_view
+                formation_id,
+                formation_slots,
+                xi_view=xi_view,
+                cache=profile_cache,
             )
         )
         try:
@@ -3674,7 +3959,9 @@ def refresh_profiles_table(
         filtered = list(all_rows)
         sort_mode = "roles"
     else:
-        all_rows, tips = _build_role_table_rows(settings, theme=theme)
+        all_rows, tips = _build_role_table_rows(
+            settings, theme=theme, cache=profile_cache
+        )
         filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
         sort_mode = "roles"
     style_data, style_header = _role_table_styles(theme, settings)
@@ -3682,46 +3969,6 @@ def refresh_profiles_table(
         "No role profiles yet. Mark players on Role scores and save — "
         "one row per evaluated role, including overall percentiles when available."
     )
-    entries = profiles.list_role_profiles()
-    if formation_id and fm.exists(formation_id):
-        depth_cards = _profile_depth_panel(
-            entries,
-            focus_role,
-            formation_id=formation_id,
-            formation_slots=formation_slots,
-            settings=settings,
-            xi_view=xi_view,
-        )
-    elif fm.pack_options():
-        depth_cards = [
-            html.Div(
-                "Select a formation to build Squad depth.",
-                className="text-muted small",
-            )
-        ]
-    else:
-        depth_cards = [
-            html.Div(
-                "Save a formation on the Formations page to build Squad depth.",
-                className="text-muted small",
-            )
-        ]
-    depth_hidden = False
-    # Stable mount id per rev — a fresh uuid every refresh remounts the
-    # sortable depth list and can stack with sort_by echo into a React loop.
-    chart = _mount_depth_chart(
-        _build_depth_chart(
-            focus_roles=focus_role,
-            formation_id=formation_id,
-            formation_slots=formation_slots,
-            settings=settings,
-            theme=theme,
-            minutes_required=depth_minutes_f,
-            xi_view=xi_view,
-        ),
-        epoch=f"r{int(_rev or 0)}",
-    )
-    chart_hidden = not formation_slots and not focus
 
     col_ids = {col["id"] for col in columns}
     sort_in = list(sort_by) if sort_by else []
@@ -3736,8 +3983,7 @@ def refresh_profiles_table(
         reset_default=reset_sort,
     )
     # sort_by is both Input and Output. Echoing it on every pf-rev refresh
-    # re-fires this callback and remounts the depth chart until React hits
-    # "Maximum update depth exceeded".
+    # re-fires this callback into a loop.
     if reset_sort or ctx.triggered_id == "pf-table":
         sort_output = sort_by
     elif _sort_by_signature(sort_by) != _sort_by_signature(sort_in):
@@ -3745,23 +3991,14 @@ def refresh_profiles_table(
     else:
         sort_output = no_update
     filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
-
-    display_rows = []
-    for row in filtered:
-        clean = _strip_internal(row)
-        clean["Minutes"] = _minutes_cell(
-            row.get("_minutes_raw"), settings, minutes_required=depth_minutes_f
-        )
-        display_rows.append(clean)
-    display_tips = [
-        tips[all_rows.index(row)] for row in filtered if row in all_rows
-    ]
-    if len(display_tips) != len(display_rows):
-        tip_by_id = {
-            str(row.get("id") or ""): tips[idx]
-            for idx, row in enumerate(all_rows)
-        }
-        display_tips = [tip_by_id.get(str(row.get("id") or ""), {}) for row in filtered]
+    display_tips = _reorder_tips_for_rows(all_rows, tips, filtered)
+    display_rows, display_tips = _display_from_cached_rows(
+        filtered,
+        display_tips,
+        settings=settings,
+        minutes_required=depth_minutes_f,
+    )
+    row_cache_out = _table_row_cache_blob(filtered, display_tips, sort_mode)
 
     total = len(all_rows)
     shown = len(display_rows)
@@ -3790,10 +4027,7 @@ def refresh_profiles_table(
             True,
             True,
             True,
-            depth_cards,
-            depth_hidden,
-            chart,
-            chart_hidden,
+            _table_row_cache_blob([], [], sort_mode),
         )
     if no_matches:
         return (
@@ -3817,10 +4051,7 @@ def refresh_profiles_table(
             True,
             True,
             True,
-            depth_cards,
-            depth_hidden,
-            chart,
-            chart_hidden,
+            row_cache_out,
         )
     return (
         columns,
@@ -3840,11 +4071,116 @@ def refresh_profiles_table(
         False,
         False,
         True,
-        depth_cards,
-        depth_hidden,
-        chart,
-        chart_hidden,
+        row_cache_out,
     )
+
+
+@callback(
+    Output("pf-summary", "children"),
+    Output("pf-depth-wrap", "hidden"),
+    Input("pf-rev", "data"),
+    Input("pf-formation-select", "value"),
+    Input("ui-settings", "data"),
+    Input("pf-hydrated", "data"),
+    # Focus active-state is clientside; XI conflicts belong on the depth chart.
+    State("pf-focus-role", "data"),
+    State("pf-xi-view", "data"),
+)
+def refresh_profiles_squad_depth(
+    _rev,
+    formation_id,
+    settings,
+    hydrated,
+    focus_role,
+    xi_view,
+):
+    """Rebuild Squad depth cards (formation / library / settings only)."""
+    if not hydrated:
+        return no_update, no_update
+
+    settings = us.normalize(settings)
+    _ensure_profile_percentiles(settings)
+    xi_view = _normalize_xi_view(xi_view)
+    formation_slots = _formation_slots(formation_id)
+    profile_cache = _PfProfileCache()
+    entries = profile_cache.list_role_profiles()
+    if formation_id and fm.exists(formation_id):
+        depth_cards = _profile_depth_panel(
+            entries,
+            focus_role,
+            formation_id=formation_id,
+            formation_slots=formation_slots,
+            settings=settings,
+            xi_view=xi_view,
+            cache=profile_cache,
+        )
+    elif fm.pack_options():
+        depth_cards = [
+            html.Div(
+                "Select a formation to build Squad depth.",
+                className="text-muted small",
+            )
+        ]
+    else:
+        depth_cards = [
+            html.Div(
+                "Save a formation on the Formations page to build Squad depth.",
+                className="text-muted small",
+            )
+        ]
+    return depth_cards, False
+
+
+@callback(
+    Output("pf-depth-chart-body", "children"),
+    Output("pf-depth-chart-wrap", "hidden"),
+    Input("pf-rev", "data"),
+    Input("pf-focus-role", "data"),
+    Input("pf-xi-view", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-depth-minutes-required", "value"),
+    Input("ui-settings", "data"),
+    Input("theme", "data"),
+    Input("pf-hydrated", "data"),
+)
+def refresh_profiles_depth_chart(
+    _rev,
+    focus_role,
+    xi_view,
+    formation_id,
+    depth_minutes_required,
+    settings,
+    theme,
+    hydrated,
+):
+    """Rebuild the depth chart (XI / focus / minutes / formation / library)."""
+    if not hydrated:
+        return no_update, no_update
+
+    settings = us.normalize(settings)
+    _ensure_profile_percentiles(settings)
+    xi_view = _normalize_xi_view(xi_view)
+    depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
+    formation_slots = _formation_slots(formation_id)
+    focus = _focus_slot(focus_role)
+    profile_cache = _PfProfileCache()
+    # Stable mount id per rev — a fresh uuid every refresh remounts the
+    # sortable depth list and can stack with sort_by echo into a React loop.
+    chart = _mount_depth_chart(
+        _build_depth_chart(
+            focus_roles=focus_role,
+            formation_id=formation_id,
+            formation_slots=formation_slots,
+            settings=settings,
+            theme=theme,
+            minutes_required=depth_minutes_f,
+            xi_view=xi_view,
+            cache=profile_cache,
+        ),
+        epoch=f"r{int(_rev or 0)}",
+    )
+    chart_hidden = not formation_slots and not focus
+    return chart, chart_hidden
 
 
 clientside_callback(
@@ -4042,6 +4378,7 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, setti
     Output("pf-table", "data", allow_duplicate=True),
     Output("pf-table", "tooltip_data", allow_duplicate=True),
     Output("pf-summary", "children", allow_duplicate=True),
+    Output("pf-table-row-cache", "data", allow_duplicate=True),
     Output("pf-depth-order", "data"),
     Input("pf-depth-order", "data"),
     State("pf-formation-select", "value"),
@@ -4071,7 +4408,7 @@ def apply_depth_chart_drag(
     reorder (the main source of snap-back / inconsistent drag).
     """
     if not isinstance(order, dict):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     # Drop stale publishes that fired after Auto-rank remounted the list.
     try:
         guard = float(order_guard or 0)
@@ -4079,7 +4416,7 @@ def apply_depth_chart_drag(
     except (TypeError, ValueError):
         guard, ts = 0.0, 0.0
     if guard and ts and ts < guard:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     role = str(order.get("role") or "").strip()
     formation_id = str(order.get("formation") or formation_id or "").strip()
     ids = [
@@ -4088,7 +4425,7 @@ def apply_depth_chart_drag(
         if str(pid or "").strip()
     ]
     if not role or not ids:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     slot_raw = order.get("slot")
     if formation_id and slot_raw is not None and str(slot_raw).strip() != "":
         try:
@@ -4109,17 +4446,21 @@ def apply_depth_chart_drag(
     depth_minutes_f = _resolve_minutes_required(depth_minutes, settings)
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
+    profile_cache = _PfProfileCache()
     tips: list[dict] = []
     rows: list[dict] = []
 
     if formation_slots and focus:
-        slot_ordered = profiles.ordered_profiles_for_slot(
+        slot_ordered = profile_cache.ordered_for_slot(
             formation_id, focus.get("slot", -1), focus["role"]
         )
         slot_label = focus.get("label") or "—"
         _starters, multi_starters, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(
-                formation_id, formation_slots, xi_view=xi_view
+                formation_id,
+                formation_slots,
+                xi_view=xi_view,
+                cache=profile_cache,
             )
         )
         try:
@@ -4155,39 +4496,38 @@ def apply_depth_chart_drag(
             settings=settings,
             theme=theme,
             xi_view=xi_view,
+            cache=profile_cache,
         )
         sort_mode = "formation"
         filtered = list(rows)
     else:
-        rows, tips = _build_role_table_rows(settings=settings, theme=theme)
+        rows, tips = _build_role_table_rows(
+            settings=settings, theme=theme, cache=profile_cache
+        )
         filtered = _filter_role_rows(rows, focus_roles=focus_role)
         sort_mode = "roles"
 
     filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
-
-    display_rows = []
-    for row in filtered:
-        clean = _strip_internal(row)
-        clean["Minutes"] = _minutes_cell(
-            row.get("_minutes_raw"), settings, minutes_required=depth_minutes_f
-        )
-        display_rows.append(clean)
-    tip_by_id = {
-        str(row.get("id") or ""): tip
-        for row, tip in zip(rows, tips)
-    }
-    display_tips = [tip_by_id.get(str(row.get("id") or ""), {}) for row in filtered]
+    display_tips = _reorder_tips_for_rows(rows, tips, filtered)
+    display_rows, display_tips = _display_from_cached_rows(
+        filtered,
+        display_tips,
+        settings=settings,
+        minutes_required=depth_minutes_f,
+    )
+    row_cache_out = _table_row_cache_blob(filtered, display_tips, sort_mode)
 
     depth_cards = _profile_depth_panel(
-        profiles.list_role_profiles(),
+        profile_cache.list_role_profiles(),
         focus_role,
         formation_id=formation_id,
         formation_slots=formation_slots,
         settings=settings,
         xi_view=xi_view,
+        cache=profile_cache,
     )
     # Leave chart DOM alone — it already matches the saved order.
-    return display_rows, display_tips, depth_cards, no_update
+    return display_rows, display_tips, depth_cards, row_cache_out, no_update
 
 
 @callback(
@@ -4223,6 +4563,7 @@ def auto_rank_depth_role(
         profiles.auto_rank_role_by_score(role)
     formation_slots = _formation_slots(formation_id)
     next_rev = int(rev or 0) + 1
+    profile_cache = _PfProfileCache()
     chart = _mount_depth_chart(
         _build_depth_chart(
             focus_roles=focus_role,
@@ -4232,6 +4573,7 @@ def auto_rank_depth_role(
             theme=theme,
             minutes_required=depth_minutes,
             xi_view=xi_view,
+            cache=profile_cache,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -4276,6 +4618,7 @@ def auto_rank_depth_all(
             theme=theme,
             minutes_required=depth_minutes,
             xi_view=xi_view,
+            cache=_PfProfileCache(),
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )

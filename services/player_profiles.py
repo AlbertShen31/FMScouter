@@ -452,13 +452,20 @@ def ordered_profiles_for_slot(
     formation_id: str | None,
     slot_index: int | str,
     role_column: str,
+    *,
+    entries: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Profiles for one formation slot in that slot’s depth order."""
+    """Profiles for one formation slot in that slot’s depth order.
+
+    Pass ``entries`` to reuse a preloaded role-profile list (avoids re-reading
+    the library index when many slots are resolved in one request).
+    """
     role = str(role_column or "").strip()
     ids = get_slot_order_ids(formation_id, slot_index, role, seed=True)
+    source = entries if entries is not None else list_role_profiles()
     by_id = {
         str(entry.get("id") or ""): entry
-        for entry in list_role_profiles()
+        for entry in source
         if _entry_role(entry) == role
     }
     return [by_id[pid] for pid in ids if pid in by_id]
@@ -1885,15 +1892,20 @@ def _score_name_sort_key(entry: dict[str, Any]) -> tuple:
     )
 
 
-def ordered_profiles_for_role(role_column: str) -> list[dict[str, Any]]:
+def ordered_profiles_for_role(
+    role_column: str,
+    *,
+    entries: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Ranked profiles first (by depth_rank), then unranked by Score desc."""
     role = str(role_column or "").strip()
     if not role:
         return []
-    entries = [entry for entry in list_role_profiles() if _entry_role(entry) == role]
+    source = entries if entries is not None else list_role_profiles()
+    role_entries = [entry for entry in source if _entry_role(entry) == role]
     ranked: list[tuple[int, dict[str, Any]]] = []
     unranked: list[dict[str, Any]] = []
-    for entry in entries:
+    for entry in role_entries:
         rank = _parse_depth_rank(entry)
         if rank is None:
             unranked.append(entry)
