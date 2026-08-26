@@ -230,6 +230,21 @@ overall_avg = mean(category averages with data)
                                     ),
                                 ),
                                 _subsection(
+                                    "League stat availability",
+                                    _para(
+                                        "Some FM leagues do not collect advanced match stats in Moneyball "
+                                        "exports. Those columns are written as 0 rather than left blank. "
+                                        "FMScouter detects this pattern (basic stats present, advanced "
+                                        "probes all zero) and marks the affected metrics as Not tracked."
+                                    ),
+                                    _para(
+                                        "Unavailable metrics are excluded from category and overall "
+                                        "averages. Universal metrics—available in every league that "
+                                        "supplies match stats—are listed in "
+                                        "config/stats_availability.json.",
+                                    ),
+                                ),
+                                _subsection(
                                     "Minutes filter",
                                     _formula(
                                         """

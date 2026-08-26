@@ -4353,6 +4353,34 @@ body[data-theme="light"] .st-player-seg-btn {
     margin: 0 0 0.45rem;
 }
 
+.st-percentile-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.45rem;
+}
+
+.st-limited-tracking-note {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    padding: 0.45rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--app-line) 80%, transparent);
+    background: color-mix(in srgb, var(--app-card) 92%, var(--app-accent) 8%);
+}
+
+.st-metric-nodata.is-unavailable {
+    font-style: italic;
+}
+
+#st-table .dash-spreadsheet-inner td .st-pct-cell.is-unavailable,
+.st-pct-cell.is-unavailable {
+    color: var(--app-muted);
+    font-style: italic;
+    font-weight: 600;
+}
+
 .pf-percentile-phase-tag {
     color: var(--app-muted);
     font-size: 0.75rem;

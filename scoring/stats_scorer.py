@@ -677,6 +677,10 @@ def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
 
     for alias in aliases:
         val = parse_number(pick(row, [alias]))
+        if val is not None and val != 0:
+            return val
+    for alias in aliases:
+        val = parse_number(pick(row, [alias]))
         if val is not None:
             return val
     return None
@@ -735,6 +739,15 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 value = _pick_metric_raw(row, metric_id)
                 if value is not None:
                     stats[metric_id] = value
+        player_payload: dict[str, Any] = {
+            "minutes": minutes,
+            "pos_group": group,
+            "stats": stats,
+        }
+        from scoring.stats_availability import apply_limited_tracking
+
+        apply_limited_tracking(player_payload, row)
+        stats = player_payload["stats"]
         # Combined Moneyball exports include full attribute sheets; keep only
         # Determination / Leadership for the personality estimate (session size).
         all_attrs = extract_attrs(row)
@@ -793,6 +806,8 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "pos_group": group,
                 "pos_cards": player_pos_groups(positions),
                 "stats": stats,
+                "stats_limited_tracking": player_payload.get("stats_limited_tracking", False),
+                "stats_unavailable": list(player_payload.get("stats_unavailable") or []),
                 "attrs": attrs,
                 "positions": positions,
                 "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),

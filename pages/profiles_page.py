@@ -3977,20 +3977,19 @@ def _resolve_stats_player_for_profile(
     file_id = str(profile.get("file_id") or "").strip()
     stat_players = profiles.load_stats_players_for_file(file_id) if file_id else None
 
+    name = (player.get("name") or "").strip()
+    club = (player.get("club") or "").strip()
+    target_key = stats_player_key({"name": name, "club": club}) if name else ""
+
+    if stat_players and target_key:
+        for sp in stat_players:
+            if stats_player_key(sp) == target_key:
+                return sp, stat_players
+
     embedded = profile.get("stats_player")
     if isinstance(embedded, dict) and embedded.get("stats"):
         return embedded, stat_players
 
-    if not stat_players:
-        return None, None
-    name = (player.get("name") or "").strip()
-    club = (player.get("club") or "").strip()
-    target_key = stats_player_key({"name": name, "club": club})
-    if not target_key:
-        return None, stat_players
-    for sp in stat_players:
-        if stats_player_key(sp) == target_key:
-            return sp, stat_players
     return None, stat_players
 
 

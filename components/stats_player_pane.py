@@ -14,6 +14,11 @@ from scoring.stats_scorer import (
     percentile_color,
     scoring_stats,
 )
+from scoring.stats_availability import (
+    LIMITED_TRACKING_NOTE,
+    has_limited_tracking,
+    metric_is_unavailable,
+)
 
 EVAL_GROUPS = tuple((key, label) for key, label, _css in POS_GROUPS if key != "all")
 EVAL_GROUPS_GK = tuple((key, label) for key, label in EVAL_GROUPS if key == "gk")
@@ -40,6 +45,50 @@ def _normalize_eval_group(
     return g if g in allowed else default
 
 
+def _metric_entry(
+    player: dict,
+    eval_group: str,
+    cat_id: str,
+    mid: str,
+    *,
+    threshold_overrides=None,
+    metric_p100=None,
+    metric_p0=None,
+) -> dict:
+    meta = metric_defs()[mid]
+    if metric_is_unavailable(player, mid):
+        return {
+            "id": mid,
+            "label": meta["label"],
+            "abbr": meta["abbr"],
+            "display": "Not tracked",
+            "percentile": None,
+            "color": None,
+            "missing": True,
+            "unavailable": True,
+        }
+    stats = scoring_stats(player)
+    band = band_metric(
+        eval_group,
+        cat_id,
+        mid,
+        stats.get(mid),
+        threshold_overrides=threshold_overrides,
+        metric_p100=metric_p100,
+        metric_p0=metric_p0,
+    )
+    return {
+        "id": mid,
+        "label": meta["label"],
+        "abbr": meta["abbr"],
+        "display": band["display"],
+        "percentile": band.get("percentile"),
+        "color": band.get("color"),
+        "missing": band.get("percentile") is None,
+        "unavailable": False,
+    }
+
+
 def _player_metric_sections(
     player: dict,
     eval_group: str | None = None,
@@ -54,33 +103,22 @@ def _player_metric_sections(
     g = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
-    stats = scoring_stats(player)
     sections = []
     for cat in categories_for_group(g):
         metrics = []
         for mid in metrics_for(g, cat["id"], threshold_overrides):
             if mid in skip_metrics:
                 continue
-            band = band_metric(
-                g,
-                cat["id"],
-                mid,
-                stats.get(mid),
-                threshold_overrides=threshold_overrides,
-                metric_p100=metric_p100,
-        metric_p0=metric_p0,
-            )
-            meta = metric_defs()[mid]
             metrics.append(
-                {
-                    "id": mid,
-                    "label": meta["label"],
-                    "abbr": meta["abbr"],
-                    "display": band["display"],
-                    "percentile": band.get("percentile"),
-                    "color": band.get("color"),
-                    "missing": band.get("percentile") is None,
-                }
+                _metric_entry(
+                    player,
+                    g,
+                    cat["id"],
+                    mid,
+                    threshold_overrides=threshold_overrides,
+                    metric_p100=metric_p100,
+                    metric_p0=metric_p0,
+                )
             )
         pcts = [
             float(m["percentile"])
@@ -158,15 +196,24 @@ def _group_switcher(active: str, player: dict | None = None) -> html.Div:
         id_type="st-player-group",
     )
 
+def _missing_metric_label(metric: dict) -> str:
+    return "Not tracked" if metric.get("unavailable") else "No data"
+
+
 def _metrics_values(sections: list[dict]) -> list:
     blocks = []
     for cat in sections:
         items = []
         for metric in cat["metrics"]:
             if metric["missing"]:
+                nodata_label = _missing_metric_label(metric)
                 value = html.Div(
                     [
-                        html.Span("No data", className="rs-player-id-value st-metric-nodata"),
+                        html.Span(
+                            nodata_label,
+                            className="rs-player-id-value st-metric-nodata"
+                            + (" is-unavailable" if metric.get("unavailable") else ""),
+                        ),
                         html.Span("—", className="st-metric-pct is-missing"),
                     ],
                     className="st-metric-value-row",
@@ -255,7 +302,7 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
         if metric["missing"]:
             pcts.append(0)
             colors.append("rgba(148, 163, 184, 0.35)")
-            texts.append("No data")
+            texts.append(_missing_metric_label(metric))
         else:
             pcts.append(float(metric["percentile"]))
             colors.append(metric["color"] or "rgb(64, 220, 120)")
@@ -343,7 +390,7 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
         if metric["missing"]:
             radius.append(5.0)
             colors.append(missing_fill)
-            custom.append(f"{metric['abbr']} · No data")
+            custom.append(f"{metric['abbr']} · {_missing_metric_label(metric)}")
         else:
             pct = float(metric["percentile"])
             radius.append(_pizza_radius(pct))
@@ -422,7 +469,7 @@ def _pizza_infobox(metrics: list[dict]) -> html.Div:
     for metric in metrics:
         swatch = metric["color"] or "rgba(148, 163, 184, 0.35)"
         if metric["missing"]:
-            value = "No data"
+            value = _missing_metric_label(metric)
             pct = "—"
         else:
             value = metric["display"]
@@ -570,18 +617,34 @@ def _overall_avg_banner(sections: list[dict], *, phase_label: str | None = None)
     return html.Div(children, className="st-overall-avg")
 
 
-def _percentile_phase_note(eval_group: str) -> html.Div:
+def _limited_tracking_note(player: dict | None) -> html.Div | None:
+    if not has_limited_tracking(player):
+        return None
+    return html.Div(
+        LIMITED_TRACKING_NOTE,
+        className="st-limited-tracking-note",
+        title=LIMITED_TRACKING_NOTE,
+    )
+
+
+def _percentile_phase_note(eval_group: str, player: dict | None = None) -> html.Div:
     from scoring.stats_scorer import pos_group_label
 
     label = pos_group_label(eval_group)
-    return html.Div(
-        f"Percentiles vs {label}",
-        className="pf-percentile-phase-note",
-        title=(
-            f"Overall and category percentiles use {label} benchmark thresholds "
-            "and adaptive 0th/100th bounds from that phase cohort in the loaded file."
-        ),
-    )
+    children = [
+        html.Div(
+            f"Percentiles vs {label}",
+            className="pf-percentile-phase-note",
+            title=(
+                f"Overall and category percentiles use {label} benchmark thresholds "
+                "and adaptive 0th/100th bounds from that phase cohort in the loaded file."
+            ),
+        )
+    ]
+    limited = _limited_tracking_note(player)
+    if limited is not None:
+        children.append(limited)
+    return html.Div(children, className="st-percentile-notes")
 
 
 def _player_modal_body(
@@ -643,6 +706,11 @@ def _player_modal_body(
                 className="st-player-switch-block",
             ),
             _overall_avg_banner(sections, phase_label=pos_group_label(eval_group)),
+            *(
+                [note]
+                if (note := _limited_tracking_note(player)) is not None
+                else []
+            ),
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
@@ -715,9 +783,10 @@ def stats_charts_bottom_pane(
     from scoring.stats_scorer import pos_group_label
 
     phase_label = pos_group_label(eval_group)
+    note_children = [_percentile_phase_note(eval_group, player)]
     return html.Div(
         [
-            _percentile_phase_note(eval_group),
+            *note_children,
             _overall_avg_banner(sections, phase_label=phase_label),
             html.Div(metrics, className="st-player-metrics"),
         ],

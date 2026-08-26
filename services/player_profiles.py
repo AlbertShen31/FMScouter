@@ -572,6 +572,7 @@ def build_stats_row_snapshot(
     group = resolve_player_pos_group(player)
     out["percentile_phase"] = group
     out["percentile_phase_label"] = pos_group_label(group)
+    out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
     thresh = settings.get("stats_thresholds")
     if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
         auto_p0, auto_p100 = adaptive_metric_bound_maps(cohort_players, thresh)
@@ -811,11 +812,6 @@ def refresh_profile_percentiles(settings=None) -> int:
         entry: dict[str, Any],
         cohort: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
-        embedded = entry.get("stats_player")
-        if isinstance(embedded, dict) and (
-            embedded.get("stats") is not None or embedded.get("pos_group")
-        ):
-            return embedded
         by_key = {
             stats_player_key(player): player
             for player in cohort
@@ -824,6 +820,11 @@ def refresh_profile_percentiles(settings=None) -> int:
         hit = by_key.get(str(entry.get("player_key") or "").strip())
         if isinstance(hit, dict):
             return hit
+        embedded = entry.get("stats_player")
+        if isinstance(embedded, dict) and (
+            embedded.get("stats") is not None or embedded.get("pos_group")
+        ):
+            return embedded
         return None
 
     def _apply(
@@ -858,7 +859,8 @@ def refresh_profile_percentiles(settings=None) -> int:
                 next_row[key] = value
                 changed = True
         if not changed:
-            return False
+            entry["stats_player"] = band_player
+            return True
         entry["row"] = next_row
         entry["stats_player"] = band_player
         return True
