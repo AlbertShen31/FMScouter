@@ -20,7 +20,7 @@ import services.export_library as lib
 import services.role_config as rc
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v5"
+FORMULA_VERSION = "v9"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -108,12 +108,19 @@ def is_fresh(cache: dict[str, Any] | None, sig: dict[str, Any] | None = None) ->
     return stored == current and bool(cache.get("role_scores") or cache.get("stats"))
 
 
-def _patch_index_cache(file_id: str, cache_meta: dict[str, Any]) -> None:
+def _patch_index_cache(
+    file_id: str,
+    cache_meta: dict[str, Any],
+    *,
+    limited_tracking_divisions: list[str] | None = None,
+) -> None:
     index = lib._read_index()
     changed = False
     for entry in index:
         if entry.get("id") == file_id:
             entry["cache"] = cache_meta
+            if limited_tracking_divisions is not None:
+                entry["limited_tracking_divisions"] = list(limited_tracking_divisions)
             changed = True
             break
     if changed:
@@ -320,8 +327,7 @@ def compute_file(file_id: str) -> dict[str, Any]:
     """Parse + score eligible pages for one saved upload; write gzip cache."""
     import config.role_weights.fm26_role_weight_config as pc
     import services.ui_settings as us
-    from scoring.role_scorer import parse_export, score_players
-    from scoring.stats_scorer import parse_stats_export
+    from scoring.stats_scorer import parse_stats_export_with_meta
 
     text, entry = lib.read_text(file_id)
     sig = current_signature()
@@ -338,6 +344,8 @@ def compute_file(file_id: str) -> dict[str, Any]:
 
     if entry.get("role_scores"):
         try:
+            from scoring.role_scorer import parse_export, score_players
+
             rc.load_pack(sig["role_pack_id"], persist=False)
             players = parse_export(text)
             role_ids = list(pc.all_positions.keys())
@@ -360,17 +368,21 @@ def compute_file(file_id: str) -> dict[str, Any]:
 
     if entry.get("stats"):
         try:
-            players = parse_stats_export(text)
+            players, limited_divisions = parse_stats_export_with_meta(text)
             tree = stp.load_tree(sig.get("stats_pack_id"))
             percentiles = _precompute_stats_percentiles(players, tree)
             payload["stats"] = {
                 "players": players,
                 "percentiles": percentiles,
                 "n_players": len(players),
+                "limited_tracking_divisions": limited_divisions,
             }
+            payload["limited_tracking_divisions"] = limited_divisions
         except Exception as exc:
             errors.append(f"stats: {exc}")
             traceback.print_exc()
+
+    limited_divisions = list(payload.get("limited_tracking_divisions") or [])
 
     if not payload["role_scores"] and not payload["stats"]:
         meta = {
@@ -380,8 +392,11 @@ def compute_file(file_id: str) -> dict[str, Any]:
             "error": "; ".join(errors) or "Nothing to compute",
             "role_scores": False,
             "stats": False,
+            "limited_tracking_divisions": limited_divisions,
         }
-        _patch_index_cache(file_id, meta)
+        _patch_index_cache(
+            file_id, meta, limited_tracking_divisions=limited_divisions
+        )
         raise ValueError(meta["error"])
 
     _write_cache(file_id, payload)
@@ -392,8 +407,11 @@ def compute_file(file_id: str) -> dict[str, Any]:
         "role_scores": bool(payload["role_scores"]),
         "stats": bool(payload["stats"]),
         "error": "; ".join(errors) if errors else "",
+        "limited_tracking_divisions": limited_divisions,
     }
-    _patch_index_cache(file_id, meta)
+    _patch_index_cache(
+        file_id, meta, limited_tracking_divisions=limited_divisions
+    )
     return payload
 
 

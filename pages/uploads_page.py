@@ -66,6 +66,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
             html.Th("Player stats"),
             html.Th("Squad finance"),
             html.Th("Precompute"),
+            html.Th("Limited leagues"),
             html.Th("Note"),
             html.Th(""),
         ]
@@ -76,6 +77,11 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         label = lib.display_label(entry)
         original = entry.get("original_name") or ""
         user_note = (entry.get("user_note") or "").strip()
+        limited = [
+            str(x).strip()
+            for x in (entry.get("limited_tracking_divisions") or [])
+            if str(x).strip()
+        ]
         elig = entry.get("eligibility_notes") or []
         if isinstance(elig, str):
             elig = [elig] if elig else []
@@ -88,6 +94,14 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
             )
         if not note_bits:
             note_bits = [html.Span("—", className="text-muted")]
+        if limited:
+            limited_cell = html.Span(
+                f"{len(limited)}",
+                className="up-limited-count",
+                title="Incomplete advanced match stats: " + ", ".join(limited),
+            )
+        else:
+            limited_cell = html.Span("—", className="text-muted")
         title = original if original and original != label else entry.get("stored_name") or ""
         rows.append(
             html.Tr(
@@ -109,6 +123,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
                     html.Td(_yes_no(bool(entry.get("stats")))),
                     html.Td(_yes_no(bool(entry.get("squad_finance")))),
                     html.Td(_cache_status_cell(entry)),
+                    html.Td(limited_cell),
                     html.Td(note_bits, className="up-notes"),
                     html.Td(
                         html.Div(
@@ -340,9 +355,11 @@ def layout(**_kwargs):
                                         "for Role scores; stats markers for Player stats; "
                                         "Salary and match fees for Squad finance. Upload "
                                         "precomputes all role scores and stats percentiles "
-                                        "using current Settings / role packs. If you change "
-                                        "those settings, click Compute to refresh. Pages then "
-                                        "load from the cache instead of rescoring.",
+                                        "using current Settings / role packs, and records "
+                                        "leagues with incomplete advanced match stats "
+                                        "(shown striped on Player stats / Profiles). If you "
+                                        "change those settings, click Compute to refresh. "
+                                        "Pages then load from the cache instead of rescoring.",
                                         className="text-muted small mb-3",
                                     ),
                                     html.Div(

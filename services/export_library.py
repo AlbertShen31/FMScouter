@@ -329,6 +329,35 @@ def delete_file(file_id: str) -> bool:
     return True
 
 
+def list_limited_tracking_divisions(
+    *,
+    file_id: str | None = None,
+) -> list[str]:
+    """Limited-stat leagues recorded on upload(s).
+
+    When ``file_id`` is set, return that file's list. Otherwise union across the
+    whole library (used by Profiles when snapshots span multiple exports).
+    """
+    if file_id:
+        entry = get_file(file_id)
+        if not entry:
+            return []
+        raw = entry.get("limited_tracking_divisions") or []
+        if isinstance(raw, list):
+            return sorted({str(x).strip() for x in raw if str(x).strip()})
+        return []
+    found: set[str] = set()
+    for entry in list_files():
+        raw = entry.get("limited_tracking_divisions") or []
+        if not isinstance(raw, list):
+            continue
+        for name in raw:
+            text = str(name).strip()
+            if text and text not in ("-", "—"):
+                found.add(text)
+    return sorted(found)
+
+
 def select_options(
     *,
     page: str | None = None,

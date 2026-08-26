@@ -22,6 +22,7 @@ import dash_mantine_components as dmc
 
 from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division
+import services.export_library as lib
 from components.player_filters import help_icon, player_filters, player_filters_host
 from components.player_modal import player_detail_body, player_modal
 from components.stats_player_pane import (
@@ -681,9 +682,15 @@ def _table_columns(
     return cols
 
 
-def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
+def _identity_cells(
+    player: dict,
+    identity_cols: list[str],
+    *,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> dict:
     """Build shortlist identity cells for one stats player row."""
     from scoring.division_tiers import apply_division_tier
+    from components.player_table import apply_division_limited_flag
 
     left = player.get("left_foot") or ""
     right = player.get("right_foot") or ""
@@ -714,6 +721,7 @@ def _identity_cells(player: dict, identity_cols: list[str]) -> dict:
         row["Left Foot"] = left
         row["Right Foot"] = right
     apply_division_tier(row)
+    apply_division_limited_flag(row, limited_divisions)
     from scoring.personality_tiers import apply_personality_tier
 
     apply_personality_tier(row)
@@ -829,6 +837,7 @@ def _build_rows(
     hist_percentiles: dict[str, dict[str, float | None]] | None = None,
     metric_p100=None,
     metric_p0=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -837,6 +846,7 @@ def _build_rows(
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
     )
     avg_cats = _avg_category_columns(g) if cat == "all" else []
+    limited = set(limited_divisions or [])
     rows = []
     hist_percentiles = hist_percentiles or {}
     for p in players:
@@ -845,7 +855,7 @@ def _build_rows(
         status = minutes_status(p.get("minutes"), minutes_required)
         mins = p.get("minutes")
         mins_text = "—" if mins is None else f"{mins:.0f}"
-        row = _identity_cells(p, identity_cols)
+        row = _identity_cells(p, identity_cols, limited_divisions=limited)
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
         row["_key"] = pkey
@@ -1239,7 +1249,9 @@ def layout(**_kwargs):
                                                                 "(top tier + lower pro), or top "
                                                                 "tier alone. Division cells: "
                                                                 "green = top, yellow = pro, "
-                                                                "red = semi-pro / amateur.",
+                                                                "red = semi-pro / amateur; "
+                                                                "striped = incomplete advanced "
+                                                                "match stats in FM.",
                                                                 "st-help-division",
                                                             ),
                                                         ],
@@ -1456,6 +1468,20 @@ def refresh_table(
     sort_memory,
 ):
     players = _parsed_players(parsed)
+    store = _unpack_parsed(parsed) or {}
+    file_id = str(store.get("file_id") or "").strip()
+    limited_divisions = lib.list_limited_tracking_divisions(
+        file_id=file_id or None
+    )
+    if not limited_divisions and players:
+        limited_divisions = sorted(
+            {
+                str(p.get("division") or "").strip()
+                for p in players
+                if p.get("stats_unavailable")
+                and str(p.get("division") or "").strip() not in ("", "-", "—")
+            }
+        )
     pos = pos or "all"
     settings = us.normalize(settings)
     minutes_required = float(
@@ -1505,6 +1531,7 @@ def refresh_table(
         hist_percentiles=hist_percentiles,
         metric_p100=metric_p100,
         metric_p0=metric_p0,
+        limited_divisions=limited_divisions,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
@@ -1528,6 +1555,7 @@ def refresh_table(
     for row in rows:
         item = {col: row.get(col, "—") for col in col_ids}
         item["DivisionTier"] = row.get("DivisionTier") or ""
+        item["DivisionLimited"] = row.get("DivisionLimited") or "no"
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         key = str(row.get("_key") or "").strip()
         if key:

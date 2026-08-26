@@ -39,7 +39,10 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Best Pos": "Best position",
     "Inf": "Information / status",
     "Injury": "Injury",
-    "Division": "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur",
+    "Division": (
+        "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur. "
+        "Striped = league with incomplete advanced match stats in FM."
+    ),
 }
 
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
@@ -666,16 +669,54 @@ def identity_data_styles(
 
 
 def division_highlight_styles(theme: str | None = None) -> list[dict]:
-    """Color Division: top (green), pro (yellow), semi-pro/amateur (red)."""
+    """Color Division: top (green), pro (yellow), semi-pro/amateur (red).
+
+    Leagues with incomplete FM match-stat tracking (``DivisionLimited`` = yes)
+    use a striped background instead of a solid tint.
+    """
     from scoring.division_tiers import division_tier_colors
 
     colors = division_tier_colors(theme)
+    dark = is_dark_theme(theme)
+    stripe = {
+        "top": (
+            "repeating-linear-gradient(135deg, rgba(74, 222, 128, 0.22) 0 2px, "
+            "transparent 2px 9px)"
+            if dark
+            else "repeating-linear-gradient(135deg, rgba(22, 163, 74, 0.14) 0 2px, "
+            "transparent 2px 9px)"
+        ),
+        "pro": (
+            "repeating-linear-gradient(135deg, rgba(251, 191, 36, 0.22) 0 2px, "
+            "transparent 2px 9px)"
+            if dark
+            else "repeating-linear-gradient(135deg, rgba(180, 83, 9, 0.12) 0 2px, "
+            "transparent 2px 9px)"
+        ),
+        "amateur": (
+            "repeating-linear-gradient(135deg, rgba(248, 113, 113, 0.22) 0 2px, "
+            "transparent 2px 9px)"
+            if dark
+            else "repeating-linear-gradient(135deg, rgba(185, 28, 28, 0.12) 0 2px, "
+            "transparent 2px 9px)"
+        ),
+    }
+    unknown_stripe = (
+        "repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.18) 0 2px, "
+        "transparent 2px 9px)"
+        if dark
+        else "repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.12) 0 2px, "
+        "transparent 2px 9px)"
+    )
     rules = []
     for tier, (bg, fg) in colors.items():
         rules.append(
             {
                 "if": {
-                    "filter_query": f'{{DivisionTier}} = "{tier}"',
+                    "filter_query": (
+                        f'{{DivisionTier}} = "{tier}" && '
+                        '{DivisionLimited} != "yes"'
+                    ),
                     "column_id": "Division",
                 },
                 "backgroundColor": bg,
@@ -684,7 +725,59 @@ def division_highlight_styles(theme: str | None = None) -> list[dict]:
                 "borderRadius": "6px",
             }
         )
+        rules.append(
+            {
+                "if": {
+                    "filter_query": (
+                        f'{{DivisionTier}} = "{tier}" && '
+                        '{DivisionLimited} = "yes"'
+                    ),
+                    "column_id": "Division",
+                },
+                "backgroundColor": bg,
+                "backgroundImage": stripe[tier],
+                "color": fg,
+                "fontWeight": "700",
+                "borderRadius": "6px",
+            }
+        )
+    rules.append(
+        {
+            "if": {
+                "filter_query": (
+                    '{DivisionLimited} = "yes" && '
+                    '{DivisionTier} = ""'
+                ),
+                "column_id": "Division",
+            },
+            "backgroundColor": (
+                "rgba(148, 163, 184, 0.16)" if dark else "#e2e8f0"
+            ),
+            "backgroundImage": unknown_stripe,
+            "color": "#94a3b8" if dark else "#475569",
+            "fontWeight": "700",
+            "borderRadius": "6px",
+        }
+    )
     return rules
+
+
+def apply_division_limited_flag(
+    row: dict,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None,
+) -> None:
+    """Set ``DivisionLimited`` for striped league highlighting."""
+    from scoring.stats_availability import division_has_limited_tracking
+
+    division = row.get("Division")
+    if division in (None, "", "-", "—"):
+        # Fall back to raw key used by some snapshots.
+        division = row.get("division")
+    row["DivisionLimited"] = (
+        "yes"
+        if division_has_limited_tracking(division, limited_divisions)
+        else "no"
+    )
 
 
 def personality_highlight_styles(

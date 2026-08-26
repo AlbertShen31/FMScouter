@@ -2,7 +2,7 @@
   "id": "fm-stats-availability-v1",
   "description": "FM Moneyball exports omit advanced metrics for some leagues. Those columns export as 0 rather than blank. FMScouter detects this pattern and excludes the affected metrics from percentile averages.",
   "detection": {
-    "summary": "Full limited tracking when every advanced probe column is zero. Partial tracking when some probes are non-zero but other advanced metrics are still zero — those zero columns are excluded individually.",
+    "summary": "A division is limited-tracking when minutes-weighted averages of advanced probe /90 rates across all players with minutes are near zero (max avg ≤ 0.25) and the division has ≥300 total minutes. Sparse leftovers (transfers, continental) do not veto the league; zero-minute rows do not affect aggregates. Probes are metrics absent in limited leagues (interceptions, key passes, progressive passes, clearances) — not xA / possession won. Recorded as limited_tracking_divisions on the upload index for striped Division highlights.",
     "basic_csv_columns": [
       "Passes Attempted",
       "Passes Attempted per 90",
@@ -12,45 +12,43 @@
       "Goals Allowed"
     ],
     "probe_csv_columns": [
-      "Possession Won per 90",
       "Interceptions per 90",
       "Interceptions",
       "Key Passes per 90",
       "Key Passes",
-      "xA/90",
-      "xA",
       "Progressive Passes per 90",
       "Clearances per 90",
       "Clearances"
     ]
   },
   "universal_metrics": {
-    "summary": "Tracked in all leagues that provide any match stats in the export (always scored when present).",
+    "summary": "Tracked in all leagues that provide any match stats in the export (always scored when present). Includes xA and possession won, which FM still fills for limited-data leagues.",
     "outfield": [
       "goals",
       "expected_goals",
       "shots",
       "assists",
+      "expected_assists",
       "tackles_attempted",
       "tackle_win_rate",
-      "passes_attempted"
+      "passes_attempted",
+      "possession_won"
     ],
     "gk": [
       "passes_attempted",
-      "goals_conceded"
+      "goals_conceded",
+      "possession_won"
     ]
   },
   "limited_tracking_unavailable": {
-    "summary": "Never populated for limited-tracking leagues; excluded from percentile averages when the detection pattern matches.",
+    "summary": "Absent in limited-tracking leagues; excluded from percentile averages when all advanced probes are zero.",
     "outfield": [
-      "possession_won",
       "header_win_rate",
       "headers_attempted",
       "headers_won",
       "interceptions",
       "clearances",
       "blocks",
-      "expected_assists",
       "key_passes",
       "dribbles",
       "possession_lost",
@@ -60,7 +58,6 @@
       "sprints"
     ],
     "gk": [
-      "possession_won",
       "xg_prevented",
       "possession_lost",
       "progressive_passes"

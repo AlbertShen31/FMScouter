@@ -5930,6 +5930,37 @@ body[data-theme="light"] .up-cache.stale {
 .up-cache.error {
     color: #f87171;
 }
+
+.up-limited-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.6rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fbbf24;
+    background-color: rgba(245, 158, 11, 0.16);
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(251, 191, 36, 0.2) 0 2px,
+        transparent 2px 8px
+    );
+    cursor: help;
+}
+
+html[data-theme="light"] .up-limited-count,
+body[data-theme="light"] .up-limited-count {
+    color: #b45309;
+    background-color: #fef3c7;
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(180, 83, 9, 0.12) 0 2px,
+        transparent 2px 8px
+    );
+}
+
 html[data-theme="light"] .up-cache.error,
 body[data-theme="light"] .up-cache.error {
     color: #b91c1c;
@@ -7418,6 +7449,41 @@ body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
     color: #f87171;
 }
 
+.pf-depth-chart-div.pf-div-limited {
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.1) 0 2px,
+        transparent 2px 9px
+    );
+}
+
+.pf-depth-chart-div.pf-div-top.pf-div-limited {
+    background-color: rgba(34, 197, 94, 0.18);
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(74, 222, 128, 0.22) 0 2px,
+        transparent 2px 9px
+    );
+}
+
+.pf-depth-chart-div.pf-div-pro.pf-div-limited {
+    background-color: rgba(245, 158, 11, 0.20);
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(251, 191, 36, 0.22) 0 2px,
+        transparent 2px 9px
+    );
+}
+
+.pf-depth-chart-div.pf-div-amateur.pf-div-limited {
+    background-color: rgba(239, 68, 68, 0.20);
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(248, 113, 113, 0.22) 0 2px,
+        transparent 2px 9px
+    );
+}
+
 html[data-theme="light"] .pf-depth-chart-div.pf-div-top,
 body[data-theme="light"] .pf-depth-chart-div.pf-div-top {
     background: #dcfce7;
@@ -7434,6 +7500,36 @@ html[data-theme="light"] .pf-depth-chart-div.pf-div-amateur,
 body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur {
     background: #fee2e2;
     color: #b91c1c;
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-top.pf-div-limited,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-top.pf-div-limited {
+    background-color: #dcfce7;
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(22, 163, 74, 0.14) 0 2px,
+        transparent 2px 9px
+    );
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-pro.pf-div-limited,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-pro.pf-div-limited {
+    background-color: #fef3c7;
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(180, 83, 9, 0.12) 0 2px,
+        transparent 2px 9px
+    );
+}
+
+html[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited,
+body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
+    background-color: #fee2e2;
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(185, 28, 28, 0.12) 0 2px,
+        transparent 2px 9px
+    );
 }
 
 .pf-depth-chart-ovr,

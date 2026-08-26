@@ -1152,9 +1152,22 @@ def _profile_identity_columns(page: str, settings) -> list[str]:
     return cols
 
 
-def _apply_profile_division(item: dict, raw: dict) -> None:
+def _limited_tracking_divisions() -> set[str]:
+    """Union of limited-stat leagues recorded across the upload library."""
+    import services.export_library as lib
+
+    return set(lib.list_limited_tracking_divisions())
+
+
+def _apply_profile_division(
+    item: dict,
+    raw: dict,
+    *,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> None:
     """Ensure Division / Personality highlight helper columns."""
     from scoring.personality_tiers import apply_personality_tier
+    from components.player_table import apply_division_limited_flag
 
     if "Division" not in item:
         item["Division"] = _blank(raw.get("Division"))
@@ -1164,7 +1177,11 @@ def _apply_profile_division(item: dict, raw: dict) -> None:
         "Nation": raw.get("Nation"),
     }
     apply_division_tier(tier_row)
+    apply_division_limited_flag(
+        tier_row, limited_divisions if limited_divisions is not None else _limited_tracking_divisions()
+    )
     item["DivisionTier"] = tier_row.get("DivisionTier") or ""
+    item["DivisionLimited"] = tier_row.get("DivisionLimited") or "no"
 
     pers = item.get("Personality")
     if pers in (None, "", "-", "—"):
@@ -1413,9 +1430,22 @@ def _depth_chart_player_row(
         position = _blank(row.get("Best Pos"))
     division = _blank(row.get("Division"))
     tier = classify_division(row.get("Division"), row.get("Nation"))
+    from scoring.stats_availability import (
+        LIMITED_DIVISION_TITLE,
+        division_has_limited_tracking,
+    )
+
+    limited = division_has_limited_tracking(
+        row.get("Division"), _limited_tracking_divisions()
+    )
     div_class = "pf-depth-chart-div"
     if tier:
         div_class = f"{div_class} pf-div-{tier}"
+    if limited:
+        div_class = f"{div_class} pf-div-limited"
+    div_title = (
+        f"{division} — {LIMITED_DIVISION_TITLE}" if limited and division != "—" else division
+    )
     if removable and profile_id and slot_index is not None:
         remove_cell = html.Button(
             "×",
@@ -1484,7 +1514,7 @@ def _depth_chart_player_row(
                 className="pf-depth-chart-feet",
             ),
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
-            html.Span(division, className=div_class, title=division),
+            html.Span(division, className=div_class, title=div_title),
             _depth_rec_cell(row.get("Rec"), theme=theme),
             (
                 dcc.Markdown(
@@ -2246,6 +2276,8 @@ def _empty_slot_table_row(
     for col in identity:
         item[col] = "—"
     item["Division"] = "—"
+    item["DivisionTier"] = ""
+    item["DivisionLimited"] = "no"
     for pct in PCT_COLS:
         item[pct] = "—"
     return item, {}

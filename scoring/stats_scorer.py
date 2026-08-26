@@ -700,6 +700,15 @@ def _has_stats_columns(header: list[str]) -> bool:
 
 
 def parse_stats_export(text: str) -> list[dict[str, Any]]:
+    """Parse a Moneyball stats CSV into player dicts."""
+    players, _limited = parse_stats_export_with_meta(text)
+    return players
+
+
+def parse_stats_export_with_meta(
+    text: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Like :func:`parse_stats_export`, plus limited-tracking division names."""
     if not text or not text.strip():
         raise ValueError("The file is empty.")
     delim = sniff_delimiter(text)
@@ -717,7 +726,13 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
             "Use the Moneyball statistics export, not the attributes-only file."
         )
 
-    players: list[dict[str, Any]] = []
+    from scoring.stats_availability import (
+        analyze_division_availability,
+        apply_limited_tracking,
+        collect_limited_tracking_divisions,
+    )
+
+    raw_rows: list[dict[str, str]] = []
     for raw in reader:
         if not raw or all(not cell.strip() for cell in raw):
             continue
@@ -726,9 +741,16 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
         elif len(raw) > len(header):
             raw = raw[: len(header)]
         row = dict(zip(header, raw))
-        name = pick(row, IDENTITY["Name"])
-        if not name:
+        if not pick(row, IDENTITY["Name"]):
             continue
+        raw_rows.append(row)
+
+    division_unavailable = analyze_division_availability(raw_rows)
+    limited_divisions = collect_limited_tracking_divisions(division_unavailable)
+
+    players: list[dict[str, Any]] = []
+    for row in raw_rows:
+        name = pick(row, IDENTITY["Name"])
         best_pos = pick(row, IDENTITY["BestPos"])
         position = pick(row, IDENTITY["Position"])
         minutes = parse_number(pick(row, ["Minutes"]))
@@ -744,12 +766,10 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
             "pos_group": group,
             "stats": stats,
         }
-        from scoring.stats_availability import apply_limited_tracking
-
-        apply_limited_tracking(player_payload, row)
+        apply_limited_tracking(
+            player_payload, row, division_unavailable=division_unavailable
+        )
         stats = player_payload["stats"]
-        # Combined Moneyball exports include full attribute sheets; keep only
-        # Determination / Leadership for the personality estimate (session size).
         all_attrs = extract_attrs(row)
         attrs = {
             code: all_attrs[code]
@@ -806,8 +826,12 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
                 "pos_group": group,
                 "pos_cards": player_pos_groups(positions),
                 "stats": stats,
-                "stats_limited_tracking": player_payload.get("stats_limited_tracking", False),
-                "stats_unavailable": list(player_payload.get("stats_unavailable") or []),
+                "stats_limited_tracking": player_payload.get(
+                    "stats_limited_tracking", False
+                ),
+                "stats_unavailable": list(
+                    player_payload.get("stats_unavailable") or []
+                ),
                 "attrs": attrs,
                 "positions": positions,
                 "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),
@@ -816,7 +840,7 @@ def parse_stats_export(text: str) -> list[dict[str, Any]]:
         )
     if not players:
         raise ValueError("No player rows found. Check that the file is an FM stats CSV export.")
-    return players
+    return players, limited_divisions
 
 
 def percentile_marks() -> list[int]:
