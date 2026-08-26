@@ -6728,14 +6728,21 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     scroll-margin-top: 4.5rem;
 }
 
+.pf-xi-wrap {
+    margin-top: 0.35rem;
+    scroll-margin-top: 4.5rem;
+}
+
 .pf-page #pf-depth-wrap.rs-shortlist-busy-host,
-.pf-page #pf-depth-chart-wrap.rs-shortlist-busy-host {
+.pf-page #pf-depth-chart-wrap.rs-shortlist-busy-host,
+.pf-page #pf-xi-wrap.rs-shortlist-busy-host {
     position: relative;
     min-height: 10rem;
 }
 
 .pf-page #pf-depth-wrap .rs-shortlist-busy,
-.pf-page #pf-depth-chart-wrap .rs-shortlist-busy {
+.pf-page #pf-depth-chart-wrap .rs-shortlist-busy,
+.pf-page #pf-xi-wrap .rs-shortlist-busy {
     border-radius: 12px;
 }
 

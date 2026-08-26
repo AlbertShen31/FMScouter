@@ -1834,7 +1834,7 @@ def _build_formation_xi_chart(
     xi_view=None,
     cache: _PfProfileCache | None = None,
 ) -> html.Div:
-    """One player per formation slot at the selected XI depth rank."""
+    """One player per formation slot at the selected XI depth rank (read-only)."""
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
     xi_view = _normalize_xi_view(xi_view)
@@ -1881,13 +1881,13 @@ def _build_formation_xi_chart(
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
                 draggable=False,
+                removable=False,
                 minutes_required=mins_limit,
             )
         )
     hint = (
         f"Rank #{xi_rank} player for each formation slot. "
-        "Slots that share a role start with the same exported players, "
-        "then can diverge. Click a Squad depth card to edit that slot."
+        "Click a Squad depth card above to edit that slot’s depth."
     )
     return html.Div(
         [
@@ -1952,14 +1952,9 @@ def _build_depth_chart(
 
     if not focus:
         if slots:
-            return _build_formation_xi_chart(
-                slots,
-                formation_id=formation_id,
-                settings=settings,
-                theme=theme,
-                minutes_required=mins_limit,
-                xi_view=xi_view,
-                cache=cache,
+            return html.Div(
+                "Click a Squad depth card to rank that slot.",
+                className="text-muted small",
             )
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
@@ -3091,10 +3086,8 @@ def layout(**_kwargs):
                                                         className="rs-depth-heading-label",
                                                     ),
                                                     html.Span(
-                                                        "First / Second XI show rank #1 or #2 "
-                                                        "per formation slot (Slot column). Focus a "
-                                                        "Squad depth card to rank that slot; drag to "
-                                                        "reorder; × removes the player from that slot only.",
+                                                        "Focus a Squad depth card to rank that slot "
+                                                        "here (drag to reorder; × removes from slot only).",
                                                         className="rs-depth-heading-hint",
                                                     ),
                                                 ],
@@ -3102,22 +3095,6 @@ def layout(**_kwargs):
                                             ),
                                             html.Div(
                                                 [
-                                                    html.Div(
-                                                        [
-                                                            html.Label(
-                                                                "XI",
-                                                                className="rs-field-label",
-                                                            ),
-                                                            html.Div(
-                                                                _xi_view_switcher("first"),
-                                                                id="pf-xi-view-switch",
-                                                            ),
-                                                        ],
-                                                        className=(
-                                                            "pf-squad-depth-field "
-                                                            "pf-xi-view-field"
-                                                        ),
-                                                    ),
                                                     html.Div(
                                                         [
                                                             html.Div(
@@ -3129,7 +3106,7 @@ def layout(**_kwargs):
                                                                     *help_icon(
                                                                         "Green = meets limit, yellow = ≥ half, "
                                                                         "red = below half. Applies to Mins color "
-                                                                        "in the depth chart and Role scores table.",
+                                                                        "in the depth chart and Starting XI.",
                                                                         "pf-help-depth-minutes",
                                                                     ),
                                                                 ],
@@ -3173,6 +3150,56 @@ def layout(**_kwargs):
                                 hidden=False,
                             ),
                             html.Div(id="pf-depth-scroll-nudge", hidden=True),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Span(
+                                                        "Starting XI",
+                                                        className="rs-depth-heading-label",
+                                                    ),
+                                                    html.Span(
+                                                        "Rank #1 or #2 per formation slot. "
+                                                        "Updates when slot depth changes or you "
+                                                        "switch First / Second XI — not when you "
+                                                        "focus a slot above.",
+                                                        className="rs-depth-heading-hint",
+                                                    ),
+                                                ],
+                                                className="rs-depth-heading-copy",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "XI",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    html.Div(
+                                                        _xi_view_switcher("first"),
+                                                        id="pf-xi-view-switch",
+                                                    ),
+                                                ],
+                                                className=(
+                                                    "pf-squad-depth-field "
+                                                    "pf-xi-view-field"
+                                                ),
+                                            ),
+                                        ],
+                                        className="pf-depth-chart-toolbar",
+                                    ),
+                                    html.Div(id="pf-xi-chart-body"),
+                                    _profiles_busy_overlay(
+                                        "pf-xi-chart-busy",
+                                        "Updating Starting XI…",
+                                        on=True,
+                                    ),
+                                ],
+                                id="pf-xi-wrap",
+                                className="pf-xi-wrap mb-3 rs-shortlist-busy-host",
+                                hidden=True,
+                            ),
                             html.Div(
                                 [
                                     html.Div(
@@ -3560,6 +3587,19 @@ def focus_profile_role(n_clicks, current_focus, formation_id):
 
 
 @callback(
+    Output("pf-xi-wrap", "hidden"),
+    Output("pf-table-host", "hidden"),
+    Input("pf-formation-select", "value"),
+    Input("pf-hydrated", "data"),
+)
+def toggle_xi_vs_table(formation_id, hydrated):
+    if not hydrated:
+        return True, False
+    has_formation = bool(_formation_slots(formation_id))
+    return not has_formation, has_formation
+
+
+@callback(
     Output("pf-xi-view", "data"),
     Input({"type": "pf-xi-view", "view": ALL}, "n_clicks"),
     prevent_initial_call=True,
@@ -3614,10 +3654,10 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Depth chart: spinner while switching First/Second XI (and related rebuilds).
+# Depth chart: spinner while focus / formation / rev / minutes rebuilds (not XI toggle).
 clientside_callback(
     """
-    function(xiView, focus, formation, rev, minutes) {
+    function(focus, formation, rev, minutes) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -3626,7 +3666,6 @@ clientside_callback(
     }
     """,
     Output("pf-depth-chart-busy", "className"),
-    Input("pf-xi-view", "data"),
     Input("pf-focus-role", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
@@ -3649,11 +3688,45 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Table: spinner for hydrate / library / formation / XI / focus rebuilds
-# (sort & page-size stay quiet — usually fast).
+# Starting XI panel: spinner on XI toggle, formation, rev, minutes (not slot focus).
 clientside_callback(
     """
-    function(rev, hydrated, formation, xiView, focus) {
+    function(xiView, formation, rev, minutes, hydrated) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("pf-xi-chart-busy", "className"),
+    Input("pf-xi-view", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-rev", "data"),
+    Input("pf-depth-minutes-required", "value"),
+    Input("pf-hydrated", "data"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_children) {
+        var el = document.getElementById("pf-xi-chart-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("pf-xi-chart-busy", "className", allow_duplicate=True),
+    Input("pf-xi-chart-body", "children"),
+    prevent_initial_call=True,
+)
+
+# Table: spinner for hydrate / library / formation / focus rebuilds (not XI toggle).
+clientside_callback(
+    """
+    function(rev, hydrated, formation, focus) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -3665,7 +3738,6 @@ clientside_callback(
     Input("pf-rev", "data"),
     Input("pf-hydrated", "data"),
     Input("pf-formation-select", "value"),
-    Input("pf-xi-view", "data"),
     Input("pf-focus-role", "data"),
     prevent_initial_call=True,
 )
@@ -3733,7 +3805,6 @@ clientside_callback(
     Output("pf-table-row-cache", "data"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
-    Input("pf-xi-view", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-page-size", "value"),
@@ -3747,7 +3818,6 @@ clientside_callback(
 def refresh_profiles_table(
     _rev,
     focus_role,
-    xi_view,
     formation_id,
     depth_minutes_required,
     page_size,
@@ -3758,11 +3828,16 @@ def refresh_profiles_table(
     sort_memory,
     row_cache,
 ):
-    """Rebuild the profiles DataTable only (not squad depth / depth chart)."""
+    """Rebuild the profiles DataTable only (hidden when a formation is active)."""
     if not hydrated:
         return (no_update,) * 18
 
     settings = us.normalize(settings)
+    formation_slots = _formation_slots(formation_id)
+    if formation_slots:
+        # Starting XI panel owns the formation lineup view.
+        return (no_update,) * 14 + (True,) + (True, True, no_update)
+
     try:
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
@@ -3896,74 +3971,19 @@ def refresh_profiles_table(
             no_update,
         )
 
-    xi_view = _normalize_xi_view(xi_view)
     # Keep Ovr / category % in sync with adaptive metric ceilings — but only
     # when library or percentile-related settings actually changed.
     _ensure_profile_percentiles(settings)
     reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
     profile_cache = _PfProfileCache()
 
-    formation_slots = _formation_slots(formation_id)
-    focus = _focus_slot(focus_role)
-    include_slot = bool(formation_slots)
+    include_slot = False
     columns = _role_table_columns(settings, include_slot=include_slot)
-    if formation_slots and not focus:
-        all_rows, tips = _build_formation_xi_table_rows(
-            formation_slots,
-            formation_id=formation_id,
-            settings=settings,
-            theme=theme,
-            xi_view=xi_view,
-            cache=profile_cache,
-        )
-        filtered = list(all_rows)
-        sort_mode = "formation"
-    elif formation_slots and focus:
-        slot_ordered = profile_cache.ordered_for_slot(
-            formation_id, focus.get("slot", -1), focus["role"]
-        )
-        slot_label = focus.get("label") or "—"
-        _starters, multi_starters, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(
-                formation_id,
-                formation_slots,
-                xi_view=xi_view,
-                cache=profile_cache,
-            )
-        )
-        try:
-            focused_slot_index = int(focus.get("slot", -1))
-        except (TypeError, ValueError):
-            focused_slot_index = -1
-        slot_is_conflicted = focused_slot_index in conflicted_slots
-        slot_is_unique = focused_slot_index in unique_slots
-        all_rows = []
-        tips = []
-        for index, entry in enumerate(slot_ordered):
-            player_key = _entry_player_key(entry)
-            item, tip = _entry_to_role_table_row(
-                entry,
-                settings=settings,
-                theme=theme,
-                slot_label=slot_label,
-                slot_conflicted=(
-                    slot_is_conflicted or player_key in multi_starters
-                ),
-                slot_unique=(
-                    slot_is_unique and player_key not in multi_starters
-                ),
-                depth_rank=index + 1,
-            )
-            all_rows.append(item)
-            tips.append(tip)
-        filtered = list(all_rows)
-        sort_mode = "roles"
-    else:
-        all_rows, tips = _build_role_table_rows(
-            settings, theme=theme, cache=profile_cache
-        )
-        filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
-        sort_mode = "roles"
+    all_rows, tips = _build_role_table_rows(
+        settings, theme=theme, cache=profile_cache
+    )
+    filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+    sort_mode = "roles"
     style_data, style_header = _role_table_styles(theme, settings)
     empty_msg = (
         "No role profiles yet. Mark players on Role scores and save — "
@@ -4136,24 +4156,24 @@ def refresh_profiles_squad_depth(
     Output("pf-depth-chart-wrap", "hidden"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
-    Input("pf-xi-view", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("pf-hydrated", "data"),
+    State("pf-xi-view", "data"),
 )
 def refresh_profiles_depth_chart(
     _rev,
     focus_role,
-    xi_view,
     formation_id,
     depth_minutes_required,
     settings,
     theme,
     hydrated,
+    xi_view,
 ):
-    """Rebuild the depth chart (XI / focus / minutes / formation / library)."""
+    """Rebuild the slot depth chart (focus / minutes / formation — not XI toggle)."""
     if not hydrated:
         return no_update, no_update
 
@@ -4183,18 +4203,93 @@ def refresh_profiles_depth_chart(
     return chart, chart_hidden
 
 
+@callback(
+    Output("pf-xi-chart-body", "children"),
+    Input("pf-xi-view", "data"),
+    Input("pf-rev", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-depth-minutes-required", "value"),
+    Input("ui-settings", "data"),
+    Input("theme", "data"),
+    Input("pf-hydrated", "data"),
+)
+def refresh_profiles_xi_chart(
+    xi_view,
+    _rev,
+    formation_id,
+    depth_minutes_required,
+    settings,
+    theme,
+    hydrated,
+):
+    """Starting / Second XI lineup (decoupled from slot-focus depth chart)."""
+    if not hydrated:
+        return no_update
+
+    settings = us.normalize(settings)
+    _ensure_profile_percentiles(settings)
+    xi_view = _normalize_xi_view(xi_view)
+    depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
+    formation_slots = _formation_slots(formation_id)
+    if not formation_slots:
+        return html.Div(
+            "Select a formation to view Starting XI.",
+            className="text-muted small",
+        )
+    profile_cache = _PfProfileCache()
+    return _build_formation_xi_chart(
+        formation_slots,
+        formation_id=formation_id,
+        settings=settings,
+        theme=theme,
+        minutes_required=depth_minutes_f,
+        xi_view=xi_view,
+        cache=profile_cache,
+    )
+
+
 clientside_callback(
     """
     function(focusRoles) {
-        const focused = new Set(
-            (Array.isArray(focusRoles) ? focusRoles : [])
-                .map(function(r) { return String(r || ""); })
-                .filter(Boolean)
-        );
-        const cards = document.querySelectorAll("#pf-summary .rs-depth-card");
+        // Focus is {slot, role, label} (or a legacy role string). Match the
+        // formation slot card; clear .active when nothing is selected.
+        var focus = null;
+        var list = Array.isArray(focusRoles)
+            ? focusRoles
+            : (focusRoles ? [focusRoles] : []);
+        if (list.length) {
+            var raw = list[0];
+            if (raw && typeof raw === "object") {
+                var role = String(raw.role || "").trim();
+                if (role) {
+                    focus = {
+                        role: role,
+                        slot: String(
+                            raw.slot !== undefined && raw.slot !== null
+                                ? raw.slot
+                                : ""
+                        ),
+                    };
+                }
+            } else if (raw) {
+                var legacy = String(raw || "").trim();
+                if (legacy) {
+                    focus = { role: legacy, slot: "" };
+                }
+            }
+        }
+        var cards = document.querySelectorAll("#pf-summary .rs-depth-card");
         cards.forEach(function(card) {
-            const role = card.getAttribute("data-rs-role") || "";
-            const on = role && focused.has(role);
+            var role = card.getAttribute("data-rs-role") || "";
+            var slot = card.getAttribute("data-rs-slot") || "";
+            var on = false;
+            if (focus && focus.role) {
+                if (focus.slot !== "") {
+                    on = role === focus.role && slot === focus.slot;
+                } else {
+                    on = role === focus.role;
+                }
+            }
             card.classList.toggle("active", !!on);
         });
         return window.dash_clientside.no_update;
@@ -4380,6 +4475,7 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, setti
     Output("pf-summary", "children", allow_duplicate=True),
     Output("pf-table-row-cache", "data", allow_duplicate=True),
     Output("pf-depth-order", "data"),
+    Output("pf-xi-chart-body", "children", allow_duplicate=True),
     Input("pf-depth-order", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
@@ -4408,7 +4504,7 @@ def apply_depth_chart_drag(
     reorder (the main source of snap-back / inconsistent drag).
     """
     if not isinstance(order, dict):
-        return no_update, no_update, no_update, no_update, no_update
+        return (no_update,) * 6
     # Drop stale publishes that fired after Auto-rank remounted the list.
     try:
         guard = float(order_guard or 0)
@@ -4416,7 +4512,7 @@ def apply_depth_chart_drag(
     except (TypeError, ValueError):
         guard, ts = 0.0, 0.0
     if guard and ts and ts < guard:
-        return no_update, no_update, no_update, no_update, no_update
+        return (no_update,) * 6
     role = str(order.get("role") or "").strip()
     formation_id = str(order.get("formation") or formation_id or "").strip()
     ids = [
@@ -4425,7 +4521,7 @@ def apply_depth_chart_drag(
         if str(pid or "").strip()
     ]
     if not role or not ids:
-        return no_update, no_update, no_update, no_update, no_update
+        return (no_update,) * 6
     slot_raw = order.get("slot")
     if formation_id and slot_raw is not None and str(slot_raw).strip() != "":
         try:
@@ -4445,77 +4541,7 @@ def apply_depth_chart_drag(
     xi_view = _normalize_xi_view(xi_view)
     depth_minutes_f = _resolve_minutes_required(depth_minutes, settings)
     formation_slots = _formation_slots(formation_id)
-    focus = _focus_slot(focus_role)
     profile_cache = _PfProfileCache()
-    tips: list[dict] = []
-    rows: list[dict] = []
-
-    if formation_slots and focus:
-        slot_ordered = profile_cache.ordered_for_slot(
-            formation_id, focus.get("slot", -1), focus["role"]
-        )
-        slot_label = focus.get("label") or "—"
-        _starters, multi_starters, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(
-                formation_id,
-                formation_slots,
-                xi_view=xi_view,
-                cache=profile_cache,
-            )
-        )
-        try:
-            focused_slot_index = int(focus.get("slot", -1))
-        except (TypeError, ValueError):
-            focused_slot_index = -1
-        slot_is_conflicted = focused_slot_index in conflicted_slots
-        slot_is_unique = focused_slot_index in unique_slots
-        for index, entry in enumerate(slot_ordered):
-            player_key = _entry_player_key(entry)
-            item, tip = _entry_to_role_table_row(
-                entry,
-                settings=settings,
-                theme=theme,
-                slot_label=slot_label,
-                slot_conflicted=(
-                    slot_is_conflicted or player_key in multi_starters
-                ),
-                slot_unique=(
-                    slot_is_unique and player_key not in multi_starters
-                ),
-                depth_rank=index + 1,
-                minutes_required=depth_minutes_f,
-            )
-            rows.append(item)
-            tips.append(tip)
-        sort_mode = "roles"
-        filtered = list(rows)
-    elif formation_slots:
-        rows, tips = _build_formation_xi_table_rows(
-            formation_slots,
-            formation_id=formation_id,
-            settings=settings,
-            theme=theme,
-            xi_view=xi_view,
-            cache=profile_cache,
-        )
-        sort_mode = "formation"
-        filtered = list(rows)
-    else:
-        rows, tips = _build_role_table_rows(
-            settings=settings, theme=theme, cache=profile_cache
-        )
-        filtered = _filter_role_rows(rows, focus_roles=focus_role)
-        sort_mode = "roles"
-
-    filtered = _sort_profile_rows(filtered, sort_by, mode=sort_mode)
-    display_tips = _reorder_tips_for_rows(rows, tips, filtered)
-    display_rows, display_tips = _display_from_cached_rows(
-        filtered,
-        display_tips,
-        settings=settings,
-        minutes_required=depth_minutes_f,
-    )
-    row_cache_out = _table_row_cache_blob(filtered, display_tips, sort_mode)
 
     depth_cards = _profile_depth_panel(
         profile_cache.list_role_profiles(),
@@ -4526,8 +4552,40 @@ def apply_depth_chart_drag(
         xi_view=xi_view,
         cache=profile_cache,
     )
-    # Leave chart DOM alone — it already matches the saved order.
-    return display_rows, display_tips, depth_cards, row_cache_out, no_update
+
+    if formation_slots:
+        xi_chart = _build_formation_xi_chart(
+            formation_slots,
+            formation_id=formation_id,
+            settings=settings,
+            theme=theme,
+            minutes_required=depth_minutes_f,
+            xi_view=xi_view,
+            cache=profile_cache,
+        )
+        return (
+            no_update,
+            no_update,
+            depth_cards,
+            no_update,
+            no_update,
+            xi_chart,
+        )
+
+    rows, tips = _build_role_table_rows(
+        settings=settings, theme=theme, cache=profile_cache
+    )
+    filtered = _filter_role_rows(rows, focus_roles=focus_role)
+    filtered = _sort_profile_rows(filtered, sort_by, mode="roles")
+    display_tips = _reorder_tips_for_rows(rows, tips, filtered)
+    display_rows, display_tips = _display_from_cached_rows(
+        filtered,
+        display_tips,
+        settings=settings,
+        minutes_required=depth_minutes_f,
+    )
+    row_cache_out = _table_row_cache_blob(filtered, display_tips, "roles")
+    return display_rows, display_tips, depth_cards, row_cache_out, no_update, no_update
 
 
 @callback(
