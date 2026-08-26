@@ -84,6 +84,10 @@ register_page(__name__, path="/profiles", name="Profiles")
 
 DEPTH_UNDO_MAX_DEFAULT = 10
 
+# Skip reloading stats cohorts when library + percentile-related settings
+# have not changed since the last refresh in this process.
+_PF_PCT_FP: str | None = None
+
 
 FILTER_SORT_RESET_IDS = frozenset(
     {
@@ -91,6 +95,33 @@ FILTER_SORT_RESET_IDS = frozenset(
         "pf-formation-select",
     }
 )
+
+
+def _percentile_settings_fingerprint(settings) -> str:
+    """Fingerprint for when stored profile Ovr/category % need a recompute."""
+    import json
+
+    settings = us.normalize(settings)
+    payload = {
+        "library": profiles.active_library_id() or "",
+        "stats_thresholds": settings.get("stats_thresholds"),
+        # Band cuts tint stored *_color fields on profile rows.
+        "bands": settings.get("bands"),
+    }
+    return json.dumps(payload, sort_keys=True, default=str)
+
+
+def _ensure_profile_percentiles(settings) -> None:
+    """Refresh stored percentiles only when the fingerprint changes."""
+    global _PF_PCT_FP
+    fp = _percentile_settings_fingerprint(settings)
+    if fp == _PF_PCT_FP:
+        return
+    try:
+        profiles.refresh_profile_percentiles(settings)
+    except Exception:
+        pass
+    _PF_PCT_FP = fp
 
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
@@ -2637,6 +2668,8 @@ def layout(**_kwargs):
     mins_req = us.default_minutes_required(settings)
     return dbc.Container(
         [
+            dcc.Interval(id="pf-hydrate-tick", interval=50, max_intervals=1),
+            dcc.Store(id="pf-hydrated", data=False),
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-depth-order", data=None),
             dcc.Store(id="pf-depth-order-guard", data=0),
@@ -3064,8 +3097,14 @@ def layout(**_kwargs):
                                         ],
                                         className="rs-table-caption-row mt-2",
                                     ),
+                                    _profiles_busy_overlay(
+                                        "pf-table-busy",
+                                        "Loading profiles…",
+                                        on=True,
+                                    ),
                                 ],
                                 id="pf-table-host",
+                                className="rs-shortlist-busy-host",
                             ),
                         ]
                     ),
@@ -3087,6 +3126,19 @@ def sync_pf_minutes_from_settings(settings, depth_minutes):
     settings = us.normalize(settings)
     default_mins = us.default_minutes_required(settings)
     return depth_minutes if depth_minutes is not None else default_mins
+
+
+@callback(
+    Output("pf-hydrated", "data"),
+    Input("pf-hydrate-tick", "n_intervals"),
+    State("pf-hydrated", "data"),
+    prevent_initial_call=True,
+)
+def hydrate_profiles_page(n_intervals, hydrated):
+    """Paint the shell first; unlock the heavy table/depth refresh on the next tick."""
+    if hydrated or not n_intervals:
+        return no_update
+    return True
 
 
 @callback(
@@ -3443,6 +3495,38 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
+# Table: keep spinner on for initial hydrate / library rev rebuilds.
+clientside_callback(
+    """
+    function(rev, hydrated) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("pf-table-busy", "className"),
+    Input("pf-rev", "data"),
+    Input("pf-hydrated", "data"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_caption) {
+        var el = document.getElementById("pf-table-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("pf-table-busy", "className", allow_duplicate=True),
+    Input("pf-table-caption", "children"),
+    prevent_initial_call=True,
+)
+
 
 clientside_callback(
     """
@@ -3501,6 +3585,7 @@ clientside_callback(
     Input("pf-table", "sort_by"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
+    Input("pf-hydrated", "data"),
     State("pf-sort-memory", "data"),
 )
 def refresh_profiles_table(
@@ -3513,15 +3598,18 @@ def refresh_profiles_table(
     sort_by,
     settings,
     theme,
+    hydrated,
     sort_memory,
 ):
+    # Shell paints first; wait for hydrate tick before the heavy rebuild.
+    if not hydrated:
+        return (no_update,) * 21
+
     settings = us.normalize(settings)
     xi_view = _normalize_xi_view(xi_view)
-    # Keep Ovr / category % in sync with adaptive metric ceilings.
-    try:
-        profiles.refresh_profile_percentiles(settings)
-    except Exception:
-        pass
+    # Keep Ovr / category % in sync with adaptive metric ceilings — but only
+    # when library or percentile-related settings actually changed.
+    _ensure_profile_percentiles(settings)
     try:
         page_size_i = int(page_size or default_page_size_value(settings))
     except (TypeError, ValueError):
