@@ -434,7 +434,7 @@ def _general_panel(settings: dict) -> list:
                             [
                                 dbc.Col(
                                     dmc.Select(
-                                        id="st-preferred-theme",
+                                        id={"type": "st-preferred-theme", "index": 0},
                                         label="Preferred theme",
                                         data=[
                                             {"label": "Dark", "value": "dark"},
@@ -486,7 +486,8 @@ def _general_panel(settings: dict) -> list:
                             className="g-3",
                         ),
                         html.Small(
-                            "Preferred theme applies on Save (and when loading a pack). "
+                            "Preferred theme stays in sync with the navbar Light/Dark button "
+                            "(also applied on Save and when loading a pack). "
                             "Page size options are comma-separated; the default must be one of them. "
                             "Recently removed limit is how many Profiles depth/shortlist deletes "
                             "stay available to restore (1–50).",
@@ -1205,7 +1206,7 @@ def _role_form_values(
         _sp_values_for(settings, sp_key_specs, "key"),
         _sp_values_for(settings, sp_pref_specs, "preferred"),
         _sp_values_for(settings, sp_useful_specs, "useful"),
-        settings["preferred_theme"],
+        [settings["preferred_theme"]],
         page_opts,
         str(settings["page_size"]),
         us.format_page_size_options(settings),
@@ -1444,6 +1445,25 @@ def _ui_draft_from_state(
 
 
 @callback(
+    Output("theme", "data", allow_duplicate=True),
+    Output("ui-settings", "data", allow_duplicate=True),
+    Input({"type": "st-preferred-theme", "index": ALL}, "value"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def apply_preferred_theme_select(preferred_values, current):
+    """Keep Settings preferred theme and the navbar theme toggle in sync."""
+    preferred = (preferred_values or [None])[0] if preferred_values else None
+    if preferred is None:
+        return no_update, no_update
+    theme = us.normalize_preferred_theme(preferred)
+    if theme == us.normalize_preferred_theme(current):
+        return no_update, no_update
+    settings = us.set_preferred_theme(theme)
+    return theme, settings
+
+
+@callback(
     Output("ui-settings", "data"),
     Output("st-pack", "data"),
     Output("st-pack", "value"),
@@ -1466,7 +1486,7 @@ def _ui_draft_from_state(
     Output({"type": "st-sp-key", "profile": ALL}, "value"),
     Output({"type": "st-sp-preferred", "profile": ALL}, "value"),
     Output({"type": "st-sp-useful", "profile": ALL}, "value"),
-    Output("st-preferred-theme", "value"),
+    Output({"type": "st-preferred-theme", "index": ALL}, "value"),
     Output("st-page-size-default", "data", allow_duplicate=True),
     Output("st-page-size-default", "value"),
     Output("st-page-size-options", "value"),
@@ -1503,7 +1523,7 @@ def _ui_draft_from_state(
     State({"type": "st-sp-key", "profile": ALL}, "value"),
     State({"type": "st-sp-preferred", "profile": ALL}, "value"),
     State({"type": "st-sp-useful", "profile": ALL}, "value"),
-    State("st-preferred-theme", "value"),
+    State("theme", "data"),
     State("st-page-size-default", "value"),
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),

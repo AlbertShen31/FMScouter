@@ -1122,5 +1122,12 @@ def preferred_theme(settings=None) -> str:
     return normalize(settings)["preferred_theme"]
 
 
+def set_preferred_theme(theme: str, pack_id: str | None = None) -> dict[str, Any]:
+    """Persist preferred theme on the active (or given) settings pack and return it."""
+    current = load(pack_id)
+    current["preferred_theme"] = normalize_preferred_theme(theme)
+    return save(current, current.get("id"))
+
+
 def format_page_size_options(settings=None) -> str:
     return ", ".join(page_size_options(settings))

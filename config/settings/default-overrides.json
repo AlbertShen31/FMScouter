@@ -151,6 +151,7 @@
     }
   ],
   "default_minutes_required": 900,
+  "depth_undo_max": 10,
   "page_size": 25,
   "page_size_options": [
     25,
@@ -162,5 +163,31 @@
     "key": "#3dff88",
     "preferred": "#c6e35b",
     "useful": "#5cadff"
+  },
+  "personality_tier_colors": {
+    "exemplary": {
+      "bg": "#dcfce7",
+      "fg": "#15803d"
+    },
+    "commendable": {
+      "bg": "#dbeafe",
+      "fg": "#1d4ed8"
+    },
+    "acceptable": {
+      "bg": "#e0e7ff",
+      "fg": "#4338ca"
+    },
+    "unpredictable": {
+      "bg": "#fef3c7",
+      "fg": "#b45309"
+    },
+    "formative": {
+      "bg": "#ffedd5",
+      "fg": "#c2410c"
+    },
+    "unsuitable": {
+      "bg": "#fee2e2",
+      "fg": "#b91c1c"
+    }
   }
 }

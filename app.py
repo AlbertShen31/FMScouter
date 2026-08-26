@@ -1,7 +1,7 @@
 import dash
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
-from dash import Input, Output, State, callback, dcc, html
+from dash import ALL, Input, Output, State, callback, dcc, html
 
 import services.ui_settings as ui_settings
 import services.export_library as export_library
@@ -69,7 +69,6 @@ app.layout = dmc.MantineProvider(
         dcc.Store(
             id="theme",
             data=ui_settings.load().get("preferred_theme") or "dark",
-            storage_type="local",
         ),
         dcc.Store(id="ui-settings", data=ui_settings.load()),
         dcc.Store(id="rs-parsed", storage_type="session"),
@@ -181,12 +180,17 @@ app.clientside_callback(
 
 @callback(
     Output("theme", "data"),
+    Output("ui-settings", "data", allow_duplicate=True),
+    Output({"type": "st-preferred-theme", "index": ALL}, "value", allow_duplicate=True),
     Input("theme-toggle", "n_clicks"),
     State("theme", "data"),
+    State({"type": "st-preferred-theme", "index": ALL}, "id"),
     prevent_initial_call=True,
 )
-def toggle_theme(_clicks, current):
-    return "light" if (current or "dark") == "dark" else "dark"
+def toggle_theme(_clicks, current, theme_ids):
+    next_theme = "light" if (current or "dark") == "dark" else "dark"
+    settings = ui_settings.set_preferred_theme(next_theme)
+    return next_theme, settings, [next_theme] * len(theme_ids or [])
 
 
 @callback(
