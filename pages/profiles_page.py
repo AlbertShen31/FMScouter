@@ -572,6 +572,20 @@ def _xi_view_switcher(active=None) -> html.Div:
     )
 
 
+def _profiles_busy_overlay(overlay_id: str, label: str, *, on: bool = False) -> html.Div:
+    """Blocking spinner overlay (same chrome as shortlist busy)."""
+    return html.Div(
+        [
+            html.Div(className="rs-shortlist-busy-spinner", **{"aria-hidden": "true"}),
+            html.Span(label, className="rs-shortlist-busy-label"),
+        ],
+        id=overlay_id,
+        className="rs-shortlist-busy" + (" is-on" if on else ""),
+        role="status",
+        **{"aria-live": "polite"},
+    )
+
+
 def _formation_xi_entry(
     formation_id: str | None,
     slot: dict,
@@ -2785,10 +2799,15 @@ def layout(**_kwargs):
                                         className="rs-depth-heading",
                                     ),
                                     html.Div(id="pf-summary", className="rs-depth-grid"),
+                                    _profiles_busy_overlay(
+                                        "pf-squad-depth-busy",
+                                        "Loading squad depth…",
+                                        on=True,
+                                    ),
                                 ],
                                 id="pf-depth-wrap",
-                                className="rs-depth-panel mb-2",
-                                hidden=True,
+                                className="rs-depth-panel mb-2 rs-shortlist-busy-host",
+                                hidden=False,
                             ),
                             html.Div(
                                 [
@@ -2872,10 +2891,15 @@ def layout(**_kwargs):
                                         children=_depth_undo_panel([]),
                                         hidden=True,
                                     ),
+                                    _profiles_busy_overlay(
+                                        "pf-depth-chart-busy",
+                                        "Updating depth chart…",
+                                        on=True,
+                                    ),
                                 ],
                                 id="pf-depth-chart-wrap",
-                                className="pf-depth-chart-wrap mb-3",
-                                hidden=True,
+                                className="pf-depth-chart-wrap mb-3 rs-shortlist-busy-host",
+                                hidden=False,
                             ),
                             html.Div(id="pf-depth-scroll-nudge", hidden=True),
                             html.Div(
@@ -3093,6 +3117,75 @@ def set_xi_view(n_clicks):
 )
 def sync_xi_view_switch(view):
     return _xi_view_switcher(view)
+
+
+# Squad depth: start with overlay on; hide when cards finish rendering.
+# Show again when formation / rev rebuilds the board (not on XI toggle).
+clientside_callback(
+    """
+    function(formation, rev) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("pf-squad-depth-busy", "className"),
+    Input("pf-formation-select", "value"),
+    Input("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_children) {
+        var el = document.getElementById("pf-squad-depth-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("pf-squad-depth-busy", "className", allow_duplicate=True),
+    Input("pf-summary", "children"),
+    prevent_initial_call=True,
+)
+
+# Depth chart: spinner while switching First/Second XI (and related rebuilds).
+clientside_callback(
+    """
+    function(xiView, focus, formation, rev, minutes) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("pf-depth-chart-busy", "className"),
+    Input("pf-xi-view", "data"),
+    Input("pf-focus-role", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-rev", "data"),
+    Input("pf-depth-minutes-required", "value"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_children) {
+        var el = document.getElementById("pf-depth-chart-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("pf-depth-chart-busy", "className", allow_duplicate=True),
+    Input("pf-depth-chart-body", "children"),
+    prevent_initial_call=True,
+)
 
 
 clientside_callback(
