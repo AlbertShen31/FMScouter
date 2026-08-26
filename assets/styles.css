@@ -1249,6 +1249,15 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     .rs-filter-hybrids {
         grid-column: 1 / -1;
     }
+
+    .st-page .rs-shortlist-filters-row {
+        flex-wrap: wrap;
+    }
+
+    .st-page .rs-shortlist-filters-row > .rs-filter-search {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
 }
 
 @media (max-width: 720px) {
@@ -1261,6 +1270,24 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     .rs-filter-club,
     .rs-filter-hybrids {
         grid-column: auto;
+    }
+
+    .st-page .rs-shortlist-filters-row > .rs-filter-age,
+    .st-page .rs-shortlist-filters-row > .st-filter-division,
+    .st-page .rs-shortlist-filters-row > .st-filter-minutes {
+        flex: 1 1 100%;
+    }
+
+    .st-page .rs-filter-age,
+    .st-division-fields .mantine-Select-root,
+    .st-minutes-fields .mantine-NumberInput-root,
+    .st-minutes-fields .mantine-Select-root {
+        width: 100%;
+    }
+
+    .st-division-fields,
+    .st-minutes-fields {
+        flex-wrap: wrap;
     }
 
     .rs-filter-score .rs-min-score-fields {
@@ -5204,14 +5231,79 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 }
 
 .st-page .rs-shortlist-filters-row {
-    grid-template-columns:
-        minmax(160px, 1.2fr)
-        minmax(96px, 0.4fr)
-        minmax(120px, 0.55fr)
-        minmax(260px, 1.2fr);
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: end;
+    gap: 10px 12px;
+}
+
+.st-page .rs-shortlist-filters-row > .rs-filter-search {
+    flex: 1 1 auto;
+    min-width: 10rem;
+}
+
+.st-page .rs-shortlist-filters-row > .rs-filter-age,
+.st-page .rs-shortlist-filters-row > .st-filter-division,
+.st-page .rs-shortlist-filters-row > .st-filter-minutes {
+    flex: 0 0 auto;
+}
+
+.st-page .rs-filter-age {
+    width: 6.25rem;
+}
+
+.st-filter-division {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 0;
+}
+
+.st-filter-division .rs-field-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 1.25rem;
+    margin-bottom: 0;
+}
+
+.st-filter-division .rs-field-label-row .rs-field-label {
+    margin-bottom: 0;
+}
+
+.st-division-fields {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.st-division-fields .mantine-Select-root {
+    flex: 0 0 auto;
+    width: 9.75rem;
+}
+
+.st-filter-incomplete-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.st-filter-incomplete-switch.mantine-Switch-root {
+    flex: 0 0 auto;
+    margin-top: 0;
+    white-space: nowrap;
 }
 
 .st-filter-minutes {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -5230,20 +5322,19 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
 .st-minutes-fields .mantine-NumberInput-root {
-    flex: 0 1 7.5rem;
-    max-width: 7.5rem;
+    flex: 0 0 6rem;
+    width: 6rem;
     min-width: 0;
 }
 
 .st-minutes-fields .mantine-Select-root {
-    flex: 1 1 auto;
-    min-width: 9.5rem;
-    width: auto;
+    flex: 0 0 auto;
+    width: 11.75rem;
 }
 
 .st-page .rs-hist-toggle {

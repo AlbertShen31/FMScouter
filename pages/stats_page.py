@@ -98,7 +98,11 @@ from scoring.stats_scorer import (
     scoring_stats,
     view_categories,
 )
-from scoring.stats_availability import LIMITED_TRACKING_HINT, metric_is_unavailable
+from scoring.stats_availability import (
+    LIMITED_TRACKING_HINT,
+    division_has_limited_tracking,
+    metric_is_unavailable,
+)
 import services.ui_settings as us
 import services.stats_threshold_packs as stp
 
@@ -159,6 +163,7 @@ ST_PERSIST_DEFAULTS = {
     "minutes_match": "any",
     "minutes_required": None,
     "division_tier": "all",
+    "include_incomplete": True,
     "page_size": None,
     "sort_by": None,
 }
@@ -182,11 +187,23 @@ def _st_persist_has_state(persist: dict | None) -> bool:
         return True
     if (p.get("division_tier") or "all") != "all":
         return True
+    if _persist_include_incomplete(p) is False:
+        return True
     if p.get("page_size") is not None:
         return True
     if p.get("sort_by"):
         return True
     return False
+
+
+def _persist_include_incomplete(persist: dict | None) -> bool:
+    """True unless the user turned incomplete-league inclusion off."""
+    p = persist or {}
+    if "include_incomplete" in p:
+        return p.get("include_incomplete") is not False
+    if "include_striped" in p:
+        return p.get("include_striped") is not False
+    return True
 
 
 def _help_icon(tip: str, help_id: str) -> list:
@@ -1102,6 +1119,15 @@ DIVISION_TIER_OPTIONS = [
     {"label": "Top tier", "value": "top"},
 ]
 
+LIMITED_DATA_LEAGUES_FILTER_TIP = (
+    "Some Football Manager leagues do not collect advanced match stats "
+    "(e.g. key passes, interceptions, progressive passes, clearances). "
+    "Moneyball exports fill those columns with zeros, so this app flags "
+    "those divisions with a striped Division cell and excludes unavailable "
+    "metrics from percentile averages. On includes players from those "
+    "leagues; off hides them."
+)
+
 
 def _passes_division_tier(player: dict, division_tier: str | None) -> bool:
     """``pro`` keeps top + professional; ``top`` keeps top flight only."""
@@ -1127,14 +1153,21 @@ def _filter_players(
     foot,
     foot_thresholds,
     division_tier="all",
+    include_incomplete=True,
+    limited_divisions=None,
 ):
     q = (search or "").strip().casefold()
     max_age = 99 if max_age is None else int(max_age)
+    limited = limited_divisions or ()
     out = []
     for p in players:
         if not _player_matches_pos_filter(p, pos):
             continue
         if not _passes_division_tier(p, division_tier):
+            continue
+        if not include_incomplete and division_has_limited_tracking(
+            p.get("division"), limited
+        ):
             continue
         if q:
             blob = " ".join(
@@ -1250,22 +1283,42 @@ def layout(**_kwargs):
                                                                 "tier alone. Division cells: "
                                                                 "green = top, yellow = pro, "
                                                                 "red = semi-pro / amateur; "
-                                                                "striped = incomplete advanced "
+                                                                "striped = limited advanced "
                                                                 "match stats in FM.",
                                                                 "st-help-division",
                                                             ),
                                                         ],
                                                         className="rs-field-label-row",
                                                     ),
-                                                    dmc.Select(
-                                                        id="st-division-tier",
-                                                        data=DIVISION_TIER_OPTIONS,
-                                                        value="all",
-                                                        clearable=False,
-                                                        searchable=False,
+                                                    html.Div(
+                                                        [
+                                                            dmc.Select(
+                                                                id="st-division-tier",
+                                                                data=DIVISION_TIER_OPTIONS,
+                                                                value="all",
+                                                                clearable=False,
+                                                                searchable=False,
+                                                            ),
+                                                            html.Div(
+                                                                [
+                                                                    dmc.Switch(
+                                                                        id="st-include-incomplete",
+                                                                        label="Include limited data leagues",
+                                                                        checked=True,
+                                                                        className="st-filter-incomplete-switch",
+                                                                    ),
+                                                                    *_help_icon(
+                                                                        LIMITED_DATA_LEAGUES_FILTER_TIP,
+                                                                        "st-help-incomplete",
+                                                                    ),
+                                                                ],
+                                                                className="st-filter-incomplete-wrap",
+                                                            ),
+                                                        ],
+                                                        className="st-division-fields",
                                                     ),
                                                 ],
-                                                className="rs-filter-age rs-filter-division",
+                                                className="st-filter-division",
                                             ),
                                             html.Div(
                                                 [
@@ -1316,7 +1369,7 @@ def layout(**_kwargs):
                                                         className="st-minutes-fields",
                                                     ),
                                                 ],
-                                                className="rs-filter-pos-match st-filter-minutes",
+                                                className="st-filter-minutes",
                                             ),
                                         ],
                                         className="rs-shortlist-filters-row",
@@ -1440,6 +1493,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("st-minutes-required", "value"),
     Input("st-foot", "data"),
     Input("st-division-tier", "value"),
+    Input("st-include-incomplete", "checked"),
     Input("st-page-size", "value"),
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
@@ -1459,6 +1513,7 @@ def refresh_table(
     minutes_required,
     foot,
     division_tier,
+    include_incomplete,
     page_size,
     marked,
     sort_by,
@@ -1519,6 +1574,8 @@ def refresh_table(
         foot=foot or "",
         foot_thresholds=settings["foot_thresholds"],
         division_tier=division_tier or "all",
+        include_incomplete=include_incomplete is not False,
+        limited_divisions=limited_divisions,
     )
     rows = _build_rows(
         filtered,
@@ -1820,6 +1877,7 @@ def switch_player_group(
     Input("st-minutes-match", "value"),
     Input("st-minutes-required", "value"),
     Input("st-division-tier", "value"),
+    Input("st-include-incomplete", "checked"),
     Input("st-page-size", "value"),
     Input("st-table", "sort_by"),
     State("st-hydrated", "data"),
@@ -1834,6 +1892,7 @@ def save_st_page_persist(
     minutes_match,
     minutes_required,
     division_tier,
+    include_incomplete,
     page_size,
     sort_by,
     hydrated,
@@ -1849,6 +1908,7 @@ def save_st_page_persist(
         "minutes_match": minutes_match or "any",
         "minutes_required": minutes_required,
         "division_tier": division_tier or "all",
+        "include_incomplete": include_incomplete is not False,
         "page_size": page_size,
         "sort_by": sort_by or None,
     }
@@ -1886,6 +1946,7 @@ clientside_callback(
     Output("st-minutes-match", "value"),
     Output("st-minutes-required", "value", allow_duplicate=True),
     Output("st-division-tier", "value"),
+    Output("st-include-incomplete", "checked"),
     Output("st-page-size", "value", allow_duplicate=True),
     Output("st-table", "sort_by", allow_duplicate=True),
     Output("st-sort-memory", "data", allow_duplicate=True),
@@ -1896,10 +1957,10 @@ clientside_callback(
 )
 def hydrate_st_page_persist(persist, hydrated):
     if hydrated or persist is None:
-        return (no_update,) * 12
+        return (no_update,) * 13
     raw = persist or {}
     if not _st_persist_has_state(raw):
-        return (*((no_update,) * 11), True)
+        return (*((no_update,) * 12), True)
     p = {**ST_PERSIST_DEFAULTS, **raw}
     sort_by = p.get("sort_by") or None
     page_size = p.get("page_size")
@@ -1913,6 +1974,7 @@ def hydrate_st_page_persist(persist, hydrated):
         p.get("minutes_match") or "any",
         minutes_required if minutes_required is not None else no_update,
         p.get("division_tier") or "all",
+        _persist_include_incomplete(p),
         page_size if page_size is not None else no_update,
         sort_by if sort_by else no_update,
         sort_by if sort_by else no_update,
