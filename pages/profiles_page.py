@@ -531,15 +531,75 @@ def _entry_player_key(entry: dict | None) -> str:
     return str(entry.get("id") or "").strip()
 
 
+def _normalize_xi_view(value) -> str:
+    """``first`` or ``second`` XI overview."""
+    raw = str(value or "").strip().lower()
+    return "second" if raw in ("2", "second", "xi2") else "first"
+
+
+def _xi_rank(value) -> int:
+    """1-based depth rank for the selected XI (First=1, Second=2)."""
+    return 2 if _normalize_xi_view(value) == "second" else 1
+
+
+def _xi_rank_index(value) -> int:
+    return _xi_rank(value) - 1
+
+
+def _xi_view_label(value) -> str:
+    return "Second XI" if _normalize_xi_view(value) == "second" else "Starting XI"
+
+
+def _xi_view_switcher(active=None) -> html.Div:
+    current = _normalize_xi_view(active)
+    buttons = []
+    for value, label in (("first", "First XI"), ("second", "Second XI")):
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": "pf-xi-view", "view": value},
+                n_clicks=0,
+                type="button",
+                className="st-player-seg-btn"
+                + (" active" if current == value else ""),
+            )
+        )
+    return html.Div(
+        buttons,
+        className="st-player-seg pf-xi-view-seg",
+        role="group",
+        **{"aria-label": "Starting XI view"},
+    )
+
+
+def _formation_xi_entry(
+    formation_id: str | None,
+    slot: dict,
+    *,
+    xi_view=None,
+) -> dict | None:
+    """Profile at the selected XI rank for one formation slot, if any."""
+    ordered = profiles.ordered_profiles_for_slot(
+        formation_id, slot["index"], slot["column"]
+    )
+    index = _xi_rank_index(xi_view)
+    if index < 0 or index >= len(ordered):
+        return None
+    return ordered[index]
+
+
 def _formation_starter_slot_maps(
     formation_id: str | None,
     slots: list[dict],
+    *,
+    xi_view=None,
 ) -> tuple[dict[int, str], set[str], set[int], set[int]]:
-    """Starter player keys per slot, plus multi/unique starter slot indexes.
+    """XI player keys per slot, plus multi/unique slot indexes.
 
-    Conflicts are based on each slot’s current #1 only, so they update when the
-    Starting XI changes (remove, restore, reorder, auto-rank).
+    Conflicts are based on each slot’s current player at the selected XI rank
+    only, so they update when the XI changes (remove, restore, reorder, auto-rank).
     """
+    rank_i = _xi_rank_index(xi_view)
     starters: dict[int, str] = {}
     key_slots: dict[str, set[int]] = {}
     for slot in slots:
@@ -547,7 +607,8 @@ def _formation_starter_slot_maps(
         ordered = profiles.ordered_profiles_for_slot(
             formation_id, index, slot["column"]
         )
-        key = _entry_player_key(ordered[0]) if ordered else ""
+        entry = ordered[rank_i] if len(ordered) > rank_i else None
+        key = _entry_player_key(entry) if entry else ""
         starters[index] = key
         if key:
             key_slots.setdefault(key, set()).add(index)
@@ -918,10 +979,10 @@ def _profile_depth_card(
                             conflicted=slot_conflicted, unique=slot_unique
                         ),
                         title=(
-                            "Same starter as another formation slot"
+                            "Same XI player as another formation slot"
                             if slot_conflicted
                             else (
-                                "Unique starter for this formation slot"
+                                "Unique XI player for this formation slot"
                                 if slot_unique
                                 else slot_label
                             )
@@ -1027,6 +1088,7 @@ def _profile_depth_panel(
     formation_id: str | None = None,
     formation_slots: list[dict] | None = None,
     settings=None,
+    xi_view=None,
 ) -> list:
     settings = us.normalize(settings)
     bands = settings["bands"]
@@ -1040,7 +1102,9 @@ def _profile_depth_panel(
                 )
             ]
         _starters, _multi, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(formation_id, formation_slots)
+            _formation_starter_slot_maps(
+                formation_id, formation_slots, xi_view=xi_view
+            )
         )
         by_line: dict[str, list[tuple[int, int, object]]] = {
             key: [] for key in _PITCH_LINE_ORDER
@@ -1338,10 +1402,10 @@ def _depth_chart_player_row(
         conflicted=slot_conflicted, unique=slot_unique
     )
     slot_title = (
-        "Same starter as another formation slot"
+        "Same XI player as another formation slot"
         if slot_conflicted
         else (
-            "Unique starter for this formation slot"
+            "Unique XI player for this formation slot"
             if slot_unique
             else slot_label
         )
@@ -1607,14 +1671,12 @@ def _starting_xi_scores(
     slots: list[dict],
     *,
     formation_id: str | None,
+    xi_view=None,
 ) -> list[float]:
-    """Role scores for each filled starting slot (#1 in that slot's depth list)."""
+    """Role scores for each filled XI slot at the selected depth rank."""
     scores: list[float] = []
     for slot in slots:
-        ordered = profiles.ordered_profiles_for_slot(
-            formation_id, slot["index"], slot["column"]
-        )
-        entry = ordered[0] if ordered else None
+        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
         if not entry:
             continue
         score = (entry.get("row") or {}).get("Score")
@@ -1627,20 +1689,23 @@ def _starting_xi_scores(
     return scores
 
 
-def _starting_xi_avg_chip(scores: list[float], settings) -> html.Span | None:
+def _starting_xi_avg_chip(
+    scores: list[float], settings, *, xi_view=None
+) -> html.Span | None:
     if not scores:
         return None
     settings = us.normalize(settings)
     avg = sum(scores) / len(scores)
     band = score_band(avg, **settings["bands"])
     n = len(scores)
+    xi_name = _xi_view_label(xi_view)
     return html.Span(
         [
             html.Span("Avg score", className="rs-depth-avg-label"),
             html.Span(f"{avg:.1f}", className=f"rs-depth-avg rs-band-{band}"),
         ],
         className="pf-depth-chart-xi-avg-wrap",
-        title=f"Average role score across {n} starter{'s' if n != 1 else ''}",
+        title=f"Average role score across {n} {xi_name} player{'s' if n != 1 else ''}",
     )
 
 
@@ -1651,26 +1716,34 @@ def _build_formation_xi_chart(
     settings=None,
     theme=None,
     minutes_required=None,
+    xi_view=None,
 ) -> html.Div:
-    """One starter per formation slot (slot-specific depth lists)."""
+    """One player per formation slot at the selected XI depth rank."""
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
+    xi_view = _normalize_xi_view(xi_view)
+    xi_rank = _xi_rank(xi_view)
+    xi_label = _xi_view_label(xi_view)
     if not slots:
         return html.Div(
             "This formation has no filled IP+OOP slots.",
             className="text-muted small",
         )
     _starters, multi_starters, conflicted_slots, unique_slots = (
-        _formation_starter_slot_maps(formation_id, slots)
+        _formation_starter_slot_maps(formation_id, slots, xi_view=xi_view)
     )
-    xi_scores = _starting_xi_scores(slots, formation_id=formation_id)
-    xi_avg_chip = _starting_xi_avg_chip(xi_scores, settings)
+    xi_scores = _starting_xi_scores(
+        slots, formation_id=formation_id, xi_view=xi_view
+    )
+    xi_avg_chip = _starting_xi_avg_chip(xi_scores, settings, xi_view=xi_view)
+    filled = sum(
+        1
+        for slot in slots
+        if _formation_xi_entry(formation_id, slot, xi_view=xi_view) is not None
+    )
     rows = []
     for index, slot in enumerate(slots):
-        ordered = profiles.ordered_profiles_for_slot(
-            formation_id, slot["index"], slot["column"]
-        )
-        entry = ordered[0] if ordered else None
+        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
         slot_index = int(slot["index"])
         rows.append(
             _depth_chart_player_row(
@@ -1688,6 +1761,11 @@ def _build_formation_xi_chart(
                 minutes_required=mins_limit,
             )
         )
+    hint = (
+        f"Rank #{xi_rank} player for each formation slot. "
+        "Slots that share a role start with the same exported players, "
+        "then can diverge. Click a Squad depth card to edit that slot."
+    )
     return html.Div(
         [
             html.Div(
@@ -1695,21 +1773,20 @@ def _build_formation_xi_chart(
                     html.Div(
                         [
                             html.Span(
-                                "Starting XI",
+                                xi_label,
                                 className="pf-depth-chart-role-name",
                             ),
                             html.Span(
-                                f"{len(slots)}",
+                                f"{filled}/{len(slots)}",
                                 className="pf-depth-chart-count",
+                                title=f"{filled} filled of {len(slots)} slots",
                             ),
                             xi_avg_chip,
                         ],
                         className="pf-depth-chart-role-title",
                     ),
                     html.Span(
-                        "Top player for each formation slot. "
-                        "Slots that share a role start with the same exported players, "
-                        "then can diverge. Click a Squad depth card to edit that slot.",
+                        hint,
                         className="text-muted small",
                     ),
                 ],
@@ -1741,11 +1818,13 @@ def _build_depth_chart(
     settings=None,
     theme=None,
     minutes_required=None,
+    xi_view=None,
 ) -> html.Div:
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
     focus = _focus_slot(focus_roles)
     slots = list(formation_slots or [])
+    xi_view = _normalize_xi_view(xi_view)
 
     if not focus:
         if slots:
@@ -1755,6 +1834,7 @@ def _build_depth_chart(
                 settings=settings,
                 theme=theme,
                 minutes_required=mins_limit,
+                xi_view=xi_view,
             )
         return html.Div(
             "Select a role in Squad depth to edit its ranking.",
@@ -1793,7 +1873,9 @@ def _build_depth_chart(
     ordered = profiles.ordered_profiles_for_slot(formation_id, slot_index, column)
     if slots:
         _starters, multi_starters, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(formation_id, slots)
+            _formation_starter_slot_maps(
+                formation_id, slots, xi_view=xi_view
+            )
         )
     else:
         multi_starters, conflicted_slots, unique_slots = set(), set(), set()
@@ -2289,31 +2371,32 @@ def _build_formation_xi_table_rows(
     formation_id: str | None = None,
     settings=None,
     theme=None,
+    xi_view=None,
 ) -> tuple[list[dict], list[dict]]:
-    """One table row per formation slot using that slot’s depth list."""
+    """One table row per formation slot using that slot’s selected XI rank."""
     rows = []
     tips = []
+    xi_view = _normalize_xi_view(xi_view)
+    xi_rank = _xi_rank(xi_view)
     _starters, multi_starters, conflicted_slots, unique_slots = (
-        _formation_starter_slot_maps(formation_id, slots)
+        _formation_starter_slot_maps(formation_id, slots, xi_view=xi_view)
     )
     for slot in slots:
-        ordered = profiles.ordered_profiles_for_slot(
-            formation_id, slot["index"], slot["column"]
-        )
+        entry = _formation_xi_entry(formation_id, slot, xi_view=xi_view)
         label = slot.get("display_label") or slot.get("label") or "—"
         slot_index = int(slot["index"])
         conflicted = slot_index in conflicted_slots
         unique = slot_index in unique_slots
-        if ordered:
+        if entry:
             item, tip = _entry_to_role_table_row(
-                ordered[0],
+                entry,
                 settings=settings,
                 theme=theme,
                 slot_label=label,
                 slot_conflicted=conflicted,
                 slot_unique=unique,
-                row_id=f"slot-{slot['index']}-{ordered[0].get('id') or 'player'}",
-                depth_rank=1,
+                row_id=f"slot-{slot['index']}-{entry.get('id') or 'player'}",
+                depth_rank=xi_rank,
             )
         else:
             item, tip = _empty_slot_table_row(
@@ -2545,6 +2628,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-depth-order-guard", data=0),
             dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
             dcc.Store(id="pf-focus-role", data=[]),
+            dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-player-key", data=None),
@@ -2717,10 +2801,10 @@ def layout(**_kwargs):
                                                         className="rs-depth-heading-label",
                                                     ),
                                                     html.Span(
-                                                        "Starting XI shows one player per formation slot "
-                                                        "(Slot column). Focus a Squad depth card to rank "
-                                                        "that slot; drag to reorder; × removes the player "
-                                                        "from that slot only.",
+                                                        "First / Second XI show rank #1 or #2 "
+                                                        "per formation slot (Slot column). Focus a "
+                                                        "Squad depth card to rank that slot; drag to "
+                                                        "reorder; × removes the player from that slot only.",
                                                         className="rs-depth-heading-hint",
                                                     ),
                                                 ],
@@ -2731,31 +2815,52 @@ def layout(**_kwargs):
                                                     html.Div(
                                                         [
                                                             html.Label(
-                                                                "Minutes",
+                                                                "XI",
                                                                 className="rs-field-label",
                                                             ),
-                                                            *help_icon(
-                                                                "Green = meets limit, yellow = ≥ half, "
-                                                                "red = below half. Applies to Mins color "
-                                                                "in the depth chart and Role scores table.",
-                                                                "pf-help-depth-minutes",
+                                                            html.Div(
+                                                                _xi_view_switcher("first"),
+                                                                id="pf-xi-view-switch",
                                                             ),
                                                         ],
-                                                        className="rs-field-label-row",
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-xi-view-field"
+                                                        ),
                                                     ),
-                                                    dmc.NumberInput(
-                                                        id="pf-depth-minutes-required",
-                                                        value=mins_req,
-                                                        min=0,
-                                                        max=20000,
-                                                        step=90,
-                                                        size="sm",
+                                                    html.Div(
+                                                        [
+                                                            html.Div(
+                                                                [
+                                                                    html.Label(
+                                                                        "Minutes",
+                                                                        className="rs-field-label",
+                                                                    ),
+                                                                    *help_icon(
+                                                                        "Green = meets limit, yellow = ≥ half, "
+                                                                        "red = below half. Applies to Mins color "
+                                                                        "in the depth chart and Role scores table.",
+                                                                        "pf-help-depth-minutes",
+                                                                    ),
+                                                                ],
+                                                                className="rs-field-label-row",
+                                                            ),
+                                                            dmc.NumberInput(
+                                                                id="pf-depth-minutes-required",
+                                                                value=mins_req,
+                                                                min=0,
+                                                                max=20000,
+                                                                step=90,
+                                                                size="sm",
+                                                            ),
+                                                        ],
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-depth-minutes-field"
+                                                        ),
                                                     ),
                                                 ],
-                                                className=(
-                                                    "pf-squad-depth-field "
-                                                    "pf-depth-minutes-field"
-                                                ),
+                                                className="pf-depth-chart-toolbar-actions",
                                             ),
                                         ],
                                         className="pf-depth-chart-toolbar",
@@ -2968,6 +3073,28 @@ def focus_profile_role(n_clicks, current_focus, formation_id):
     return [{"slot": slot_index, "role": column, "label": label}]
 
 
+@callback(
+    Output("pf-xi-view", "data"),
+    Input({"type": "pf-xi-view", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_xi_view(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
+        return no_update
+    view = str((ctx.triggered_id or {}).get("view") or "").strip()
+    if view not in ("first", "second"):
+        return no_update
+    return view
+
+
+@callback(
+    Output("pf-xi-view-switch", "children"),
+    Input("pf-xi-view", "data"),
+)
+def sync_xi_view_switch(view):
+    return _xi_view_switcher(view)
+
+
 clientside_callback(
     """
     function(focus) {
@@ -3018,6 +3145,7 @@ clientside_callback(
     Output("pf-depth-chart-wrap", "hidden"),
     Input("pf-rev", "data"),
     Input("pf-focus-role", "data"),
+    Input("pf-xi-view", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-page-size", "value"),
@@ -3029,6 +3157,7 @@ clientside_callback(
 def refresh_profiles_table(
     _rev,
     focus_role,
+    xi_view,
     formation_id,
     depth_minutes_required,
     page_size,
@@ -3038,6 +3167,7 @@ def refresh_profiles_table(
     sort_memory,
 ):
     settings = us.normalize(settings)
+    xi_view = _normalize_xi_view(xi_view)
     # Keep Ovr / category % in sync with adaptive metric ceilings.
     try:
         profiles.refresh_profile_percentiles(settings)
@@ -3065,6 +3195,7 @@ def refresh_profiles_table(
             formation_id=formation_id,
             settings=settings,
             theme=theme,
+            xi_view=xi_view,
         )
         filtered = list(all_rows)
         sort_mode = "formation"
@@ -3074,7 +3205,9 @@ def refresh_profiles_table(
         )
         slot_label = focus.get("label") or "—"
         _starters, multi_starters, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(formation_id, formation_slots)
+            _formation_starter_slot_maps(
+                formation_id, formation_slots, xi_view=xi_view
+            )
         )
         try:
             focused_slot_index = int(focus.get("slot", -1))
@@ -3120,6 +3253,7 @@ def refresh_profiles_table(
             formation_id=formation_id,
             formation_slots=formation_slots,
             settings=settings,
+            xi_view=xi_view,
         )
     elif fm.pack_options():
         depth_cards = [
@@ -3146,6 +3280,7 @@ def refresh_profiles_table(
             settings=settings,
             theme=theme,
             minutes_required=depth_minutes_f,
+            xi_view=xi_view,
         ),
         epoch=f"r{int(_rev or 0)}",
     )
@@ -3474,6 +3609,7 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, setti
     Input("pf-depth-order", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("pf-xi-view", "data"),
     State("pf-table", "sort_by"),
     State("pf-depth-order-guard", "data"),
     State("pf-depth-minutes-required", "value"),
@@ -3485,6 +3621,7 @@ def apply_depth_chart_drag(
     order,
     formation_id,
     focus_role,
+    xi_view,
     sort_by,
     order_guard,
     depth_minutes,
@@ -3531,6 +3668,7 @@ def apply_depth_chart_drag(
         profiles.set_depth_ranks(role, ids)
 
     settings = us.normalize(settings)
+    xi_view = _normalize_xi_view(xi_view)
     depth_minutes_f = _resolve_minutes_required(depth_minutes, settings)
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
@@ -3543,7 +3681,9 @@ def apply_depth_chart_drag(
         )
         slot_label = focus.get("label") or "—"
         _starters, multi_starters, conflicted_slots, unique_slots = (
-            _formation_starter_slot_maps(formation_id, formation_slots)
+            _formation_starter_slot_maps(
+                formation_id, formation_slots, xi_view=xi_view
+            )
         )
         try:
             focused_slot_index = int(focus.get("slot", -1))
@@ -3577,6 +3717,7 @@ def apply_depth_chart_drag(
             formation_id=formation_id,
             settings=settings,
             theme=theme,
+            xi_view=xi_view,
         )
         sort_mode = "formation"
         filtered = list(rows)
@@ -3606,6 +3747,7 @@ def apply_depth_chart_drag(
         formation_id=formation_id,
         formation_slots=formation_slots,
         settings=settings,
+        xi_view=xi_view,
     )
     # Leave chart DOM alone — it already matches the saved order.
     return display_rows, display_tips, depth_cards, no_update
@@ -3619,13 +3761,14 @@ def apply_depth_chart_drag(
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_role(
-    n_clicks, rev, formation_id, focus_role, depth_minutes, settings, theme
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
 ):
     if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update
@@ -3651,6 +3794,7 @@ def auto_rank_depth_role(
             settings=settings,
             theme=theme,
             minutes_required=depth_minutes,
+            xi_view=xi_view,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -3666,13 +3810,14 @@ def auto_rank_depth_role(
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
     State("pf-focus-role", "data"),
+    State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_all(
-    n_clicks, rev, formation_id, focus_role, depth_minutes, settings, theme
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
 ):
     if not n_clicks:
         return no_update, no_update, no_update
@@ -3693,6 +3838,7 @@ def auto_rank_depth_all(
             settings=settings,
             theme=theme,
             minutes_required=depth_minutes,
+            xi_view=xi_view,
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )

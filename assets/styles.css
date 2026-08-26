@@ -6896,6 +6896,29 @@ body[data-theme="light"] .pf-depth-undo-row {
     min-width: 0;
 }
 
+.pf-depth-chart-toolbar-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0.85rem 1.1rem;
+    flex-wrap: wrap;
+}
+
+.pf-xi-view-field {
+    min-width: 11.5rem;
+}
+
+.pf-xi-view-seg {
+    width: auto;
+    min-width: 11rem;
+}
+
+.pf-xi-view-seg .st-player-seg-btn {
+    flex: 1 1 0;
+    padding: 7px 12px;
+    font-size: 12px;
+}
+
 .pf-depth-minutes-field {
     flex: 0 0 auto;
     min-width: 7.5rem;
