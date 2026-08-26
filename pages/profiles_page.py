@@ -1881,13 +1881,14 @@ def _build_formation_xi_chart(
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
                 draggable=False,
-                removable=False,
+                removable=True,
                 minutes_required=mins_limit,
             )
         )
     hint = (
         f"Rank #{xi_rank} player for each formation slot. "
-        "Click a Squad depth card above to edit that slot’s depth."
+        "× removes that player from the slot only (Recently removed). "
+        "Click a Squad depth card above to edit depth."
     )
     return html.Div(
         [
