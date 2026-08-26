@@ -6824,16 +6824,23 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     scroll-margin-top: 4.5rem;
 }
 
+.pf-setpiece-wrap {
+    margin-top: 0.35rem;
+    scroll-margin-top: 4.5rem;
+}
+
 .pf-page #pf-depth-wrap.rs-shortlist-busy-host,
 .pf-page #pf-depth-chart-wrap.rs-shortlist-busy-host,
-.pf-page #pf-xi-wrap.rs-shortlist-busy-host {
+.pf-page #pf-xi-wrap.rs-shortlist-busy-host,
+.pf-page #pf-setpiece-wrap.rs-shortlist-busy-host {
     position: relative;
     min-height: 10rem;
 }
 
 .pf-page #pf-depth-wrap .rs-shortlist-busy,
 .pf-page #pf-depth-chart-wrap .rs-shortlist-busy,
-.pf-page #pf-xi-wrap .rs-shortlist-busy {
+.pf-page #pf-xi-wrap .rs-shortlist-busy,
+.pf-page #pf-setpiece-wrap .rs-shortlist-busy {
     border-radius: 12px;
 }
 
@@ -7056,6 +7063,245 @@ body[data-theme="light"] .pf-depth-undo-row {
     flex: 1 1 0;
     padding: 7px 12px;
     font-size: 12px;
+}
+
+.pf-setpiece-view-field {
+    min-width: 18rem;
+}
+
+.pf-setpiece-view-seg {
+    width: auto;
+    min-width: 17rem;
+}
+
+.pf-setpiece-view-seg .st-player-seg-btn {
+    flex: 1 1 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+}
+
+.pf-setpiece-chart-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+}
+
+.pf-setpiece-chart,
+.pf-setpiece-chart-shell {
+    width: 100%;
+}
+
+.pf-setpiece-chart-shell .pf-setpiece-chart-head {
+    border: 1px solid var(--app-line);
+    border-radius: 12px 12px 0 0;
+    margin-bottom: 0;
+    background: var(--app-head);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pf-setpiece-chart > .pf-depth-chart-role-head {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pf-setpiece-chart-shell > .pf-setpiece-chart-head .text-muted,
+.pf-setpiece-chart > .pf-depth-chart-role-head .text-muted {
+    white-space: normal;
+}
+
+.pf-setpiece-footed-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--app-line);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    background: var(--app-card);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pf-setpiece-footed-grid > .pf-setpiece-chart {
+    width: 100%;
+    box-shadow: none;
+}
+
+.pf-setpiece-empty {
+    padding: 0.75rem 1rem;
+}
+
+/* Mirror Starting XI stretch pattern: Name / Pos / Club / Division flex.
+   Rec→Rk use fixed tracks so header and body grids share the same edges. */
+.pf-setpiece-chart-cols,
+.pf-setpiece-chart-row {
+    display: grid;
+    grid-template-columns:
+        2.5rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        minmax(7.25rem, 1.15fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(9.25rem, 1.05fr)
+        2.85rem
+        2.5rem
+        3.35rem
+        4.25rem
+        2rem;
+    gap: 0.3rem 0.4rem;
+    align-items: center;
+    padding: 0.5rem 0.7rem;
+    min-width: 58rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.pf-setpiece-chart.is-aerial .pf-setpiece-chart-cols,
+.pf-setpiece-chart.is-aerial .pf-setpiece-chart-row {
+    grid-template-columns:
+        2.5rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        2.85rem
+        minmax(7.25rem, 1.15fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(9.25rem, 1.05fr)
+        2.85rem
+        2.5rem
+        3.35rem
+        4.25rem
+        2rem;
+    min-width: 61rem;
+}
+
+.pf-setpiece-chart-cols {
+    background: var(--app-head);
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--app-line);
+    min-height: 38px;
+}
+
+.pf-setpiece-chart-cols .pf-depth-chart-rank,
+.pf-setpiece-chart-cols .pf-depth-chart-feet,
+.pf-setpiece-chart-cols .pf-depth-chart-div,
+.pf-setpiece-chart-cols .pf-depth-chart-pos,
+.pf-setpiece-chart-cols .pf-depth-chart-name-label,
+.pf-setpiece-chart-cols .pf-depth-chart-club,
+.pf-setpiece-chart-cols .pf-depth-chart-age,
+.pf-setpiece-chart-cols .pf-depth-chart-height,
+.pf-setpiece-chart-cols .pf-depth-chart-rec,
+.pf-setpiece-chart-cols .pf-depth-chart-injury,
+.pf-setpiece-chart-cols .pf-depth-chart-score,
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot,
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot-rank {
+    color: var(--app-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.pf-setpiece-chart-cols .pf-depth-chart-rank,
+.pf-setpiece-chart-cols .pf-depth-chart-age,
+.pf-setpiece-chart-cols .pf-depth-chart-height,
+.pf-setpiece-chart-cols .pf-depth-chart-feet {
+    text-align: center;
+}
+
+.pf-setpiece-chart-cols .pf-depth-chart-name-label,
+.pf-setpiece-chart-cols .pf-depth-chart-pos,
+.pf-setpiece-chart-cols .pf-depth-chart-club,
+.pf-setpiece-chart-cols .pf-depth-chart-div {
+    text-align: left;
+}
+
+/* Rec → Rk: stretch to the track and center so headers match body pills. */
+.pf-setpiece-chart-cols .pf-depth-chart-rec,
+.pf-setpiece-chart-cols .pf-depth-chart-injury,
+.pf-setpiece-chart-cols .pf-depth-chart-score,
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot,
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot-rank,
+.pf-setpiece-chart-row .pf-depth-chart-rec,
+.pf-setpiece-chart-row .pf-depth-chart-injury,
+.pf-setpiece-chart-row .pf-depth-chart-score,
+.pf-setpiece-chart-row .pf-setpiece-chart-slot,
+.pf-setpiece-chart-row .pf-setpiece-chart-slot-rank {
+    justify-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.pf-setpiece-chart-row .pf-depth-chart-injury p {
+    margin: 0 !important;
+}
+
+.pf-setpiece-chart-slot {
+    min-width: 0;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--app-text);
+}
+
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot {
+    font-size: 0.72rem;
+}
+
+.pf-setpiece-chart-slot-rank {
+    color: var(--app-text);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+}
+
+.pf-setpiece-chart-cols .pf-setpiece-chart-slot-rank {
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.pf-setpiece-chart-row {
+    background: var(--app-card);
+    border-bottom: 1px solid var(--app-line);
+    min-height: 38px;
+}
+
+.pf-setpiece-chart-row.is-odd {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="light"] .pf-setpiece-chart-row.is-odd,
+body[data-theme="light"] .pf-setpiece-chart-row.is-odd {
+    background: rgba(0, 0, 0, 0.025);
+}
+
+.pf-setpiece-chart-row:last-child {
+    border-bottom: none;
+}
+
+.pf-setpiece-chart-row:hover {
+    background: var(--table-hover-bg) !important;
 }
 
 .pf-depth-minutes-field {

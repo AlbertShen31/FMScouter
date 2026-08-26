@@ -60,8 +60,11 @@ def _pattern_click_triggered() -> bool:
 from scoring.comparison import score_display
 from scoring.division_tiers import apply_division_tier, classify_division
 from scoring.role_scorer import (
+    FootStrength,
+    apply_set_piece_scores,
     combo_column,
     combo_meta,
+    foot_strength,
     group_abbr_tone,
     parse_combo_id,
     role_meta,
@@ -605,6 +608,212 @@ def _xi_view_switcher(active=None) -> html.Div:
         role="group",
         **{"aria-label": "Starting XI view"},
     )
+
+
+SET_PIECE_TOP_N = 10
+SET_PIECE_FOOT_TOP_N = 5
+# Delivery / kick categories: split into left / right very-strong takers.
+SET_PIECE_FOOTED_IDS = frozenset({"corners", "dfk", "ifk"})
+
+
+def _setpiece_profile_list(settings=None) -> list[dict]:
+    return list(us.set_piece_profiles(settings))
+
+
+def _normalize_setpiece_view(value, settings=None) -> str:
+    pieces = _setpiece_profile_list(settings)
+    ids = [str(p.get("id") or "") for p in pieces if p.get("id")]
+    raw = str(value or "").strip().lower()
+    if raw in ids:
+        return raw
+    return ids[0] if ids else "corners"
+
+
+def _setpiece_profile(piece_id: str, settings=None) -> dict | None:
+    target = _normalize_setpiece_view(piece_id, settings)
+    for profile in _setpiece_profile_list(settings):
+        if str(profile.get("id") or "") == target:
+            return profile
+    return None
+
+
+def _setpiece_view_switcher(active=None, settings=None) -> html.Div:
+    current = _normalize_setpiece_view(active, settings)
+    buttons = []
+    for profile in _setpiece_profile_list(settings):
+        piece_id = str(profile.get("id") or "").strip()
+        if not piece_id:
+            continue
+        abbr = str(profile.get("abbr") or profile.get("label") or piece_id).strip()
+        label = str(profile.get("label") or abbr).strip()
+        buttons.append(
+            html.Button(
+                abbr,
+                id={"type": "pf-setpiece-view", "view": piece_id},
+                n_clicks=0,
+                type="button",
+                title=label,
+                className="st-player-seg-btn"
+                + (" active" if piece_id == current else ""),
+            )
+        )
+    return html.Div(
+        buttons,
+        className="st-player-seg pf-setpiece-view-seg",
+        role="group",
+        **{"aria-label": "Set piece category"},
+    )
+
+
+def _try_float_score(value) -> float | None:
+    if value is None or value in ("", "-", "—"):
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if score != score:  # NaN
+        return None
+    return score
+
+
+def _entry_setpiece_score(entry: dict, score_col: str, *, settings=None) -> float | None:
+    """Prefer snapshot score; recompute from stored attrs when missing."""
+    if not score_col:
+        return None
+    row = entry.get("row") or {}
+    parsed = _try_float_score(row.get(score_col))
+    if parsed is not None:
+        return parsed
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else None
+    attrs = (player or {}).get("attrs") or {}
+    if not isinstance(attrs, dict) or not attrs:
+        return None
+    settings = us.normalize(settings)
+    temp: dict = {}
+    apply_set_piece_scores(
+        temp,
+        attrs,
+        tier_weights=us.tier_weights(settings),
+        profiles=us.set_piece_profiles(settings),
+    )
+    return _try_float_score(temp.get(score_col))
+
+
+def _unique_setpiece_entries(
+    entries: list[dict] | None = None,
+    *,
+    score_col: str = "",
+    settings=None,
+) -> list[dict]:
+    """One entry per player_key; prefer the row with a real set-piece score."""
+    by_key: dict[str, tuple[float, dict]] = {}
+    for entry in entries or []:
+        key = _entry_player_key(entry)
+        if not key:
+            continue
+        score = _entry_setpiece_score(entry, score_col, settings=settings)
+        rank = score if score is not None else float("-inf")
+        prev = by_key.get(key)
+        if prev is None or rank > prev[0]:
+            by_key[key] = (rank, entry)
+    return [item for _, item in by_key.values()]
+
+
+def _entry_very_strong_feet(entry: dict) -> tuple[bool, bool]:
+    """Return (left_very_strong, right_very_strong) from snapshot or player."""
+    row = entry.get("row") if isinstance(entry.get("row"), dict) else {}
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    left_raw = row.get("Left Foot")
+    right_raw = row.get("Right Foot")
+    if left_raw in (None, "", "-", "—"):
+        left_raw = player.get("left_foot")
+    if right_raw in (None, "", "-", "—"):
+        right_raw = player.get("right_foot")
+    left = foot_strength(left_raw or "")
+    right = foot_strength(right_raw or "")
+    return (
+        left == FootStrength.VERY_STRONG,
+        right == FootStrength.VERY_STRONG,
+    )
+
+
+def _best_slot_by_player_key(
+    formation_id: str | None,
+    slots: list[dict] | None,
+    *,
+    cache: _PfProfileCache | None = None,
+) -> dict[str, tuple[int, str]]:
+    """Best depth rank per player across formation slots.
+
+    Rank 1 is best. On tied ranks, keep the earlier Starting XI slot.
+    """
+    best: dict[str, tuple[int, str]] = {}
+    if not formation_id or not slots:
+        return best
+    for slot in slots:
+        label = str(slot.get("display_label") or slot.get("label") or "—").strip() or "—"
+        if cache is not None:
+            ordered = cache.ordered_for_slot(
+                formation_id, slot["index"], slot.get("column") or ""
+            )
+        else:
+            ordered = profiles.ordered_profiles_for_slot(
+                formation_id, slot["index"], slot.get("column") or ""
+            )
+        for index, entry in enumerate(ordered):
+            key = _entry_player_key(entry)
+            if not key:
+                continue
+            rank = index + 1
+            prev = best.get(key)
+            if prev is None or rank < prev[0]:
+                best[key] = (rank, label)
+    return best
+
+
+def _top_setpiece_entries(
+    piece_id: str,
+    *,
+    settings=None,
+    limit: int = SET_PIECE_TOP_N,
+    foot_side: str | None = None,
+    cache: _PfProfileCache | None = None,
+) -> tuple[dict | None, list[tuple[dict, float | None]]]:
+    """Return (profile meta, [(entry, score), ...]) ranked for the category.
+
+    ``foot_side`` of ``left`` / ``right`` keeps only very-strong on that foot.
+    """
+    settings = us.normalize(settings)
+    profile = _setpiece_profile(piece_id, settings)
+    score_col = str((profile or {}).get("score") or "").strip()
+    if cache is not None:
+        entries = cache.list_role_profiles()
+    else:
+        entries = profiles.list_role_profiles()
+    unique = _unique_setpiece_entries(
+        entries, score_col=score_col, settings=settings
+    )
+    side = str(foot_side or "").strip().lower()
+    ranked: list[tuple[dict, float | None]] = []
+    for entry in unique:
+        if side in ("left", "right"):
+            left_vs, right_vs = _entry_very_strong_feet(entry)
+            if side == "left" and not left_vs:
+                continue
+            if side == "right" and not right_vs:
+                continue
+        ranked.append(
+            (entry, _entry_setpiece_score(entry, score_col, settings=settings))
+        )
+    ranked.sort(
+        key=lambda item: (
+            item[1] is None,
+            -(item[1] if item[1] is not None else 0.0),
+            (profiles.profile_identity(item[0])[0] or "").lower(),
+        )
+    )
+    return profile, ranked[: max(0, int(limit or 0))]
 
 
 def _profiles_busy_overlay(overlay_id: str, label: str, *, on: bool = False) -> html.Div:
@@ -1923,6 +2132,404 @@ def _build_formation_xi_chart(
     )
 
 
+def _setpiece_chart_col_headers(*, show_height: bool, score_abbr: str) -> html.Div:
+    cells = [
+        html.Span("#", className="pf-depth-chart-rank"),
+        html.Span("Name", className="pf-depth-chart-name-label"),
+        html.Span("Age", className="pf-depth-chart-age"),
+    ]
+    if show_height:
+        cells.append(
+            html.Span("Ht", className="pf-depth-chart-height", title="Height")
+        )
+    cells.extend(
+        [
+            html.Span("Pos", className="pf-depth-chart-pos"),
+            html.Span("Feet", className="pf-depth-chart-feet"),
+            html.Span("Club", className="pf-depth-chart-club"),
+            html.Span("Division", className="pf-depth-chart-div"),
+            html.Span("Rec", className="pf-depth-chart-rec"),
+            html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
+            html.Span(
+                score_abbr or "Score",
+                className="pf-depth-chart-score",
+                title=score_abbr or "Set piece score",
+            ),
+            html.Span(
+                "Slot",
+                className="pf-setpiece-chart-slot",
+                title="Highest-ranked formation slot (Starting XI order breaks ties)",
+            ),
+            html.Span(
+                "Rk",
+                className="pf-setpiece-chart-slot-rank",
+                title="Depth rank in that slot",
+            ),
+        ]
+    )
+    return html.Div(cells, className="pf-setpiece-chart-cols")
+
+
+def _setpiece_chart_player_row(
+    entry: dict | None,
+    *,
+    index: int,
+    score: float | None,
+    settings,
+    theme=None,
+    show_height: bool = False,
+    slot_label: str | None = None,
+    slot_rank: int | None = None,
+) -> html.Div:
+    """Read-only depth-style row for the set-piece leaderboard."""
+    settings = us.normalize(settings)
+    odd = " is-odd" if index % 2 else ""
+    slot_text = _blank(slot_label) if slot_label not in (None, "") else "—"
+    rank_text = str(slot_rank) if isinstance(slot_rank, int) and slot_rank > 0 else "—"
+
+    if entry is None:
+        cells = [
+            html.Span(str(index + 1), className="pf-depth-chart-rank"),
+            html.Span("—", className="pf-depth-chart-name is-empty"),
+            html.Span("—", className="pf-depth-chart-age"),
+        ]
+        if show_height:
+            cells.append(html.Span("—", className="pf-depth-chart-height"))
+        cells.extend(
+            [
+                html.Span("—", className="pf-depth-chart-pos"),
+                html.Span("—", className="pf-depth-chart-feet"),
+                html.Span("—", className="pf-depth-chart-club"),
+                html.Span("—", className="pf-depth-chart-div"),
+                html.Span("—", className="pf-depth-chart-rec"),
+                html.Span("—", className="pf-depth-chart-injury"),
+                html.Div(
+                    html.Span("—", className="pf-depth-chart-metric"),
+                    className="pf-depth-chart-score",
+                ),
+                html.Span("—", className="pf-setpiece-chart-slot"),
+                html.Span("—", className="pf-setpiece-chart-slot-rank"),
+            ]
+        )
+        return html.Div(
+            cells,
+            className="pf-setpiece-chart-row is-empty" + odd,
+        )
+
+    row = entry.get("row") or {}
+    profile_id = str(entry.get("id") or "").strip()
+    name, club = profiles.profile_identity(entry)
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    feet_row = dict(row)
+    if feet_row.get("Left Foot") in (None, "", "-", "—") and player.get("left_foot"):
+        feet_row["Left Foot"] = player.get("left_foot")
+    if feet_row.get("Right Foot") in (None, "", "-", "—") and player.get("right_foot"):
+        feet_row["Right Foot"] = player.get("right_foot")
+    position = _blank(row.get("Position"))
+    if position == "—":
+        position = _blank(row.get("Best Pos"))
+    division = _blank(row.get("Division"))
+    tier = classify_division(row.get("Division"), row.get("Nation"))
+    from scoring.stats_availability import (
+        LIMITED_DIVISION_TITLE,
+        division_has_limited_tracking,
+    )
+
+    limited = division_has_limited_tracking(
+        row.get("Division"), _limited_tracking_divisions()
+    )
+    div_class = "pf-depth-chart-div"
+    if tier:
+        div_class = f"{div_class} pf-div-{tier}"
+    if limited:
+        div_class = f"{div_class} pf-div-limited"
+    div_title = (
+        f"{division} — {LIMITED_DIVISION_TITLE}" if limited and division != "—" else division
+    )
+    injury_html = injury_cell(row.get("Injury"))
+    cells = [
+        html.Span(str(index + 1), className="pf-depth-chart-rank"),
+        (
+            html.Button(
+                name or "Player",
+                id={"type": "pf-depth-name", "id": profile_id},
+                n_clicks=0,
+                className="pf-depth-chart-name",
+                title="Open player details",
+                type="button",
+            )
+            if profile_id
+            else html.Span("—", className="pf-depth-chart-name is-empty")
+        ),
+        _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
+    ]
+    if show_height:
+        cells.append(_depth_plain_cell(row.get("Height"), "pf-depth-chart-height"))
+    cells.extend(
+        [
+            html.Span(position, className="pf-depth-chart-pos", title=position),
+            dcc.Markdown(
+                feet_cell(feet_row),
+                dangerously_allow_html=True,
+                className="pf-depth-chart-feet",
+            ),
+            html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
+            html.Span(division, className=div_class, title=div_title),
+            _depth_rec_cell(row.get("Rec"), theme=theme),
+            (
+                dcc.Markdown(
+                    injury_html,
+                    dangerously_allow_html=True,
+                    className="pf-depth-chart-injury",
+                )
+                if injury_html and injury_html not in ("—", "-", "")
+                else html.Span("—", className="pf-depth-chart-injury")
+            ),
+            html.Div(
+                _depth_score_cell(score, settings, theme=theme),
+                className="pf-depth-chart-score",
+            ),
+            html.Span(
+                slot_text,
+                className="pf-setpiece-chart-slot",
+                title=slot_text if slot_text != "—" else "Not in any formation slot",
+            ),
+            html.Span(
+                rank_text,
+                className="pf-setpiece-chart-slot-rank",
+                title=(
+                    f"Depth rank #{rank_text} in {slot_text}"
+                    if rank_text != "—"
+                    else "Not in any formation slot"
+                ),
+            ),
+        ]
+    )
+    return html.Div(
+        cells,
+        className="pf-setpiece-chart-row" + odd,
+        key=f"pf-sp-{index}-{profile_id or 'x'}",
+        **({"data-profile-id": profile_id} if profile_id else {}),
+    )
+
+
+def _setpiece_ranked_table(
+    ranked: list[tuple[dict, float | None]],
+    *,
+    settings,
+    theme=None,
+    show_height: bool = False,
+    score_abbr: str = "Score",
+    slot_map: dict[str, tuple[int, str]] | None = None,
+    empty_message: str = "No matching players.",
+) -> html.Div:
+    if not ranked:
+        return html.Div(empty_message, className="text-muted small pf-setpiece-empty")
+    slot_map = slot_map or {}
+    rows = []
+    for index, (entry, score) in enumerate(ranked):
+        key = _entry_player_key(entry)
+        placement = slot_map.get(key)
+        slot_rank = placement[0] if placement else None
+        slot_label = placement[1] if placement else None
+        rows.append(
+            _setpiece_chart_player_row(
+                entry,
+                index=index,
+                score=score,
+                settings=settings,
+                theme=theme,
+                show_height=show_height,
+                slot_label=slot_label,
+                slot_rank=slot_rank,
+            )
+        )
+    return html.Div(
+        [
+            _setpiece_chart_col_headers(
+                show_height=show_height, score_abbr=score_abbr
+            ),
+            html.Div(rows, className="pf-setpiece-chart-list"),
+        ]
+    )
+
+
+def _setpiece_group_section(
+    *,
+    title: str,
+    count_label: str,
+    count_title: str,
+    hint: str,
+    table: html.Div,
+    show_height: bool = False,
+) -> html.Div:
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(title, className="pf-depth-chart-role-name"),
+                            html.Span(
+                                count_label,
+                                className="pf-depth-chart-count",
+                                title=count_title,
+                            ),
+                        ],
+                        className="pf-depth-chart-role-title",
+                    ),
+                    html.Span(hint, className="text-muted small"),
+                ],
+                className="pf-depth-chart-role-head",
+            ),
+            table,
+        ],
+        className="pf-depth-chart-section pf-setpiece-chart"
+        + (" is-aerial" if show_height else ""),
+    )
+
+
+def _build_setpiece_chart(
+    piece_id: str | None = None,
+    *,
+    settings=None,
+    theme=None,
+    formation_id: str | None = None,
+    formation_slots: list[dict] | None = None,
+    cache: _PfProfileCache | None = None,
+) -> html.Div:
+    """Top set-piece scores among unique players in the active library."""
+    settings = us.normalize(settings)
+    piece_id = _normalize_setpiece_view(piece_id, settings)
+    profile = _setpiece_profile(piece_id, settings)
+    abbr = str((profile or {}).get("abbr") or (profile or {}).get("label") or "Score")
+    label = str((profile or {}).get("label") or abbr)
+    show_height = piece_id == "aerial"
+    slots = list(formation_slots or [])
+    slot_map = _best_slot_by_player_key(formation_id, slots, cache=cache)
+
+    if piece_id in SET_PIECE_FOOTED_IDS:
+        _, left_ranked = _top_setpiece_entries(
+            piece_id,
+            settings=settings,
+            limit=SET_PIECE_FOOT_TOP_N,
+            foot_side="left",
+            cache=cache,
+        )
+        _, right_ranked = _top_setpiece_entries(
+            piece_id,
+            settings=settings,
+            limit=SET_PIECE_FOOT_TOP_N,
+            foot_side="right",
+            cache=cache,
+        )
+        left_table = _setpiece_ranked_table(
+            left_ranked,
+            settings=settings,
+            theme=theme,
+            show_height=False,
+            score_abbr=abbr,
+            slot_map=slot_map,
+            empty_message="No very strong left-footed takers yet.",
+        )
+        right_table = _setpiece_ranked_table(
+            right_ranked,
+            settings=settings,
+            theme=theme,
+            show_height=False,
+            score_abbr=abbr,
+            slot_map=slot_map,
+            empty_message="No very strong right-footed takers yet.",
+        )
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Span(
+                                    label,
+                                    className="pf-depth-chart-role-name",
+                                ),
+                                html.Span(
+                                    "L/R · VS",
+                                    className="pf-depth-chart-count",
+                                    title=(
+                                        f"Top {SET_PIECE_FOOT_TOP_N} very strong "
+                                        "left- and right-footed takers"
+                                    ),
+                                ),
+                            ],
+                            className="pf-depth-chart-role-title",
+                        ),
+                        html.Span(
+                            "Very strong foot only. Slot is the best depth rank "
+                            "across the formation; ties keep the earlier Starting XI slot.",
+                            className="text-muted small",
+                        ),
+                    ],
+                    className="pf-depth-chart-role-head pf-setpiece-chart-head",
+                ),
+                html.Div(
+                    [
+                        _setpiece_group_section(
+                            title="Left · VS",
+                            count_label=f"Top {len(left_ranked)}",
+                            count_title=(
+                                f"Top {len(left_ranked)} of up to "
+                                f"{SET_PIECE_FOOT_TOP_N} very strong left foot"
+                            ),
+                            hint="Left Foot = Very strong",
+                            table=left_table,
+                        ),
+                        _setpiece_group_section(
+                            title="Right · VS",
+                            count_label=f"Top {len(right_ranked)}",
+                            count_title=(
+                                f"Top {len(right_ranked)} of up to "
+                                f"{SET_PIECE_FOOT_TOP_N} very strong right foot"
+                            ),
+                            hint="Right Foot = Very strong",
+                            table=right_table,
+                        ),
+                    ],
+                    className="pf-setpiece-footed-grid",
+                ),
+            ],
+            className="pf-setpiece-chart-shell",
+        )
+
+    _, ranked = _top_setpiece_entries(
+        piece_id,
+        settings=settings,
+        limit=SET_PIECE_TOP_N,
+        cache=cache,
+    )
+    table = _setpiece_ranked_table(
+        ranked,
+        settings=settings,
+        theme=theme,
+        show_height=show_height,
+        score_abbr=abbr,
+        slot_map=slot_map,
+        empty_message="No saved players in this profile yet.",
+    )
+    return _setpiece_group_section(
+        title=label,
+        count_label=f"Top {len(ranked)}" if ranked else "Top 0",
+        count_title=(
+            f"Top {len(ranked)} of up to {SET_PIECE_TOP_N} by {label} score"
+        ),
+        hint=(
+            "Unique players in this library, ranked by set-piece score. "
+            "Slot is the best depth rank across the formation; ties keep the "
+            "earlier Starting XI slot. Read-only."
+        ),
+        table=table,
+        show_height=show_height,
+    )
+
+
 def _mount_depth_chart(chart, *, epoch: str | int | None = None) -> html.Div:
     """Wrap chart so Dash must remount after drag DOM mutations / auto-rank."""
     token = str(epoch if epoch is not None else uuid.uuid4().hex)
@@ -2825,6 +3432,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
+            dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-table-row-cache", data=None),
@@ -3200,6 +3808,58 @@ def layout(**_kwargs):
                                 id="pf-xi-wrap",
                                 className="pf-xi-wrap mb-3 rs-shortlist-busy-host",
                                 hidden=True,
+                            ),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Span(
+                                                        "Set pieces",
+                                                        className="rs-depth-heading-label",
+                                                    ),
+                                                    html.Span(
+                                                        "Top set-piece takers in this "
+                                                        "library. COR / DFK / IFK split "
+                                                        "into very strong left and right "
+                                                        "foot (top 5 each). Slot shows "
+                                                        "best formation depth rank.",
+                                                        className="rs-depth-heading-hint",
+                                                    ),
+                                                ],
+                                                className="rs-depth-heading-copy",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "Category",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    html.Div(
+                                                        _setpiece_view_switcher(
+                                                            "corners", settings
+                                                        ),
+                                                        id="pf-setpiece-view-switch",
+                                                    ),
+                                                ],
+                                                className=(
+                                                    "pf-squad-depth-field "
+                                                    "pf-setpiece-view-field"
+                                                ),
+                                            ),
+                                        ],
+                                        className="pf-depth-chart-toolbar",
+                                    ),
+                                    html.Div(id="pf-setpiece-chart-body"),
+                                    _profiles_busy_overlay(
+                                        "pf-setpiece-chart-busy",
+                                        "Updating set pieces…",
+                                        on=True,
+                                    ),
+                                ],
+                                id="pf-setpiece-wrap",
+                                className="pf-setpiece-wrap mb-3 rs-shortlist-busy-host",
                             ),
                             html.Div(
                                 [
@@ -3622,6 +4282,33 @@ def sync_xi_view_switch(view):
     return _xi_view_switcher(view)
 
 
+@callback(
+    Output("pf-setpiece-view", "data"),
+    Input({"type": "pf-setpiece-view", "view": ALL}, "n_clicks"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def set_setpiece_view(n_clicks, settings):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
+        return no_update
+    view = str((ctx.triggered_id or {}).get("view") or "").strip()
+    settings = us.normalize(settings)
+    valid = {str(p.get("id") or "") for p in _setpiece_profile_list(settings)}
+    if view not in valid:
+        return no_update
+    return view
+
+
+@callback(
+    Output("pf-setpiece-view-switch", "children"),
+    Input("pf-setpiece-view", "data"),
+    Input("ui-settings", "data"),
+)
+def sync_setpiece_view_switch(view, settings):
+    settings = us.normalize(settings)
+    return _setpiece_view_switcher(view, settings)
+
+
 # Squad depth: start with overlay on; hide when cards finish rendering.
 # Show again when formation / rev rebuilds the board (not on XI toggle).
 clientside_callback(
@@ -3721,6 +4408,40 @@ clientside_callback(
     """,
     Output("pf-xi-chart-busy", "className", allow_duplicate=True),
     Input("pf-xi-chart-body", "children"),
+    prevent_initial_call=True,
+)
+
+# Set pieces panel: spinner on category / formation / rev / hydrate.
+clientside_callback(
+    """
+    function(pieceView, formation, rev, hydrated) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("pf-setpiece-chart-busy", "className"),
+    Input("pf-setpiece-view", "data"),
+    Input("pf-formation-select", "value"),
+    Input("pf-rev", "data"),
+    Input("pf-hydrated", "data"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
+    function(_children) {
+        var el = document.getElementById("pf-setpiece-chart-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        return "rs-shortlist-busy";
+    }
+    """,
+    Output("pf-setpiece-chart-busy", "className", allow_duplicate=True),
+    Input("pf-setpiece-chart-body", "children"),
     prevent_initial_call=True,
 )
 
@@ -4245,6 +4966,42 @@ def refresh_profiles_xi_chart(
         theme=theme,
         minutes_required=depth_minutes_f,
         xi_view=xi_view,
+        cache=profile_cache,
+    )
+
+
+@callback(
+    Output("pf-setpiece-chart-body", "children"),
+    Input("pf-setpiece-view", "data"),
+    Input("pf-rev", "data"),
+    Input("pf-formation-select", "value"),
+    Input("ui-settings", "data"),
+    Input("theme", "data"),
+    Input("pf-hydrated", "data"),
+)
+def refresh_profiles_setpiece_chart(
+    piece_view,
+    _rev,
+    formation_id,
+    settings,
+    theme,
+    hydrated,
+):
+    """Top set-piece scores for unique players in the active library."""
+    if not hydrated:
+        return no_update
+
+    settings = us.normalize(settings)
+    _ensure_profile_percentiles(settings)
+    piece_view = _normalize_setpiece_view(piece_view, settings)
+    formation_slots = _formation_slots(formation_id)
+    profile_cache = _PfProfileCache()
+    return _build_setpiece_chart(
+        piece_view,
+        settings=settings,
+        theme=theme,
+        formation_id=formation_id,
+        formation_slots=formation_slots,
         cache=profile_cache,
     )
 
