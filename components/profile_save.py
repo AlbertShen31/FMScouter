@@ -1,7 +1,7 @@
-"""Save marked shortlist players to the profiles library."""
+"""Save marked shortlist players to a chosen profiles library."""
 from __future__ import annotations
 
-from dash import Input, Output, State, callback, html, no_update
+from dash import Input, Output, State, callback, dcc, html, no_update
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
@@ -12,20 +12,45 @@ from scoring.stats_scorer import player_key as stats_player_key
 
 
 def profile_save_panel(*, prefix: str, section_number: int) -> dbc.Card:
+    options = profiles.library_options()
+    active = profiles.active_library_id() or (options[0]["value"] if options else None)
     return dbc.Card(
         [
             dbc.CardHeader(f"{section_number}. Profiles"),
             dbc.CardBody(
                 [
                     html.P(
-                        "Mark players in the shortlist, then save them here. One profile "
-                        "row is created per evaluated role — each save stores that "
-                        "shortlist row only (not the whole file).",
+                        "Mark players in the shortlist, then save them to a profile "
+                        "library. One row is created per evaluated role — each save "
+                        "stores that shortlist row only (not the whole file).",
                         className="text-muted small mb-3",
+                    ),
+                    html.Div(
+                        [
+                            html.Label(
+                                "Save to profile",
+                                className="rs-field-label",
+                            ),
+                            dmc.Select(
+                                id=f"{prefix}-profile-library",
+                                data=options,
+                                value=active,
+                                clearable=False,
+                                searchable=True,
+                                placeholder="Select a profile",
+                                size="sm",
+                            ),
+                            dcc.Interval(
+                                id=f"{prefix}-profile-library-poll",
+                                interval=3000,
+                                n_intervals=0,
+                            ),
+                        ],
+                        className="pf-save-library-field mb-3",
                     ),
                     html.Div(id=f"{prefix}-profile-preview", className="pf-save-preview"),
                     dmc.Button(
-                        "Save marked to profiles",
+                        "Save marked to profile",
                         id=f"{prefix}-profile-save-btn",
                         className="me-2",
                         disabled=True,
@@ -73,6 +98,13 @@ def _effective_marked_keys(marked, selected_ids=None, table_data=None) -> list[s
     return sorted(marked_set)
 
 
+def _library_label(library_id: str | None) -> str:
+    meta = profiles.get_library(library_id)
+    if meta:
+        return str(meta.get("name") or meta.get("id") or "Profiles")
+    return "Profiles"
+
+
 def register_profile_save_callbacks(
     prefix: str,
     *,
@@ -86,20 +118,23 @@ def register_profile_save_callbacks(
         Input(marked_store, "data"),
         Input(parsed_id, "data"),
         Input(f"{prefix}-table", "selected_row_ids"),
+        Input(f"{prefix}-profile-library", "value"),
         State(f"{prefix}-table", "data"),
     )
-    def _preview_marked(marked, parsed, selected_ids, table_data):
+    def _preview_marked(marked, parsed, selected_ids, library_id, table_data):
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         has_data = bool(parsed_players(parsed) if parsed else [])
+        has_library = bool(str(library_id or "").strip())
         if not marked_list:
             preview = html.P("No players marked yet.", className="text-muted mb-0")
         else:
             n = len(marked_list)
             preview = html.P(
-                f"{n} player{'s' if n != 1 else ''} marked for save.",
+                f"{n} player{'s' if n != 1 else ''} marked for "
+                f"{_library_label(library_id)}.",
                 className="text-muted mb-0",
             )
-        disabled = not marked_list or not has_data
+        disabled = not marked_list or not has_data or not has_library
         return preview, disabled
 
     @callback(
@@ -111,9 +146,12 @@ def register_profile_save_callbacks(
         State("ui-settings", "data"),
         State(f"{prefix}-table", "selected_row_ids"),
         State(f"{prefix}-table", "data"),
+        State(f"{prefix}-profile-library", "value"),
         prevent_initial_call=True,
     )
-    def _save_marked(n_clicks, marked, parsed, settings, selected_ids, table_data):
+    def _save_marked(
+        n_clicks, marked, parsed, settings, selected_ids, table_data, library_id
+    ):
         if not n_clicks:
             return no_update, no_update
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
@@ -144,13 +182,14 @@ def register_profile_save_callbacks(
                 items,
                 saved_from=saved_from,
                 source_label=_source_label(parsed),
+                library_id=library_id,
             )
             msg = html.Div(
                 [
                     html.Span("✓ ", className="rs-upload-ok"),
                     html.Span(
                         f"Saved {len(saved)} player{'s' if len(saved) != 1 else ''} "
-                        "to Profiles."
+                        f"to {_library_label(library_id)}."
                     ),
                 ],
                 className="up-save-row",
@@ -171,6 +210,28 @@ def register_role_profile_save_callbacks(
     hybrids_id: str,
 ) -> None:
     @callback(
+        Output(f"{prefix}-profile-library", "data"),
+        Output(f"{prefix}-profile-library", "value"),
+        Input(f"{prefix}-profile-library-poll", "n_intervals"),
+        State(f"{prefix}-profile-library", "value"),
+        State(f"{prefix}-profile-library", "data"),
+    )
+    def _refresh_library_options(_n, current, current_data):
+        # Pick up libraries created on the Profiles page without a full reload.
+        options = profiles.library_options()
+        values = {opt["value"] for opt in options}
+        active = profiles.active_library_id()
+        if current in values:
+            value = current
+        elif active in values:
+            value = active
+        else:
+            value = options[0]["value"] if options else None
+        data_out = options if options != (current_data or []) else no_update
+        value_out = value if value != current else no_update
+        return data_out, value_out
+
+    @callback(
         Output(f"{prefix}-profile-preview", "children"),
         Output(f"{prefix}-profile-save-btn", "disabled"),
         Input(marked_store, "data"),
@@ -179,12 +240,21 @@ def register_role_profile_save_callbacks(
         Input(focus_id, "data"),
         Input(hybrids_id, "checked"),
         Input(f"{prefix}-table", "selected_row_ids"),
+        Input(f"{prefix}-profile-library", "value"),
         State(f"{prefix}-table", "data"),
     )
     def _preview_marked(
-        marked, parsed, payload, focus_role, hybrids_only, selected_ids, table_data
+        marked,
+        parsed,
+        payload,
+        focus_role,
+        hybrids_only,
+        selected_ids,
+        library_id,
+        table_data,
     ):
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
+        has_library = bool(str(library_id or "").strip())
         if not marked_list:
             preview = html.P("No players marked yet.", className="text-muted mb-0")
         else:
@@ -198,10 +268,11 @@ def register_role_profile_save_callbacks(
             n_rows = len(items)
             preview = html.P(
                 f"{n_players} player{'s' if n_players != 1 else ''} marked → "
-                f"{n_rows} role profile row{'s' if n_rows != 1 else ''} to save.",
+                f"{n_rows} role profile row{'s' if n_rows != 1 else ''} for "
+                f"{_library_label(library_id)}.",
                 className="text-muted mb-0",
             )
-        disabled = not marked_list or not payload
+        disabled = not marked_list or not payload or not has_library
         return preview, disabled
 
     @callback(
@@ -216,6 +287,7 @@ def register_role_profile_save_callbacks(
         State("ui-settings", "data"),
         State(f"{prefix}-table", "selected_row_ids"),
         State(f"{prefix}-table", "data"),
+        State(f"{prefix}-profile-library", "value"),
         prevent_initial_call=True,
     )
     def _save_marked(
@@ -228,6 +300,7 @@ def register_role_profile_save_callbacks(
         settings,
         selected_ids,
         table_data,
+        library_id,
     ):
         if not n_clicks:
             return no_update, no_update
@@ -254,13 +327,15 @@ def register_role_profile_save_callbacks(
                 items,
                 saved_from="role_scores",
                 source_label=_source_label(parsed),
+                library_id=library_id,
             )
             msg = html.Div(
                 [
                     html.Span("✓ ", className="rs-upload-ok"),
                     html.Span(
                         f"Saved {len(saved)} role profile row"
-                        f"{'' if len(saved) == 1 else 's'} to Profiles."
+                        f"{'' if len(saved) == 1 else 's'} to "
+                        f"{_library_label(library_id)}."
                     ),
                 ],
                 className="up-save-row",

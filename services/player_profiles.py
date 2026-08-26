@@ -1,12 +1,26 @@
-"""Saved player profiles: one shortlist-style row snapshot per saved entry."""
+"""Saved player profiles: named libraries of shortlist-style row snapshots.
+
+Each library lives under ``data/profiles/packs/<id>/`` with ``meta.json``,
+``index.json``, and ``slot_depth.json``. ``active.json`` points at the current
+library. Legacy flat ``index.json`` / ``slot_depth.json`` are migrated once into
+a Default library.
+"""
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from config.paths import PROFILES_DIR, PROFILES_INDEX_PATH
+from config.paths import (
+    PROFILES_ACTIVE_PATH,
+    PROFILES_DIR,
+    PROFILES_INDEX_PATH,
+    PROFILES_PACKS_DIR,
+)
 import services.export_library as lib
 from scoring.role_scorer import player_row_key
 from scoring.stats_scorer import player_key as stats_player_key
@@ -16,7 +30,8 @@ SAVED_FROM_LABELS = {
     "stats": "Player stats",
 }
 
-SLOT_DEPTH_PATH = PROFILES_DIR / "slot_depth.json"
+# Legacy flat path (pre multi-library); kept for migration only.
+_LEGACY_SLOT_DEPTH_PATH = PROFILES_DIR / "slot_depth.json"
 
 # Identity fields copied from a scored role shortlist row into the snapshot.
 ROLE_IDENTITY_KEYS = (
@@ -38,28 +53,337 @@ ROLE_IDENTITY_KEYS = (
 )
 
 
+def _slugify(name: str) -> str:
+    text = re.sub(r"[^a-zA-Z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    return text[:48] or "profile"
+
+
+def _unique_library_id(name: str) -> str:
+    base = _slugify(name)
+    candidate = base
+    index = 2
+    while _library_dir(candidate).exists():
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
+
+
+def _library_dir(library_id: str) -> Path:
+    safe = "".join(ch for ch in str(library_id or "") if ch.isalnum() or ch in "-_")
+    return PROFILES_PACKS_DIR / safe
+
+
+def _meta_path(library_id: str) -> Path:
+    return _library_dir(library_id) / "meta.json"
+
+
+def _index_path(library_id: str | None = None) -> Path:
+    return _library_dir(_resolve_library_id(library_id)) / "index.json"
+
+
+def _slot_depth_path(library_id: str | None = None) -> Path:
+    return _library_dir(_resolve_library_id(library_id)) / "slot_depth.json"
+
+
+def _read_json(path: Path, fallback: Any) -> Any:
+    if not path.is_file():
+        return fallback
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _normalize_meta(raw: Any, *, library_id: str) -> dict[str, Any]:
+    payload = raw if isinstance(raw, dict) else {}
+    name = str(payload.get("name") or library_id or "Profile").strip() or "Profile"
+    return {
+        "id": library_id,
+        "name": name,
+        "formation_id": str(payload.get("formation_id") or "").strip(),
+        "created_at": str(payload.get("created_at") or "").strip(),
+        "updated_at": str(payload.get("updated_at") or "").strip(),
+    }
+
+
+def _migrate_legacy_if_needed() -> None:
+    """Move root index/slot_depth into packs/default once."""
+    legacy_index = PROFILES_INDEX_PATH
+    legacy_depth = _LEGACY_SLOT_DEPTH_PATH
+    if not legacy_index.is_file() and not legacy_depth.is_file():
+        return
+    dest = _library_dir("default")
+    if dest.exists() and (dest / "index.json").is_file():
+        # Already have a default pack — archive leftovers if present.
+        for path in (legacy_index, legacy_depth):
+            if path.is_file():
+                path.unlink()
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    formation_id = ""
+    if legacy_depth.is_file():
+        depth = _read_json(legacy_depth, {})
+        if isinstance(depth, dict) and depth:
+            formation_id = str(next(iter(depth.keys())) or "").strip()
+        target = dest / "slot_depth.json"
+        if not target.exists():
+            shutil.move(str(legacy_depth), str(target))
+        elif legacy_depth.is_file():
+            legacy_depth.unlink()
+    else:
+        _write_json(dest / "slot_depth.json", {})
+    if legacy_index.is_file():
+        target = dest / "index.json"
+        if not target.exists():
+            shutil.move(str(legacy_index), str(target))
+        elif legacy_index.is_file():
+            legacy_index.unlink()
+    else:
+        _write_json(dest / "index.json", [])
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if not formation_id:
+        try:
+            import services.formations as fm
+
+            formation_id = fm.active_id() or ""
+        except Exception:
+            formation_id = ""
+    _write_json(
+        dest / "meta.json",
+        {
+            "id": "default",
+            "name": "Default",
+            "formation_id": formation_id,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    if not PROFILES_ACTIVE_PATH.is_file():
+        _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
+
+
 def ensure_dirs() -> None:
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
-    if not PROFILES_INDEX_PATH.exists():
-        PROFILES_INDEX_PATH.write_text("[]\n", encoding="utf-8")
-    if not SLOT_DEPTH_PATH.exists():
-        SLOT_DEPTH_PATH.write_text("{}\n", encoding="utf-8")
+    PROFILES_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    _migrate_legacy_if_needed()
+    ids = list_library_ids()
+    if not ids:
+        _bootstrap_default_library()
+        ids = list_library_ids()
+    active = str(_read_json(PROFILES_ACTIVE_PATH, {}).get("id") or "").strip()
+    if ids and (not active or not _library_dir(active).is_dir()):
+        _write_json(PROFILES_ACTIVE_PATH, {"id": ids[0]})
 
 
-def _read_slot_depth() -> dict[str, Any]:
+def _bootstrap_default_library() -> None:
+    """Create an empty Default library without going through create_library."""
+    dest = _library_dir("default")
+    if dest.exists():
+        return
+    formation_id = ""
+    try:
+        import services.formations as fm
+
+        formation_id = fm.active_id() or ""
+    except Exception:
+        formation_id = ""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    dest.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        dest / "meta.json",
+        {
+            "id": "default",
+            "name": "Default",
+            "formation_id": formation_id,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    _write_json(dest / "index.json", [])
+    _write_json(dest / "slot_depth.json", {})
+    _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
+
+
+def list_library_ids() -> list[str]:
+    if not PROFILES_PACKS_DIR.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in PROFILES_PACKS_DIR.iterdir()
+        if path.is_dir() and (path / "meta.json").is_file()
+    )
+
+
+def _formation_display_name(formation_id: str) -> str:
+    """Resolve a formation pack id to its stored display name."""
+    fid = str(formation_id or "").strip()
+    if not fid:
+        return ""
+    try:
+        import services.formations as fm
+
+        if not fm.exists(fid):
+            return fid
+        formation = fm.load(fid, persist=False)
+        name = str((formation or {}).get("name") or "").strip()
+        return name or fid
+    except Exception:
+        return fid
+
+
+def library_options() -> list[dict[str, str]]:
+    options = []
+    for library_id in list_library_ids():
+        meta = get_library(library_id)
+        if not meta:
+            continue
+        formation_id = str(meta.get("formation_id") or "").strip()
+        formation_label = _formation_display_name(formation_id) if formation_id else ""
+        suffix = f" · {formation_label}" if formation_label else ""
+        options.append(
+            {
+                "label": f"{meta.get('name') or library_id}{suffix}",
+                "value": library_id,
+            }
+        )
+    return options
+
+
+def active_library_id() -> str:
+    ensure_dirs()
+    raw = _read_json(PROFILES_ACTIVE_PATH, {})
+    library_id = str((raw or {}).get("id") or "").strip()
+    if library_id and _library_dir(library_id).is_dir():
+        return library_id
+    ids = list_library_ids()
+    return ids[0] if ids else ""
+
+
+def set_active_library(library_id: str) -> str:
+    ensure_dirs()
+    lid = str(library_id or "").strip()
+    if not lid or not _library_dir(lid).is_dir():
+        raise ValueError("Profile library not found.")
+    _write_json(PROFILES_ACTIVE_PATH, {"id": lid})
+    return lid
+
+
+def _resolve_library_id(library_id: str | None = None) -> str:
+    lid = str(library_id or "").strip()
+    if lid:
+        if not _library_dir(lid).is_dir():
+            raise ValueError(f"Profile library not found: {lid}")
+        return lid
+    active = active_library_id()
+    if not active:
+        raise ValueError("No profile library is active.")
+    return active
+
+
+def get_library(library_id: str | None = None) -> dict[str, Any] | None:
     ensure_dirs()
     try:
-        data = json.loads(SLOT_DEPTH_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+        lid = _resolve_library_id(library_id)
+    except ValueError:
+        return None
+    path = _meta_path(lid)
+    if not path.is_file():
+        return None
+    return _normalize_meta(_read_json(path, {}), library_id=lid)
+
+
+def create_library(
+    name: str,
+    formation_id: str,
+    *,
+    library_id: str | None = None,
+    activate: bool = True,
+) -> dict[str, Any]:
+    """Create an empty profile library. Formation is required."""
+    PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+    PROFILES_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    _migrate_legacy_if_needed()
+    label = str(name or "").strip()
+    if not label:
+        raise ValueError("Enter a profile name.")
+    fid = str(formation_id or "").strip()
+    if not fid:
+        raise ValueError("Select a formation to create a profile.")
+    try:
+        import services.formations as fm
+
+        if not fm.exists(fid):
+            raise ValueError("Select a valid formation.")
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Could not validate formation: {exc}") from exc
+    lid = str(library_id or "").strip() or _unique_library_id(label)
+    dest = _library_dir(lid)
+    if dest.exists():
+        raise ValueError(f"A profile named “{lid}” already exists.")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    meta = {
+        "id": lid,
+        "name": label,
+        "formation_id": fid,
+        "created_at": now,
+        "updated_at": now,
+    }
+    dest.mkdir(parents=True, exist_ok=True)
+    _write_json(dest / "meta.json", meta)
+    _write_json(dest / "index.json", [])
+    _write_json(dest / "slot_depth.json", {})
+    if activate or not PROFILES_ACTIVE_PATH.is_file():
+        set_active_library(lid)
+    return _normalize_meta(meta, library_id=lid)
+
+
+def update_library_formation(library_id: str | None, formation_id: str) -> dict[str, Any]:
+    meta = get_library(library_id)
+    if not meta:
+        raise ValueError("Profile library not found.")
+    fid = str(formation_id or "").strip()
+    meta["formation_id"] = fid
+    meta["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _write_json(_meta_path(meta["id"]), meta)
+    return meta
+
+
+def delete_library(library_id: str) -> bool:
+    ensure_dirs()
+    lid = str(library_id or "").strip()
+    dest = _library_dir(lid)
+    if not dest.is_dir():
+        return False
+    ids = list_library_ids()
+    if len(ids) <= 1:
+        raise ValueError("Cannot delete the only profile library.")
+    shutil.rmtree(dest)
+    if active_library_id() == lid:
+        remaining = list_library_ids()
+        if remaining:
+            set_active_library(remaining[0])
+    return True
+
+
+def _read_slot_depth(library_id: str | None = None) -> dict[str, Any]:
+    ensure_dirs()
+    data = _read_json(_slot_depth_path(library_id), {})
     return data if isinstance(data, dict) else {}
 
 
-def _write_slot_depth(payload: dict[str, Any]) -> None:
+def _write_slot_depth(payload: dict[str, Any], library_id: str | None = None) -> None:
     ensure_dirs()
-    SLOT_DEPTH_PATH.write_text(
-        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-    )
+    _write_json(_slot_depth_path(library_id), payload)
 
 
 def _slot_key(slot_index: int | str) -> str:
@@ -342,23 +666,16 @@ def auto_rank_slot_by_score(
     return len(ids)
 
 
-def _read_index() -> list[dict[str, Any]]:
+def _read_index(library_id: str | None = None) -> list[dict[str, Any]]:
     ensure_dirs()
-    if not PROFILES_INDEX_PATH.exists():
-        return []
-    try:
-        data = json.loads(PROFILES_INDEX_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+    path = _index_path(library_id)
+    data = _read_json(path, [])
     return data if isinstance(data, list) else []
 
 
-def _write_index(entries: list[dict[str, Any]]) -> None:
+def _write_index(entries: list[dict[str, Any]], library_id: str | None = None) -> None:
     ensure_dirs()
-    PROFILES_INDEX_PATH.write_text(
-        json.dumps(entries, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    _write_json(_index_path(library_id), list(entries or []))
 
 
 def split_player_key(key: str) -> tuple[str, str]:
@@ -1236,6 +1553,7 @@ def save_profile_rows(
     saved_from: str,
     source_label: str = "",
     note: str | None = None,
+    library_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Upsert profile entries that already include a ``row`` snapshot."""
     if saved_from not in SAVED_FROM_LABELS:
@@ -1245,9 +1563,10 @@ def save_profile_rows(
         raise ValueError("Note is too long (max 500 characters).")
     if not items:
         raise ValueError("No profile rows to save.")
+    target = _resolve_library_id(library_id)
 
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    index = _read_index()
+    index = _read_index(target)
     by_key: dict[tuple[str, str], dict[str, Any]] = {
         profile_upsert_key(entry): entry for entry in index
     }
@@ -1305,7 +1624,11 @@ def save_profile_rows(
         index.append(entry)
         by_key[pair] = entry
         saved.append(dict(entry))
-    _write_index(index)
+    _write_index(index, target)
+    meta = get_library(target)
+    if meta:
+        meta["updated_at"] = now
+        _write_json(_meta_path(target), meta)
     return saved
 
 

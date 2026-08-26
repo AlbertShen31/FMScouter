@@ -6892,6 +6892,36 @@ body[data-theme="light"] .pf-depth-undo-row {
     font-size: 0.75rem;
 }
 
+.pf-library-active-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
+}
+
+.pf-library-field {
+    flex: 1 1 16rem;
+    min-width: 12rem;
+    max-width: 28rem;
+}
+
+.pf-library-create-row {
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.2fr) minmax(10rem, 1fr) auto;
+    gap: 0.75rem 1rem;
+    align-items: end;
+}
+
+@media (max-width: 720px) {
+    .pf-library-create-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pf-save-library-field {
+    max-width: 22rem;
+}
+
 .pf-depth-chart-toolbar {
     display: flex;
     flex-direction: row;

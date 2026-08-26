@@ -2649,12 +2649,96 @@ def layout(**_kwargs):
             player_modal(prefix="pf"),
             html.H1("Profiles", className="mt-2 mb-3"),
             html.P(
-                "Saved shortlist rows from Role scores (one row per evaluated role, "
-                "with overall percentiles when the source file has stats). Pick a "
-                "formation for Squad depth, focus a role to rank players in the Depth "
-                "chart, and click a name for the player modal. Use Update from saved file "
-                "to replace personal info, role scores, and percentiles from a library export.",
+                "Each profile library holds its own saved players and depth chart. "
+                "Create a profile with a formation, save marked players into it from "
+                "Role scores, then rank them here. Use Update from saved file to refresh "
+                "personal info, role scores, and percentiles from a library export.",
                 className="text-muted mb-3",
+            ),
+            dbc.Card(
+                [
+                    dbc.CardHeader("Profile libraries"),
+                    dbc.CardBody(
+                        [
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            html.Label(
+                                                "Active profile",
+                                                className="rs-field-label",
+                                            ),
+                                            dmc.Select(
+                                                id="pf-library-select",
+                                                data=profiles.library_options(),
+                                                value=profiles.active_library_id() or None,
+                                                clearable=False,
+                                                searchable=True,
+                                                placeholder="Select a profile",
+                                                size="sm",
+                                            ),
+                                        ],
+                                        className="pf-library-field",
+                                    ),
+                                    dmc.Button(
+                                        "Delete",
+                                        id="pf-library-delete",
+                                        size="sm",
+                                        variant="light",
+                                        color="red",
+                                        n_clicks=0,
+                                        disabled=len(profiles.list_library_ids()) <= 1,
+                                    ),
+                                ],
+                                className="pf-library-active-row mb-3",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "New profile",
+                                        className="rs-depth-heading-label",
+                                    ),
+                                    html.Span(
+                                        "Name and formation are required. Formation "
+                                        "sets the Squad depth layout for the new library.",
+                                        className="rs-depth-heading-hint",
+                                    ),
+                                ],
+                                className="rs-depth-heading-copy mb-2",
+                            ),
+                            html.Div(
+                                [
+                                    dmc.TextInput(
+                                        id="pf-library-name",
+                                        label="Name",
+                                        placeholder="e.g. Main save · 2026",
+                                        size="sm",
+                                    ),
+                                    dmc.Select(
+                                        id="pf-library-formation",
+                                        label="Formation",
+                                        data=fm.pack_options(),
+                                        value=fm.active_id() or None,
+                                        clearable=False,
+                                        searchable=True,
+                                        placeholder="Select a formation",
+                                        size="sm",
+                                    ),
+                                    dmc.Button(
+                                        "Create profile",
+                                        id="pf-library-create",
+                                        size="sm",
+                                        n_clicks=0,
+                                        disabled=True,
+                                    ),
+                                ],
+                                className="pf-library-create-row",
+                            ),
+                            html.Div(id="pf-library-status", className="mt-2"),
+                        ]
+                    ),
+                ],
+                className="mb-3 rs-section-card",
             ),
             dbc.Card(
                 [
@@ -3023,11 +3107,179 @@ def sync_band_legend(settings):
 def hydrate_pf_formation(stored):
     options = fm.pack_options()
     ids = {opt["value"] for opt in options}
+    meta = profiles.get_library()
+    preferred = str((meta or {}).get("formation_id") or "").strip()
+    if preferred in ids:
+        return options, preferred, preferred
     if stored in ids:
         return options, stored, no_update
     active = fm.active_id()
     value = active if active in ids else (options[0]["value"] if options else None)
     return options, value, value
+
+
+@callback(
+    Output("pf-library-create", "disabled"),
+    Input("pf-library-name", "value"),
+    Input("pf-library-formation", "value"),
+)
+def toggle_library_create(name, formation_id):
+    return not (str(name or "").strip() and str(formation_id or "").strip())
+
+
+@callback(
+    Output("pf-library-select", "data"),
+    Output("pf-library-select", "value"),
+    Output("pf-library-status", "children"),
+    Output("pf-library-name", "value"),
+    Output("pf-library-delete", "disabled"),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-formation-select", "value", allow_duplicate=True),
+    Output("pf-formation", "data", allow_duplicate=True),
+    Output("pf-focus-role", "data", allow_duplicate=True),
+    Input("pf-library-create", "n_clicks"),
+    State("pf-library-name", "value"),
+    State("pf-library-formation", "value"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def create_profile_library(n_clicks, name, formation_id, rev):
+    if not n_clicks:
+        return (no_update,) * 9
+    try:
+        meta = profiles.create_library(str(name or ""), str(formation_id or ""))
+    except Exception as exc:
+        return (
+            no_update,
+            no_update,
+            html.Div(str(exc), className="text-danger small"),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+    options = profiles.library_options()
+    fid = str(meta.get("formation_id") or "")
+    if fid and fm.exists(fid):
+        fm.load(fid, persist=True)
+    msg = html.Div(
+        [
+            html.Span("✓ ", className="rs-upload-ok"),
+            html.Span(f"Created profile “{meta.get('name')}”."),
+        ],
+        className="up-save-row",
+    )
+    return (
+        options,
+        meta["id"],
+        msg,
+        "",
+        len(profiles.list_library_ids()) <= 1,
+        int(rev or 0) + 1,
+        fid or no_update,
+        fid or no_update,
+        [],
+    )
+
+
+@callback(
+    Output("pf-library-select", "data", allow_duplicate=True),
+    Output("pf-library-select", "value", allow_duplicate=True),
+    Output("pf-library-status", "children", allow_duplicate=True),
+    Output("pf-library-delete", "disabled", allow_duplicate=True),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-formation-select", "value", allow_duplicate=True),
+    Output("pf-formation", "data", allow_duplicate=True),
+    Output("pf-focus-role", "data", allow_duplicate=True),
+    Input("pf-library-delete", "n_clicks"),
+    State("pf-library-select", "value"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def delete_profile_library(n_clicks, library_id, rev):
+    if not n_clicks:
+        return (no_update,) * 8
+    try:
+        deleted = profiles.delete_library(str(library_id or ""))
+    except Exception as exc:
+        return (
+            no_update,
+            no_update,
+            html.Div(str(exc), className="text-danger small"),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+    if not deleted:
+        return (
+            no_update,
+            no_update,
+            html.Div("Profile not found.", className="text-danger small"),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+    options = profiles.library_options()
+    active = profiles.active_library_id()
+    meta = profiles.get_library(active) or {}
+    fid = str(meta.get("formation_id") or "")
+    if fid and fm.exists(fid):
+        fm.load(fid, persist=True)
+    msg = html.Div(
+        [
+            html.Span("✓ ", className="rs-upload-ok"),
+            html.Span("Deleted profile library."),
+        ],
+        className="up-save-row",
+    )
+    return (
+        options,
+        active,
+        msg,
+        len(profiles.list_library_ids()) <= 1,
+        int(rev or 0) + 1,
+        fid or no_update,
+        fid or no_update,
+        [],
+    )
+
+
+@callback(
+    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-formation-select", "value", allow_duplicate=True),
+    Output("pf-formation", "data", allow_duplicate=True),
+    Output("pf-focus-role", "data", allow_duplicate=True),
+    Output("pf-library-status", "children", allow_duplicate=True),
+    Input("pf-library-select", "value"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def switch_profile_library(library_id, rev):
+    lid = str(library_id or "").strip()
+    if not lid:
+        return no_update, no_update, no_update, no_update, no_update
+    try:
+        if lid != profiles.active_library_id():
+            profiles.set_active_library(lid)
+    except Exception as exc:
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            html.Div(str(exc), className="text-danger small"),
+        )
+    meta = profiles.get_library(lid) or {}
+    fid = str(meta.get("formation_id") or "")
+    if fid and fm.exists(fid):
+        fm.load(fid, persist=True)
+    return int(rev or 0) + 1, fid or no_update, fid or no_update, [], no_update
 
 
 @callback(
@@ -3041,6 +3293,10 @@ def hydrate_pf_formation(stored):
 def persist_pf_formation(value, stored, focus):
     if value and fm.exists(value):
         fm.load(value, persist=True)
+        try:
+            profiles.update_library_formation(None, value)
+        except Exception:
+            pass
     slots = _formation_slots(value)
     focused = _focus_slot(focus)
     next_focus = no_update
