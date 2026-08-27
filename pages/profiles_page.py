@@ -1727,6 +1727,7 @@ def _depth_chart_player_row(
     removable: bool = True,
     selectable: bool = False,
     minutes_required=None,
+    name_src: str = "depth",
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
@@ -1745,6 +1746,7 @@ def _depth_chart_player_row(
         )
     )
     role_col = str(role_column or "").strip()
+    name_src = str(name_src or "depth").strip() or "depth"
 
     def check_cell(profile_id: str = "") -> html.Span | dmc.Checkbox:
         if not selectable:
@@ -1892,11 +1894,21 @@ def _depth_chart_player_row(
             (
                 html.Button(
                     name or "Player",
-                    id={"type": "pf-depth-name", "id": profile_id},
+                    id={
+                        "type": "pf-depth-name",
+                        "id": profile_id,
+                        "src": name_src,
+                        "slot": (
+                            str(slot_index)
+                            if slot_index is not None
+                            else "0"
+                        ),
+                    },
                     n_clicks=0,
                     className="pf-depth-chart-name",
                     title="Open player details",
                     draggable="false",
+                    type="button",
                 )
                 if profile_id
                 else html.Span("—", className="pf-depth-chart-name is-empty")
@@ -1969,6 +1981,7 @@ def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> ht
                     className="pf-depth-chart-check",
                     **{"aria-label": "Select all players in this slot"},
                 ),
+                html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
                 html.Span("#", className="pf-depth-chart-rank"),
             ],
             className="pf-depth-chart-rank-cell",
@@ -2105,6 +2118,7 @@ def _build_formation_xi_chart(
                 draggable=False,
                 removable=True,
                 minutes_required=mins_limit,
+                name_src="xi",
             )
         )
     hint = (
@@ -2265,7 +2279,12 @@ def _setpiece_chart_player_row(
         (
             html.Button(
                 name or "Player",
-                id={"type": "pf-depth-name", "id": profile_id},
+                id={
+                    "type": "pf-depth-name",
+                    "id": profile_id,
+                    "src": "setpiece",
+                    "slot": str(index),
+                },
                 n_clicks=0,
                 className="pf-depth-chart-name",
                 title="Open player details",
@@ -2692,6 +2711,7 @@ def _build_depth_chart(
             draggable=True,
             selectable=True,
             minutes_required=mins_limit,
+            name_src="depth",
         )
         for idx, entry in enumerate(ordered)
     ]
@@ -5721,13 +5741,13 @@ def restore_depth_undo(n_clicks, undo_items, rev):
     Output("pf-player-modal-title", "children", allow_duplicate=True),
     Output("pf-player-modal-body", "children", allow_duplicate=True),
     Output("pf-player-key", "data", allow_duplicate=True),
-    Input({"type": "pf-depth-name", "id": ALL}, "n_clicks"),
+    Input({"type": "pf-depth-name", "id": ALL, "src": ALL, "slot": ALL}, "n_clicks"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def open_profile_modal_from_depth(n_clicks, settings, theme):
-    if not ctx.triggered_id or not clicked(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update, no_update
     profile_id = str(ctx.triggered_id.get("id") or "").strip()
     profile = profiles.get_profile(profile_id) if profile_id else None

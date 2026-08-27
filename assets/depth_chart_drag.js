@@ -7,6 +7,7 @@
 (function () {
   var state = null;
   var publishTimer = null;
+  var suppressClick = false;
   var DRAG_THRESHOLD_PX = 5;
 
   function rowFrom(target) {
@@ -186,6 +187,7 @@
     var row = state.row;
     var startIds = state.startIds;
     var insertBefore = state.insertBefore;
+    var wasActive = !!state.active;
     try {
       if (row && state.pointerId != null) {
         row.releasePointerCapture(state.pointerId);
@@ -201,6 +203,11 @@
     if (publish && list && insertBefore) {
       commitInsert(list, row, insertBefore);
       publishOrder(list, startIds);
+    }
+    // Drop can land the pointer over another row's name button; swallow that click
+    // so the scout modal does not open for the wrong player.
+    if (wasActive) {
+      suppressClick = true;
     }
     state = null;
   }
@@ -291,4 +298,18 @@
       endDrag(false);
     }
   });
+
+  document.addEventListener(
+    "click",
+    function (event) {
+      if (!suppressClick) return;
+      suppressClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+    },
+    true
+  );
 })();

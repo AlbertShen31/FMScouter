@@ -7590,22 +7590,24 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
 }
 
 .pf-depth-chart-rank-cell {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: 1.1rem 0.65rem 1.35rem;
     align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    justify-self: center;
+    justify-items: center;
+    column-gap: 0.25rem;
+    justify-self: stretch;
+    width: 100%;
     cursor: grab;
     user-select: none;
 }
 
 .pf-depth-chart-check-slot {
     width: 1.1rem;
-    flex-shrink: 0;
+    justify-self: center;
 }
 
 .pf-depth-chart-check {
-    flex-shrink: 0;
+    justify-self: center;
     cursor: pointer;
 }
 
@@ -7619,10 +7621,18 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
 }
 
 .pf-depth-chart-grip {
+    width: 0.65rem;
     color: var(--app-muted);
     font-size: 0.75rem;
     letter-spacing: -0.12em;
     line-height: 1;
+    text-align: center;
+    overflow: hidden;
+}
+
+.pf-depth-chart-rank-cell .pf-depth-chart-rank {
+    width: 1.35rem;
+    min-width: 1.35rem;
 }
 
 .pf-depth-chart-row.is-sortable {
