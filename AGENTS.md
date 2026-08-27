@@ -85,7 +85,7 @@ Acceptance examples (do not regress without an explicit rule change):
 - Library dropdown labels: profile **display name** + formation **display name** from formation packs — **not** the slug id (e.g. `5-1-4-0 Dracula`, not `5-1-4-0-dracula`).
 - Depth chart: First XI = depth rank #1 per slot; Second XI = #2. Formation slots drive squad depth; remember last formation per library meta.
 - Same player in multiple active XI slots → conflict styling (red). Slot order follows formation config.
-- Auto-rank: role score first, then OVR percentile on ties.
+- Auto-rank: sorts players still on that slot by role score, then OVR on ties. Slot removals stay off until Recently removed restore or a newer Role-scores export (re-export reinstates immediately; brand-new exports still use Refresh exports).
 - Prefer per-library slot depth; switching active library remounts Profiles via rev/store pattern already used.
 
 ---

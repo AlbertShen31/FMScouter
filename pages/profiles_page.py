@@ -3645,9 +3645,11 @@ def layout(**_kwargs):
                                                                     ),
                                                                 ),
                                                                 title=(
-                                                                    "Pull in new Role scores "
-                                                                    "exports (keeps current "
-                                                                    "ranks; adds missing players)"
+                                                                    "Pull in brand-new Role scores "
+                                                                    "exports (keeps current ranks). "
+                                                                    "Players you removed from a slot "
+                                                                    "come back when you export them "
+                                                                    "again, or via Recently removed."
                                                                 ),
                                                             ),
                                                         ],
@@ -3658,7 +3660,10 @@ def layout(**_kwargs):
                                                         "Slots that share a role start with the same "
                                                         "exported players. Click a card to edit that "
                                                         "role’s depth; click again to return to the XI. "
-                                                        "Auto-rank uses Score, then Ovr on ties.",
+                                                        "Auto-rank sorts players still on the slot "
+                                                        "(Score, then Ovr). Removals stay off until "
+                                                        "Recently removed restore or a new Role-scores "
+                                                        "export.",
                                                         className="rs-depth-heading-hint",
                                                     ),
                                                 ],

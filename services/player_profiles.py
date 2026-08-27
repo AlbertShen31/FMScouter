@@ -32,6 +32,8 @@ SAVED_FROM_LABELS = {
 
 # Legacy flat path (pre multi-library); kept for migration only.
 _LEGACY_SLOT_DEPTH_PATH = PROFILES_DIR / "slot_depth.json"
+# Per-formation map key for profile ids removed from a slot (not part of depth lists).
+_SLOT_EXCLUDED_KEY = "_excluded"
 
 # Identity fields copied from a scored role shortlist row into the snapshot.
 ROLE_IDENTITY_KEYS = (
@@ -404,7 +406,7 @@ def get_slot_order_ids(
     pack = str(formation_id or "").strip()
     role = str(role_column or "").strip()
     key = _slot_key(slot_index)
-    if not pack or not role or key == "":
+    if not pack or not role or key == "" or key == _SLOT_EXCLUDED_KEY:
         return [
             str(entry.get("id") or "")
             for entry in ordered_profiles_for_role(role)
@@ -437,7 +439,7 @@ def set_slot_order_ids(
 ) -> None:
     pack = str(formation_id or "").strip()
     key = _slot_key(slot_index)
-    if not pack or key == "":
+    if not pack or key == "" or key == _SLOT_EXCLUDED_KEY:
         return
     store = _read_slot_depth()
     pack_map = dict(store.get(pack) or {}) if isinstance(store.get(pack), dict) else {}
@@ -446,6 +448,126 @@ def set_slot_order_ids(
     ]
     store[pack] = pack_map
     _write_slot_depth(store)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _slot_excluded_map(pack_map: dict[str, Any]) -> dict[str, dict[str, str]]:
+    raw = pack_map.get(_SLOT_EXCLUDED_KEY)
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for slot_key, payload in raw.items():
+        if not isinstance(payload, dict):
+            continue
+        times: dict[str, str] = {}
+        for pid, at in payload.items():
+            pid_s = str(pid or "").strip()
+            at_s = str(at or "").strip()
+            if pid_s and at_s:
+                times[pid_s] = at_s
+        if times:
+            out[str(slot_key)] = times
+    return out
+
+
+def get_slot_excluded_at(
+    formation_id: str | None,
+    slot_index: int | str,
+) -> dict[str, str]:
+    """Return profile_id → excluded_at for one slot (removed until restore / re-export)."""
+    pack = str(formation_id or "").strip()
+    key = _slot_key(slot_index)
+    if not pack or key == "" or key == _SLOT_EXCLUDED_KEY:
+        return {}
+    store = _read_slot_depth()
+    pack_map = store.get(pack) if isinstance(store.get(pack), dict) else {}
+    return dict(_slot_excluded_map(pack_map).get(key) or {})
+
+
+def _write_slot_excluded_map(
+    formation_id: str | None,
+    slot_index: int | str,
+    times: dict[str, str],
+) -> None:
+    pack = str(formation_id or "").strip()
+    key = _slot_key(slot_index)
+    if not pack or key == "" or key == _SLOT_EXCLUDED_KEY:
+        return
+    store = _read_slot_depth()
+    pack_map = dict(store.get(pack) or {}) if isinstance(store.get(pack), dict) else {}
+    excluded = _slot_excluded_map(pack_map)
+    cleaned = {
+        pid: at
+        for pid, at in times.items()
+        if str(pid or "").strip() and str(at or "").strip()
+    }
+    if cleaned:
+        excluded[key] = cleaned
+    else:
+        excluded.pop(key, None)
+    if excluded:
+        pack_map[_SLOT_EXCLUDED_KEY] = excluded
+    else:
+        pack_map.pop(_SLOT_EXCLUDED_KEY, None)
+    store[pack] = pack_map
+    _write_slot_depth(store)
+
+
+def mark_slot_excluded(
+    formation_id: str | None,
+    slot_index: int | str,
+    profile_ids: list[str],
+) -> None:
+    times = get_slot_excluded_at(formation_id, slot_index)
+    now = _utc_now_iso()
+    changed = False
+    for raw in profile_ids:
+        pid = str(raw or "").strip()
+        if not pid:
+            continue
+        times[pid] = now
+        changed = True
+    if changed:
+        _write_slot_excluded_map(formation_id, slot_index, times)
+
+
+def clear_slot_excluded(
+    formation_id: str | None,
+    slot_index: int | str,
+    profile_ids: list[str],
+) -> None:
+    times = get_slot_excluded_at(formation_id, slot_index)
+    if not times:
+        return
+    next_times = dict(times)
+    changed = False
+    for raw in profile_ids:
+        pid = str(raw or "").strip()
+        if pid and pid in next_times:
+            next_times.pop(pid, None)
+            changed = True
+    if changed:
+        _write_slot_excluded_map(formation_id, slot_index, next_times)
+
+
+def _still_excluded_ids(
+    excluded_at: dict[str, str],
+    entries_by_id: dict[str, dict[str, Any]],
+) -> set[str]:
+    """Ids that stay off the slot: no row, or not re-exported after the remove."""
+    held: set[str] = set()
+    for pid, at in excluded_at.items():
+        entry = entries_by_id.get(pid)
+        if not entry:
+            held.add(pid)
+            continue
+        saved = str(entry.get("saved_at") or "").strip()
+        if not saved or saved <= str(at):
+            held.add(pid)
+    return held
 
 
 def ordered_profiles_for_slot(
@@ -485,6 +607,8 @@ def profile_used_in_formation_slots(
     pack_map = store.get(pack) if isinstance(store.get(pack), dict) else {}
     skip = _slot_key(except_slot) if except_slot is not None else None
     for key, ids in pack_map.items():
+        if str(key) == _SLOT_EXCLUDED_KEY:
+            continue
         if skip is not None and str(key) == skip:
             continue
         if not isinstance(ids, list):
@@ -503,7 +627,8 @@ def remove_from_slot_depth(
     """Remove a player from one slot’s depth only.
 
     Deletes the shortlist row only when no other slot in this formation still
-    references the same profile id.
+    references the same profile id. Removals are remembered so auto-rank /
+    Refresh exports do not put the player back until restore or a newer export.
     """
     pack = str(formation_id or "").strip()
     role = str(role_column or "").strip()
@@ -519,6 +644,7 @@ def remove_from_slot_depth(
         return None
     next_ids = [item for item in ids if item != pid]
     set_slot_order_ids(pack, slot_index, next_ids)
+    mark_slot_excluded(pack, slot_index, [pid])
     deleted_from_table = False
     snapshot = dict(entry) if entry else {"id": pid, "role_column": role}
     if entry and not profile_used_in_formation_slots(
@@ -572,6 +698,7 @@ def delete_profile_with_slot_cleanup(
         set_slot_order_ids(
             pack, slot_index, [item for item in ids if item != pid]
         )
+        mark_slot_excluded(pack, slot_index, [pid])
         slot_refs.append(
             {
                 "slot": int(_slot_key(slot_index))
@@ -652,6 +779,11 @@ def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
             ids = [item_id for item_id in ids if item_id != pid]
             ids.append(pid)
         set_slot_order_ids(pack, ref_slot, ids)
+        clear_slot_excluded(
+            pack,
+            ref_slot,
+            [str(entry.get("id") or "").strip() for entry in restored],
+        )
     return restored
 
 
@@ -660,12 +792,18 @@ def auto_rank_slot_by_score(
     slot_index: int | str,
     role_column: str,
 ) -> int:
-    """Reset one slot’s depth order from role Score ranking."""
+    """Reorder one slot’s current depth by Score (then Ovr); do not re-add removals."""
     role = str(role_column or "").strip()
     if not role:
         return 0
+    current_ids = get_slot_order_ids(formation_id, slot_index, role, seed=True)
+    by_id = {
+        str(entry.get("id") or "").strip(): entry
+        for entry in list_role_profiles()
+        if _entry_role(entry) == role and str(entry.get("id") or "").strip()
+    }
     ordered = sorted(
-        [entry for entry in list_role_profiles() if _entry_role(entry) == role],
+        [by_id[pid] for pid in current_ids if pid in by_id],
         key=_score_name_sort_key,
     )
     ids = [str(entry.get("id") or "") for entry in ordered if entry.get("id")]
@@ -678,11 +816,11 @@ def sync_slot_depth_from_exports(
     slot_index: int | str,
     role_column: str,
 ) -> int:
-    """Keep existing slot order; append any new Role-score exports for the role.
+    """Keep existing slot order; append new Role-score exports for the role.
 
-    Slot depth is a fixed id list once seeded, so later saves from Role scores
-    do not appear until something rewrites the list (e.g. auto-rank). This
-    preserves manual ranking and only adds missing profile ids (by Score).
+    Slot depth is a fixed id list once seeded. Later saves from Role scores do
+    not appear until Refresh. Players removed from the slot stay excluded until
+    Recently removed restore or a newer export (saved_at after the remove).
     """
     role = str(role_column or "").strip()
     if not role:
@@ -690,18 +828,26 @@ def sync_slot_depth_from_exports(
     role_entries = [
         entry for entry in list_role_profiles() if _entry_role(entry) == role
     ]
-    role_ids = {
-        str(entry.get("id") or "").strip()
+    by_id = {
+        str(entry.get("id") or "").strip(): entry
         for entry in role_entries
         if str(entry.get("id") or "").strip()
     }
+    role_ids = set(by_id)
     current = get_slot_order_ids(formation_id, slot_index, role, seed=True)
     kept = [pid for pid in current if pid in role_ids]
     present = set(kept)
+    excluded_at = get_slot_excluded_at(formation_id, slot_index)
+    still_excluded = _still_excluded_ids(excluded_at, by_id)
+    if set(excluded_at) != still_excluded:
+        pruned = {pid: excluded_at[pid] for pid in still_excluded if pid in excluded_at}
+        _write_slot_excluded_map(formation_id, slot_index, pruned)
     missing = [
         entry
         for entry in role_entries
-        if str(entry.get("id") or "").strip() not in present
+        if (pid := str(entry.get("id") or "").strip())
+        and pid not in present
+        and pid not in still_excluded
     ]
     if not missing and kept == current:
         return 0
@@ -715,6 +861,60 @@ def sync_slot_depth_from_exports(
         return 0
     set_slot_order_ids(formation_id, slot_index, new_ids)
     return len(missing)
+
+
+def reinstate_exported_profile_on_slots(
+    profile_id: str,
+    *,
+    library_id: str | None = None,
+) -> int:
+    """After a Role-scores export, put a profile back on slots that had removed it.
+
+    Brand-new exports (never removed from a slot) are unchanged — use Refresh
+    exports to pull those in. Returns how many slots were reinstated.
+    """
+    pid = str(profile_id or "").strip()
+    if not pid:
+        return 0
+    lid = _resolve_library_id(library_id)
+    store = _read_slot_depth(lid)
+    changed = 0
+    for pack, raw_map in list(store.items()):
+        if not isinstance(raw_map, dict):
+            continue
+        excluded = _slot_excluded_map(raw_map)
+        touched_slots = [key for key, times in excluded.items() if pid in times]
+        if not touched_slots:
+            continue
+        pack_map = dict(raw_map)
+        excluded = _slot_excluded_map(pack_map)
+        for slot_key in touched_slots:
+            times = dict(excluded.get(slot_key) or {})
+            if pid not in times:
+                continue
+            times.pop(pid, None)
+            if times:
+                excluded[slot_key] = times
+            else:
+                excluded.pop(slot_key, None)
+            raw_ids = pack_map.get(slot_key)
+            ids = (
+                [str(item).strip() for item in raw_ids if str(item or "").strip()]
+                if isinstance(raw_ids, list)
+                else []
+            )
+            if pid not in ids:
+                ids.append(pid)
+            pack_map[slot_key] = ids
+            changed += 1
+        if excluded:
+            pack_map[_SLOT_EXCLUDED_KEY] = excluded
+        else:
+            pack_map.pop(_SLOT_EXCLUDED_KEY, None)
+        store[str(pack)] = pack_map
+    if changed:
+        _write_slot_depth(store, lid)
+    return changed
 
 
 def _read_index(library_id: str | None = None) -> list[dict[str, Any]]:
@@ -1680,6 +1880,12 @@ def save_profile_rows(
     if meta:
         meta["updated_at"] = now
         _write_json(_meta_path(target), meta)
+    if saved_from == "role_scores":
+        for entry in saved:
+            pid = str(entry.get("id") or "").strip()
+            if not pid or not str(entry.get("role_column") or "").strip():
+                continue
+            reinstate_exported_profile_on_slots(pid, library_id=target)
     return saved
 
 
