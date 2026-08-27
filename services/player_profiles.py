@@ -388,6 +388,27 @@ def _write_slot_depth(payload: dict[str, Any], library_id: str | None = None) ->
     _write_json(_slot_depth_path(library_id), payload)
 
 
+def _profile_ids_in_slot_depth(
+    *,
+    library_id: str | None = None,
+    formation_id: str | None = None,
+) -> set[str]:
+    """Profile ids listed on any formation slot depth (not the excluded map)."""
+    store = _read_slot_depth(library_id)
+    ids: set[str] = set()
+    pack_filter = str(formation_id or "").strip()
+    for pack, pack_map in store.items():
+        if pack_filter and str(pack) != pack_filter:
+            continue
+        if not isinstance(pack_map, dict):
+            continue
+        for key, raw in pack_map.items():
+            if str(key) == _SLOT_EXCLUDED_KEY or not isinstance(raw, list):
+                continue
+            ids.update(str(pid).strip() for pid in raw if str(pid or "").strip())
+    return ids
+
+
 def _slot_key(slot_index: int | str) -> str:
     try:
         return str(int(slot_index))
@@ -1573,6 +1594,7 @@ def replace_profiles_from_saved_file(
     Matches existing profiles by player **name** only (club can change mid-season).
     When several file rows share a name, prefers the profile's current club if present.
     Role profiles keep their ``role_column`` and profile ``id`` (depth/slots stay valid).
+    Only profiles actively listed in the library formation's squad depth are updated.
     Players missing from the file are left unchanged and reported under ``missing``.
     """
     import services.ui_settings as us
@@ -1587,10 +1609,31 @@ def replace_profiles_from_saved_file(
 
     settings = us.normalize(settings)
     source_label = lib.display_label(entry)
-    role_entries = list_role_profiles()
-    pct_entries = list_percentile_profiles()
-    if not role_entries and not pct_entries:
+    if not list_role_profiles() and not list_percentile_profiles():
         raise ValueError("No saved profiles to update.")
+
+    meta = get_library()
+    formation_id = str((meta or {}).get("formation_id") or "").strip()
+    active_ids = _profile_ids_in_slot_depth(formation_id=formation_id or None)
+    role_entries = [
+        prof
+        for prof in list_role_profiles()
+        if str(prof.get("id") or "").strip() in active_ids
+    ]
+    active_name_keys = {
+        _norm_player_name(name)
+        for prof in role_entries
+        if (name := profile_identity(prof)[0])
+    }
+    pct_entries = [
+        prof
+        for prof in list_percentile_profiles()
+        if _norm_player_name(profile_identity(prof)[0]) in active_name_keys
+    ]
+    if not role_entries and not pct_entries:
+        raise ValueError(
+            "No players in squad depth to update. Add players to formation slots first."
+        )
 
     column_map = _column_to_role_id()
     role_ids: list[str] = []
@@ -1749,7 +1792,7 @@ def replace_profiles_from_saved_file(
 
     if not items:
         raise ValueError(
-            "No saved profiles matched players in that file by name. "
+            "No squad-depth players matched players in that file by name. "
             "Renamed players will not match."
         )
 
@@ -1758,6 +1801,7 @@ def replace_profiles_from_saved_file(
         items,
         saved_from=saved_from,
         source_label=source_label,
+        reinstate_slots=False,
     )
     return {
         "updated": len(saved),
@@ -1805,6 +1849,7 @@ def save_profile_rows(
     source_label: str = "",
     note: str | None = None,
     library_id: str | None = None,
+    reinstate_slots: bool = True,
 ) -> list[dict[str, Any]]:
     """Upsert profile entries that already include a ``row`` snapshot."""
     if saved_from not in SAVED_FROM_LABELS:
@@ -1880,7 +1925,7 @@ def save_profile_rows(
     if meta:
         meta["updated_at"] = now
         _write_json(_meta_path(target), meta)
-    if saved_from == "role_scores":
+    if reinstate_slots and saved_from == "role_scores":
         for entry in saved:
             pid = str(entry.get("id") or "").strip()
             if not pid or not str(entry.get("role_column") or "").strip():
