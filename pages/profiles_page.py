@@ -1432,7 +1432,20 @@ def _profile_depth_panel(
         }
         for slot in formation_slots:
             meta = _role_column_meta(slot["column"])
-            payload = _profile_depth_card_stats(meta, entries, bands)
+            # Counts / avg / top names must follow this slot's depth list —
+            # not every saved profile for the role (shared roles differ per slot).
+            if cache is not None:
+                slot_entries = cache.ordered_for_slot(
+                    formation_id, slot["index"], slot["column"]
+                )
+            else:
+                slot_entries = profiles.ordered_profiles_for_slot(
+                    formation_id,
+                    slot["index"],
+                    slot["column"],
+                    entries=entries,
+                )
+            payload = _profile_depth_card_stats(meta, slot_entries, bands)
             if not payload:
                 payload = _empty_depth_card_stats(meta)
             slot_index = int(slot["index"])
