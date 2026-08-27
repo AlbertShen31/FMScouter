@@ -1251,6 +1251,7 @@ def _slot_flank_side(slot: dict) -> int:
 def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> dict | None:
     column = meta["column"]
     eligible = []
+    top_names: list[str] = []
     for entry in entries:
         role = entry.get("role_column") or (entry.get("row") or {}).get("Role")
         if role != column:
@@ -1265,6 +1266,8 @@ def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> d
             continue
         name = row.get("Name") or profiles.profile_identity(entry)[0] or ""
         eligible.append({"Name": name, column: score_f})
+        if len(top_names) < 3 and name:
+            top_names.append(name)
     if not eligible:
         return None
     scores = [float(row.get(column) or 0) for row in eligible]
@@ -1273,8 +1276,7 @@ def _profile_depth_card_stats(meta: dict, entries: list[dict], bands: dict) -> d
     for score in scores:
         counts[score_band(score, **bands)] += 1
     total = len(scores) or 1
-    top = sorted(eligible, key=lambda row: float(row.get(column) or 0), reverse=True)[:3]
-    names = " · ".join(player.get("Name", "") for player in top)
+    names = " · ".join(top_names)
     return {
         "meta": meta,
         "avg": avg,
