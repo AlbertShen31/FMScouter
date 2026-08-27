@@ -304,6 +304,13 @@
     function (event) {
       if (!suppressClick) return;
       suppressClick = false;
+      // Only block the ghost name-button click after a drop — never × /
+      // Remove selected / checkboxes / other chrome.
+      var nameBtn =
+        event.target && event.target.closest
+          ? event.target.closest(".pf-depth-chart-name")
+          : null;
+      if (!nameBtn) return;
       event.preventDefault();
       event.stopPropagation();
       if (typeof event.stopImmediatePropagation === "function") {

@@ -1853,9 +1853,11 @@ def _depth_chart_player_row(
                 "type": "pf-depth-remove",
                 "id": profile_id,
                 "slot": str(slot_index),
+                "src": name_src,
             },
             n_clicks=0,
             className="pf-depth-chart-remove-btn",
+            type="button",
             title=(
                 f"Remove from {slot_label or 'this slot'} only "
                 "(other slots keep this player)"
@@ -3799,56 +3801,6 @@ def layout(**_kwargs):
                                             html.Div(
                                                 [
                                                     html.Span(
-                                                        "Starting XI",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Rank #1 or #2 per formation slot. "
-                                                        "Updates when slot depth changes or you "
-                                                        "switch First / Second XI — not when you "
-                                                        "focus a slot above.",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
-                                            ),
-                                            html.Div(
-                                                [
-                                                    html.Label(
-                                                        "XI",
-                                                        className="rs-field-label",
-                                                    ),
-                                                    html.Div(
-                                                        _xi_view_switcher("first"),
-                                                        id="pf-xi-view-switch",
-                                                    ),
-                                                ],
-                                                className=(
-                                                    "pf-squad-depth-field "
-                                                    "pf-xi-view-field"
-                                                ),
-                                            ),
-                                        ],
-                                        className="pf-depth-chart-toolbar",
-                                    ),
-                                    html.Div(id="pf-xi-chart-body"),
-                                    _profiles_busy_overlay(
-                                        "pf-xi-chart-busy",
-                                        "Updating Starting XI…",
-                                        on=True,
-                                    ),
-                                ],
-                                id="pf-xi-wrap",
-                                className="pf-xi-wrap mb-3 rs-shortlist-busy-host",
-                                hidden=True,
-                            ),
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.Div(
-                                                [
-                                                    html.Span(
                                                         "Set pieces",
                                                         className="rs-depth-heading-label",
                                                     ),
@@ -3893,6 +3845,56 @@ def layout(**_kwargs):
                                 ],
                                 id="pf-setpiece-wrap",
                                 className="pf-setpiece-wrap mb-3 rs-shortlist-busy-host",
+                            ),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Span(
+                                                        "Starting XI",
+                                                        className="rs-depth-heading-label",
+                                                    ),
+                                                    html.Span(
+                                                        "Rank #1 or #2 per formation slot. "
+                                                        "Updates when slot depth changes or you "
+                                                        "switch First / Second XI — not when you "
+                                                        "focus a slot above.",
+                                                        className="rs-depth-heading-hint",
+                                                    ),
+                                                ],
+                                                className="rs-depth-heading-copy",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "XI",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    html.Div(
+                                                        _xi_view_switcher("first"),
+                                                        id="pf-xi-view-switch",
+                                                    ),
+                                                ],
+                                                className=(
+                                                    "pf-squad-depth-field "
+                                                    "pf-xi-view-field"
+                                                ),
+                                            ),
+                                        ],
+                                        className="pf-depth-chart-toolbar",
+                                    ),
+                                    html.Div(id="pf-xi-chart-body"),
+                                    _profiles_busy_overlay(
+                                        "pf-xi-chart-busy",
+                                        "Updating Starting XI…",
+                                        on=True,
+                                    ),
+                                ],
+                                id="pf-xi-wrap",
+                                className="pf-xi-wrap mb-3 rs-shortlist-busy-host",
+                                hidden=True,
                             ),
                             html.Div(
                                 [
@@ -5539,7 +5541,7 @@ def _remove_ids_from_slot(
 @callback(
     Output("pf-depth-undo", "data"),
     Output("pf-rev", "data", allow_duplicate=True),
-    Input({"type": "pf-depth-remove", "id": ALL, "slot": ALL}, "n_clicks"),
+    Input({"type": "pf-depth-remove", "id": ALL, "slot": ALL, "src": ALL}, "n_clicks"),
     State("pf-depth-undo", "data"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
