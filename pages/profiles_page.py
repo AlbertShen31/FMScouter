@@ -3650,13 +3650,18 @@ def layout(**_kwargs):
                                                 [
                                                     html.Div(
                                                         [
-                                                            html.Span(
-                                                                "Squad depth",
-                                                                className="rs-depth-heading-label",
-                                                            ),
-                                                            *help_icon(
-                                                                PF_SQUAD_DEPTH_TIP,
-                                                                "pf-help-squad-depth",
+                                                            html.Div(
+                                                                [
+                                                                    html.Span(
+                                                                        "Squad depth",
+                                                                        className="rs-depth-heading-label",
+                                                                    ),
+                                                                    *help_icon(
+                                                                        PF_SQUAD_DEPTH_TIP,
+                                                                        "pf-help-squad-depth",
+                                                                    ),
+                                                                ],
+                                                                className="rs-depth-heading-title-row",
                                                             ),
                                                             html.Span(
                                                                 dmc.Button(
