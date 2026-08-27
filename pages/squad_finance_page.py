@@ -56,6 +56,44 @@ _PROJECTION_YEAR_CHOICES = {1, SUSTAINABILITY_YEARS}
 
 register_page(__name__, path="/squad-finance", name="Squad finance")
 
+SF_PAGE_TIP = (
+    f"Upload a Moneyball player export with salary and match fees, pick {STARTERS} starters "
+    f"(including a GK) and {SUBS} substitutes, then set how many games to model. Matchday "
+    "players include appearance fees; everyone else is treated as a reserve (wages only). "
+    "Optionally enter club finances by category in millions."
+)
+SF_UPLOAD_TIP = (
+    "Uses Salary, Appearance Fee, and FFP Contribution columns. "
+    "FFP is shown for reference and is not included in totals."
+)
+SF_CLUB_FINANCES_TIP = (
+    "Enter annual figures in millions (e.g. 25.5). Income and expenses are held constant over "
+    "the selected years. Leave blank to skip the sustainability check."
+)
+SF_WAGE_SCENARIO_TIP = (
+    "Uses division-change and Yearly Salary Raise columns from the Moneyball export. "
+    "Projected Y1–Yn salaries are end-of-season figures after raises and drops."
+)
+SF_SUSTAINABILITY_TIP = (
+    "Projects N years at today's annual income and club expenses. Expenses = club P&L (box 3) + "
+    f"debt payments + full-season squad bill from the statement (box 4, scaled to "
+    f"{DEFAULT_SEASON_GAMES} games). Closing position = (balance − debt) + sum of each year's "
+    "(income − expenses)."
+)
+SF_BALANCE_DEBT_TIP = (
+    "Cash balance grows by each year's net; outstanding debt falls by annual debt payments "
+    "(floored at zero)."
+)
+SF_STATEMENT_OUTLOOK_TIP = (
+    "Y1–Yn are expected annual salaries at the end of each season if the player stays on this "
+    "contract (division change plus that year's raise/drop applied)."
+)
+SF_STATEMENT_NOTE_TIP = (
+    "Matchday starters and substitutes are assumed to appear in every game (appearance fee × games). "
+    f"Reserves include wages only — no appearance fees. Wages are prorated by games / "
+    f"{DEFAULT_SEASON_GAMES}. Totals are all wages + matchday appearance fees; FFP is display-only."
+)
+
 register_upload_callbacks(
     "sf",
     parse_fn=load_squad_finance,
@@ -220,6 +258,16 @@ def _projection_figure(sustain: dict, theme: str | None) -> go.Figure:
         ),
     )
     return fig
+
+
+def _subhead(title: str, tip: str, help_id: str) -> html.Div:
+    return html.Div(
+        [
+            html.H4(title, className="sf-cat-head mb-0"),
+            *help_icon(tip, help_id),
+        ],
+        className="sf-subhead-row",
+    )
 
 
 def _help(tip: str, help_id: str) -> list:
@@ -535,11 +583,15 @@ def _statement_table(
         )
     return html.Div(
         [
-            html.P(
-                f"Y1–Y{years} are expected annual salaries at the end of each "
-                f"season if the player stays on this contract (division change plus "
-                f"that year’s raise/drop applied).",
-                className="sf-note sf-statement-outlook-note",
+            html.Div(
+                [
+                    html.Span(
+                        f"Y1–Y{years} outlook",
+                        className="sf-statement-outlook-label",
+                    ),
+                    *help_icon(SF_STATEMENT_OUTLOOK_TIP, "sf-help-statement-outlook"),
+                ],
+                className="sf-subhead-row sf-statement-outlook-head",
             ),
             html.Table(
                 [html.Thead(header), html.Tbody(body)],
@@ -616,21 +668,21 @@ def _sustainability_panel(sustain: dict, theme: str | None = None) -> html.Div:
     )
     return html.Div(
         [
-            html.H3("Club sustainability", className="sf-subhead"),
-            html.P(
-                f"Projects {years} years at today’s annual income and club expenses. "
-                f"Expenses = club P&L (box 3) + debt payments + full-season "
-                f"squad bill from the statement (box 4, scaled to {DEFAULT_SEASON_GAMES} "
-                f"games). Closing position = (balance − debt) + sum of each year’s "
-                f"(income − expenses).{scenario_note}",
-                className="sf-note",
+            html.Div(
+                [
+                    html.H3("Club sustainability", className="sf-subhead mb-0"),
+                    *help_icon(
+                        f"{SF_SUSTAINABILITY_TIP}{scenario_note}",
+                        "sf-help-sustainability",
+                    ),
+                ],
+                className="sf-subhead-row",
             ),
             html.Div(cards, className="sf-summary-row"),
-            html.H4("Balance & debt outlook", className="sf-cat-head"),
-            html.P(
-                "Cash balance grows by each year’s net; outstanding debt falls "
-                "by annual debt payments (floored at zero).",
-                className="sf-note",
+            _subhead(
+                "Balance & debt outlook",
+                SF_BALANCE_DEBT_TIP,
+                "sf-help-balance-debt",
             ),
             dcc.Graph(
                 figure=_projection_figure(sustain, theme),
@@ -671,24 +723,19 @@ def layout(**_kwargs):
     return dbc.Container(
         [
             dcc.Interval(id="sf-hydrate-tick", interval=50, max_intervals=1),
-            html.H1("Squad finance", className="mt-2 mb-2"),
-            html.P(
-                "Upload a Moneyball player export with salary and match fees, pick "
-                f"{STARTERS} starters (including a GK) and {SUBS} substitutes, then set "
-                "how many games to model. Matchday players include appearance fees; "
-                "everyone else is treated as a reserve (wages only). Optionally enter "
-                "club finances by category in millions.",
-                className="text-muted mb-3",
+            html.Div(
+                [
+                    html.H1("Squad finance", className="mt-2 mb-0"),
+                    *help_icon(SF_PAGE_TIP, "sf-help-page"),
+                ],
+                className="rs-page-title-row mb-3",
             ),
             upload_card(
                 "sf",
                 "1. Upload squad export",
                 upload_label=html.Div(["Drag a CSV here, or ", html.A("browse")]),
-                hint=html.P(
-                    "Uses Salary, Appearance Fee, and FFP Contribution columns. "
-                    "FFP is shown for reference and is not included in totals.",
-                    className="text-muted small mb-0 mt-2",
-                ),
+                header_tip=SF_UPLOAD_TIP,
+                header_help_id="sf-help-upload",
                 include_data_rev=False,
                 library_page="squad_finance",
             ),
@@ -801,28 +848,26 @@ def layout(**_kwargs):
                     ),
                     dbc.Card(
                         [
-                            section_card_header("3. Club finances (optional)"),
+                            dbc.CardHeader(
+                                html.Div(
+                                    [
+                                        html.Span("3. Club finances (optional)"),
+                                        *help_icon(
+                                            SF_CLUB_FINANCES_TIP,
+                                            "sf-help-club-finances",
+                                        ),
+                                    ],
+                                    className="rs-card-header-title",
+                                )
+                            ),
                             dbc.CardBody(
                                 [
-                                    html.P(
-                                        "Enter annual figures in millions (e.g. 25.5). "
-                                        "Income and expenses are held constant over the "
-                                        "selected years. Leave blank to skip the "
-                                        "sustainability check.",
-                                        className="sf-note",
-                                    ),
                                     html.Div(
                                         [
-                                            html.H4(
+                                            _subhead(
                                                 "Wage scenario",
-                                                className="sf-cat-head",
-                                            ),
-                                            html.P(
-                                                "Uses division-change and Yearly Salary "
-                                                "Raise columns from the Moneyball export. "
-                                                "Projected Y1–Yn salaries are end-of-season "
-                                                "figures after raises and drops.",
-                                                className="sf-note sf-note-tight",
+                                                SF_WAGE_SCENARIO_TIP,
+                                                "sf-help-wage-scenario",
                                             ),
                                             html.Div(
                                                 [
@@ -1355,24 +1400,22 @@ def render_statement(
                 delta=period_delta if show_delta else None,
             ),
         ]
-    note_bits = [
-        "Matchday starters and substitutes are assumed to appear in every game "
-        "(appearance fee × games). Reserves include wages only — no appearance fees. "
-        f"Wages are prorated by games / {DEFAULT_SEASON_GAMES}. "
-        "Totals are all wages + matchday appearance fees; FFP is display-only."
-    ]
+    note_tip = SF_STATEMENT_NOTE_TIP
     if show_delta:
         kind = "promotion" if period_delta > 0 else "relegation"
-        note_bits.append(
+        note_tip += (
             f" Squad wages and total include the selected {kind} adjustment "
             f"({format_signed_money(period_delta)} for this period)."
         )
     if compare and hist_statement:
-        note_bits.append(
+        note_tip += (
             " Green ↓ / red ↑ in parentheses compare this export to the historical "
             "upload (same starters and subs)."
         )
-    note = html.P(note_bits, className="sf-note")
+    note = html.Div(
+        *help_icon(note_tip, "sf-help-statement-note"),
+        className="sf-note-row",
+    )
     children: list = [
         note,
         _collapsible(

@@ -1221,18 +1221,11 @@ def layout(**_kwargs):
             upload_card(
                 "st",
                 "1. Saved statistics export",
-                hint=html.Div(
-                    [
-                        html.P(
-                            f"Use a saved Moneyball statistics export. Benchmarks: {benchmarks()['name']}.",
-                            className="text-muted small mb-1 mt-2",
-                        ),
-                        html.P(
-                            LIMITED_TRACKING_HINT,
-                            className="text-muted small mb-0",
-                        ),
-                    ]
+                header_tip=(
+                    f"Use a saved Moneyball statistics export. Benchmarks: {benchmarks()['name']}. "
+                    f"{LIMITED_TRACKING_HINT}"
                 ),
+                header_help_id="st-help-upload",
                 library_page="stats",
                 library_only=True,
             ),

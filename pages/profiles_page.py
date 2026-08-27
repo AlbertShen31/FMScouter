@@ -85,6 +85,38 @@ from components.stats_player_pane import stats_charts_bottom_pane
 
 register_page(__name__, path="/profiles", name="Profiles")
 
+PF_PAGE_TIP = (
+    "Each profile library holds its own saved players and depth chart. Create a profile with a "
+    "formation, save marked players into it from Role scores, then rank them here. Use Update "
+    "from saved file to refresh personal info, role scores, and percentiles from a library export."
+)
+PF_NEW_PROFILE_TIP = (
+    "Name and formation are required. Formation sets the Squad depth layout for the new library."
+)
+PF_REPLACE_TIP = (
+    "Replaces personal info, role scores, and percentiles for saved profiles that match by player "
+    "name in the file (club changes are fine). Depth ranking and profile ids are kept. Compute "
+    "the file on Uploads first when the label says Stale."
+)
+PF_SQUAD_DEPTH_TIP = (
+    "One card per formation position (up to 11). Slots that share a role start with the same "
+    "exported players. Click a card to edit that role's depth; click again to return to the XI. "
+    "Auto-rank sorts players still on the slot (Score, then Ovr). Removals stay off until "
+    "Recently removed restore or a new Role-scores export."
+)
+PF_DEPTH_CHART_TIP = (
+    "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only)."
+)
+PF_SET_PIECES_TIP = (
+    "Top set-piece takers in this library. COR / DFK / IFK split into strong left and right foot "
+    "(top 5 each). Slot shows best formation depth rank."
+)
+PF_STARTING_XI_TIP = (
+    "Rank #1 or #2 per formation slot. Updates when slot depth changes or you switch First / "
+    "Second XI — not when you focus a slot above."
+)
+PF_UNDO_TIP = "Restore adds a player back to the bottom of the same slot."
+
 DEPTH_UNDO_MAX_DEFAULT = 10
 
 # Skip reloading stats cohorts when library + percentile-related settings
@@ -99,6 +131,16 @@ FILTER_SORT_RESET_IDS = frozenset(
         "pf-formation-select",
     }
 )
+
+
+def _depth_heading(label: str, tip: str, help_id: str) -> html.Div:
+    return html.Div(
+        [
+            html.Span(label, className="rs-depth-heading-label"),
+            *help_icon(tip, help_id),
+        ],
+        className="rs-depth-heading-title-row",
+    )
 
 
 def _percentile_settings_fingerprint(settings) -> str:
@@ -2397,24 +2439,23 @@ def _setpiece_group_section(
     hint: str,
     table: html.Div,
     show_height: bool = False,
+    help_id: str | None = None,
 ) -> html.Div:
+    title_row: list = [
+        html.Span(title, className="pf-depth-chart-role-name"),
+        html.Span(
+            count_label,
+            className="pf-depth-chart-count",
+            title=count_title,
+        ),
+    ]
+    if hint:
+        hid = help_id or f"pf-help-setpiece-{re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')}"
+        title_row.extend(help_icon(hint, hid))
     return html.Div(
         [
             html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Span(title, className="pf-depth-chart-role-name"),
-                            html.Span(
-                                count_label,
-                                className="pf-depth-chart-count",
-                                title=count_title,
-                            ),
-                        ],
-                        className="pf-depth-chart-role-title",
-                    ),
-                    html.Span(hint, className="text-muted small"),
-                ],
+                html.Div(title_row, className="pf-depth-chart-role-title"),
                 className="pf-depth-chart-role-head",
             ),
             table,
@@ -2494,13 +2535,13 @@ def _build_setpiece_chart(
                                         "left- and right-footed takers"
                                     ),
                                 ),
+                                *help_icon(
+                                    "Strong foot or better. Slot is the best depth rank "
+                                    "across the formation; ties keep the earlier Starting XI slot.",
+                                    "pf-help-setpiece-foot-split",
+                                ),
                             ],
                             className="pf-depth-chart-role-title",
-                        ),
-                        html.Span(
-                            "Strong foot or better. Slot is the best depth rank "
-                            "across the formation; ties keep the earlier Starting XI slot.",
-                            className="text-muted small",
                         ),
                     ],
                     className="pf-depth-chart-role-head pf-setpiece-chart-head",
@@ -3410,6 +3451,7 @@ def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
                             className="pf-depth-undo-badge",
                             **{"aria-label": f"{count} recently removed"},
                         ),
+                        *help_icon(PF_UNDO_TIP, "pf-help-recently-removed"),
                     ],
                     className="pf-depth-undo-title-row",
                 ),
@@ -3417,10 +3459,6 @@ def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
             ),
             html.Div(
                 [
-                    html.Span(
-                        "Restore adds a player back to the bottom of the same slot.",
-                        className="pf-depth-undo-hint",
-                    ),
                     html.Div(rows, className="pf-depth-undo-list"),
                 ],
                 className="pf-depth-undo-body",
@@ -3474,13 +3512,12 @@ def layout(**_kwargs):
             dcc.Store(id="pf-table-row-cache", data=None),
             dcc.Store(id="pf-player-key", data=None),
             player_modal(prefix="pf"),
-            html.H1("Profiles", className="mt-2 mb-3"),
-            html.P(
-                "Each profile library holds its own saved players and depth chart. "
-                "Create a profile with a formation, save marked players into it from "
-                "Role scores, then rank them here. Use Update from saved file to refresh "
-                "personal info, role scores, and percentiles from a library export.",
-                className="text-muted mb-3",
+            html.Div(
+                [
+                    html.H1("Profiles", className="mt-2 mb-0"),
+                    *help_icon(PF_PAGE_TIP, "pf-help-page"),
+                ],
+                className="rs-page-title-row mb-3",
             ),
             dbc.Card(
                 [
@@ -3520,17 +3557,11 @@ def layout(**_kwargs):
                                 className="pf-library-active-row mb-3",
                             ),
                             html.Div(
-                                [
-                                    html.Span(
-                                        "New profile",
-                                        className="rs-depth-heading-label",
-                                    ),
-                                    html.Span(
-                                        "Name and formation are required. Formation "
-                                        "sets the Squad depth layout for the new library.",
-                                        className="rs-depth-heading-hint",
-                                    ),
-                                ],
+                                _depth_heading(
+                                    "New profile",
+                                    PF_NEW_PROFILE_TIP,
+                                    "pf-help-new-profile",
+                                ),
                                 className="rs-depth-heading-copy mb-2",
                             ),
                             html.Div(
@@ -3576,9 +3607,21 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "Update from saved file",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    *help_icon(
+                                                        PF_REPLACE_TIP,
+                                                        "pf-help-replace",
+                                                    ),
+                                                ],
+                                                className="rs-field-label-row",
+                                            ),
                                             dmc.Select(
                                                 id="pf-replace-file",
-                                                label="Update from saved file",
                                                 data=lib.select_options(page="role_scores"),
                                                 value=None,
                                                 clearable=True,
@@ -3595,14 +3638,6 @@ def layout(**_kwargs):
                                         ],
                                         className="pf-replace-controls",
                                     ),
-                                    html.Small(
-                                        "Replaces personal info, role scores, and percentiles "
-                                        "for saved profiles that match by player name in the file "
-                                        "(club changes are fine). Depth ranking and profile ids "
-                                        "are kept. Compute the file on Uploads first when the "
-                                        "label says Stale.",
-                                        className="text-muted d-block mt-1",
-                                    ),
                                     html.Div(id="pf-replace-status", className="mt-2"),
                                 ],
                                 className="pf-replace-bar mb-3",
@@ -3618,6 +3653,10 @@ def layout(**_kwargs):
                                                             html.Span(
                                                                 "Squad depth",
                                                                 className="rs-depth-heading-label",
+                                                            ),
+                                                            *help_icon(
+                                                                PF_SQUAD_DEPTH_TIP,
+                                                                "pf-help-squad-depth",
                                                             ),
                                                             html.Span(
                                                                 dmc.Button(
@@ -3654,17 +3693,6 @@ def layout(**_kwargs):
                                                             ),
                                                         ],
                                                         className="pf-squad-depth-title-row",
-                                                    ),
-                                                    html.Span(
-                                                        "One card per formation position (up to 11). "
-                                                        "Slots that share a role start with the same "
-                                                        "exported players. Click a card to edit that "
-                                                        "role’s depth; click again to return to the XI. "
-                                                        "Auto-rank sorts players still on the slot "
-                                                        "(Score, then Ovr). Removals stay off until "
-                                                        "Recently removed restore or a new Role-scores "
-                                                        "export.",
-                                                        className="rs-depth-heading-hint",
                                                     ),
                                                 ],
                                                 className="rs-depth-heading-copy",
@@ -3765,19 +3793,10 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            html.Div(
-                                                [
-                                                    html.Span(
-                                                        "Depth chart",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Focus a Squad depth card to rank that slot "
-                                                        "here (drag to reorder; × removes from slot only).",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
+                                            _depth_heading(
+                                                "Depth chart",
+                                                PF_DEPTH_CHART_TIP,
+                                                "pf-help-depth-chart",
                                             ),
                                             html.Div(
                                                 [
@@ -3840,22 +3859,10 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            html.Div(
-                                                [
-                                                    html.Span(
-                                                        "Set pieces",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Top set-piece takers in this "
-                                                        "library. COR / DFK / IFK split "
-                                                        "into strong left and right "
-                                                        "foot (top 5 each). Slot shows "
-                                                        "best formation depth rank.",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
+                                            _depth_heading(
+                                                "Set pieces",
+                                                PF_SET_PIECES_TIP,
+                                                "pf-help-set-pieces",
                                             ),
                                             html.Div(
                                                 [
@@ -3892,21 +3899,10 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            html.Div(
-                                                [
-                                                    html.Span(
-                                                        "Starting XI",
-                                                        className="rs-depth-heading-label",
-                                                    ),
-                                                    html.Span(
-                                                        "Rank #1 or #2 per formation slot. "
-                                                        "Updates when slot depth changes or you "
-                                                        "switch First / Second XI — not when you "
-                                                        "focus a slot above.",
-                                                        className="rs-depth-heading-hint",
-                                                    ),
-                                                ],
-                                                className="rs-depth-heading-copy",
+                                            _depth_heading(
+                                                "Starting XI",
+                                                PF_STARTING_XI_TIP,
+                                                "pf-help-starting-xi",
                                             ),
                                             html.Div(
                                                 [

@@ -7,6 +7,7 @@ from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update,
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 import services.role_config as rc
 import scoring.role_scorer as rs
 from scoring.personality_tiers import tier_defs
@@ -49,6 +50,37 @@ SETTINGS_SECTIONS = (
     ("role-scores", "Role scores"),
     ("player-stats", "Player stats"),
 )
+
+def _card_header(title: str, tip: str | None = None, *, help_id: str | None = None) -> dbc.CardHeader:
+    if not tip:
+        return dbc.CardHeader(title)
+    hid = help_id or (
+        "st-help-"
+        + title.lower().replace(" & ", "-").replace("&", "and").replace(" ", "-")
+    )
+    return dbc.CardHeader(
+        html.Div(
+            [html.Span(title), *help_icon(tip, hid)],
+            className="rs-card-header-title",
+        )
+    )
+
+
+def _section_heading(
+    title: str,
+    blurb: str | None = None,
+    *,
+    help_id: str | None = None,
+) -> html.Div:
+    row: list = [html.H2(title, className="st-section-heading")]
+    if blurb:
+        hid = help_id or f"st-help-section-{title.lower().replace(' ', '-')}"
+        row.extend(help_icon(blurb, hid))
+    return html.Div(
+        html.Div(row, className="st-section-head-row"),
+        className="st-section-head",
+    )
+
 
 def _set_piece_attr_options() -> list[dict[str, str]]:
     return [
@@ -153,17 +185,12 @@ def _badge_color_row(tier: str, label: str, color: str) -> html.Div:
 
 
 def _pers_color_row(tier: str, label: str, colors: dict, description: str = "") -> html.Div:
+    label_row: list = [html.Div(label, className="st-color-name")]
+    if description:
+        label_row.extend(help_icon(description, f"st-help-pers-{tier}"))
     return html.Div(
         [
-            html.Div(
-                [
-                    html.Div(label, className="st-color-name"),
-                    html.Div(description, className="st-pers-tier-desc")
-                    if description
-                    else None,
-                ],
-                className="st-pers-tier-meta",
-            ),
+            html.Div(label_row, className="st-pers-tier-meta st-pers-tier-label-row"),
             html.Div(
                 [
                     html.Span(
@@ -234,13 +261,6 @@ def _color_row(band: str, label: str, colors: dict) -> html.Div:
         ],
         className="st-color-row",
     )
-
-
-def _section_heading(title: str, blurb: str | None = None) -> html.Div:
-    children: list = [html.H2(title, className="st-section-heading")]
-    if blurb:
-        children.append(html.P(blurb, className="text-muted st-section-blurb"))
-    return html.Div(children, className="st-section-head")
 
 
 def _section_save_row(save_id: str, status_id: str) -> html.Div:
@@ -378,10 +398,9 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Settings pack"),
+                _card_header("Settings pack", default_note, help_id="st-help-settings-pack"),
                 dbc.CardBody(
                     [
-                        html.P(default_note, className="text-muted"),
                         dbc.Row(
                             [
                                 dbc.Col(
@@ -427,7 +446,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Appearance & tables"),
+                _card_header(
+                    "Appearance & tables",
+                    "Preferred theme stays in sync with the navbar Light/Dark button "
+                    "(also applied on Save and when loading a pack). Page size options are "
+                    "comma-separated; the default must be one of them. Recently removed limit "
+                    "is how many Profiles depth/shortlist deletes stay available to restore (1–50).",
+                    help_id="st-help-appearance",
+                ),
                 dbc.CardBody(
                     [
                         dbc.Row(
@@ -485,14 +511,6 @@ def _general_panel(settings: dict) -> list:
                             ],
                             className="g-3",
                         ),
-                        html.Small(
-                            "Preferred theme stays in sync with the navbar Light/Dark button "
-                            "(also applied on Save and when loading a pack). "
-                            "Page size options are comma-separated; the default must be one of them. "
-                            "Recently removed limit is how many Profiles depth/shortlist deletes "
-                            "stay available to restore (1–50).",
-                            className="text-muted d-block mt-2",
-                        ),
                     ]
                 ),
             ],
@@ -500,14 +518,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Active scoring weights pack"),
+                _card_header(
+                    "Active scoring weights pack",
+                    "Attribute key / preferred / useful weights used on Role scores. "
+                    "Percentile threshold packs are managed under Player stats.",
+                    help_id="st-help-scoring-weights-pack",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Attribute key / preferred / useful weights used on Role scores. "
-                            "Percentile threshold packs are managed under Player stats.",
-                            className="text-muted",
-                        ),
                         dmc.Select(
                             id="st-role-weights-pack",
                             label="Scoring weights",
@@ -530,7 +548,12 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Age filter"),
+                _card_header(
+                    "Age filter",
+                    "Comma-separated maximum ages for the Max age menu on Role scores "
+                    "and Player stats. Any is always included.",
+                    help_id="st-help-age-filter",
+                ),
                 dbc.CardBody(
                     [
                         dmc.TextInput(
@@ -539,11 +562,6 @@ def _general_panel(settings: dict) -> list:
                             value=us.format_list(settings["age_tiers"], kind="age"),
                             debounce=500,
                         ),
-                        html.Small(
-                            "Comma-separated maximum ages for the Max age menu on Role scores "
-                            "and Player stats. Any is always included.",
-                            className="text-muted",
-                        ),
                     ]
                 ),
             ],
@@ -551,15 +569,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Footedness"),
+                _card_header(
+                    "Footedness",
+                    "Strength scale is 1 (very weak) through 6 (very strong). Each footedness "
+                    "filter uses its own minimum rating for that foot (Role scores and Player stats).",
+                    help_id="st-help-footedness",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Strength scale is 1 (very weak) through 6 (very strong). "
-                            "Each footedness filter uses its own minimum rating for that foot "
-                            "(Role scores and Player stats).",
-                            className="text-muted",
-                        ),
                         html.Div(
                             [
                                 dmc.Select(
@@ -601,14 +618,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Score bands"),
+                _card_header(
+                    "Score bands",
+                    "Used for squad-depth coloring, table cell colors, and the Poor cutoff "
+                    "across Role scores and Profiles.",
+                    help_id="st-help-score-bands",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Used for squad-depth coloring, table cell colors, and the Poor cutoff "
-                            "across Role scores and Profiles.",
-                            className="text-muted",
-                        ),
                         dbc.Row(
                             [
                                 dbc.Col(
@@ -668,14 +685,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Band colors"),
+                _card_header(
+                    "Band colors",
+                    "Background and text color table cells and legend chips. "
+                    "Bar is the squad-depth segment. Enter hex colors like #dcfce7.",
+                    help_id="st-help-band-colors",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Background and text color table cells and legend chips. "
-                            "Bar is the squad-depth segment. Enter hex colors like #dcfce7.",
-                            className="text-muted",
-                        ),
                         html.Div(
                             [
                                 _color_row(band, label, settings["colors"][band])
@@ -690,15 +707,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Personality tier colors"),
+                _card_header(
+                    "Personality tier colors",
+                    "Background and text colors for Personality cells and modal labels. "
+                    "Tiers follow the FM personality guide (Excellent → Poor).",
+                    help_id="st-help-personality-colors",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Background and text colors for Personality cells and modal labels. "
-                            "Tiers follow the FM personality guide "
-                            "(Excellent → Poor).",
-                            className="text-muted",
-                        ),
                         html.Div(
                             [
                                 _pers_color_row(
@@ -718,14 +734,14 @@ def _general_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Minutes requirement"),
+                _card_header(
+                    "Minutes requirement",
+                    "Default minutes used to seed the Player stats minutes filter "
+                    "(and related Profiles views).",
+                    help_id="st-help-minutes",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Default minutes used to seed the Player stats minutes filter "
-                            "(and related Profiles views).",
-                            className="text-muted",
-                        ),
                         dmc.NumberInput(
                             id="st-default-minutes",
                             label="Default minutes required",
@@ -755,14 +771,14 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Scoring weights"),
+                _card_header(
+                    "Scoring weights",
+                    "Tier multipliers for role and set-piece scores. "
+                    "Hybrid weights combine IP and OOP part scores.",
+                    help_id="st-help-scoring-weights",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Tier multipliers for role and set-piece scores. "
-                            "Hybrid weights combine IP and OOP part scores.",
-                            className="text-muted",
-                        ),
                         dbc.Row(
                             [
                                 dbc.Col(
@@ -835,17 +851,17 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Set-piece formulas"),
+                _card_header(
+                    "Set-piece formulas",
+                    "Edit key / preferred / useful attributes per type. "
+                    "Preview uses the scoring weights above.",
+                    help_id="st-help-set-piece-formulas",
+                ),
                 dbc.CardBody(
                     [
                         html.P(
                             id="st-set-piece-hint",
                             children=rs.set_piece_hint(tier_w),
-                            className="text-muted",
-                        ),
-                        html.P(
-                            "Edit key / preferred / useful attributes per type. "
-                            "Preview uses the scoring weights above.",
                             className="text-muted",
                         ),
                         _set_piece_editor(settings),
@@ -856,7 +872,12 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Histogram bins"),
+                _card_header(
+                    "Histogram bins",
+                    "Comma-separated edges. The first value is the top of the lowest band "
+                    "(so 10 makes that band <10). The last value starts the open-ended top bin.",
+                    help_id="st-help-histogram-bins",
+                ),
                 dbc.CardBody(
                     [
                         dmc.TextInput(
@@ -864,11 +885,6 @@ def _role_panel(settings: dict) -> list:
                             label="Cut points",
                             value=us.format_list(settings["hist_edges"]),
                             debounce=500,
-                        ),
-                        html.Small(
-                            "Comma-separated edges. The first value is the top of the lowest band "
-                            "(so 10 makes that band <10). The last value starts the open-ended top bin.",
-                            className="text-muted d-block mb-2",
                         ),
                         html.Div(
                             id="st-hist-preview",
@@ -882,15 +898,15 @@ def _role_panel(settings: dict) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Role config badge colors"),
+                _card_header(
+                    "Role config badge colors",
+                    "Colors for key / preferred / useful on the Role configs page "
+                    "(CSS variables --rc-key, --rc-green, --rc-blue). "
+                    "The same values apply in dark and light themes — pick colors that work for both.",
+                    help_id="st-help-badge-colors",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Colors for key / preferred / useful on the Role configs page "
-                            "(CSS variables --rc-key, --rc-green, --rc-blue). "
-                            "The same values apply in dark and light themes — pick colors that work for both.",
-                            className="text-muted",
-                        ),
                         html.Div(
                             [
                                 _badge_color_row("key", "Key", badge["key"]),
@@ -927,10 +943,13 @@ def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Percentile threshold pack"),
+                _card_header(
+                    "Percentile threshold pack",
+                    note,
+                    help_id="st-help-percentile-pack",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(note, className="text-muted"),
                         dbc.Row(
                             [
                                 dbc.Col(
@@ -976,15 +995,15 @@ def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
         ),
         dbc.Card(
             [
-                dbc.CardHeader("Statistic percentile thresholds"),
+                _card_header(
+                    "Statistic percentile thresholds",
+                    "Pick a position group and category, then edit the four cut-points. "
+                    "Categories are ordered Defending, Final third / Goalkeeping, then Possession. "
+                    "Save this section to apply the active pack on Player stats.",
+                    help_id="st-help-stat-thresholds",
+                ),
                 dbc.CardBody(
                     [
-                        html.P(
-                            "Pick a position group and category, then edit the four cut-points. "
-                            "Categories are ordered Defending, Final third / Goalkeeping, then Possession. "
-                            "Save this section to apply the active pack on Player stats.",
-                            className="text-muted",
-                        ),
                         html.Div(
                             [
                                 dmc.Select(
@@ -1030,12 +1049,16 @@ def layout(section: str | None = None, **_kwargs):
     active = section if section in allowed else "general"
     return dbc.Container(
         [
-            html.H1("Settings"),
-            html.P(
-                "Use the side nav to jump between sections. Each section has its own Save. "
-                "Player stats percentiles are separate named packs "
-                f"(built-in: {stp.BUILTIN_NAME}).",
-                className="text-muted",
+            html.Div(
+                [
+                    html.H1("Settings", className="mb-0"),
+                    *help_icon(
+                        "Use the side nav to jump between sections. Each section has its own Save. "
+                        f"Player stats percentiles are separate named packs (built-in: {stp.BUILTIN_NAME}).",
+                        "st-help-page",
+                    ),
+                ],
+                className="rs-page-title-row mb-3",
             ),
             dcc.Location(id="st-settings-url", refresh=False),
             dcc.Store(id="st-settings-section", data=active),

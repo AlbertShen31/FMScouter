@@ -4,6 +4,7 @@ from __future__ import annotations
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 import services.role_config as rc
 from components.attr_columns import attr_grid, attr_group_columns, attr_row
 from scoring.role_scorer import GROUP_DEFS, iter_roles, role_groups, role_meta
@@ -242,12 +243,16 @@ def _identity(role_id: str) -> html.Div:
                 ],
                 className="rc-info-list",
             ),
-            html.Div("Positions", className="rc-section-kicker"),
             html.Div(
-                "Player-position buckets this role can score in. A role can "
-                "belong to more than one (Inside Winger is Wide midfielders "
-                "and Wingers).",
-                className="rc-hint",
+                [
+                    html.Span("Positions", className="rc-section-kicker mb-0"),
+                    *help_icon(
+                        "Player-position buckets this role can score in. A role can belong to "
+                        "more than one (Inside Winger is Wide midfielders and Wingers).",
+                        "rc-help-positions",
+                    ),
+                ],
+                className="rc-kicker-row",
             ),
             html.Div(
                 [
@@ -322,12 +327,12 @@ def _attributes(role_id: str, paint: str = "key") -> html.Div:
                 [
                     html.Div("Attributes", className="rc-attrs-title"),
                     html.Div(_paint_buttons(paint), className="rc-legend-row"),
+                    *help_icon(
+                        f"Assigning {_tier_hints()[paint]}. Click a type once, then click attributes to apply it.",
+                        "rc-help-attributes",
+                    ),
                 ],
                 className="rc-attrs-header",
-            ),
-            html.Div(
-                f"Assigning {_tier_hints()[paint]}. Click a type once, then click attributes to apply it.",
-                className="rc-attrs-note",
             ),
             attr_grid(columns),
         ],
@@ -378,13 +383,13 @@ def layout():
         ),
         html.Div(
             [
-                html.H1("Role configs", className="rc-page-title"),
-                html.P(
+                html.H1("Role configs", className="rc-page-title mb-0"),
+                *help_icon(
                     "View and edit the key, preferred, and useful attributes used to score each FM26 role.",
-                    className="rc-page-sub",
+                    "rc-help-page",
                 ),
             ],
-            className="rc-hero",
+            className="rc-hero rs-page-title-row",
         ),
         html.Div(
             [

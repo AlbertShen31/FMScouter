@@ -301,6 +301,8 @@ def upload_card(
     *,
     upload_label: Any = None,
     hint: Any = None,
+    header_tip: str | None = None,
+    header_help_id: str | None = None,
     class_name: str = "mb-3 rs-section-card",
     include_data_rev: bool = True,
     include_historical: bool = True,
@@ -366,27 +368,6 @@ def upload_card(
             )
         )
         if library_page:
-            body_children.append(
-                html.P(
-                    [
-                        (
-                            "Choose a saved file for each slot (Ready = fast load from "
-                            "precompute). Clear removes only that side from the page "
-                            "cache. Add or compute files on "
-                            if library_only
-                            else (
-                                "Selecting a saved file loads that slot. Labels show "
-                                "cache status (Ready / Stale / Not computed). Clear "
-                                "removes only that side’s export from the page cache. "
-                                "Manage files on "
-                            )
-                        ),
-                        html.A("Uploads", href="/uploads"),
-                        ".",
-                    ],
-                    className="rs-lib-hint text-muted small mb-0 mt-2",
-                )
-            )
             if library_page in {"role_scores", "stats"}:
                 body_children.append(
                     dcc.Interval(
@@ -413,26 +394,6 @@ def upload_card(
             )
         )
         if library_page:
-            body_children.append(
-                html.P(
-                    [
-                        (
-                            "Choose a saved file to load (Ready = fast load from "
-                            "precompute). Clear removes it from this page’s cache. "
-                            "Add or compute files on "
-                            if library_only
-                            else (
-                                "Selecting a saved file loads it. Labels show cache "
-                                "status (Ready / Stale / Not computed). Clear removes "
-                                "the export from this page’s cache. Manage files on "
-                            )
-                        ),
-                        html.A("Uploads", href="/uploads"),
-                        ".",
-                    ],
-                    className="rs-lib-hint text-muted small mb-0 mt-2",
-                )
-            )
             if library_page in {"role_scores", "stats"}:
                 body_children.append(
                     dcc.Interval(
@@ -444,8 +405,43 @@ def upload_card(
                 )
     if hint is not None:
         body_children.append(hint)
+    if library_page:
+        library_tip = (
+            "Choose a saved file for each slot (Ready = fast load from precompute). "
+            "Clear removes only that side from the page cache. Add or compute files on "
+            "the Uploads page."
+            if library_only and include_historical
+            else (
+                "Choose a saved file to load (Ready = fast load from precompute). "
+                "Clear removes it from this page's cache. Add or compute files on "
+                "the Uploads page."
+                if library_only
+                else (
+                    "Selecting a saved file loads that slot. Labels show cache status "
+                    "(Ready / Stale / Not computed). Clear removes only that side's export "
+                    "from the page cache. Manage files on the Uploads page."
+                    if include_historical
+                    else (
+                        "Selecting a saved file loads it. Labels show cache status "
+                        "(Ready / Stale / Not computed). Clear removes the export from "
+                        "this page's cache. Manage files on the Uploads page."
+                    )
+                )
+            )
+        )
+    else:
+        library_tip = None
+    combined_tip = " ".join(part for part in (header_tip, library_tip) if part)
+    if combined_tip:
+        hid = header_help_id or f"{prefix}-help-upload"
+        card_title = html.Div(
+            [html.Span(title), *help_icon(combined_tip, hid)],
+            className="rs-card-header-title",
+        )
+    else:
+        card_title = title
     return dbc.Card(
-        [dbc.CardHeader(title), dbc.CardBody(body_children)],
+        [dbc.CardHeader(card_title), dbc.CardBody(body_children)],
         className=class_name,
     )
 

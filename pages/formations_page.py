@@ -5,10 +5,20 @@ from dash import ALL, Input, Output, State, callback, ctx, html, no_update, regi
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 import services.formations as fm
 from scoring.role_scorer import combo_meta, role_options
 
 register_page(__name__, path="/formations", name="Formations")
+
+FM_PAGE_TIP = (
+    "Save up to 11 hybrid roles. Slot names update from IP positions (duplicate CBs become "
+    "RCB/LCB). IP position filters both role lists unless you set a separate OOP position. "
+    "Save writes a new file if none is selected."
+)
+FM_HYBRID_SLOTS_TIP = (
+    "IP position is required. Leave OOP position blank to use the IP position for both role lists."
+)
 
 POS_OPTIONS = fm.position_options()
 _FORM_OUTPUT_COUNT = 13
@@ -140,13 +150,12 @@ def layout():
     formation = fm.blank()
     return dbc.Container(
         [
-            html.H1("Formations"),
-            html.P(
-                "Save up to 11 hybrid roles. Slot names update from IP positions "
-                "(duplicate CBs become RCB/LCB). IP position filters both role lists "
-                "unless you set a separate OOP position. Save writes a new file if none "
-                "is selected.",
-                className="text-muted",
+            html.Div(
+                [
+                    html.H1("Formations", className="mb-0"),
+                    *help_icon(FM_PAGE_TIP, "fm-help-page"),
+                ],
+                className="rs-page-title-row mb-3",
             ),
             dbc.Card(
                 [
@@ -250,13 +259,13 @@ def layout():
             dbc.Card(
                 [
                     dbc.CardHeader(
-                        [
-                            html.Span("Hybrid slots"),
-                            html.Span(
-                                "IP position is required. Leave OOP position blank to use the IP position for both role lists.",
-                                className="fm-slots-hint",
-                            ),
-                        ],
+                        html.Div(
+                            [
+                                html.Span("Hybrid slots"),
+                                *help_icon(FM_HYBRID_SLOTS_TIP, "fm-help-hybrid-slots"),
+                            ],
+                            className="rs-card-header-title",
+                        ),
                         className="fm-slots-header",
                     ),
                     dbc.CardBody(

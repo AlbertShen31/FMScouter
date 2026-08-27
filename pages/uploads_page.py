@@ -17,11 +17,47 @@ from dash import (
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 from components.scouting_shell import decode_upload, upload_error
 import services.export_library as lib
 import services.upload_cache as upload_cache
 
 register_page(__name__, path="/uploads", name="Uploads")
+
+UP_PAGE_TIP = (
+    "Save CSV exports on this machine. Role scores and Player stats load from this library; "
+    "Squad finance can also upload manually. Rename files and add notes so the dropdowns stay "
+    "readable. Files stay under data/uploads/ (not published as static assets). Moneyball / "
+    "finance exports include contracts and wages — encrypt the host disk or delete CSVs you "
+    "do not need."
+)
+UP_VIEW_TIP = (
+    "Use one custom view that includes attributes, Moneyball stats, salary/fees, and player "
+    "identity columns so a single export works on every page."
+)
+UP_ELIGIBILITY_TIP = (
+    "Eligible means the file has Name/Player, enough player info (Club/Age/Position), plus: "
+    "attributes for Role scores; stats markers for Player stats; Salary and match fees for "
+    "Squad finance. Upload precomputes all role scores and stats percentiles using current "
+    "Settings / role packs, and records leagues with incomplete advanced match stats (shown "
+    "striped on Player stats / Profiles). If you change those settings, click Compute to "
+    "refresh. Pages then load from the cache instead of rescoring."
+)
+UP_COMPUTE_ALL_TIP = (
+    "Recompute role scores and stats percentiles for every eligible saved file."
+)
+
+
+def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
+    return dbc.CardHeader(
+        html.Div(
+            [
+                html.Span(title),
+                *help_icon(tip, help_id),
+            ],
+            className="rs-card-header-title",
+        )
+    )
 
 
 def _yes_no(ok: bool) -> html.Span:
@@ -202,11 +238,6 @@ def _view_panel() -> html.Div:
                         "Download FM export view",
                         id="up-view-download-btn",
                         disabled=disabled,
-                        className="me-2",
-                    ),
-                    html.Span(
-                        "Placeholder until you add the view file under data/views/.",
-                        className="text-muted small",
                     ),
                 ],
                 className="up-view-actions",
@@ -289,33 +320,17 @@ def layout(**_kwargs):
                 hidden=True,
             ),
             _edit_modal(),
-            html.H1("Uploads", className="mt-2 mb-3"),
-            html.P(
-                "Save CSV exports on this machine. Role scores and Player stats load "
-                "from this library; Squad finance can also upload manually. Rename "
-                "files and add notes so the dropdowns stay readable.",
-                className="text-muted mb-2",
-            ),
-            html.P(
-                "Confidential: files stay under data/uploads/ (not published as static "
-                "assets). Moneyball / finance exports include contracts and wages — "
-                "encrypt the host disk or delete CSVs you do not need.",
-                className="text-muted mb-3",
+            html.Div(
+                [
+                    html.H1("Uploads", className="mt-2 mb-0"),
+                    *help_icon(UP_PAGE_TIP, "up-help-page"),
+                ],
+                className="rs-page-title-row mb-3",
             ),
             dbc.Card(
                 [
-                    dbc.CardHeader("1. FM export view"),
-                    dbc.CardBody(
-                        [
-                            html.P(
-                                "Use one custom view that includes attributes, "
-                                "Moneyball stats, salary/fees, and player identity "
-                                "columns so a single export works on every page.",
-                                className="mb-2",
-                            ),
-                            _view_panel(),
-                        ]
-                    ),
+                    _card_header("1. FM export view", UP_VIEW_TIP, "up-help-view"),
+                    dbc.CardBody(_view_panel()),
                 ],
                 className="mb-3 rs-section-card",
             ),
@@ -346,22 +361,13 @@ def layout(**_kwargs):
                     ),
                     dbc.Card(
                         [
-                            dbc.CardHeader("3. Saved files & page eligibility"),
+                            _card_header(
+                                "3. Saved files & page eligibility",
+                                UP_ELIGIBILITY_TIP,
+                                "up-help-eligibility",
+                            ),
                             dbc.CardBody(
                                 [
-                                    html.P(
-                                        "Eligible means the file has Name/Player, enough "
-                                        "player info (Club/Age/Position), plus: attributes "
-                                        "for Role scores; stats markers for Player stats; "
-                                        "Salary and match fees for Squad finance. Upload "
-                                        "precomputes all role scores and stats percentiles "
-                                        "using current Settings / role packs, and records "
-                                        "leagues with incomplete advanced match stats "
-                                        "(shown striped on Player stats / Profiles). If you "
-                                        "change those settings, click Compute to refresh. "
-                                        "Pages then load from the cache instead of rescoring.",
-                                        className="text-muted small mb-3",
-                                    ),
                                     html.Div(
                                         [
                                             dmc.Button(
@@ -372,11 +378,7 @@ def layout(**_kwargs):
                                                 n_clicks=0,
                                                 disabled=not _any_computable(),
                                             ),
-                                            html.Span(
-                                                "Recompute role scores and stats percentiles "
-                                                "for every eligible saved file.",
-                                                className="text-muted small ms-2",
-                                            ),
+                                            *help_icon(UP_COMPUTE_ALL_TIP, "up-help-compute-all"),
                                         ],
                                         className="up-compute-all-row mb-3",
                                     ),

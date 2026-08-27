@@ -563,10 +563,6 @@ def _set_piece_panel(settings=None) -> html.Details:
                             html.Div(
                                 [
                                     html.Div("Add columns", className="rs-metrics-section-label"),
-                                    html.P(
-                                        "Show computed set-piece scores in the shortlist.",
-                                        className="rs-metrics-section-hint",
-                                    ),
                                 ],
                                 className="rs-metrics-section-head",
                             ),
@@ -590,10 +586,6 @@ def _set_piece_panel(settings=None) -> html.Details:
                             html.Div(
                                 [
                                     html.Div("Min score filter", className="rs-metrics-section-label"),
-                                    html.P(
-                                        "Leave blank for any. Applies to every checked type.",
-                                        className="rs-metrics-section-hint",
-                                    ),
                                 ],
                                 className="rs-metrics-section-head",
                             ),
@@ -1095,14 +1087,14 @@ def layout():
                                                     "Squad depth",
                                                     className="rs-depth-heading-label",
                                                 ),
-                                                html.Span(
+                                                *help_icon(
                                                     "Click cards to focus the table on one or more roles. "
                                                     "Click again to remove a role; clear all to show every role. "
                                                     "Click a player name in the shortlist for full details.",
-                                                    className="rs-depth-heading-hint",
+                                                    "rs-help-squad-depth",
                                                 ),
                                             ],
-                                            className="rs-depth-heading-copy",
+                                            className="rs-depth-heading-title-row",
                                         ),
                                         html.Div(_band_legend(settings), id="rs-band-legend"),
                                     ],

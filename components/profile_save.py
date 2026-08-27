@@ -5,6 +5,7 @@ from dash import Input, Output, State, callback, dcc, html, no_update
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
+from components.player_filters import help_icon
 from components.scouting_shell import as_list, parsed_players
 import services.export_library as lib
 import services.player_profiles as profiles
@@ -16,15 +17,22 @@ def profile_save_panel(*, prefix: str, section_number: int) -> dbc.Card:
     active = profiles.active_library_id() or (options[0]["value"] if options else None)
     return dbc.Card(
         [
-            dbc.CardHeader(f"{section_number}. Profiles"),
+            dbc.CardHeader(
+                html.Div(
+                    [
+                        html.Span(f"{section_number}. Profiles"),
+                        *help_icon(
+                            "Mark players in the shortlist, then save them to a profile library. "
+                            "One row is created per evaluated role — each save stores that shortlist "
+                            "row only (not the whole file).",
+                            f"{prefix}-help-profile-save",
+                        ),
+                    ],
+                    className="rs-card-header-title",
+                )
+            ),
             dbc.CardBody(
                 [
-                    html.P(
-                        "Mark players in the shortlist, then save them to a profile "
-                        "library. One row is created per evaluated role — each save "
-                        "stores that shortlist row only (not the whole file).",
-                        className="text-muted small mb-3",
-                    ),
                     html.Div(
                         [
                             html.Label(
