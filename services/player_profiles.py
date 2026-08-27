@@ -673,6 +673,50 @@ def auto_rank_slot_by_score(
     return len(ids)
 
 
+def sync_slot_depth_from_exports(
+    formation_id: str | None,
+    slot_index: int | str,
+    role_column: str,
+) -> int:
+    """Keep existing slot order; append any new Role-score exports for the role.
+
+    Slot depth is a fixed id list once seeded, so later saves from Role scores
+    do not appear until something rewrites the list (e.g. auto-rank). This
+    preserves manual ranking and only adds missing profile ids (by Score).
+    """
+    role = str(role_column or "").strip()
+    if not role:
+        return 0
+    role_entries = [
+        entry for entry in list_role_profiles() if _entry_role(entry) == role
+    ]
+    role_ids = {
+        str(entry.get("id") or "").strip()
+        for entry in role_entries
+        if str(entry.get("id") or "").strip()
+    }
+    current = get_slot_order_ids(formation_id, slot_index, role, seed=True)
+    kept = [pid for pid in current if pid in role_ids]
+    present = set(kept)
+    missing = [
+        entry
+        for entry in role_entries
+        if str(entry.get("id") or "").strip() not in present
+    ]
+    if not missing and kept == current:
+        return 0
+    missing.sort(key=_score_name_sort_key)
+    new_ids = kept + [
+        str(entry.get("id") or "").strip()
+        for entry in missing
+        if str(entry.get("id") or "").strip()
+    ]
+    if new_ids == current:
+        return 0
+    set_slot_order_ids(formation_id, slot_index, new_ids)
+    return len(missing)
+
+
 def _read_index(library_id: str | None = None) -> list[dict[str, Any]]:
     ensure_dirs()
     path = _index_path(library_id)

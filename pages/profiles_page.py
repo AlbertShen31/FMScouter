@@ -612,8 +612,9 @@ def _xi_view_switcher(active=None) -> html.Div:
 
 SET_PIECE_TOP_N = 10
 SET_PIECE_FOOT_TOP_N = 5
-# Delivery / kick categories: split into left / right very-strong takers.
+# Delivery / kick categories: split into left / right strong(+) takers.
 SET_PIECE_FOOTED_IDS = frozenset({"corners", "dfk", "ifk"})
+SET_PIECE_FOOT_MIN = FootStrength.STRONG
 
 
 def _setpiece_profile_list(settings=None) -> list[dict]:
@@ -720,8 +721,8 @@ def _unique_setpiece_entries(
     return [item for _, item in by_key.values()]
 
 
-def _entry_very_strong_feet(entry: dict) -> tuple[bool, bool]:
-    """Return (left_very_strong, right_very_strong) from snapshot or player."""
+def _entry_strong_feet(entry: dict) -> tuple[bool, bool]:
+    """Return (left_strong, right_strong) for Strong or better from snapshot/player."""
     row = entry.get("row") if isinstance(entry.get("row"), dict) else {}
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
     left_raw = row.get("Left Foot")
@@ -733,8 +734,8 @@ def _entry_very_strong_feet(entry: dict) -> tuple[bool, bool]:
     left = foot_strength(left_raw or "")
     right = foot_strength(right_raw or "")
     return (
-        left == FootStrength.VERY_STRONG,
-        right == FootStrength.VERY_STRONG,
+        left is not None and left >= SET_PIECE_FOOT_MIN,
+        right is not None and right >= SET_PIECE_FOOT_MIN,
     )
 
 
@@ -782,7 +783,7 @@ def _top_setpiece_entries(
 ) -> tuple[dict | None, list[tuple[dict, float | None]]]:
     """Return (profile meta, [(entry, score), ...]) ranked for the category.
 
-    ``foot_side`` of ``left`` / ``right`` keeps only very-strong on that foot.
+    ``foot_side`` of ``left`` / ``right`` keeps only Strong+ on that foot.
     """
     settings = us.normalize(settings)
     profile = _setpiece_profile(piece_id, settings)
@@ -798,10 +799,10 @@ def _top_setpiece_entries(
     ranked: list[tuple[dict, float | None]] = []
     for entry in unique:
         if side in ("left", "right"):
-            left_vs, right_vs = _entry_very_strong_feet(entry)
-            if side == "left" and not left_vs:
+            left_ok, right_ok = _entry_strong_feet(entry)
+            if side == "left" and not left_ok:
                 continue
-            if side == "right" and not right_vs:
+            if side == "right" and not right_ok:
                 continue
         ranked.append(
             (entry, _entry_setpiece_score(entry, score_col, settings=settings))
@@ -2464,7 +2465,7 @@ def _build_setpiece_chart(
             show_height=False,
             score_abbr=abbr,
             slot_map=slot_map,
-            empty_message="No very strong left-footed takers yet.",
+            empty_message="No strong left-footed takers yet.",
         )
         right_table = _setpiece_ranked_table(
             right_ranked,
@@ -2473,7 +2474,7 @@ def _build_setpiece_chart(
             show_height=False,
             score_abbr=abbr,
             slot_map=slot_map,
-            empty_message="No very strong right-footed takers yet.",
+            empty_message="No strong right-footed takers yet.",
         )
         return html.Div(
             [
@@ -2486,10 +2487,10 @@ def _build_setpiece_chart(
                                     className="pf-depth-chart-role-name",
                                 ),
                                 html.Span(
-                                    "L/R · VS",
+                                    "L/R · Strong",
                                     className="pf-depth-chart-count",
                                     title=(
-                                        f"Top {SET_PIECE_FOOT_TOP_N} very strong "
+                                        f"Top {SET_PIECE_FOOT_TOP_N} strong "
                                         "left- and right-footed takers"
                                     ),
                                 ),
@@ -2497,7 +2498,7 @@ def _build_setpiece_chart(
                             className="pf-depth-chart-role-title",
                         ),
                         html.Span(
-                            "Very strong foot only. Slot is the best depth rank "
+                            "Strong foot or better. Slot is the best depth rank "
                             "across the formation; ties keep the earlier Starting XI slot.",
                             className="text-muted small",
                         ),
@@ -2507,23 +2508,23 @@ def _build_setpiece_chart(
                 html.Div(
                     [
                         _setpiece_group_section(
-                            title="Left · VS",
+                            title="Left · Strong",
                             count_label=f"Top {len(left_ranked)}",
                             count_title=(
                                 f"Top {len(left_ranked)} of up to "
-                                f"{SET_PIECE_FOOT_TOP_N} very strong left foot"
+                                f"{SET_PIECE_FOOT_TOP_N} strong left foot"
                             ),
-                            hint="Left Foot = Very strong",
+                            hint="Left Foot ≥ Strong",
                             table=left_table,
                         ),
                         _setpiece_group_section(
-                            title="Right · VS",
+                            title="Right · Strong",
                             count_label=f"Top {len(right_ranked)}",
                             count_title=(
                                 f"Top {len(right_ranked)} of up to "
-                                f"{SET_PIECE_FOOT_TOP_N} very strong right foot"
+                                f"{SET_PIECE_FOOT_TOP_N} strong right foot"
                             ),
-                            hint="Right Foot = Very strong",
+                            hint="Right Foot ≥ Strong",
                             table=right_table,
                         ),
                     ],
@@ -3612,9 +3613,45 @@ def layout(**_kwargs):
                                         [
                                             html.Div(
                                                 [
-                                                    html.Span(
-                                                        "Squad depth",
-                                                        className="rs-depth-heading-label",
+                                                    html.Div(
+                                                        [
+                                                            html.Span(
+                                                                "Squad depth",
+                                                                className="rs-depth-heading-label",
+                                                            ),
+                                                            html.Span(
+                                                                dmc.Button(
+                                                                    [
+                                                                        html.Span(
+                                                                            "↻",
+                                                                            className=(
+                                                                                "pf-squad-depth-refresh-icon"
+                                                                            ),
+                                                                            **{
+                                                                                "aria-hidden": "true"
+                                                                            },
+                                                                        ),
+                                                                        "Refresh exports",
+                                                                    ],
+                                                                    id="pf-squad-depth-refresh",
+                                                                    size="sm",
+                                                                    variant="filled",
+                                                                    color="teal",
+                                                                    n_clicks=0,
+                                                                    className=(
+                                                                        "pf-squad-depth-refresh "
+                                                                        "pf-depth-role-btn "
+                                                                        "pf-depth-role-btn-rank"
+                                                                    ),
+                                                                ),
+                                                                title=(
+                                                                    "Pull in new Role scores "
+                                                                    "exports (keeps current "
+                                                                    "ranks; adds missing players)"
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        className="pf-squad-depth-title-row",
                                                     ),
                                                     html.Span(
                                                         "One card per formation position (up to 11). "
@@ -3807,7 +3844,7 @@ def layout(**_kwargs):
                                                     html.Span(
                                                         "Top set-piece takers in this "
                                                         "library. COR / DFK / IFK split "
-                                                        "into very strong left and right "
+                                                        "into strong left and right "
                                                         "foot (top 5 each). Slot shows "
                                                         "best formation depth rank.",
                                                         className="rs-depth-heading-hint",
@@ -4345,10 +4382,10 @@ def sync_setpiece_view_switch(view, settings):
 
 
 # Squad depth: start with overlay on; hide when cards finish rendering.
-# Show again when formation / rev rebuilds the board (not on XI toggle).
+# Show again when formation / rev / refresh rebuilds the board (not on XI toggle).
 clientside_callback(
     """
-    function(formation, rev) {
+    function(formation, rev, refreshClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -4359,6 +4396,7 @@ clientside_callback(
     Output("pf-squad-depth-busy", "className"),
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
+    Input("pf-squad-depth-refresh", "n_clicks"),
     prevent_initial_call=True,
 )
 
@@ -4377,10 +4415,11 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Depth chart: spinner while focus / formation / rev / minutes rebuilds (not XI toggle).
+# Depth chart: spinner while focus / formation / rev / minutes / refresh rebuilds
+# (not XI toggle). Refresh also bumps pf-rev after syncing exports.
 clientside_callback(
     """
-    function(focus, formation, rev, minutes) {
+    function(focus, formation, rev, minutes, refreshClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -4393,6 +4432,7 @@ clientside_callback(
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
     Input("pf-depth-minutes-required", "value"),
+    Input("pf-squad-depth-refresh", "n_clicks"),
     prevent_initial_call=True,
 )
 
@@ -5429,6 +5469,49 @@ def auto_rank_depth_role(
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
     # Invalidate in-flight drag publishes (ts is Date.now() from the browser).
+    return next_rev, chart, int(time.time() * 1000)
+
+
+@callback(
+    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-depth-chart-body", "children", allow_duplicate=True),
+    Output("pf-depth-order-guard", "data", allow_duplicate=True),
+    Input("pf-squad-depth-refresh", "n_clicks"),
+    State("pf-rev", "data"),
+    State("pf-formation-select", "value"),
+    State("pf-focus-role", "data"),
+    State("pf-xi-view", "data"),
+    State("pf-depth-minutes-required", "value"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def refresh_depth_from_role_exports(
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
+):
+    """Append new Role-score exports into each slot’s depth, then rebuild charts."""
+    if not n_clicks:
+        return no_update, no_update, no_update
+    slots = _formation_slots(formation_id)
+    if slots:
+        for slot in slots:
+            profiles.sync_slot_depth_from_exports(
+                formation_id, slot["index"], slot["column"]
+            )
+    next_rev = int(rev or 0) + 1
+    chart = _mount_depth_chart(
+        _build_depth_chart(
+            focus_roles=focus_role,
+            formation_id=formation_id,
+            formation_slots=slots,
+            settings=settings,
+            theme=theme,
+            minutes_required=depth_minutes,
+            xi_view=xi_view,
+            cache=_PfProfileCache(),
+        ),
+        epoch=f"sync-{next_rev}-{uuid.uuid4().hex[:10]}",
+    )
     return next_rev, chart, int(time.time() * 1000)
 
 
