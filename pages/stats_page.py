@@ -25,6 +25,17 @@ from scoring.division_tiers import classify_division
 import services.export_library as lib
 from components.player_filters import help_icon, player_filters, player_filters_host
 from components.player_modal import player_detail_body, player_modal
+from components.stats_compare import (
+    compare_title,
+    compare_control_state,
+    compare_players_incompatible,
+    compare_status_children,
+    default_compare_eval_group,
+    normalize_compare_eval_group,
+    normalize_compare_view,
+    stats_compare_body,
+    stats_compare_modal,
+)
 from components.stats_player_pane import (
     _group_switcher,
     _limited_tracking_note,
@@ -1208,6 +1219,9 @@ def layout(**_kwargs):
             dcc.Store(id="st-player-key", data=None),
             dcc.Store(id="st-player-view", data="bars", storage_type="local"),
             dcc.Store(id="st-player-group", data="mid"),
+            dcc.Store(id="st-compare-keys", data=None),
+            dcc.Store(id="st-compare-view", data="bars", storage_type="local"),
+            dcc.Store(id="st-compare-group", data="mid"),
             pattern_matching_stubs(
                 "st",
                 [
@@ -1216,6 +1230,8 @@ def layout(**_kwargs):
                     {"type": "foot", "foot": "_"},
                     {"type": "player-view", "view": "_"},
                     {"type": "player-group", "group": "_"},
+                    {"type": "compare-view", "view": "_"},
+                    {"type": "compare-group", "group": "_"},
                 ],
             ),
             upload_card(
@@ -1386,6 +1402,21 @@ def layout(**_kwargs):
                                         prefix="st",
                                         clear_button_id="st-clear-marks",
                                         settings=settings,
+                                        extra_actions=[
+                                            dmc.Button(
+                                                "Compare marked",
+                                                id="st-compare-btn",
+                                                size="sm",
+                                                variant="light",
+                                                n_clicks=0,
+                                                disabled=True,
+                                                className="st-compare-btn",
+                                            ),
+                                        ],
+                                    ),
+                                    html.Div(
+                                        id="st-compare-status",
+                                        className="st-compare-status-wrap",
                                     ),
                                 ]
                             ),
@@ -1399,6 +1430,7 @@ def layout(**_kwargs):
                 hidden=True,
             ),
             player_modal(prefix="st"),
+            stats_compare_modal(prefix="st"),
         ],
         className="rs-page st-page",
     )
@@ -1641,7 +1673,7 @@ def refresh_table(
             no_update,
             no_update,
             no_update,
-            selected_ids,
+            no_update,
             no_update,
             no_update,
             caption,
@@ -1849,7 +1881,7 @@ def switch_player_group(
                 if minutes_required is not None
                 else us.default_minutes_required(settings)
             ),
-            view=_normalize_player_view(view),
+            view=normalize_compare_view(view),
             eval_group=group,
             theme=theme,
             threshold_overrides=thresh,
@@ -1858,6 +1890,244 @@ def switch_player_group(
             metric_p0=metric_p0,
         ),
     )
+
+
+def _build_stats_compare_body(
+    player_a: dict,
+    player_b: dict,
+    *,
+    view: str,
+    eval_group: str,
+    theme: str | None,
+    settings: dict,
+    players: list[dict],
+) -> html.Div:
+    settings = us.normalize(settings)
+    thresh = settings.get("stats_thresholds")
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
+    eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
+    label_a = str(player_a.get("name") or "Player A")
+    label_b = str(player_b.get("name") or "Player B")
+    return stats_compare_body(
+        player_a,
+        player_b,
+        label_a=label_a,
+        label_b=label_b,
+        view=view,
+        eval_group=eval_group,
+        theme=theme,
+        threshold_overrides=thresh,
+        metric_p100_a=metric_p100,
+        metric_p0_a=metric_p0,
+        metric_p100_b=metric_p100,
+        metric_p0_b=metric_p0,
+        prefix="st",
+    )
+
+
+@callback(
+    Output("st-compare-modal", "is_open"),
+    Output("st-compare-modal-title", "children"),
+    Output("st-compare-modal-body", "children"),
+    Output("st-compare-keys", "data"),
+    Output("st-compare-group", "data", allow_duplicate=True),
+    Input("st-compare-btn", "n_clicks"),
+    Input("st-compare-modal", "is_open"),
+    Input("st-compare-modal-close", "n_clicks"),
+    State("st-marked", "data"),
+    State("st-parsed", "data"),
+    State("st-compare-view", "data"),
+    State("st-compare-group", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def open_stats_compare(
+    compare_clicks,
+    is_open,
+    _close,
+    marked,
+    parsed,
+    view,
+    eval_group,
+    theme,
+    settings,
+):
+    triggered = ctx.triggered_id
+    if triggered == "st-compare-modal":
+        if not is_open:
+            return False, no_update, no_update, None, no_update
+        return no_update, no_update, no_update, no_update, no_update
+    if triggered == "st-compare-modal-close":
+        return False, no_update, no_update, None, no_update
+    keys = [str(k) for k in (marked or []) if k]
+    if len(keys) != 2:
+        return no_update, no_update, no_update, no_update, no_update
+    players = _parsed_players(parsed)
+    player_a = next((p for p in players if player_key(p) == keys[0]), None)
+    player_b = next((p for p in players if player_key(p) == keys[1]), None)
+    if not player_a or not player_b:
+        return (
+            True,
+            "Compare players",
+            html.Div("One or both marked players were not found in the current export."),
+            keys,
+            no_update,
+        )
+    blocked, message = compare_control_state(2, player_a=player_a, player_b=player_b)
+    if blocked:
+        return (no_update,) * 5
+    settings = us.normalize(settings)
+    eval_group = default_compare_eval_group(player_a, player_b)
+    label_a = str(player_a.get("name") or "Player A")
+    label_b = str(player_b.get("name") or "Player B")
+    return (
+        True,
+        compare_title(label_a, label_b),
+        _build_stats_compare_body(
+            player_a,
+            player_b,
+            view=normalize_compare_view(view),
+            eval_group=eval_group,
+            theme=theme,
+            settings=settings,
+            players=players,
+        ),
+        keys,
+        eval_group,
+    )
+
+
+def _lookup_compare_players(parsed, compare_keys):
+    keys = [str(k) for k in (compare_keys or []) if k]
+    if len(keys) != 2:
+        return None, None
+    players = _parsed_players(parsed)
+    player_a = next((p for p in players if player_key(p) == keys[0]), None)
+    player_b = next((p for p in players if player_key(p) == keys[1]), None)
+    return player_a, player_b
+
+
+@callback(
+    Output("st-compare-view", "data", allow_duplicate=True),
+    Output("st-compare-modal-body", "children", allow_duplicate=True),
+    Input({"type": "st-compare-view", "view": ALL}, "n_clicks"),
+    State("st-compare-view", "data"),
+    State("st-compare-group", "data"),
+    State("st-compare-keys", "data"),
+    State("st-parsed", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def switch_compare_view(
+    n_clicks,
+    current,
+    eval_group,
+    compare_keys,
+    parsed,
+    theme,
+    settings,
+):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    view = ctx.triggered_id.get("view")
+    if view == "_" or view not in ("values", "bars"):
+        return no_update, no_update
+    if view == current:
+        return no_update, no_update
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    if not player_a or not player_b:
+        return normalize_compare_view(view), html.Div("Players not found.")
+    settings = us.normalize(settings)
+    return (
+        normalize_compare_view(view),
+        _build_stats_compare_body(
+            player_a,
+            player_b,
+            view=view,
+            eval_group=eval_group,
+            theme=theme,
+            settings=settings,
+            players=_parsed_players(parsed),
+        ),
+    )
+
+
+@callback(
+    Output("st-compare-group", "data", allow_duplicate=True),
+    Output("st-compare-modal-body", "children", allow_duplicate=True),
+    Input({"type": "st-compare-group", "group": ALL}, "n_clicks"),
+    State("st-compare-group", "data"),
+    State("st-compare-view", "data"),
+    State("st-compare-keys", "data"),
+    State("st-parsed", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def switch_compare_group(
+    n_clicks,
+    current,
+    view,
+    compare_keys,
+    parsed,
+    theme,
+    settings,
+):
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update, no_update
+    group = ctx.triggered_id.get("group")
+    if group == "_":
+        return no_update, no_update
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    if not player_a or not player_b:
+        return no_update, no_update
+    from components.stats_compare import compare_eval_groups
+
+    allowed = {key for key, _ in compare_eval_groups(player_a, player_b)}
+    if group not in allowed:
+        return no_update, no_update
+    if group == current:
+        return no_update, no_update
+    settings = us.normalize(settings)
+    return (
+        group,
+        _build_stats_compare_body(
+            player_a,
+            player_b,
+            view=normalize_compare_view(view),
+            eval_group=group,
+            theme=theme,
+            settings=settings,
+            players=_parsed_players(parsed),
+        ),
+    )
+
+
+@callback(
+    Output("st-compare-btn", "disabled"),
+    Output("st-compare-status", "children"),
+    Input("st-marked", "data"),
+    State("st-parsed", "data"),
+)
+def update_stats_compare_controls(marked, parsed):
+    keys = [str(k) for k in (marked or []) if k]
+    count = len(keys)
+    if count != 2:
+        disabled, message = compare_control_state(count)
+        return disabled, compare_status_children(message)
+    players = _parsed_players(parsed)
+    player_a = next((p for p in players if player_key(p) == keys[0]), None)
+    player_b = next((p for p in players if player_key(p) == keys[1]), None)
+    if not player_a or not player_b:
+        return True, compare_status_children(
+            "Marked players not found in the current export."
+        )
+    disabled, message = compare_control_state(
+        2, player_a=player_a, player_b=player_b
+    )
+    return disabled, compare_status_children(message)
 
 
 @callback(

@@ -884,6 +884,7 @@ def table_caption_row(
     clear_label: str = "Clear marked rows",
     settings=None,
     select_all: bool = False,
+    extra_actions: list | None = None,
 ) -> html.Div:
     """Caption + rows-per-page + clear-marks row used under both tables."""
     actions: list = [
@@ -922,6 +923,8 @@ def table_caption_row(
             className="rs-squad-clear-btn",
         )
     )
+    if extra_actions:
+        actions.extend(extra_actions)
     return html.Div(
         [
             html.Div(id=f"{prefix}-table-caption", className="text-muted"),

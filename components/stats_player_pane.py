@@ -138,6 +138,10 @@ def _player_metric_sections(
     return sections
 
 
+# Public alias for compare and other callers.
+player_metric_sections = _player_metric_sections
+
+
 def _section_title(cat: dict) -> html.Div:
     """Category heading with average percentile badge when available."""
     avg = cat.get("avg_percentile")
@@ -256,12 +260,17 @@ def _metrics_values(sections: list[dict]) -> list:
     return blocks
 
 
+# Hover-only charts: zoom/pan/select/edit disabled in config + layout; drag layer blocked in CSS.
 PLAYER_CHART_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
     "responsive": True,
     "scrollZoom": False,
     "doubleClick": False,
+    "editable": False,
+    "showTips": False,
+    "showLink": False,
+    "sendData": False,
     "showAxisDragHandles": False,
     "showAxisRangeEntryBoxes": False,
 }
@@ -286,6 +295,7 @@ def _chart_layout(theme: str | None, *, height: int, margin: dict | None = None)
         height=height,
         showlegend=False,
         dragmode=False,
+        clickmode="none",
         hovermode="closest",
     )
 

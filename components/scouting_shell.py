@@ -57,6 +57,43 @@ def as_list(value) -> list:
     return list(value)
 
 
+def merge_ordered_keys(
+    current: list | None,
+    *,
+    keys_in_scope: set[str],
+    selected_ids: list | None,
+) -> list[str]:
+    """Merge checkbox selection into an ordered key list (first marked = first kept).
+
+    Keys outside ``keys_in_scope`` (e.g. other pages) keep their relative order.
+    Keys in scope are replaced by ``selected_ids`` order (DataTable click order).
+    """
+    scope = {str(k).strip() for k in keys_in_scope if k}
+    kept = [str(k).strip() for k in as_list(current) if str(k).strip() and str(k).strip() not in scope]
+    kept_set = set(kept)
+    page_marks: list[str] = []
+    for raw in selected_ids or []:
+        key = str(raw).strip()
+        if not key or key not in scope or key in kept_set:
+            continue
+        page_marks.append(key)
+        kept_set.add(key)
+    return kept + page_marks
+
+
+def append_ordered_keys(current: list | None, new_keys: list[str]) -> list[str]:
+    """Append keys not already present, preserving existing order."""
+    out = [str(k).strip() for k in as_list(current) if str(k).strip()]
+    seen = set(out)
+    for raw in new_keys or []:
+        key = str(raw).strip()
+        if not key or key in seen:
+            continue
+        out.append(key)
+        seen.add(key)
+    return out
+
+
 def clicked(n_clicks) -> bool:
     return bool(n_clicks) and any(n_clicks)
 
@@ -1280,8 +1317,9 @@ def register_marks_callbacks(
     """Sync DataTable selection with a marked-keys store.
 
     Pages must put a stable ``id`` (and ideally ``_key``) on each table row.
-    Marks persist across table refreshes (role/filter changes). Checkboxes are
-    restored clientside from the marked store whenever ``data`` or marks change.
+    Marks persist across table refreshes (role/filter changes) in **selection order**
+    (first marked row stays first in the store). Checkboxes are restored clientside
+    from the marked store whenever ``data`` or marks change.
     ``selected_rows`` uses absolute indices into ``data`` (required by Dash).
 
     When ``select_all`` is True, expects a ``{prefix}-select-all`` button that
@@ -1303,7 +1341,8 @@ def register_marks_callbacks(
     def _sync_marks(selected_ids, table_data, marked):
         table_data = table_data or []
         keys_in_data = {key for row in table_data if (key := key_fn(row))}
-        marked_set = set(as_list(marked))
+        marked_list = [str(k) for k in as_list(marked) if k]
+        marked_set = set(marked_list)
         expected = {key for key in keys_in_data if key in marked_set}
         selected = {str(key) for key in (selected_ids or []) if key}
         if selected == expected:
@@ -1314,24 +1353,42 @@ def register_marks_callbacks(
         if not selected:
             return no_update
 
-        # Merge: update marks for rows in the current table data; preserve others.
-        marked_set -= keys_in_data
-        marked_set |= selected
-        return sorted(marked_set)
+        return merge_ordered_keys(
+            marked_list,
+            keys_in_scope=keys_in_data,
+            selected_ids=selected_ids,
+        )
 
     # Restore checkboxes from marked keys. ``selected_rows`` must be absolute
     # indices into ``data`` (see Dash DataTable + pagination docs / SO 61905396).
     # Marked is an Input so Clear / Select all update the UI without a data refresh.
     clientside_callback(
         f"""
-        function(tableData, marked) {{
-            const keys = Array.isArray(marked)
+        function(tableData, marked, currentSelectedIds) {{
+            const markedKeys = Array.isArray(marked)
                 ? marked.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
                 : [];
-            const markedSet = new Set(keys);
+            const markedSet = new Set(markedKeys);
+            const current = Array.isArray(currentSelectedIds)
+                ? currentSelectedIds.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
+                : [];
+            const merged = [];
+            const seen = new Set();
+            markedKeys.forEach(function(id) {{
+                if (id && !seen.has(id)) {{
+                    merged.push(id);
+                    seen.add(id);
+                }}
+            }});
+            current.forEach(function(id) {{
+                if (id && !seen.has(id)) {{
+                    merged.push(id);
+                    seen.add(id);
+                }}
+            }});
             const ids = [];
             const indices = [];
-            if (Array.isArray(tableData) && tableData.length && markedSet.size) {{
+            if (Array.isArray(tableData) && tableData.length && seen.size) {{
                 for (let i = 0; i < tableData.length; i++) {{
                     const row = tableData[i] || {{}};
                     let id = String(row.id || row._key || "").trim();
@@ -1340,7 +1397,7 @@ def register_marks_callbacks(
                         const club = String(row.Club || "").trim();
                         id = name ? name + "|" + club : "";
                     }}
-                    if (id && markedSet.has(id)) {{
+                    if (id && seen.has(id)) {{
                         ids.push(id);
                         indices.push(i);
                     }}
@@ -1353,6 +1410,7 @@ def register_marks_callbacks(
         Output(table_id, "selected_rows"),
         Input(table_id, "data"),
         Input(marked_store, "data"),
+        State(table_id, "selected_row_ids"),
         prevent_initial_call=True,
     )
 
@@ -1436,14 +1494,12 @@ def register_marks_callbacks(
             if not page_ids:
                 return no_update
 
-            marked_set = set(as_list(marked))
+            marked_list = [str(k) for k in as_list(marked) if k]
             page_set = set(page_ids)
             # Toggle: clear this page if every displayed row is already marked.
-            if page_set and page_set.issubset(marked_set):
-                marked_set -= page_set
-            else:
-                marked_set |= page_set
-            return sorted(marked_set)
+            if page_set and page_set.issubset(set(marked_list)):
+                return [k for k in marked_list if k not in page_set]
+            return append_ordered_keys(marked_list, page_ids)
 
         @callback(
             Output(f"{prefix}-select-all", "disabled"),

@@ -37,7 +37,24 @@ from components.player_table import (
     style_header_conditional,
     table_css,
 )
-from components.scouting_shell import clicked
+from components.scouting_shell import (
+    append_ordered_keys,
+    as_list,
+    clicked,
+    merge_ordered_keys,
+    pattern_matching_stubs,
+)
+from components.stats_compare import (
+    compare_control_state,
+    compare_status_children,
+    compare_title,
+    default_compare_eval_group,
+    normalize_compare_eval_group,
+    normalize_compare_view,
+    stats_compare_body,
+    stats_compare_modal,
+)
+from components.stats_player_pane import stats_charts_bottom_pane
 
 
 def _pattern_click_triggered() -> bool:
@@ -72,16 +89,18 @@ from scoring.role_scorer import (
     to_int,
 )
 from scoring.stats_scorer import (
+    adaptive_metric_bound_maps,
     category_abbr,
     minutes_color,
     minutes_status,
     percentile_color,
+    resolve_player_pos_group,
+    scoring_stats,
 )
 import services.export_library as lib
 import services.formations as fm
 import services.player_profiles as profiles
 import services.ui_settings as us
-from components.stats_player_pane import stats_charts_bottom_pane
 
 register_page(__name__, path="/profiles", name="Profiles")
 
@@ -3542,7 +3561,19 @@ def layout(**_kwargs):
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-table-row-cache", data=None),
             dcc.Store(id="pf-player-key", data=None),
+            dcc.Store(id="pf-compare-keys", data=None),
+            dcc.Store(id="pf-selected-order", data=[]),
+            dcc.Store(id="pf-compare-view", data="bars", storage_type="local"),
+            dcc.Store(id="pf-compare-group", data="mid"),
+            pattern_matching_stubs(
+                "pf",
+                [
+                    {"type": "compare-view", "view": "_"},
+                    {"type": "compare-group", "group": "_"},
+                ],
+            ),
             player_modal(prefix="pf"),
+            stats_compare_modal(prefix="pf"),
             html.Div(
                 [
                     html.H1("Profiles", className="mt-2 mb-0"),
@@ -4047,6 +4078,15 @@ def layout(**_kwargs):
                                                         disabled=True,
                                                     ),
                                                     dmc.Button(
+                                                        "Compare selected",
+                                                        id="pf-compare-btn",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                        disabled=True,
+                                                        className="st-compare-btn",
+                                                    ),
+                                                    dmc.Button(
                                                         "Delete selected",
                                                         id="pf-delete-selected",
                                                         size="sm",
@@ -4061,6 +4101,10 @@ def layout(**_kwargs):
                                             ),
                                         ],
                                         className="rs-table-caption-row mt-2",
+                                    ),
+                                    html.Div(
+                                        id="pf-compare-status",
+                                        className="st-compare-status-wrap",
                                     ),
                                     _profiles_busy_overlay(
                                         "pf-table-busy",
@@ -5203,27 +5247,29 @@ clientside_callback(
 @callback(
     Output("pf-table", "selected_row_ids", allow_duplicate=True),
     Output("pf-table", "selected_rows", allow_duplicate=True),
+    Output("pf-selected-order", "data", allow_duplicate=True),
     Input("pf-select-all", "n_clicks"),
     State("pf-table", "data"),
     State("pf-table", "selected_row_ids"),
     State("pf-table", "page_current"),
     State("pf-table", "page_size"),
+    State("pf-selected-order", "data"),
     prevent_initial_call=True,
 )
-def select_all_profiles(n_clicks, rows, selected_ids, page_current, page_size):
+def select_all_profiles(n_clicks, rows, selected_ids, page_current, page_size, order):
     if not n_clicks or not rows:
-        return no_update, no_update
+        return no_update, no_update, no_update
     all_ids = [
         row_id
         for row in rows
         if (row_id := str(row.get("id") or row.get("_key") or "").strip())
     ]
     if not all_ids:
-        return [], []
+        return [], [], []
     current = {str(item) for item in (selected_ids or []) if item}
     # Toggle: clear if every visible row is already selected.
     if current and current.issuperset(all_ids):
-        return [], []
+        return [], [], []
     try:
         page = int(page_current or 0)
         size = int(page_size or len(rows) or 50)
@@ -5232,7 +5278,7 @@ def select_all_profiles(n_clicks, rows, selected_ids, page_current, page_size):
     start = max(0, page * size)
     end = start + size
     page_indices = list(range(min(size, max(0, len(rows) - start))))
-    return all_ids, page_indices
+    return all_ids, page_indices, append_ordered_keys(order, all_ids)
 
 
 @callback(
@@ -5318,23 +5364,29 @@ def replace_profiles_from_file(n_clicks, file_id, settings, rev):
 @callback(
     Output("pf-depth-undo", "data", allow_duplicate=True),
     Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-selected-order", "data", allow_duplicate=True),
     Input("pf-delete-selected", "n_clicks"),
     State("pf-table", "selected_row_ids"),
     State("pf-rev", "data"),
     State("pf-depth-undo", "data"),
     State("pf-formation-select", "value"),
     State("ui-settings", "data"),
+    State("pf-selected-order", "data"),
     prevent_initial_call=True,
 )
-def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, settings):
+def delete_selected(
+    n_clicks, selected_ids, rev, undo_items, formation_id, settings, order
+):
     if not n_clicks or not selected_ids:
-        return no_update, no_update
+        return no_update, no_update, no_update
     slots = _formation_slots(formation_id)
     limit = _depth_undo_limit(settings)
     next_undo = list(undo_items or [])
     deleted = 0
     seen: set[str] = set()
+    removed_rows: set[str] = set()
     for row_id in selected_ids:
+        removed_rows.add(str(row_id))
         profile_id = _resolve_profile_id(row_id)
         if not profile_id or profile_id in seen:
             continue
@@ -5349,8 +5401,38 @@ def delete_selected(n_clicks, selected_ids, rev, undo_items, formation_id, setti
         next_undo = _push_depth_undo(next_undo, payload, limit=limit)
         deleted += 1
     if not deleted:
-        return no_update, no_update
-    return next_undo, int(rev or 0) + 1
+        return no_update, no_update, no_update
+    next_order = [
+        key for key in as_list(order) if str(key) not in removed_rows
+    ]
+    return next_undo, int(rev or 0) + 1, next_order
+
+
+@callback(
+    Output("pf-selected-order", "data", allow_duplicate=True),
+    Input("pf-table", "selected_row_ids"),
+    State("pf-table", "data"),
+    State("pf-selected-order", "data"),
+    prevent_initial_call=True,
+)
+def sync_profile_selection_order(selected_ids, table_data, order):
+    table_data = table_data or []
+    keys_in_data = {
+        key for row in table_data if (key := _profile_table_row_key(row))
+    }
+    order_list = [str(k) for k in as_list(order) if k]
+    order_set = set(order_list)
+    expected = {key for key in keys_in_data if key in order_set}
+    selected = {str(key) for key in (selected_ids or []) if key}
+    if selected == expected:
+        return no_update
+    if not selected:
+        return no_update
+    return merge_ordered_keys(
+        order_list,
+        keys_in_scope=keys_in_data,
+        selected_ids=selected_ids,
+    )
 
 
 @callback(
@@ -6155,3 +6237,325 @@ def switch_profile_modal_bottom(mode, profile_id, settings, theme):
     return _build_profile_modal_body(
         profile, player, settings=settings, theme=theme, mode=mode or "roles"
     )
+
+
+def _enrich_stats_player(stats_player: dict | None, player: dict) -> dict | None:
+    if not isinstance(stats_player, dict):
+        if not isinstance(player, dict) or not player:
+            return None
+        stats_player = dict(player)
+    else:
+        stats_player = dict(stats_player)
+    for key in ("best_pos", "position", "position_role", "name", "club", "positions"):
+        if not stats_player.get(key) and player.get(key):
+            stats_player[key] = player.get(key)
+    if not stats_player.get("best_pos") and player.get("best_pos"):
+        stats_player["best_pos"] = player.get("best_pos")
+    if not stats_player.get("position") and player.get("position"):
+        stats_player["position"] = player.get("position")
+    stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+    return stats_player
+
+
+def _profile_table_row_key(row) -> str:
+    if not isinstance(row, dict):
+        return ""
+    return str(row.get("id") or row.get("_key") or "").strip()
+
+
+def _profiles_for_compare(
+    ordered_ids, *, selected_ids: list | None = None
+) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    selected_set = {str(k) for k in (selected_ids or []) if k}
+    for row_id in ordered_ids or []:
+        rid = str(row_id)
+        if selected_set and rid not in selected_set:
+            continue
+        profile_id = _resolve_profile_id(row_id)
+        if not profile_id or profile_id in seen:
+            continue
+        profile = profiles.get_profile(profile_id)
+        if not profile:
+            continue
+        seen.add(profile_id)
+        out.append(profile)
+        if len(out) >= 2:
+            break
+    return out
+
+
+def _profile_compare_player_dicts(
+    profile_a: dict, profile_b: dict
+) -> tuple[dict, dict]:
+    players: list[dict] = []
+    for profile in (profile_a, profile_b):
+        player = profile.get("player") if isinstance(profile.get("player"), dict) else {}
+        stats, _ = _resolve_stats_player_for_profile(profile, player or {})
+        players.append(_enrich_stats_player(stats, player or {}) or dict(player or {}))
+    return players[0], players[1]
+
+
+def _build_profile_stats_compare_body(
+    profile_a: dict,
+    profile_b: dict,
+    *,
+    view: str,
+    eval_group: str,
+    theme: str | None,
+    settings: dict,
+) -> html.Div:
+    settings = us.normalize(settings)
+    player_a = profile_a.get("player") if isinstance(profile_a.get("player"), dict) else {}
+    player_b = profile_b.get("player") if isinstance(profile_b.get("player"), dict) else {}
+    stats_a, cohort_a = _resolve_stats_player_for_profile(profile_a, player_a)
+    stats_b, cohort_b = _resolve_stats_player_for_profile(profile_b, player_b)
+    stats_a = _enrich_stats_player(stats_a, player_a) or dict(player_a)
+    stats_b = _enrich_stats_player(stats_b, player_b) or dict(player_b)
+    label_a = str(stats_a.get("name") or player_a.get("name") or "Player A")
+    label_b = str(stats_b.get("name") or player_b.get("name") or "Player B")
+    file_a = str(profile_a.get("file_id") or "").strip()
+    file_b = str(profile_b.get("file_id") or "").strip()
+    same_file = bool(file_a and file_a == file_b)
+    thresh = settings.get("stats_thresholds")
+    cohort_note = None
+    if same_file and cohort_a:
+        metric_p0, metric_p100 = adaptive_metric_bound_maps(cohort_a, thresh)
+        metric_p0_a = metric_p0_b = metric_p0
+        metric_p100_a = metric_p100_b = metric_p100
+    else:
+        if file_a != file_b:
+            cohort_note = (
+                "Percentiles are relative to each player's source export; raw values "
+                "are directly comparable."
+            )
+        metric_p0_a, metric_p100_a = (
+            adaptive_metric_bound_maps(cohort_a, thresh) if cohort_a else ({}, {})
+        )
+        metric_p0_b, metric_p100_b = (
+            adaptive_metric_bound_maps(cohort_b, thresh) if cohort_b else ({}, {})
+        )
+    eval_group = normalize_compare_eval_group(eval_group, stats_a, stats_b)
+
+    return stats_compare_body(
+        stats_a,
+        stats_b,
+        label_a=label_a,
+        label_b=label_b,
+        view=normalize_compare_view(view),
+        eval_group=eval_group,
+        theme=theme,
+        threshold_overrides=thresh,
+        metric_p100_a=metric_p100_a,
+        metric_p0_a=metric_p0_a,
+        metric_p100_b=metric_p100_b,
+        metric_p0_b=metric_p0_b,
+        cohort_note=cohort_note,
+        prefix="pf",
+    )
+
+
+@callback(
+    Output("pf-compare-modal", "is_open"),
+    Output("pf-compare-modal-title", "children"),
+    Output("pf-compare-modal-body", "children"),
+    Output("pf-compare-keys", "data"),
+    Output("pf-compare-group", "data", allow_duplicate=True),
+    Input("pf-compare-btn", "n_clicks"),
+    Input("pf-compare-modal", "is_open"),
+    Input("pf-compare-modal-close", "n_clicks"),
+    State("pf-table", "selected_row_ids"),
+    State("pf-selected-order", "data"),
+    State("pf-compare-view", "data"),
+    State("pf-compare-group", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def open_profile_compare(
+    compare_clicks,
+    is_open,
+    _close,
+    selected_ids,
+    selected_order,
+    view,
+    eval_group,
+    theme,
+    settings,
+):
+    triggered = ctx.triggered_id
+    if triggered == "pf-compare-modal":
+        if not is_open:
+            return False, no_update, no_update, None, no_update
+        return no_update, no_update, no_update, no_update, no_update
+    if triggered == "pf-compare-modal-close":
+        return False, no_update, no_update, None, no_update
+    pair = _profiles_for_compare(
+        selected_order or selected_ids, selected_ids=selected_ids
+    )
+    if len(pair) != 2:
+        return no_update, no_update, no_update, no_update, no_update
+    profile_a, profile_b = pair
+    player_a, player_b = _profile_compare_player_dicts(profile_a, profile_b)
+    blocked, _message = compare_control_state(
+        2, player_a=player_a, player_b=player_b
+    )
+    if blocked:
+        return (no_update,) * 5
+    keys = [str(profile_a.get("id") or ""), str(profile_b.get("id") or "")]
+    label_a = str(player_a.get("name") or profiles.profile_identity(profile_a)[0] or "Player A")
+    label_b = str(player_b.get("name") or profiles.profile_identity(profile_b)[0] or "Player B")
+    settings = us.normalize(settings)
+    eval_group_out = default_compare_eval_group(player_a, player_b)
+    body = _build_profile_stats_compare_body(
+        profile_a,
+        profile_b,
+        view=view or "bars",
+        eval_group=eval_group_out,
+        theme=theme,
+        settings=settings,
+    )
+    return (
+        True,
+        compare_title(label_a, label_b),
+        body,
+        keys,
+        eval_group_out,
+    )
+
+
+def _lookup_profile_compare_pair(compare_keys):
+    keys = [str(k) for k in (compare_keys or []) if k]
+    if len(keys) != 2:
+        return None, None
+    profile_a = profiles.get_profile(keys[0])
+    profile_b = profiles.get_profile(keys[1])
+    if not profile_a or not profile_b:
+        return None, None
+    return profile_a, profile_b
+
+
+@callback(
+    Output("pf-compare-view", "data", allow_duplicate=True),
+    Output("pf-compare-modal-body", "children", allow_duplicate=True),
+    Input({"type": "pf-compare-view", "view": ALL}, "n_clicks"),
+    State("pf-compare-view", "data"),
+    State("pf-compare-group", "data"),
+    State("pf-compare-keys", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def switch_profile_compare_view(
+    n_clicks,
+    current,
+    eval_group,
+    compare_keys,
+    theme,
+    settings,
+):
+    if not ctx.triggered_id or not _pattern_click_triggered():
+        return no_update, no_update
+    view = ctx.triggered_id.get("view")
+    if view == "_" or view not in ("values", "bars"):
+        return no_update, no_update
+    if view == current:
+        return no_update, no_update
+    profile_a, profile_b = _lookup_profile_compare_pair(compare_keys)
+    if not profile_a or not profile_b:
+        return normalize_compare_view(view), html.Div("Profiles not found.")
+    settings = us.normalize(settings)
+    return (
+        normalize_compare_view(view),
+        _build_profile_stats_compare_body(
+            profile_a,
+            profile_b,
+            view=view,
+            eval_group=eval_group,
+            theme=theme,
+            settings=settings,
+        ),
+    )
+
+
+@callback(
+    Output("pf-compare-group", "data", allow_duplicate=True),
+    Output("pf-compare-modal-body", "children", allow_duplicate=True),
+    Input({"type": "pf-compare-group", "group": ALL}, "n_clicks"),
+    State("pf-compare-group", "data"),
+    State("pf-compare-view", "data"),
+    State("pf-compare-keys", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def switch_profile_compare_group(
+    n_clicks,
+    current,
+    view,
+    compare_keys,
+    theme,
+    settings,
+):
+    if not ctx.triggered_id or not _pattern_click_triggered():
+        return no_update, no_update
+    group = ctx.triggered_id.get("group")
+    if group == "_":
+        return no_update, no_update
+    profile_a, profile_b = _lookup_profile_compare_pair(compare_keys)
+    if not profile_a or not profile_b:
+        return no_update, no_update
+    stats_a, _ = _resolve_stats_player_for_profile(
+        profile_a, profile_a.get("player") or {}
+    )
+    stats_b, _ = _resolve_stats_player_for_profile(
+        profile_b, profile_b.get("player") or {}
+    )
+    if not isinstance(stats_a, dict) or not isinstance(stats_b, dict):
+        return no_update, no_update
+    from components.stats_compare import compare_eval_groups
+
+    allowed = {key for key, _ in compare_eval_groups(stats_a, stats_b)}
+    if group not in allowed:
+        return no_update, no_update
+    if group == current:
+        return no_update, no_update
+    settings = us.normalize(settings)
+    return (
+        group,
+        _build_profile_stats_compare_body(
+            profile_a,
+            profile_b,
+            view=normalize_compare_view(view or "bars"),
+            eval_group=group,
+            theme=theme,
+            settings=settings,
+        ),
+    )
+
+
+@callback(
+    Output("pf-compare-btn", "disabled"),
+    Output("pf-compare-status", "children"),
+    Input("pf-table", "selected_row_ids"),
+    Input("pf-selected-order", "data"),
+)
+def update_profiles_compare_controls(selected_ids, selected_order):
+    selected = [str(k) for k in (selected_ids or []) if k]
+    count = len(selected)
+    if count != 2:
+        disabled, message = compare_control_state(count)
+        return disabled, compare_status_children(message)
+    pair = _profiles_for_compare(
+        selected_order or selected_ids, selected_ids=selected_ids
+    )
+    if len(pair) != 2:
+        return True, compare_status_children(
+            "Could not resolve both selected profiles."
+        )
+    player_a, player_b = _profile_compare_player_dicts(pair[0], pair[1])
+    disabled, message = compare_control_state(
+        2, player_a=player_a, player_b=player_b
+    )
+    return disabled, compare_status_children(message)
