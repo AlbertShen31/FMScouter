@@ -1827,7 +1827,7 @@ def _depth_chart_player_row(
             checked=False,
             size="xs",
             className="pf-depth-chart-check",
-            **{"aria-label": "Select player for bulk remove"},
+            **{"aria-label": "Select player for compare or bulk remove"},
         )
 
     def empty_row_cells() -> list:
@@ -3563,6 +3563,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-player-key", data=None),
             dcc.Store(id="pf-compare-keys", data=None),
             dcc.Store(id="pf-selected-order", data=[]),
+            dcc.Store(id="pf-depth-compare-order", data=[]),
             dcc.Store(id="pf-compare-view", data="bars", storage_type="local"),
             dcc.Store(id="pf-compare-group", data="mid"),
             pattern_matching_stubs(
@@ -3912,11 +3913,24 @@ def layout(**_kwargs):
                                                             "pf-depth-minutes-field"
                                                         ),
                                                     ),
+                                                    dmc.Button(
+                                                        "Compare selected",
+                                                        id="pf-compare-btn",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                        disabled=True,
+                                                        className="st-compare-btn",
+                                                    ),
                                                 ],
                                                 className="pf-depth-chart-toolbar-actions",
                                             ),
                                         ],
                                         className="pf-depth-chart-toolbar",
+                                    ),
+                                    html.Div(
+                                        id="pf-compare-status",
+                                        className="st-compare-status-wrap",
                                     ),
                                     html.Div(id="pf-depth-chart-body"),
                                     html.Div(
@@ -4078,15 +4092,6 @@ def layout(**_kwargs):
                                                         disabled=True,
                                                     ),
                                                     dmc.Button(
-                                                        "Compare selected",
-                                                        id="pf-compare-btn",
-                                                        size="sm",
-                                                        variant="light",
-                                                        n_clicks=0,
-                                                        disabled=True,
-                                                        className="st-compare-btn",
-                                                    ),
-                                                    dmc.Button(
                                                         "Delete selected",
                                                         id="pf-delete-selected",
                                                         size="sm",
@@ -4101,10 +4106,6 @@ def layout(**_kwargs):
                                             ),
                                         ],
                                         className="rs-table-caption-row mt-2",
-                                    ),
-                                    html.Div(
-                                        id="pf-compare-status",
-                                        className="st-compare-status-wrap",
                                     ),
                                     _profiles_busy_overlay(
                                         "pf-table-busy",
@@ -6263,6 +6264,39 @@ def _profile_table_row_key(row) -> str:
     return str(row.get("id") or row.get("_key") or "").strip()
 
 
+def _depth_checked_profile_ids(
+    checked_vals, check_ids
+) -> set[str]:
+    active: set[str] = set()
+    for checked, spec in zip(checked_vals or [], check_ids or []):
+        if not checked or not isinstance(spec, dict):
+            continue
+        pid = str(spec.get("id") or "").strip()
+        if pid:
+            active.add(pid)
+    return active
+
+
+def _sync_depth_compare_order(
+    checked_vals,
+    check_ids,
+    order,
+) -> list[str]:
+    active = _depth_checked_profile_ids(checked_vals, check_ids)
+    if not active:
+        return []
+    order_list = [str(k) for k in as_list(order) if str(k) in active]
+    seen = set(order_list)
+    for checked, spec in zip(checked_vals or [], check_ids or []):
+        if not checked or not isinstance(spec, dict):
+            continue
+        pid = str(spec.get("id") or "").strip()
+        if pid and pid in active and pid not in seen:
+            order_list.append(pid)
+            seen.add(pid)
+    return order_list
+
+
 def _profiles_for_compare(
     ordered_ids, *, selected_ids: list | None = None
 ) -> list[dict]:
@@ -6357,6 +6391,30 @@ def _build_profile_stats_compare_body(
 
 
 @callback(
+    Output("pf-depth-compare-order", "data", allow_duplicate=True),
+    Input("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def clear_depth_compare_order_on_rev(_rev):
+    return []
+
+
+@callback(
+    Output("pf-depth-compare-order", "data", allow_duplicate=True),
+    Input({"type": "pf-depth-check", "id": ALL, "slot": ALL}, "checked"),
+    State({"type": "pf-depth-check", "id": ALL, "slot": ALL}, "id"),
+    State("pf-depth-compare-order", "data"),
+    prevent_initial_call=True,
+)
+def sync_depth_compare_order(checked_vals, check_ids, order):
+    next_order = _sync_depth_compare_order(checked_vals, check_ids, order)
+    prior = [str(k) for k in as_list(order) if k]
+    if next_order == prior:
+        return no_update
+    return next_order
+
+
+@callback(
     Output("pf-compare-modal", "is_open"),
     Output("pf-compare-modal-title", "children"),
     Output("pf-compare-modal-body", "children"),
@@ -6365,8 +6423,7 @@ def _build_profile_stats_compare_body(
     Input("pf-compare-btn", "n_clicks"),
     Input("pf-compare-modal", "is_open"),
     Input("pf-compare-modal-close", "n_clicks"),
-    State("pf-table", "selected_row_ids"),
-    State("pf-selected-order", "data"),
+    State("pf-depth-compare-order", "data"),
     State("pf-compare-view", "data"),
     State("pf-compare-group", "data"),
     State("theme", "data"),
@@ -6377,8 +6434,7 @@ def open_profile_compare(
     compare_clicks,
     is_open,
     _close,
-    selected_ids,
-    selected_order,
+    depth_compare_order,
     view,
     eval_group,
     theme,
@@ -6391,9 +6447,8 @@ def open_profile_compare(
         return no_update, no_update, no_update, no_update, no_update
     if triggered == "pf-compare-modal-close":
         return False, no_update, no_update, None, no_update
-    pair = _profiles_for_compare(
-        selected_order or selected_ids, selected_ids=selected_ids
-    )
+    order = [str(k) for k in as_list(depth_compare_order) if k]
+    pair = _profiles_for_compare(order, selected_ids=order)
     if len(pair) != 2:
         return no_update, no_update, no_update, no_update, no_update
     profile_a, profile_b = pair
@@ -6538,18 +6593,15 @@ def switch_profile_compare_group(
 @callback(
     Output("pf-compare-btn", "disabled"),
     Output("pf-compare-status", "children"),
-    Input("pf-table", "selected_row_ids"),
-    Input("pf-selected-order", "data"),
+    Input("pf-depth-compare-order", "data"),
 )
-def update_profiles_compare_controls(selected_ids, selected_order):
-    selected = [str(k) for k in (selected_ids or []) if k]
-    count = len(selected)
+def update_profiles_compare_controls(depth_compare_order):
+    order = [str(k) for k in as_list(depth_compare_order) if k]
+    count = len(order)
     if count != 2:
         disabled, message = compare_control_state(count)
         return disabled, compare_status_children(message)
-    pair = _profiles_for_compare(
-        selected_order or selected_ids, selected_ids=selected_ids
-    )
+    pair = _profiles_for_compare(order, selected_ids=order)
     if len(pair) != 2:
         return True, compare_status_children(
             "Could not resolve both selected profiles."

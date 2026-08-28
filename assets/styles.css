@@ -7537,6 +7537,11 @@ body[data-theme="light"] .pf-depth-undo-row {
     flex-wrap: wrap;
 }
 
+.pf-depth-chart-wrap .st-compare-status-wrap {
+    margin-top: -0.15rem;
+    margin-bottom: 0.35rem;
+}
+
 .pf-xi-view-field {
     min-width: 11.5rem;
 }
