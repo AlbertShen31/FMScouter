@@ -95,7 +95,7 @@ DEFAULT_SHORTLIST_SCOPES = {
     "Club": "both",
     "Rec": "both",
     "Injury": "both",
-    "Division": "player_stats",
+    "Division": "both",
     "Nation": "off",
     "Inf": "off",
     "Best Pos": "off",

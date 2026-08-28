@@ -73,6 +73,7 @@ from components.player_modal import player_modal
 from components.player_table import (
     IDENTITY_LEFT_COLS,
     IDENTITY_TEXT_COLS,
+    apply_division_limited_flag,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -91,6 +92,7 @@ from components.player_table import (
     table_caption_row,
     table_css,
 )
+import services.export_library as lib
 import services.formations as fm
 import services.role_config as rc
 import services.ui_settings as us
@@ -1316,6 +1318,20 @@ def _cell_number(value) -> float:
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
 TABLE_MARKDOWN_COLS = {"Feet", "Injury"}
+
+
+def _limited_tracking_divisions(payload: dict | None) -> set[str]:
+    file_id = str((payload or {}).get("file_id") or "").strip()
+    return set(lib.list_limited_tracking_divisions(file_id=file_id or None))
+
+
+def _attach_division_style_fields(
+    item: dict, row: dict, limited_divisions: set[str]
+) -> None:
+    """Set DivisionTier / DivisionLimited for stats-style division highlighting."""
+    item["DivisionTier"] = row.get("DivisionTier") or ""
+    apply_division_limited_flag(item, limited_divisions)
+    item["DivisionLimited"] = item.get("DivisionLimited") or "no"
 
 
 def _column_sort_key(column_id: str, value, row: dict | None = None):
@@ -2637,6 +2653,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
+            "file_id": file_id or "",
             "rows": rows,
             "roles": labels,
             "role_ids": needed,
@@ -3253,6 +3270,7 @@ def render_shortlist(
     data_score_set = set(data_score_cols)
     # Hoist once — per-cell band_text_color/normalize was ~0.5ms × tens of thousands.
     band_colors = us.band_text_colors(settings, theme=theme)
+    limited_divisions = _limited_tracking_divisions(payload)
     for row in filtered:
         row_key = player_row_key(row)
         hist_row = historical_by_key.get(row_key) if compare else None
@@ -3283,7 +3301,7 @@ def render_shortlist(
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
-        item["DivisionTier"] = row.get("DivisionTier") or ""
+        _attach_division_style_fields(item, row, limited_divisions)
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         if row_key:
             item["id"] = row_key
