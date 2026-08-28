@@ -1,9 +1,9 @@
 """Saved player profiles: named libraries of shortlist-style row snapshots.
 
 Each library lives under ``data/profiles/packs/<id>/`` with ``meta.json``,
-``index.json``, ``slot_depth.json``, and ``export_staging.json``. ``active.json``
-points at the current library. Legacy flat ``index.json`` / ``slot_depth.json``
-are migrated once into a Default library.
+``index.json``, ``slot_depth.json``, ``depth_undo.json``, and ``export_staging.json``.
+``active.json`` points at the current library. Legacy flat ``index.json`` /
+``slot_depth.json`` are migrated once into a Default library.
 """
 from __future__ import annotations
 
@@ -89,6 +89,10 @@ def _slot_depth_path(library_id: str | None = None) -> Path:
 
 def _export_staging_path(library_id: str | None = None) -> Path:
     return _library_dir(_resolve_library_id(library_id)) / "export_staging.json"
+
+
+def _depth_undo_path(library_id: str | None = None) -> Path:
+    return _library_dir(_resolve_library_id(library_id)) / "depth_undo.json"
 
 
 def _read_json(path: Path, fallback: Any) -> Any:
@@ -215,6 +219,7 @@ def _bootstrap_default_library() -> None:
     )
     _write_json(dest / "index.json", [])
     _write_json(dest / "slot_depth.json", {})
+    _write_json(dest / "depth_undo.json", [])
     _write_json(dest / "export_staging.json", {"pending": []})
     _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
 
@@ -349,6 +354,7 @@ def create_library(
     _write_json(dest / "meta.json", meta)
     _write_json(dest / "index.json", [])
     _write_json(dest / "slot_depth.json", {})
+    _write_json(dest / "depth_undo.json", [])
     _write_json(dest / "export_staging.json", {"pending": []})
     if activate or not PROFILES_ACTIVE_PATH.is_file():
         set_active_library(lid)
@@ -392,6 +398,23 @@ def _read_slot_depth(library_id: str | None = None) -> dict[str, Any]:
 def _write_slot_depth(payload: dict[str, Any], library_id: str | None = None) -> None:
     ensure_dirs()
     _write_json(_slot_depth_path(library_id), payload)
+
+
+def read_depth_undo(library_id: str | None = None) -> list[dict[str, Any]]:
+    """Recently removed restore tray entries for one profile library."""
+    ensure_dirs()
+    data = _read_json(_depth_undo_path(library_id), [])
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, dict)]
+
+
+def write_depth_undo(
+    items: list[dict[str, Any]], library_id: str | None = None
+) -> None:
+    ensure_dirs()
+    cleaned = [item for item in (items or []) if isinstance(item, dict)]
+    _write_json(_depth_undo_path(library_id), cleaned)
 
 
 def _read_export_staging(library_id: str | None = None) -> list[dict[str, Any]]:

@@ -2629,6 +2629,32 @@ def _build_setpiece_chart(
     )
 
 
+def _depth_chart_empty_hint(message: str) -> html.Div:
+    return html.Div(message, className="text-muted small pf-depth-chart-empty-hint")
+
+
+def _depth_chart_role_tone(column: str, meta: dict) -> str:
+    tone = str(meta.get("tone") or "").strip().lower()
+    if tone.startswith("ip"):
+        return "ip"
+    if tone.startswith("oop"):
+        return "oop"
+    if tone in ("combo", "hybrid") or "+" in column:
+        return "combo"
+    if tone != "gk":
+        return "gk" if not tone else tone
+    return tone
+
+
+def _depth_chart_role_title_label(
+    column: str, slot_label: str, meta: dict
+) -> str:
+    label = _role_display_label(column)
+    if label == "—":
+        label = meta.get("short_label") or meta.get("name") or column
+    return f"{slot_label} · {label}" if slot_label else label
+
+
 def _mount_depth_chart(chart, *, epoch: str | int | None = None) -> html.Div:
     """Wrap chart so Dash must remount after drag DOM mutations / auto-rank."""
     token = str(epoch if epoch is not None else uuid.uuid4().hex)
@@ -2659,13 +2685,11 @@ def _build_depth_chart(
 
     if not focus:
         if slots:
-            return html.Div(
-                "Click a Squad depth card to rank that slot.",
-                className="text-muted small",
+            return _depth_chart_empty_hint(
+                "Click a Squad depth card to rank that slot."
             )
-        return html.Div(
-            "Select a role in Squad depth to edit its ranking.",
-            className="text-muted small",
+        return _depth_chart_empty_hint(
+            "Select a role in Squad depth to edit its ranking."
         )
 
     column = focus["role"]
@@ -2691,10 +2715,7 @@ def _build_depth_chart(
                 slot_index = match["index"]
 
     if hybrids_only and "+" not in column:
-        return html.Div(
-            "No saved profiles for the focused role.",
-            className="text-muted small",
-        )
+        return _depth_chart_empty_hint("No saved profiles for the focused role.")
 
     meta = _role_column_meta(column)
     if cache is not None:
@@ -2717,45 +2738,44 @@ def _build_depth_chart(
         focused_slot_index = -1
     slot_is_conflicted = focused_slot_index in conflicted_slots
     slot_is_unique = focused_slot_index in unique_slots
+    title_label = _depth_chart_role_title_label(column, slot_label, meta)
+    tone = _depth_chart_role_tone(column, meta)
+    role_color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
     if not ordered:
         return html.Div(
             [
                 html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Span(
-                                    slot_label or _role_display_label(column),
-                                    className="pf-depth-chart-role-name",
-                                ),
-                                html.Span("0", className="pf-depth-chart-count"),
-                            ],
-                            className="pf-depth-chart-role-title",
-                        ),
-                    ],
+                    html.Div(
+                        [
+                            _colored_group_abbr(
+                                meta.get("group_abbr") or "", css="rs-depth-code"
+                            ),
+                            html.Span(
+                                meta.get("phase") or "",
+                                className=f"rs-phase-tag {meta.get('tone') or 'gk'}",
+                            ),
+                            html.Span(
+                                title_label,
+                                className=f"pf-depth-chart-role-name pf-role-{tone}",
+                                style={"color": role_color},
+                            ),
+                            html.Span("0", className="pf-depth-chart-count"),
+                        ],
+                        className="pf-depth-chart-role-title",
+                    ),
                     className="pf-depth-chart-role-head",
                 ),
                 html.Div(
                     "No saved profiles for this formation slot’s role.",
-                    className="text-muted small px-3 pb-3",
+                    className="text-muted small pf-depth-chart-empty",
                 ),
             ],
-            className="pf-depth-chart-section",
+            className="pf-depth-chart-section is-empty",
         )
 
     label = _role_display_label(column)
     if label == "—":
         label = meta.get("short_label") or meta.get("name") or column
-    tone = str(meta.get("tone") or "").strip().lower()
-    if tone.startswith("ip"):
-        tone = "ip"
-    elif tone.startswith("oop"):
-        tone = "oop"
-    elif tone in ("combo", "hybrid") or "+" in column:
-        tone = "combo"
-    elif tone != "gk":
-        tone = "gk" if not tone else tone
-    role_color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
     rows = [
         _depth_chart_player_row(
             entry,
@@ -2782,7 +2802,6 @@ def _build_depth_chart(
         )
         for idx, entry in enumerate(ordered)
     ]
-    title_label = f"{slot_label} · {label}" if slot_label else label
     order_ids = [str(entry.get("id") or "") for entry in ordered if entry.get("id")]
     order_fp = uuid.uuid5(
         uuid.NAMESPACE_OID, f"{formation_id}|{slot_index}|{'|'.join(order_ids)}"
@@ -3423,6 +3442,23 @@ def _depth_undo_items(items, *, limit: int | None = None) -> list[dict]:
     return out
 
 
+def _load_depth_undo(*, library_id=None, settings=None) -> list[dict]:
+    lid = str(library_id or profiles.active_library_id() or "").strip()
+    if not lid:
+        return []
+    limit = _depth_undo_limit(settings)
+    return _depth_undo_items(profiles.read_depth_undo(library_id=lid), limit=limit)
+
+
+def _save_depth_undo(items, *, library_id=None, settings=None) -> list[dict]:
+    limit = _depth_undo_limit(settings)
+    trimmed = _depth_undo_items(items, limit=limit)
+    lid = str(library_id or profiles.active_library_id() or "").strip()
+    if lid:
+        profiles.write_depth_undo(trimmed, library_id=lid)
+    return trimmed
+
+
 def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
     rows = []
     valid = _depth_undo_items(items, limit=limit)
@@ -3554,7 +3590,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-depth-order", data=None),
             dcc.Store(id="pf-depth-order-guard", data=0),
-            dcc.Store(id="pf-depth-undo", storage_type="local", data=[]),
+            dcc.Store(id="pf-depth-undo", data=[]),
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
@@ -4137,6 +4173,16 @@ def sync_pf_minutes_from_settings(settings, depth_minutes):
     settings = us.normalize(settings)
     default_mins = us.default_minutes_required(settings)
     return depth_minutes if depth_minutes is not None else default_mins
+
+
+@callback(
+    Output("pf-depth-undo", "data"),
+    Input("pf-library-select", "value"),
+    Input("pf-hydrate-tick", "n_intervals"),
+    State("ui-settings", "data"),
+)
+def load_depth_undo_for_library(library_id, _n_intervals, settings):
+    return _load_depth_undo(library_id=library_id, settings=settings)
 
 
 @callback(
@@ -5407,7 +5453,7 @@ def delete_selected(
     next_order = [
         key for key in as_list(order) if str(key) not in removed_rows
     ]
-    return next_undo, int(rev or 0) + 1, next_order
+    return _save_depth_undo(next_undo, settings=settings), int(rev or 0) + 1, next_order
 
 
 @callback(
@@ -5778,7 +5824,7 @@ def _remove_ids_from_slot(
 
 
 @callback(
-    Output("pf-depth-undo", "data"),
+    Output("pf-depth-undo", "data", allow_duplicate=True),
     Output("pf-rev", "data", allow_duplicate=True),
     Input({"type": "pf-depth-remove", "id": ALL, "slot": ALL, "src": ALL}, "n_clicks"),
     State("pf-depth-undo", "data"),
@@ -5815,7 +5861,7 @@ def remove_from_depth_chart(
     )
     if not removed_n:
         return no_update, no_update
-    return next_undo, int(rev or 0) + 1
+    return _save_depth_undo(next_undo, settings=settings), int(rev or 0) + 1
 
 
 @callback(
@@ -5932,7 +5978,7 @@ def remove_selected_from_depth_chart(
     )
     if not removed_n:
         return no_update, no_update
-    return next_undo, int(rev or 0) + 1
+    return _save_depth_undo(next_undo, settings=settings), int(rev or 0) + 1
 
 
 @callback(
@@ -5953,9 +5999,10 @@ def render_depth_undo(undo_items, settings):
     Input({"type": "pf-depth-undo-restore", "id": ALL}, "n_clicks"),
     State("pf-depth-undo", "data"),
     State("pf-rev", "data"),
+    State("ui-settings", "data"),
     prevent_initial_call=True,
 )
-def restore_depth_undo(n_clicks, undo_items, rev):
+def restore_depth_undo(n_clicks, undo_items, rev, settings):
     if not ctx.triggered_id or not clicked(n_clicks):
         return no_update, no_update
     undo_id = str(ctx.triggered_id.get("id") or "").strip()
@@ -5973,8 +6020,8 @@ def restore_depth_undo(n_clicks, undo_items, rev):
         return no_update, no_update
     restored = profiles.restore_to_slot_depth(match)
     if not restored:
-        return remaining, no_update
-    return remaining, int(rev or 0) + 1
+        return _save_depth_undo(remaining, settings=settings), no_update
+    return _save_depth_undo(remaining, settings=settings), int(rev or 0) + 1
 
 
 @callback(

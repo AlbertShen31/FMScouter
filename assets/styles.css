@@ -7304,6 +7304,8 @@ body[data-theme="light"] .pf-export-staging-badge {
 .pf-depth-chart-wrap {
     margin-top: 0.35rem;
     scroll-margin-top: 4.5rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .pf-xi-wrap {
@@ -7314,6 +7316,8 @@ body[data-theme="light"] .pf-export-staging-badge {
 .pf-setpiece-wrap {
     margin-top: 0.35rem;
     scroll-margin-top: 4.5rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .pf-page #pf-depth-wrap.rs-shortlist-busy-host,
@@ -7517,7 +7521,7 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-depth-chart-toolbar {
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem 1.5rem;
     flex-wrap: wrap;
@@ -7527,6 +7531,99 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-depth-chart-toolbar .rs-depth-heading-copy {
     flex: 1 1 16rem;
     min-width: 0;
+}
+
+.pf-depth-chart-mount {
+    min-width: 0;
+}
+
+.pf-depth-chart-wrap #pf-depth-chart-body:has(.pf-depth-chart-empty-hint),
+.pf-depth-chart-wrap #pf-depth-chart-body:has(.pf-depth-chart-section.is-empty) {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 6.5rem;
+}
+
+.pf-depth-chart-wrap #pf-depth-chart-body:has(.pf-depth-chart-empty-hint) .pf-depth-chart-mount,
+.pf-depth-chart-wrap #pf-depth-chart-body:has(.pf-depth-chart-section.is-empty) .pf-depth-chart-mount {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 6.5rem;
+}
+
+.pf-depth-chart-wrap #pf-depth-chart-body:has(.pf-depth-chart-empty-hint) .pf-depth-chart-mount {
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-depth-chart-empty-hint {
+    padding: 0 1rem;
+    line-height: 1.45;
+    text-align: center;
+}
+
+.pf-depth-chart-section.is-empty {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 7.5rem;
+}
+
+.pf-depth-chart-section.is-empty .pf-depth-chart-role-head {
+    border-bottom: none;
+    padding-bottom: 0.35rem;
+    flex: 0 0 auto;
+}
+
+.pf-depth-chart-empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 1rem;
+    line-height: 1.45;
+    text-align: center;
+}
+
+.pf-setpiece-wrap #pf-setpiece-chart-body:has(.pf-setpiece-empty) {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 6.5rem;
+}
+
+.pf-setpiece-wrap #pf-setpiece-chart-body:has(.pf-setpiece-empty) .pf-setpiece-chart-shell,
+.pf-setpiece-wrap #pf-setpiece-chart-body:has(.pf-setpiece-empty) > .pf-setpiece-chart {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 6.5rem;
+}
+
+.pf-setpiece-wrap #pf-setpiece-chart-body:has(.pf-setpiece-empty) .pf-setpiece-footed-grid {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.pf-setpiece-chart:has(> .pf-setpiece-empty),
+.pf-setpiece-footed-grid .pf-setpiece-chart:has(> .pf-setpiece-empty) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 6.5rem;
+}
+
+.pf-setpiece-chart:has(> .pf-setpiece-empty) > .pf-setpiece-empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    line-height: 1.45;
+    text-align: center;
 }
 
 .pf-depth-chart-toolbar-actions {
@@ -7624,6 +7721,7 @@ body[data-theme="light"] .pf-depth-undo-row {
     box-shadow: none;
 }
 
+/* Legacy padding kept for non-flex contexts; flex rules above override layout. */
 .pf-setpiece-empty {
     padding: 0.75rem 1rem;
 }
