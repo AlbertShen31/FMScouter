@@ -1743,6 +1743,8 @@ def replace_profiles_from_saved_file(
     entry = lib.get_file(file_id)
     if not entry:
         raise FileNotFoundError("Saved file not found.")
+    if not lib.file_eligible_for(file_id, "stats"):
+        raise ValueError(lib.STATS_REQUIRED_MSG)
 
     settings = us.normalize(settings)
     source_label = lib.display_label(entry)

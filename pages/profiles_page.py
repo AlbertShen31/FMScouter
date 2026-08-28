@@ -114,8 +114,9 @@ PF_NEW_PROFILE_TIP = (
 )
 PF_REPLACE_TIP = (
     "Replaces personal info, role scores, and percentiles for saved profiles that match by player "
-    "name in the file (club changes are fine). Depth ranking and profile ids are kept. Compute "
-    "the file on Uploads first when the label says Stale."
+    "name in the file (club changes are fine). Depth ranking and profile ids are kept. Only "
+    "files eligible for Player stats are listed. Compute the file on Uploads first when the "
+    "label says Stale."
 )
 PF_SQUAD_DEPTH_TIP = (
     "One card per formation position (up to 11). Save from Role scores queues exports "
@@ -3685,7 +3686,7 @@ def layout(**_kwargs):
                                             ),
                                             dmc.Select(
                                                 id="pf-replace-file",
-                                                data=lib.select_options(page="role_scores"),
+                                                data=lib.select_options(page="stats"),
                                                 value=None,
                                                 clearable=True,
                                                 searchable=True,
@@ -5304,7 +5305,7 @@ def toggle_replace_btn(file_id):
     Input("pf-rev", "data"),
 )
 def refresh_replace_file_options(_rev):
-    return lib.select_options(page="role_scores")
+    return lib.select_options(page="stats")
 
 
 @callback(

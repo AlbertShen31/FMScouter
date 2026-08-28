@@ -23,8 +23,9 @@ def profile_save_panel(*, prefix: str, section_number: int) -> dbc.Card:
                         html.Span(f"{section_number}. Profiles"),
                         *help_icon(
                             "Mark players in the shortlist, then save them to a profile library. "
-                            "One row is created per evaluated role — each save stores that shortlist "
-                            "row only (not the whole file).",
+                            "Requires a saved library file eligible for Player stats. One row is "
+                            "created per evaluated role — each save stores that shortlist row only "
+                            "(not the whole file).",
                             f"{prefix}-help-profile-save",
                         ),
                     ],
@@ -111,6 +112,16 @@ def _library_label(library_id: str | None) -> str:
     if meta:
         return str(meta.get("name") or meta.get("id") or "Profiles")
     return "Profiles"
+
+
+def _profiles_stats_eligible(parsed) -> bool:
+    """Profiles need percentiles/charts from a stats-eligible saved upload."""
+    if not isinstance(parsed, dict):
+        return False
+    file_id = str(parsed.get("file_id") or "").strip()
+    if not file_id:
+        return False
+    return lib.file_eligible_for(file_id, "stats")
 
 
 def register_profile_save_callbacks(
@@ -263,7 +274,10 @@ def register_role_profile_save_callbacks(
     ):
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         has_library = bool(str(library_id or "").strip())
-        if not marked_list:
+        stats_ok = _profiles_stats_eligible(parsed)
+        if not stats_ok:
+            preview = html.P(lib.STATS_REQUIRED_MSG, className="text-muted mb-0")
+        elif not marked_list:
             preview = html.P("No players marked yet.", className="text-muted mb-0")
         else:
             items = profiles.expand_role_profile_rows(
@@ -280,7 +294,7 @@ def register_role_profile_save_callbacks(
                 f"{_library_label(library_id)}.",
                 className="text-muted mb-0",
             )
-        disabled = not marked_list or not payload or not has_library
+        disabled = not marked_list or not payload or not has_library or not stats_ok
         return preview, disabled
 
     @callback(
@@ -315,6 +329,8 @@ def register_role_profile_save_callbacks(
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         if not marked_list or not payload:
             return no_update, no_update
+        if not _profiles_stats_eligible(parsed):
+            return html.Div(lib.STATS_REQUIRED_MSG, className="text-danger small"), no_update
         try:
             file_id = (parsed or {}).get("file_id") if isinstance(parsed, dict) else ""
             items = profiles.expand_role_profile_rows(

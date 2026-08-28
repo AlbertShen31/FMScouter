@@ -1,0 +1,3982 @@
+{
+  "generated_by": "scripts/audit_column_usage.py",
+  "source_snapshot": "config/export_formats/fm26_moneyball_combined_columns.json",
+  "column_count_snapshot": 248,
+  "mapped_entry_count": 269,
+  "snapshot_columns_covered": 248,
+  "undocumented_in_snapshot": [],
+  "aliases_not_in_snapshot": [
+    "Avg Rating International",
+    "Best Position",
+    "CA",
+    "Command of Area",
+    "Conversion %",
+    "Conversion Rate",
+    "Div",
+    "Form Int",
+    "Hdrs W/90",
+    "Injury",
+    "Int Apps (Season)",
+    "Int Assists",
+    "International Appearances",
+    "International Goals",
+    "L",
+    "LFoot",
+    "Last 5 Games Int",
+    "Name",
+    "Nat",
+    "Nationality",
+    "OP Cr C/90",
+    "OP Crosses Completed per 90",
+    "Off the Ball",
+    "One on Ones",
+    "PA",
+    "Pass Completion %",
+    "Pass Completion Ratio",
+    "Position / Role",
+    "Pressures Completed",
+    "Pressures Completed per 90",
+    "Ps C %",
+    "R",
+    "RFoot",
+    "Rec",
+    "Rec.",
+    "Red Cards",
+    "Rushing Out",
+    "SOT/90",
+    "Sec Position",
+    "Second Nation",
+    "Second Nationality",
+    "Secondary Position",
+    "Shot Conversion %",
+    "Shots Conversion %",
+    "Shots On Target",
+    "Shots On Target per 90",
+    "Shots on Target/90",
+    "Sprints",
+    "Sprints per 90",
+    "Squad",
+    "Teamwork",
+    "Top Division Promotion Salary Raise",
+    "Youth Apps",
+    "Youth Goals"
+  ],
+  "page_eligibility": {
+    "role_scores": "Name + ≥1 attribute + Club/Age/Position",
+    "player_stats": "Name + stats markers + Club/Age/Position",
+    "squad_finance": "Name + Salary + Appearance Fee + Unused Sub Fee + Club/Age/Position",
+    "profiles": "Requires stats-eligible saved file for save / replace"
+  },
+  "entries": [
+    {
+      "primary_csv": "Acceleration",
+      "csv_aliases": [
+        "Acceleration"
+      ],
+      "category": "attribute",
+      "internal_key": "Acc",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Aerial Reach",
+      "csv_aliases": [
+        "Aerial Reach"
+      ],
+      "category": "attribute",
+      "internal_key": "Aer",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Aggression",
+      "csv_aliases": [
+        "Aggression"
+      ],
+      "category": "attribute",
+      "internal_key": "Agg",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Agility",
+      "csv_aliases": [
+        "Agility"
+      ],
+      "category": "attribute",
+      "internal_key": "Agi",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Anticipation",
+      "csv_aliases": [
+        "Anticipation"
+      ],
+      "category": "attribute",
+      "internal_key": "Ant",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Balance",
+      "csv_aliases": [
+        "Balance"
+      ],
+      "category": "attribute",
+      "internal_key": "Bal",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Bravery",
+      "csv_aliases": [
+        "Bravery"
+      ],
+      "category": "attribute",
+      "internal_key": "Bra",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Command Of Area",
+      "csv_aliases": [
+        "Command Of Area",
+        "Command of Area"
+      ],
+      "category": "attribute",
+      "internal_key": "Cmd",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Communication",
+      "csv_aliases": [
+        "Communication"
+      ],
+      "category": "attribute",
+      "internal_key": "Com",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Composure",
+      "csv_aliases": [
+        "Composure"
+      ],
+      "category": "attribute",
+      "internal_key": "Cmp",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Concentration",
+      "csv_aliases": [
+        "Concentration"
+      ],
+      "category": "attribute",
+      "internal_key": "Cnt",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Corners",
+      "csv_aliases": [
+        "Corners"
+      ],
+      "category": "attribute",
+      "internal_key": "Cor",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals; set-piece raw column when checked on Role scores",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Crossing",
+      "csv_aliases": [
+        "Crossing"
+      ],
+      "category": "attribute",
+      "internal_key": "Cro",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Decisions",
+      "csv_aliases": [
+        "Decisions"
+      ],
+      "category": "attribute",
+      "internal_key": "Dec",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Determination",
+      "csv_aliases": [
+        "Determination"
+      ],
+      "category": "attribute",
+      "internal_key": "Det",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Personality hidden-range estimation (Player stats parser)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Dribbling",
+      "csv_aliases": [
+        "Dribbling"
+      ],
+      "category": "attribute",
+      "internal_key": "Dri",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Eccentricity",
+      "csv_aliases": [
+        "Eccentricity"
+      ],
+      "category": "attribute",
+      "internal_key": "Ecc",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Finishing",
+      "csv_aliases": [
+        "Finishing"
+      ],
+      "category": "attribute",
+      "internal_key": "Fin",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "First Touch",
+      "csv_aliases": [
+        "First Touch"
+      ],
+      "category": "attribute",
+      "internal_key": "Fir",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Flair",
+      "csv_aliases": [
+        "Flair"
+      ],
+      "category": "attribute",
+      "internal_key": "Fla",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Free Kick Taking",
+      "csv_aliases": [
+        "Free Kick Taking"
+      ],
+      "category": "attribute",
+      "internal_key": "Fre",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals; set-piece raw column when checked on Role scores",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Handling",
+      "csv_aliases": [
+        "Handling"
+      ],
+      "category": "attribute",
+      "internal_key": "Han",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Heading",
+      "csv_aliases": [
+        "Heading"
+      ],
+      "category": "attribute",
+      "internal_key": "Hea",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Jumping Reach",
+      "csv_aliases": [
+        "Jumping Reach"
+      ],
+      "category": "attribute",
+      "internal_key": "Jum",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Kicking",
+      "csv_aliases": [
+        "Kicking"
+      ],
+      "category": "attribute",
+      "internal_key": "Kic",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Leadership",
+      "csv_aliases": [
+        "Leadership"
+      ],
+      "category": "attribute",
+      "internal_key": "Ldr",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Personality hidden-range estimation (Player stats parser)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Long Shots",
+      "csv_aliases": [
+        "Long Shots"
+      ],
+      "category": "attribute",
+      "internal_key": "Lon",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Long Throws",
+      "csv_aliases": [
+        "Long Throws"
+      ],
+      "category": "attribute",
+      "internal_key": "LTh",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals; set-piece raw column when checked on Role scores",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Marking",
+      "csv_aliases": [
+        "Marking"
+      ],
+      "category": "attribute",
+      "internal_key": "Mar",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Natural Fitness",
+      "csv_aliases": [
+        "Natural Fitness"
+      ],
+      "category": "attribute",
+      "internal_key": "Nat",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Off The Ball",
+      "csv_aliases": [
+        "Off The Ball",
+        "Off the Ball"
+      ],
+      "category": "attribute",
+      "internal_key": "OtB",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "One On Ones",
+      "csv_aliases": [
+        "One On Ones",
+        "One on Ones"
+      ],
+      "category": "attribute",
+      "internal_key": "1v1",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pace",
+      "csv_aliases": [
+        "Pace"
+      ],
+      "category": "attribute",
+      "internal_key": "Pac",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Passing",
+      "csv_aliases": [
+        "Passing"
+      ],
+      "category": "attribute",
+      "internal_key": "Pas",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Penalty Taking",
+      "csv_aliases": [
+        "Penalty Taking"
+      ],
+      "category": "attribute",
+      "internal_key": "Pen",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals; set-piece raw column when checked on Role scores",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Positioning",
+      "csv_aliases": [
+        "Positioning"
+      ],
+      "category": "attribute",
+      "internal_key": "Pos",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Punching",
+      "csv_aliases": [
+        "Punching"
+      ],
+      "category": "attribute",
+      "internal_key": "Pun",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Reflexes",
+      "csv_aliases": [
+        "Reflexes"
+      ],
+      "category": "attribute",
+      "internal_key": "Ref",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Rushing Out (Tendency)",
+      "csv_aliases": [
+        "Rushing Out (Tendency)",
+        "Rushing Out"
+      ],
+      "category": "attribute",
+      "internal_key": "TRO",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Stamina",
+      "csv_aliases": [
+        "Stamina"
+      ],
+      "category": "attribute",
+      "internal_key": "Sta",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Strength",
+      "csv_aliases": [
+        "Strength"
+      ],
+      "category": "attribute",
+      "internal_key": "Str",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Tackling",
+      "csv_aliases": [
+        "Tackling"
+      ],
+      "category": "attribute",
+      "internal_key": "Tck",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Team Work",
+      "csv_aliases": [
+        "Team Work",
+        "Teamwork"
+      ],
+      "category": "attribute",
+      "internal_key": "Tea",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Technique",
+      "csv_aliases": [
+        "Technique"
+      ],
+      "category": "attribute",
+      "internal_key": "Tec",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Throwing",
+      "csv_aliases": [
+        "Throwing"
+      ],
+      "category": "attribute",
+      "internal_key": "Thr",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Vision",
+      "csv_aliases": [
+        "Vision"
+      ],
+      "category": "attribute",
+      "internal_key": "Vis",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Work Rate",
+      "csv_aliases": [
+        "Work Rate"
+      ],
+      "category": "attribute",
+      "internal_key": "Wor",
+      "pages": [
+        "Formulas",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role score weights (Role scores / Formulas); attribute grid in modals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "AT Apps",
+      "csv_aliases": [
+        "AT Apps"
+      ],
+      "category": "career",
+      "internal_key": "at_apps",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Career totals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "AT Gls",
+      "csv_aliases": [
+        "AT Gls"
+      ],
+      "category": "career",
+      "internal_key": "at_gls",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Career totals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "AT League Apps",
+      "csv_aliases": [
+        "AT League Apps"
+      ],
+      "category": "career",
+      "internal_key": "at_league_apps",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Career totals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "AT League Goals",
+      "csv_aliases": [
+        "AT League Goals"
+      ],
+      "category": "career",
+      "internal_key": "at_league_goals",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Career totals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Appearances",
+      "csv_aliases": [
+        "Appearances"
+      ],
+      "category": "discipline",
+      "internal_key": "appearances",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Discipline",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Fouls Against",
+      "csv_aliases": [
+        "Fouls Against"
+      ],
+      "category": "discipline",
+      "internal_key": "fouls_against",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Discipline",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Fouls Made",
+      "csv_aliases": [
+        "Fouls Made"
+      ],
+      "category": "discipline",
+      "internal_key": "fouls_made",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Discipline",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Red cards",
+      "csv_aliases": [
+        "Red cards",
+        "Red Cards"
+      ],
+      "category": "discipline",
+      "internal_key": "red_cards",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Discipline",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Yellow Cards",
+      "csv_aliases": [
+        "Yellow Cards"
+      ],
+      "category": "discipline",
+      "internal_key": "yellow_cards",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Discipline",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Active Non Promotion Release Clause",
+      "csv_aliases": [
+        "Active Non Promotion Release Clause"
+      ],
+      "category": "finance",
+      "internal_key": "active_non_promotion_release",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Active Relegation Release Clause",
+      "csv_aliases": [
+        "Active Relegation Release Clause"
+      ],
+      "category": "finance",
+      "internal_key": "active_relegation_release",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Appearance Fee",
+      "csv_aliases": [
+        "Appearance Fee"
+      ],
+      "category": "finance",
+      "internal_key": "appearance_fee",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Assist Bonus",
+      "csv_aliases": [
+        "Assist Bonus"
+      ],
+      "category": "finance",
+      "internal_key": "assist_bonus",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Expires",
+      "csv_aliases": [
+        "Expires"
+      ],
+      "category": "finance",
+      "internal_key": "contract_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "FFP Contribution",
+      "csv_aliases": [
+        "FFP Contribution"
+      ],
+      "category": "finance",
+      "internal_key": "ffp_contribution",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Displayed on Squad finance; excluded from totals",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Goal Bonus",
+      "csv_aliases": [
+        "Goal Bonus"
+      ],
+      "category": "finance",
+      "internal_key": "goal_bonus",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Int Cap Bonus",
+      "csv_aliases": [
+        "Int Cap Bonus"
+      ],
+      "category": "finance",
+      "internal_key": "int_cap_bonus",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause",
+      "csv_aliases": [
+        "Minimum Fee Release Clause"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Clubs in a Continental Competition)",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Clubs in a Continental Competition)"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_continental",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Clubs in a Continental Competition) - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Clubs in a Continental Competition) - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_continental_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Clubs in a Major Continental Competition)",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Clubs in a Major Continental Competition)"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_major_continental",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Clubs in a Major Continental Competition) - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Clubs in a Major Continental Competition) - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_major_continental_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Domestic Clubs in Higher Division)",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Domestic Clubs in Higher Division)"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_higher_division",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Domestic Clubs in Higher Division) - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Domestic Clubs in Higher Division) - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_higher_division_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Domestic Clubs)",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Domestic Clubs)"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_domestic",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Domestic Clubs) - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Domestic Clubs) - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_domestic_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Foreign Clubs)",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Foreign Clubs)"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_foreign",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause (Foreign Clubs) - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause (Foreign Clubs) - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_foreign_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Minimum Fee Release Clause - Expiry Date",
+      "csv_aliases": [
+        "Minimum Fee Release Clause - Expiry Date"
+      ],
+      "category": "finance",
+      "internal_key": "min_release_clause_expires",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Non Promotion Release Clause",
+      "csv_aliases": [
+        "Non Promotion Release Clause"
+      ],
+      "category": "finance",
+      "internal_key": "non_promotion_release",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Promotion Salary Raise",
+      "csv_aliases": [
+        "Promotion Salary Raise"
+      ],
+      "category": "finance",
+      "internal_key": "promotion_salary_raise",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Relegation Release Clause",
+      "csv_aliases": [
+        "Relegation Release Clause"
+      ],
+      "category": "finance",
+      "internal_key": "relegation_release",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed + stored; not shown in UI (granular release clause)",
+      "notes": "Consider surfacing or dropping if unused long-term"
+    },
+    {
+      "primary_csv": "Relegation Salary Drop",
+      "csv_aliases": [
+        "Relegation Salary Drop"
+      ],
+      "category": "finance",
+      "internal_key": "relegation_salary_drop",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Salary",
+      "csv_aliases": [
+        "Salary"
+      ],
+      "category": "finance",
+      "internal_key": "salary",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shutout Bonus",
+      "csv_aliases": [
+        "Shutout Bonus"
+      ],
+      "category": "finance",
+      "internal_key": "shutout_bonus",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Top Division Promotion Salary raise",
+      "csv_aliases": [
+        "Top Division Promotion Salary raise",
+        "Top Division Promotion Salary Raise"
+      ],
+      "category": "finance",
+      "internal_key": "top_division_promotion_salary_raise",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Top Division Relegation Salary Drop",
+      "csv_aliases": [
+        "Top Division Relegation Salary Drop"
+      ],
+      "category": "finance",
+      "internal_key": "top_division_relegation_salary_drop",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Transfer Value",
+      "csv_aliases": [
+        "Transfer Value"
+      ],
+      "category": "finance",
+      "internal_key": "transfer_value",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Unused Substitute Fee",
+      "csv_aliases": [
+        "Unused Substitute Fee"
+      ],
+      "category": "finance",
+      "internal_key": "unused_sub_fee",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "WP Needed",
+      "csv_aliases": [
+        "WP Needed"
+      ],
+      "category": "finance",
+      "internal_key": "wp_needed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Work Permit Required",
+      "csv_aliases": [
+        "Work Permit Required"
+      ],
+      "category": "finance",
+      "internal_key": "work_permit_required",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Yearly Salary Raise",
+      "csv_aliases": [
+        "Yearly Salary Raise"
+      ],
+      "category": "finance",
+      "internal_key": "yearly_salary_raise",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Squad finance",
+        "Uploads"
+      ],
+      "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "2nd Nat",
+      "csv_aliases": [
+        "2nd Nat",
+        "Second Nationality",
+        "Second Nation"
+      ],
+      "category": "identity",
+      "internal_key": "second_nation",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Ability",
+      "csv_aliases": [
+        "Ability",
+        "CA"
+      ],
+      "category": "identity",
+      "internal_key": "ability",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Ability Gold",
+      "csv_aliases": [
+        "Ability Gold"
+      ],
+      "category": "identity",
+      "internal_key": "ability_gold",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Ability Silver",
+      "csv_aliases": [
+        "Ability Silver"
+      ],
+      "category": "identity",
+      "internal_key": "ability_silver",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Age",
+      "csv_aliases": [
+        "Age"
+      ],
+      "category": "identity",
+      "internal_key": "age",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Page eligibility gate + identity",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Average Rating International",
+      "csv_aliases": [
+        "Average Rating International",
+        "Avg Rating International"
+      ],
+      "category": "identity",
+      "internal_key": "avg_rating_int",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Based In",
+      "csv_aliases": [
+        "Based In"
+      ],
+      "category": "identity",
+      "internal_key": "based_in",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Best Pos",
+      "csv_aliases": [
+        "Best Pos",
+        "Best Position"
+      ],
+      "category": "identity",
+      "internal_key": "best_pos",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role eligibility, position groups, shortlist / modal",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Best Role",
+      "csv_aliases": [
+        "Best Role"
+      ],
+      "category": "identity",
+      "internal_key": "best_role",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role eligibility, position groups, shortlist / modal",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Club",
+      "csv_aliases": [
+        "Club"
+      ],
+      "category": "identity",
+      "internal_key": "club",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Page eligibility gate + identity",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Division",
+      "csv_aliases": [
+        "Division",
+        "Div"
+      ],
+      "category": "identity",
+      "internal_key": "division",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Division tier + limited-tracking stripe (Player stats / Profiles)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Form International",
+      "csv_aliases": [
+        "Form International",
+        "Form Int"
+      ],
+      "category": "identity",
+      "internal_key": "form_int",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Height",
+      "csv_aliases": [
+        "Height"
+      ],
+      "category": "identity",
+      "internal_key": "height",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Home Grown Status",
+      "csv_aliases": [
+        "Home Grown Status"
+      ],
+      "category": "identity",
+      "internal_key": "home_grown_status",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Inf",
+      "csv_aliases": [
+        "Inf"
+      ],
+      "category": "identity",
+      "internal_key": "inf",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Injury",
+      "csv_aliases": [
+        "Injury"
+      ],
+      "category": "identity",
+      "internal_key": "injury",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Int Apps",
+      "csv_aliases": [
+        "Int Apps",
+        "International Appearances"
+      ],
+      "category": "identity",
+      "internal_key": "int_apps",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Int Gls",
+      "csv_aliases": [
+        "Int Gls",
+        "International Goals"
+      ],
+      "category": "identity",
+      "internal_key": "int_gls",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "International Appearances (Season)",
+      "csv_aliases": [
+        "International Appearances (Season)",
+        "Int Apps (Season)"
+      ],
+      "category": "identity",
+      "internal_key": "int_apps_season",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "International Assists",
+      "csv_aliases": [
+        "International Assists",
+        "Int Assists"
+      ],
+      "category": "identity",
+      "internal_key": "int_assists",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "International Goals Conceded",
+      "csv_aliases": [
+        "International Goals Conceded"
+      ],
+      "category": "identity",
+      "internal_key": "int_goals_conceded",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Last 5 Games International",
+      "csv_aliases": [
+        "Last 5 Games International",
+        "Last 5 Games Int"
+      ],
+      "category": "identity",
+      "internal_key": "last5_int",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Left Foot",
+      "csv_aliases": [
+        "Left Foot",
+        "LFoot",
+        "L"
+      ],
+      "category": "identity",
+      "internal_key": "left_foot",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Media Handling",
+      "csv_aliases": [
+        "Media Handling"
+      ],
+      "category": "identity",
+      "internal_key": "media_handling",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Nation",
+      "csv_aliases": [
+        "Nation",
+        "Nat",
+        "Nationality"
+      ],
+      "category": "identity",
+      "internal_key": "nation",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "National Team",
+      "csv_aliases": [
+        "National Team"
+      ],
+      "category": "identity",
+      "internal_key": "national_team",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Personality",
+      "csv_aliases": [
+        "Personality"
+      ],
+      "category": "identity",
+      "internal_key": "personality",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Personality tier classification + modal",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Picked",
+      "csv_aliases": [
+        "Picked"
+      ],
+      "category": "identity",
+      "internal_key": "picked",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Player",
+      "csv_aliases": [
+        "Player",
+        "Name"
+      ],
+      "category": "identity",
+      "internal_key": "name",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player identity key across all pages",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Position",
+      "csv_aliases": [
+        "Position"
+      ],
+      "category": "identity",
+      "internal_key": "position",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role eligibility, position groups, shortlist / modal",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Position/Role",
+      "csv_aliases": [
+        "Position/Role",
+        "Position / Role"
+      ],
+      "category": "identity",
+      "internal_key": "position_role",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Potential",
+      "csv_aliases": [
+        "Potential",
+        "PA"
+      ],
+      "category": "identity",
+      "internal_key": "potential",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Potential Gold",
+      "csv_aliases": [
+        "Potential Gold"
+      ],
+      "category": "identity",
+      "internal_key": "potential_gold",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Potential Silver",
+      "csv_aliases": [
+        "Potential Silver"
+      ],
+      "category": "identity",
+      "internal_key": "potential_silver",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Rec.",
+      "csv_aliases": [
+        "Rec.",
+        "Rec"
+      ],
+      "category": "identity",
+      "internal_key": "rec",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Right Foot",
+      "csv_aliases": [
+        "Right Foot",
+        "RFoot",
+        "R"
+      ],
+      "category": "identity",
+      "internal_key": "right_foot",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Sec. Position",
+      "csv_aliases": [
+        "Sec. Position",
+        "Secondary Position",
+        "Sec Position"
+      ],
+      "category": "identity",
+      "internal_key": "sec_position",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Role eligibility, position groups, shortlist / modal",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Squad",
+      "csv_aliases": [
+        "Squad"
+      ],
+      "category": "identity",
+      "internal_key": "squad",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Style",
+      "csv_aliases": [
+        "Style"
+      ],
+      "category": "identity",
+      "internal_key": "style",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "World Reputation",
+      "csv_aliases": [
+        "World Reputation"
+      ],
+      "category": "identity",
+      "internal_key": "world_reputation",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "World Reputation Gold",
+      "csv_aliases": [
+        "World Reputation Gold"
+      ],
+      "category": "identity",
+      "internal_key": "world_reputation_gold",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "World Reputation Silver",
+      "csv_aliases": [
+        "World Reputation Silver"
+      ],
+      "category": "identity",
+      "internal_key": "world_reputation_silver",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed but hidden in UI (unreliable FM26 star ratings)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Yth Apps",
+      "csv_aliases": [
+        "Yth Apps",
+        "Youth Apps"
+      ],
+      "category": "identity",
+      "internal_key": "yth_apps",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Yth Gls",
+      "csv_aliases": [
+        "Yth Gls",
+        "Youth Goals"
+      ],
+      "category": "identity",
+      "internal_key": "yth_gls",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Clearances",
+      "csv_aliases": [
+        "Clearances"
+      ],
+      "category": "stats_availability",
+      "internal_key": "Clearances",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Limited-tracking league detection (not a scored percentile)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Interceptions",
+      "csv_aliases": [
+        "Interceptions"
+      ],
+      "category": "stats_availability",
+      "internal_key": "Interceptions",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Limited-tracking league detection (not a scored percentile)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Passes Attempted",
+      "csv_aliases": [
+        "Passes Attempted"
+      ],
+      "category": "stats_availability",
+      "internal_key": "Passes Attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Limited-tracking league detection (not a scored percentile)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Assists",
+      "csv_aliases": [
+        "Assists"
+      ],
+      "category": "stats_metric",
+      "internal_key": "assists",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Assists per 90» (assists)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Asts/90",
+      "csv_aliases": [
+        "Asts/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "assists",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Assists per 90» (assists)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Blk/90",
+      "csv_aliases": [
+        "Blk/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "blocks",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Blocks per 90» (blocks)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Clearances per 90",
+      "csv_aliases": [
+        "Clearances per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "clearances",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Clearances per 90» (clearances); limited-tracking probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Conv %",
+      "csv_aliases": [
+        "Conv %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "conversion_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Conversion %",
+      "csv_aliases": [
+        "Conversion %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "conversion_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Conversion Rate",
+      "csv_aliases": [
+        "Conversion Rate"
+      ],
+      "category": "stats_metric",
+      "internal_key": "conversion_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Crosses Completed per 90",
+      "csv_aliases": [
+        "Crosses Completed per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Dribbles",
+      "csv_aliases": [
+        "Dribbles"
+      ],
+      "category": "stats_metric",
+      "internal_key": "dribbles",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Dribbles per 90» (dribbles)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Dribbles per 90",
+      "csv_aliases": [
+        "Dribbles per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "dribbles",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Dribbles per 90» (dribbles)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Goals",
+      "csv_aliases": [
+        "Goals"
+      ],
+      "category": "stats_metric",
+      "internal_key": "goals",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Goals per 90» (goals)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Goals Allowed",
+      "csv_aliases": [
+        "Goals Allowed"
+      ],
+      "category": "stats_metric",
+      "internal_key": "goals_conceded",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Goals Conceded per 90» (goals_conceded); basic availability probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Goals per 90 minutes",
+      "csv_aliases": [
+        "Goals per 90 minutes"
+      ],
+      "category": "stats_metric",
+      "internal_key": "goals",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Goals per 90» (goals)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Hdrs W/90",
+      "csv_aliases": [
+        "Hdrs W/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "headers_won",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Headers Won per 90» (headers_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Headers Attempted per 90",
+      "csv_aliases": [
+        "Headers Attempted per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "headers_attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Headers Attempted per 90» (headers_attempted)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Headers Won",
+      "csv_aliases": [
+        "Headers Won"
+      ],
+      "category": "stats_metric",
+      "internal_key": "headers_won",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Headers Won per 90» (headers_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Headers Won Percentage",
+      "csv_aliases": [
+        "Headers Won Percentage"
+      ],
+      "category": "stats_metric",
+      "internal_key": "header_win_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Header Win Rate» (header_win_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Headers Won per 90",
+      "csv_aliases": [
+        "Headers Won per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "headers_won",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Headers Won per 90» (headers_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Interceptions per 90",
+      "csv_aliases": [
+        "Interceptions per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "interceptions",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Interceptions per 90» (interceptions); limited-tracking probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Key Passes",
+      "csv_aliases": [
+        "Key Passes"
+      ],
+      "category": "stats_metric",
+      "internal_key": "key_passes",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Key Passes per 90» (key_passes); limited-tracking probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Key Passes per 90",
+      "csv_aliases": [
+        "Key Passes per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "key_passes",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Key Passes per 90» (key_passes); limited-tracking probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Minutes",
+      "csv_aliases": [
+        "Minutes"
+      ],
+      "category": "stats_metric",
+      "internal_key": "minutes",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Minutes gate, per-90 derivation, limited-tracking aggregates",
+      "notes": ""
+    },
+    {
+      "primary_csv": "OP Cr C/90",
+      "csv_aliases": [
+        "OP Cr C/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "OP Crosses Completed per 90",
+      "csv_aliases": [
+        "OP Crosses Completed per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Open Play Crosses Completed per 90",
+      "csv_aliases": [
+        "Open Play Crosses Completed per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pass Completion %",
+      "csv_aliases": [
+        "Pass Completion %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pass_completion",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pass Completion» (pass_completion)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pass Completion Percentage",
+      "csv_aliases": [
+        "Pass Completion Percentage"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pass_completion",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pass Completion» (pass_completion)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pass Completion Ratio",
+      "csv_aliases": [
+        "Pass Completion Ratio"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pass_completion",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pass Completion» (pass_completion)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Passes Attempted per 90",
+      "csv_aliases": [
+        "Passes Attempted per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "passes_attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Passes Attempted per 90» (passes_attempted); basic availability probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Possession Lost per 90",
+      "csv_aliases": [
+        "Possession Lost per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "possession_lost",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Possession Lost per 90» (possession_lost)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Possession Won per 90",
+      "csv_aliases": [
+        "Possession Won per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "possession_won",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Possession Won per 90» (possession_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pres C/90",
+      "csv_aliases": [
+        "Pres C/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pressures",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pressures Completed per 90» (pressures)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pressures Completed",
+      "csv_aliases": [
+        "Pressures Completed"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pressures",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pressures Completed per 90» (pressures)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pressures Completed per 90",
+      "csv_aliases": [
+        "Pressures Completed per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pressures",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pressures Completed per 90» (pressures)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Progressive Passes per 90",
+      "csv_aliases": [
+        "Progressive Passes per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "progressive_passes",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Progressive Passes per 90» (progressive_passes); limited-tracking probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Ps C %",
+      "csv_aliases": [
+        "Ps C %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pass_completion",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pass Completion» (pass_completion)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "SOT/90",
+      "csv_aliases": [
+        "SOT/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shot Conversion %",
+      "csv_aliases": [
+        "Shot Conversion %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "conversion_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shot/90",
+      "csv_aliases": [
+        "Shot/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots per 90» (shots); basic availability probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots",
+      "csv_aliases": [
+        "Shots"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots per 90» (shots); basic availability probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots Conversion %",
+      "csv_aliases": [
+        "Shots Conversion %"
+      ],
+      "category": "stats_metric",
+      "internal_key": "conversion_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots On Target",
+      "csv_aliases": [
+        "Shots On Target"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots On Target per 90",
+      "csv_aliases": [
+        "Shots On Target per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots on Target",
+      "csv_aliases": [
+        "Shots on Target"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots on Target per 90",
+      "csv_aliases": [
+        "Shots on Target per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shots on Target/90",
+      "csv_aliases": [
+        "Shots on Target/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "shots_on_target",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shts Blckd/90",
+      "csv_aliases": [
+        "Shts Blckd/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "blocks",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Blocks per 90» (blocks)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Sprints",
+      "csv_aliases": [
+        "Sprints"
+      ],
+      "category": "stats_metric",
+      "internal_key": "sprints",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Sprints per 90» (sprints)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Sprints per 90",
+      "csv_aliases": [
+        "Sprints per 90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "sprints",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Sprints per 90» (sprints)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Sprints/90",
+      "csv_aliases": [
+        "Sprints/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "sprints",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Sprints per 90» (sprints)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Tackle Completion Percentage",
+      "csv_aliases": [
+        "Tackle Completion Percentage"
+      ],
+      "category": "stats_metric",
+      "internal_key": "tackle_win_rate",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Tackle Win Rate» (tackle_win_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Tackles Attempted",
+      "csv_aliases": [
+        "Tackles Attempted"
+      ],
+      "category": "stats_metric",
+      "internal_key": "tackles_attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Tackles Attempted per 90» (tackles_attempted); basic availability probe",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xA",
+      "csv_aliases": [
+        "xA"
+      ],
+      "category": "stats_metric",
+      "internal_key": "expected_assists",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Expected Assists per 90» (expected_assists)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xA/90",
+      "csv_aliases": [
+        "xA/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "expected_assists",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Expected Assists per 90» (expected_assists)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xG",
+      "csv_aliases": [
+        "xG"
+      ],
+      "category": "stats_metric",
+      "internal_key": "expected_goals",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Expected Goals per 90» (expected_goals)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xG/90",
+      "csv_aliases": [
+        "xG/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "expected_goals",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Expected Goals per 90» (expected_goals)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xGP",
+      "csv_aliases": [
+        "xGP"
+      ],
+      "category": "stats_metric",
+      "internal_key": "xg_prevented",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «xG Prevented per 90» (xg_prevented)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "xGP/90",
+      "csv_aliases": [
+        "xGP/90"
+      ],
+      "category": "stats_metric",
+      "internal_key": "xg_prevented",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «xG Prevented per 90» (xg_prevented)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "All/90",
+      "csv_aliases": [
+        "All/90"
+      ],
+      "category": "unused",
+      "internal_key": "All/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Season overview aggregate"
+    },
+    {
+      "primary_csv": "Average Rating Club",
+      "csv_aliases": [
+        "Average Rating Club"
+      ],
+      "category": "unused",
+      "internal_key": "Average Rating Club",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Club form rating; international variant is parsed"
+    },
+    {
+      "primary_csv": "Blk",
+      "csv_aliases": [
+        "Blk"
+      ],
+      "category": "unused",
+      "internal_key": "Blk",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Block total; Blk/90 is the scored metric"
+    },
+    {
+      "primary_csv": "Chances Created per 90",
+      "csv_aliases": [
+        "Chances Created per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Chances Created per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Clear Cut Chances Created",
+      "csv_aliases": [
+        "Clear Cut Chances Created"
+      ],
+      "category": "unused",
+      "internal_key": "Clear Cut Chances Created",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Cln/90",
+      "csv_aliases": [
+        "Cln/90"
+      ],
+      "category": "unused",
+      "internal_key": "Cln/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Clean sheets per 90 (GK); not scored"
+    },
+    {
+      "primary_csv": "Crosses Attempted",
+      "csv_aliases": [
+        "Crosses Attempted"
+      ],
+      "category": "unused",
+      "internal_key": "Crosses Attempted",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Cross totals; only OP crosses completed /90 scored"
+    },
+    {
+      "primary_csv": "Crosses Attempted per 90",
+      "csv_aliases": [
+        "Crosses Attempted per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Crosses Attempted per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Crosses Completed",
+      "csv_aliases": [
+        "Crosses Completed"
+      ],
+      "category": "unused",
+      "internal_key": "Crosses Completed",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Cross totals; only OP crosses completed /90 scored"
+    },
+    {
+      "primary_csv": "Crosses Completed Ratio",
+      "csv_aliases": [
+        "Crosses Completed Ratio"
+      ],
+      "category": "unused",
+      "internal_key": "Crosses Completed Ratio",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Dist/90",
+      "csv_aliases": [
+        "Dist/90"
+      ],
+      "category": "unused",
+      "internal_key": "Dist/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Physical distance; not scored"
+    },
+    {
+      "primary_csv": "Distance",
+      "csv_aliases": [
+        "Distance"
+      ],
+      "category": "unused",
+      "internal_key": "Distance",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Physical distance total; not scored"
+    },
+    {
+      "primary_csv": "Expected Save Percentage",
+      "csv_aliases": [
+        "Expected Save Percentage"
+      ],
+      "category": "unused",
+      "internal_key": "Expected Save Percentage",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK detail; xGP/90 used instead"
+    },
+    {
+      "primary_csv": "Form",
+      "csv_aliases": [
+        "Form"
+      ],
+      "category": "unused",
+      "internal_key": "Form",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Generic form string; not parsed"
+    },
+    {
+      "primary_csv": "Form Club",
+      "csv_aliases": [
+        "Form Club"
+      ],
+      "category": "unused",
+      "internal_key": "Form Club",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Club form; Int form fields are parsed via identity"
+    },
+    {
+      "primary_csv": "Free Kick Shots",
+      "csv_aliases": [
+        "Free Kick Shots"
+      ],
+      "category": "unused",
+      "internal_key": "Free Kick Shots",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Shooting detail; not scored"
+    },
+    {
+      "primary_csv": "Game Win Ratio",
+      "csv_aliases": [
+        "Game Win Ratio"
+      ],
+      "category": "unused",
+      "internal_key": "Game Win Ratio",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Results aggregate; not parsed"
+    },
+    {
+      "primary_csv": "Games Drawn",
+      "csv_aliases": [
+        "Games Drawn"
+      ],
+      "category": "unused",
+      "internal_key": "Games Drawn",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Results aggregate; not parsed"
+    },
+    {
+      "primary_csv": "Games Lost",
+      "csv_aliases": [
+        "Games Lost"
+      ],
+      "category": "unused",
+      "internal_key": "Games Lost",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Results aggregate; not parsed"
+    },
+    {
+      "primary_csv": "Games Missed In A Row",
+      "csv_aliases": [
+        "Games Missed In A Row"
+      ],
+      "category": "unused",
+      "internal_key": "Games Missed In A Row",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Availability streak; not parsed"
+    },
+    {
+      "primary_csv": "Games Won",
+      "csv_aliases": [
+        "Games Won"
+      ],
+      "category": "unused",
+      "internal_key": "Games Won",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Results aggregate; not parsed"
+    },
+    {
+      "primary_csv": "Goals From Outside The Box",
+      "csv_aliases": [
+        "Goals From Outside The Box"
+      ],
+      "category": "unused",
+      "internal_key": "Goals From Outside The Box",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Shooting detail; not scored"
+    },
+    {
+      "primary_csv": "Headers Attempted",
+      "csv_aliases": [
+        "Headers Attempted"
+      ],
+      "category": "unused",
+      "internal_key": "Headers Attempted",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Header total; per-90 / % variants scored"
+    },
+    {
+      "primary_csv": "Headers Lost per 90",
+      "csv_aliases": [
+        "Headers Lost per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Headers Lost per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Key Headers per 90",
+      "csv_aliases": [
+        "Key Headers per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Key Headers per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Key Tackles",
+      "csv_aliases": [
+        "Key Tackles"
+      ],
+      "category": "unused",
+      "internal_key": "Key Tackles",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Tackle detail; not scored"
+    },
+    {
+      "primary_csv": "Key Tackles per 90",
+      "csv_aliases": [
+        "Key Tackles per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Key Tackles per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Last 5 Games Club",
+      "csv_aliases": [
+        "Last 5 Games Club"
+      ],
+      "category": "unused",
+      "internal_key": "Last 5 Games Club",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Club form; Last 5 Games International is parsed"
+    },
+    {
+      "primary_csv": "Last Match Rating",
+      "csv_aliases": [
+        "Last Match Rating"
+      ],
+      "category": "unused",
+      "internal_key": "Last Match Rating",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Single-match rating; not parsed"
+    },
+    {
+      "primary_csv": "Mins/Gl",
+      "csv_aliases": [
+        "Mins/Gl"
+      ],
+      "category": "unused",
+      "internal_key": "Mins/Gl",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Minutes per goal; not parsed"
+    },
+    {
+      "primary_csv": "Mins/Gm",
+      "csv_aliases": [
+        "Mins/Gm"
+      ],
+      "category": "unused",
+      "internal_key": "Mins/Gm",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Minutes per game; not parsed"
+    },
+    {
+      "primary_csv": "Minutes Since Last Conceded",
+      "csv_aliases": [
+        "Minutes Since Last Conceded"
+      ],
+      "category": "unused",
+      "internal_key": "Minutes Since Last Conceded",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK streak; not parsed"
+    },
+    {
+      "primary_csv": "Minutes Since Last Goal",
+      "csv_aliases": [
+        "Minutes Since Last Goal"
+      ],
+      "category": "unused",
+      "internal_key": "Minutes Since Last Goal",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Scoring streak; not parsed"
+    },
+    {
+      "primary_csv": "Mistakes Leading to Goals",
+      "csv_aliases": [
+        "Mistakes Leading to Goals"
+      ],
+      "category": "unused",
+      "internal_key": "Mistakes Leading to Goals",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK error count; not scored"
+    },
+    {
+      "primary_csv": "NP-xG",
+      "csv_aliases": [
+        "NP-xG"
+      ],
+      "category": "unused",
+      "internal_key": "NP-xG",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Non-penalty xG total; xG/90 scored"
+    },
+    {
+      "primary_csv": "NP-xG/90",
+      "csv_aliases": [
+        "NP-xG/90"
+      ],
+      "category": "unused",
+      "internal_key": "NP-xG/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks (xG/90 used)"
+    },
+    {
+      "primary_csv": "Off",
+      "csv_aliases": [
+        "Off"
+      ],
+      "category": "unused",
+      "internal_key": "Off",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Unclear FM column; not parsed"
+    },
+    {
+      "primary_csv": "Open Play Cross Completion Percentage",
+      "csv_aliases": [
+        "Open Play Cross Completion Percentage"
+      ],
+      "category": "unused",
+      "internal_key": "Open Play Cross Completion Percentage",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Cross %; not scored"
+    },
+    {
+      "primary_csv": "Open Play Crosses Attempted",
+      "csv_aliases": [
+        "Open Play Crosses Attempted"
+      ],
+      "category": "unused",
+      "internal_key": "Open Play Crosses Attempted",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Cross totals; OP crosses completed /90 scored"
+    },
+    {
+      "primary_csv": "Open Play Crosses Attempted per 90",
+      "csv_aliases": [
+        "Open Play Crosses Attempted per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Open Play Crosses Attempted per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Open Play Crosses Completed",
+      "csv_aliases": [
+        "Open Play Crosses Completed"
+      ],
+      "category": "unused",
+      "internal_key": "Open Play Crosses Completed",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Cross total; per-90 variant scored"
+    },
+    {
+      "primary_csv": "Open Play Key Passes per 90",
+      "csv_aliases": [
+        "Open Play Key Passes per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Open Play Key Passes per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Passes Completed",
+      "csv_aliases": [
+        "Passes Completed"
+      ],
+      "category": "unused",
+      "internal_key": "Passes Completed",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Pass total; passes attempted /90 scored"
+    },
+    {
+      "primary_csv": "Passes Completed per 90",
+      "csv_aliases": [
+        "Passes Completed per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Passes Completed per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Penalties Faced",
+      "csv_aliases": [
+        "Penalties Faced"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Faced",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Penalties Saved",
+      "csv_aliases": [
+        "Penalties Saved"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Saved",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Penalties Saved Ratio",
+      "csv_aliases": [
+        "Penalties Saved Ratio"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Saved Ratio",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Penalties Scored",
+      "csv_aliases": [
+        "Penalties Scored"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Scored",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Penalties Scored Ratio",
+      "csv_aliases": [
+        "Penalties Scored Ratio"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Scored Ratio",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Penalties Taken",
+      "csv_aliases": [
+        "Penalties Taken"
+      ],
+      "category": "unused",
+      "internal_key": "Penalties Taken",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Penalty detail; not parsed"
+    },
+    {
+      "primary_csv": "Player of the Match",
+      "csv_aliases": [
+        "Player of the Match"
+      ],
+      "category": "unused",
+      "internal_key": "Player of the Match",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Awards; not parsed"
+    },
+    {
+      "primary_csv": "Pres A",
+      "csv_aliases": [
+        "Pres A"
+      ],
+      "category": "unused",
+      "internal_key": "Pres A",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Pressures attempted total; Pres C/90 scored"
+    },
+    {
+      "primary_csv": "Pres A/90",
+      "csv_aliases": [
+        "Pres A/90"
+      ],
+      "category": "unused",
+      "internal_key": "Pres A/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Pres C",
+      "csv_aliases": [
+        "Pres C"
+      ],
+      "category": "unused",
+      "internal_key": "Pres C",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Pressures completed total; Pres C/90 scored"
+    },
+    {
+      "primary_csv": "PsP",
+      "csv_aliases": [
+        "PsP"
+      ],
+      "category": "unused",
+      "internal_key": "PsP",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Progressive passes total; per-90 variant scored"
+    },
+    {
+      "primary_csv": "Pts/Gm",
+      "csv_aliases": [
+        "Pts/Gm"
+      ],
+      "category": "unused",
+      "internal_key": "Pts/Gm",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "League points per game; not parsed"
+    },
+    {
+      "primary_csv": "Rating",
+      "csv_aliases": [
+        "Rating"
+      ],
+      "category": "unused",
+      "internal_key": "Rating",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Average rating alias; Average Rating Club not parsed either"
+    },
+    {
+      "primary_csv": "Save Percentage",
+      "csv_aliases": [
+        "Save Percentage"
+      ],
+      "category": "unused",
+      "internal_key": "Save Percentage",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK save %; not scored"
+    },
+    {
+      "primary_csv": "Saves Held",
+      "csv_aliases": [
+        "Saves Held"
+      ],
+      "category": "unused",
+      "internal_key": "Saves Held",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK save type; not parsed"
+    },
+    {
+      "primary_csv": "Saves Parried",
+      "csv_aliases": [
+        "Saves Parried"
+      ],
+      "category": "unused",
+      "internal_key": "Saves Parried",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK save type; not parsed"
+    },
+    {
+      "primary_csv": "Saves Tipped",
+      "csv_aliases": [
+        "Saves Tipped"
+      ],
+      "category": "unused",
+      "internal_key": "Saves Tipped",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK save type; not parsed"
+    },
+    {
+      "primary_csv": "Saves per 90",
+      "csv_aliases": [
+        "Saves per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Saves per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK saves rate; not in benchmarks"
+    },
+    {
+      "primary_csv": "Shots From Outside The Box Per 90 minutes",
+      "csv_aliases": [
+        "Shots From Outside The Box Per 90 minutes"
+      ],
+      "category": "unused",
+      "internal_key": "Shots From Outside The Box Per 90 minutes",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Shooting detail; not scored"
+    },
+    {
+      "primary_csv": "Shots on Target Percentage",
+      "csv_aliases": [
+        "Shots on Target Percentage"
+      ],
+      "category": "unused",
+      "internal_key": "Shots on Target Percentage",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "SOT %; SOT per-90 scored"
+    },
+    {
+      "primary_csv": "Shts Blckd",
+      "csv_aliases": [
+        "Shts Blckd"
+      ],
+      "category": "unused",
+      "internal_key": "Shts Blckd",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Block total; Blk/90 scored"
+    },
+    {
+      "primary_csv": "Shutouts",
+      "csv_aliases": [
+        "Shutouts"
+      ],
+      "category": "unused",
+      "internal_key": "Shutouts",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "GK shutouts; not scored"
+    },
+    {
+      "primary_csv": "Starts",
+      "csv_aliases": [
+        "Starts"
+      ],
+      "category": "unused",
+      "internal_key": "Starts",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Lineup count; not parsed"
+    },
+    {
+      "primary_csv": "Tackled Completed",
+      "csv_aliases": [
+        "Tackled Completed"
+      ],
+      "category": "unused",
+      "internal_key": "Tackled Completed",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Tackle total (FM typo); per-90 from attempts scored"
+    },
+    {
+      "primary_csv": "Tackles Completed per 90",
+      "csv_aliases": [
+        "Tackles Completed per 90"
+      ],
+      "category": "unused",
+      "internal_key": "Tackles Completed per 90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Not in stats benchmarks"
+    },
+    {
+      "primary_csv": "Tall",
+      "csv_aliases": [
+        "Tall"
+      ],
+      "category": "unused",
+      "internal_key": "Tall",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Unknown FM flag; not parsed"
+    },
+    {
+      "primary_csv": "Tcon/90",
+      "csv_aliases": [
+        "Tcon/90"
+      ],
+      "category": "unused",
+      "internal_key": "Tcon/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Team conceded per 90; not parsed"
+    },
+    {
+      "primary_csv": "Team Goals",
+      "csv_aliases": [
+        "Team Goals"
+      ],
+      "category": "unused",
+      "internal_key": "Team Goals",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Team context; not parsed"
+    },
+    {
+      "primary_csv": "Tgls/90",
+      "csv_aliases": [
+        "Tgls/90"
+      ],
+      "category": "unused",
+      "internal_key": "Tgls/90",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Team goals per 90; not parsed"
+    },
+    {
+      "primary_csv": "xG-OP",
+      "csv_aliases": [
+        "xG-OP"
+      ],
+      "category": "unused",
+      "internal_key": "xG-OP",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Open-play xG delta; not scored"
+    },
+    {
+      "primary_csv": "xG/shot",
+      "csv_aliases": [
+        "xG/shot"
+      ],
+      "category": "unused",
+      "internal_key": "xG/shot",
+      "pages": [],
+      "usage": "Not parsed by any page",
+      "notes": "Shot quality average; not scored"
+    }
+  ]
+}

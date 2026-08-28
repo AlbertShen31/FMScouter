@@ -18,6 +18,7 @@ Dash + dash-mantine-components scouting app for Football Manager exports.
 | Scoring | `scoring/` — role scorer, stats scorer, availability, personality, division tiers |
 | Services | `services/` — upload cache, formations, profile libraries, export library, UI settings |
 | Config | `config/` — role weights, formations, stats thresholds, availability, paths |
+| Column / metric map | `docs/column-usage.md` (+ `docs/column-usage.json`); regenerate with `python scripts/audit_column_usage.py` |
 | Styles | `assets/styles.css` — theme tokens (`--app-bg`, `--app-card`, `--app-text`, …) |
 | Profile data | `data/profiles/packs/<id>/` (`meta.json`, `index.json`, `slot_depth.json`) + `data/profiles/active.json` |
 

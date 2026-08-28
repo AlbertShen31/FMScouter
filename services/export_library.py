@@ -203,6 +203,21 @@ def get_file(file_id: str) -> dict[str, Any] | None:
     return None
 
 
+def file_eligible_for(file_id: str, page: str) -> bool:
+    """Whether a saved upload is eligible for a scouting page (header-based)."""
+    entry = get_file(file_id)
+    if not entry:
+        return False
+    return page in (entry.get("pages") or [])
+
+
+STATS_REQUIRED_MSG = (
+    "Profiles need a saved file eligible for Player stats "
+    "(Moneyball statistics columns). Upload a combined export on Uploads, "
+    "or pick one from the library dropdown."
+)
+
+
 def read_text(file_id: str) -> tuple[str, dict[str, Any]]:
     entry = get_file(file_id)
     if not entry:
