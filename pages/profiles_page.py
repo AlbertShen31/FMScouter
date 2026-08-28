@@ -99,8 +99,9 @@ PF_REPLACE_TIP = (
     "the file on Uploads first when the label says Stale."
 )
 PF_SQUAD_DEPTH_TIP = (
-    "One card per formation position (up to 11). Slots that share a role start with the same "
-    "exported players. Click a card to edit that role's depth; click again to return to the XI. "
+    "One card per formation position (up to 11). Save from Role scores queues exports "
+    "until Refresh exports places them on the matching slot (one slot each, bottom of depth). "
+    "Click a card to edit that role's depth; click again to return to the XI. "
     "Auto-rank sorts players still on the slot (Score, then Ovr). Removals stay off until "
     "Recently removed restore or a new Role-scores export."
 )
@@ -3494,6 +3495,33 @@ def _push_depth_undo(undo_items, payload: dict, *, limit: int | None = None) -> 
     return next_items[:max_items]
 
 
+def _export_staging_notice(count: int):
+    if count <= 0:
+        return html.Div(className="pf-export-staging-notice is-empty")
+    noun = "export" if count == 1 else "exports"
+    badge_label = f"{count} staged {noun}"
+    return html.Div(
+        [
+            html.Span(
+                str(count),
+                className="pf-export-staging-badge",
+                **{"aria-label": badge_label},
+            ),
+            html.Span(
+                [
+                    html.Strong(f"{count} staged {noun}"),
+                    " — use ",
+                    html.Strong("Refresh exports"),
+                    " to load into squad depth.",
+                ],
+                className="pf-export-staging-text",
+            ),
+        ],
+        className="pf-export-staging-notice",
+        **{"aria-live": "polite"},
+    )
+
+
 def layout(**_kwargs):
     profiles.ensure_dirs()
     settings = us.load()
@@ -3501,6 +3529,7 @@ def layout(**_kwargs):
     return dbc.Container(
         [
             dcc.Interval(id="pf-hydrate-tick", interval=50, max_intervals=1),
+            dcc.Interval(id="pf-staging-poll", interval=3000, n_intervals=0),
             dcc.Store(id="pf-hydrated", data=False),
             dcc.Store(id="pf-rev", data=0),
             dcc.Store(id="pf-depth-order", data=None),
@@ -3665,37 +3694,51 @@ def layout(**_kwargs):
                                                                 ],
                                                                 className="rs-depth-heading-title-row",
                                                             ),
-                                                            html.Span(
-                                                                dmc.Button(
-                                                                    [
-                                                                        html.Span(
-                                                                            "↻",
-                                                                            className=(
-                                                                                "pf-squad-depth-refresh-icon"
-                                                                            ),
-                                                                            **{
-                                                                                "aria-hidden": "true"
-                                                                            },
+                                                            html.Div(
+                                                                [
+                                                                    html.Div(
+                                                                        id="pf-export-staging-notice",
+                                                                        className=(
+                                                                            "pf-export-staging-notice-wrap"
                                                                         ),
-                                                                        "Refresh exports",
-                                                                    ],
-                                                                    id="pf-squad-depth-refresh",
-                                                                    size="sm",
-                                                                    variant="filled",
-                                                                    color="teal",
-                                                                    n_clicks=0,
-                                                                    className=(
-                                                                        "pf-squad-depth-refresh "
-                                                                        "pf-depth-role-btn "
-                                                                        "pf-depth-role-btn-rank"
                                                                     ),
-                                                                ),
-                                                                title=(
-                                                                    "Pull in brand-new Role scores "
-                                                                    "exports (keeps current ranks). "
-                                                                    "Players you removed from a slot "
-                                                                    "come back when you export them "
-                                                                    "again, or via Recently removed."
+                                                                    html.Span(
+                                                                        dmc.Button(
+                                                                            [
+                                                                                html.Span(
+                                                                                    "↻",
+                                                                                    className=(
+                                                                                        "pf-squad-depth-refresh-icon"
+                                                                                    ),
+                                                                                    **{
+                                                                                        "aria-hidden": "true"
+                                                                                    },
+                                                                                ),
+                                                                                "Refresh exports",
+                                                                            ],
+                                                                            id="pf-squad-depth-refresh",
+                                                                            size="sm",
+                                                                            variant="filled",
+                                                                            color="teal",
+                                                                            n_clicks=0,
+                                                                            className=(
+                                                                                "pf-squad-depth-refresh "
+                                                                                "pf-depth-role-btn "
+                                                                                "pf-depth-role-btn-rank"
+                                                                            ),
+                                                                        ),
+                                                                        title=(
+                                                                            "Load staged Role scores exports "
+                                                                            "into matching slots (keeps current "
+                                                                            "ranks; new players append at bottom). "
+                                                                            "Players you removed from a slot "
+                                                                            "come back when you export them "
+                                                                            "again, or via Recently removed."
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                className=(
+                                                                    "pf-squad-depth-refresh-cluster"
                                                                 ),
                                                             ),
                                                         ],
@@ -5480,6 +5523,30 @@ def auto_rank_depth_role(
     return next_rev, chart, int(time.time() * 1000)
 
 
+_PF_SQUAD_DEPTH_REFRESH_CLASS = (
+    "pf-squad-depth-refresh pf-depth-role-btn pf-depth-role-btn-rank"
+)
+
+
+@callback(
+    Output("pf-export-staging-notice", "children"),
+    Output("pf-squad-depth-refresh", "className"),
+    Input("pf-library-select", "value"),
+    Input("pf-rev", "data"),
+    Input("pf-staging-poll", "n_intervals"),
+    Input("pf-squad-depth-refresh", "n_clicks"),
+)
+def refresh_export_staging_notice(
+    library_id, _rev, _poll, _refresh_clicks
+):
+    count = profiles.pending_staged_export_count(library_id)
+    notice = _export_staging_notice(count)
+    button_class = _PF_SQUAD_DEPTH_REFRESH_CLASS
+    if count > 0:
+        button_class = f"{button_class} pf-squad-depth-refresh--pending"
+    return notice, button_class
+
+
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
     Output("pf-depth-chart-body", "children", allow_duplicate=True),
@@ -5497,15 +5564,12 @@ def auto_rank_depth_role(
 def refresh_depth_from_role_exports(
     n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
 ):
-    """Append new Role-score exports into each slot’s depth, then rebuild charts."""
+    """Load staged Role-score exports into formation slots, then rebuild charts."""
     if not n_clicks:
         return no_update, no_update, no_update
     slots = _formation_slots(formation_id)
     if slots:
-        for slot in slots:
-            profiles.sync_slot_depth_from_exports(
-                formation_id, slot["index"], slot["column"]
-            )
+        profiles.sync_formation_depth_from_exports(formation_id, slots)
     next_rev = int(rev or 0) + 1
     chart = _mount_depth_chart(
         _build_depth_chart(

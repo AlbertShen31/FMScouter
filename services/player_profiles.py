@@ -1,9 +1,9 @@
 """Saved player profiles: named libraries of shortlist-style row snapshots.
 
 Each library lives under ``data/profiles/packs/<id>/`` with ``meta.json``,
-``index.json``, and ``slot_depth.json``. ``active.json`` points at the current
-library. Legacy flat ``index.json`` / ``slot_depth.json`` are migrated once into
-a Default library.
+``index.json``, ``slot_depth.json``, and ``export_staging.json``. ``active.json``
+points at the current library. Legacy flat ``index.json`` / ``slot_depth.json``
+are migrated once into a Default library.
 """
 from __future__ import annotations
 
@@ -85,6 +85,10 @@ def _index_path(library_id: str | None = None) -> Path:
 
 def _slot_depth_path(library_id: str | None = None) -> Path:
     return _library_dir(_resolve_library_id(library_id)) / "slot_depth.json"
+
+
+def _export_staging_path(library_id: str | None = None) -> Path:
+    return _library_dir(_resolve_library_id(library_id)) / "export_staging.json"
 
 
 def _read_json(path: Path, fallback: Any) -> Any:
@@ -211,6 +215,7 @@ def _bootstrap_default_library() -> None:
     )
     _write_json(dest / "index.json", [])
     _write_json(dest / "slot_depth.json", {})
+    _write_json(dest / "export_staging.json", {"pending": []})
     _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
 
 
@@ -344,6 +349,7 @@ def create_library(
     _write_json(dest / "meta.json", meta)
     _write_json(dest / "index.json", [])
     _write_json(dest / "slot_depth.json", {})
+    _write_json(dest / "export_staging.json", {"pending": []})
     if activate or not PROFILES_ACTIVE_PATH.is_file():
         set_active_library(lid)
     return _normalize_meta(meta, library_id=lid)
@@ -388,6 +394,81 @@ def _write_slot_depth(payload: dict[str, Any], library_id: str | None = None) ->
     _write_json(_slot_depth_path(library_id), payload)
 
 
+def _read_export_staging(library_id: str | None = None) -> list[dict[str, Any]]:
+    ensure_dirs()
+    data = _read_json(_export_staging_path(library_id), {})
+    if not isinstance(data, dict):
+        return []
+    pending = data.get("pending")
+    if not isinstance(pending, list):
+        return []
+    return [item for item in pending if isinstance(item, dict)]
+
+
+def _write_export_staging(
+    pending: list[dict[str, Any]], library_id: str | None = None
+) -> None:
+    ensure_dirs()
+    cleaned = [
+        {
+            "profile_id": str(item.get("profile_id") or "").strip(),
+            "role_column": str(item.get("role_column") or "").strip(),
+            "saved_at": str(item.get("saved_at") or "").strip(),
+        }
+        for item in pending
+        if isinstance(item, dict)
+        and str(item.get("profile_id") or "").strip()
+        and str(item.get("role_column") or "").strip()
+    ]
+    _write_json(_export_staging_path(library_id), {"pending": cleaned})
+
+
+def stage_role_export(
+    profile_id: str,
+    role_column: str,
+    *,
+    library_id: str | None = None,
+    saved_at: str | None = None,
+) -> None:
+    """Queue a Role-scores export for the next Refresh exports on Profiles."""
+    pid = str(profile_id or "").strip()
+    role = str(role_column or "").strip()
+    if not pid or not role:
+        return
+    pending = _read_export_staging(library_id)
+    pending = [
+        item
+        for item in pending
+        if str(item.get("profile_id") or "").strip() != pid
+    ]
+    pending.append(
+        {
+            "profile_id": pid,
+            "role_column": role,
+            "saved_at": saved_at or _utc_now_iso(),
+        }
+    )
+    _write_export_staging(pending, library_id)
+
+
+def pending_staged_export_count(library_id: str | None = None) -> int:
+    """How many Role-scores exports are waiting for Refresh exports."""
+    lid = _resolve_library_id(library_id)
+    pending = _read_export_staging(lid)
+    if not pending:
+        return 0
+    valid_ids = {
+        str(entry.get("id") or "").strip()
+        for entry in _read_index(lid)
+        if str(entry.get("id") or "").strip()
+    }
+    return sum(
+        1
+        for item in pending
+        if str(item.get("profile_id") or "").strip() in valid_ids
+    )
+
+
 def _profile_ids_in_slot_depth(
     *,
     library_id: str | None = None,
@@ -423,7 +504,7 @@ def get_slot_order_ids(
     *,
     seed: bool = True,
 ) -> list[str]:
-    """Return ordered profile ids for one formation slot (seed from role depth)."""
+    """Return ordered profile ids for one formation slot (empty when first opened)."""
     pack = str(formation_id or "").strip()
     role = str(role_column or "").strip()
     key = _slot_key(slot_index)
@@ -441,16 +522,11 @@ def get_slot_order_ids(
         return [str(pid).strip() for pid in raw if str(pid or "").strip() in valid]
     if not seed:
         return []
-    seeded = [
-        str(entry.get("id") or "")
-        for entry in ordered_profiles_for_role(role)
-        if str(entry.get("id") or "")
-    ]
     pack_map = dict(pack_map)
-    pack_map[key] = seeded
+    pack_map[key] = []
     store[pack] = pack_map
     _write_slot_depth(store)
-    return list(seeded)
+    return []
 
 
 def set_slot_order_ids(
@@ -832,56 +908,117 @@ def auto_rank_slot_by_score(
     return len(ids)
 
 
+def sync_formation_depth_from_exports(
+    formation_id: str | None,
+    slots: list[dict[str, Any]],
+    *,
+    library_id: str | None = None,
+) -> int:
+    """Pull staged Role-score exports into formation slots (append at bottom only).
+
+    Each staged profile is placed on at most one slot: the first matching slot
+    (by lineup order) where it is not already listed anywhere in the formation.
+    Existing slot order is preserved; removed players stay excluded until restore
+    or a newer export (saved_at after the remove).
+    """
+    pack = str(formation_id or "").strip()
+    if not pack or not slots:
+        return 0
+    lid = _resolve_library_id(library_id)
+    pending = _read_export_staging(lid)
+    if not pending:
+        return 0
+
+    role_profiles = list_role_profiles()
+    by_id = {
+        str(entry.get("id") or "").strip(): entry
+        for entry in role_profiles
+        if str(entry.get("id") or "").strip()
+    }
+    in_formation = _profile_ids_in_slot_depth(library_id=lid, formation_id=pack)
+    consumed: set[str] = {
+        str(item.get("profile_id") or "").strip()
+        for item in pending
+        if str(item.get("profile_id") or "").strip() in in_formation
+    }
+    total_added = 0
+
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        try:
+            slot_index = slot["index"]
+        except KeyError:
+            continue
+        role = str(slot.get("column") or "").strip()
+        if not role:
+            continue
+
+        current = get_slot_order_ids(pack, slot_index, role, seed=True)
+        kept = [pid for pid in current if pid in by_id]
+        present = set(kept)
+        excluded_at = get_slot_excluded_at(pack, slot_index)
+        still_excluded = _still_excluded_ids(excluded_at, by_id)
+        if set(excluded_at) != still_excluded:
+            pruned = {
+                pid: excluded_at[pid] for pid in still_excluded if pid in excluded_at
+            }
+            _write_slot_excluded_map(pack, slot_index, pruned)
+
+        staged_entries: list[dict[str, Any]] = []
+        for item in pending:
+            pid = str(item.get("profile_id") or "").strip()
+            item_role = str(item.get("role_column") or "").strip()
+            if not pid or item_role != role or pid in consumed:
+                continue
+            if pid in present or pid in still_excluded:
+                continue
+            entry = by_id.get(pid)
+            if not entry or _entry_role(entry) != role:
+                continue
+            staged_entries.append(entry)
+
+        staged_entries.sort(key=_score_name_sort_key)
+        append_ids = [
+            str(entry.get("id") or "").strip()
+            for entry in staged_entries
+            if str(entry.get("id") or "").strip()
+        ]
+        new_ids = kept + append_ids
+        if new_ids != current:
+            set_slot_order_ids(pack, slot_index, new_ids)
+        if append_ids:
+            total_added += len(append_ids)
+            for pid in append_ids:
+                consumed.add(pid)
+                in_formation.add(pid)
+
+    remaining = [
+        item
+        for item in pending
+        if str(item.get("profile_id") or "").strip() not in consumed
+    ]
+    if len(remaining) != len(pending):
+        _write_export_staging(remaining, lid)
+    return total_added
+
+
 def sync_slot_depth_from_exports(
     formation_id: str | None,
     slot_index: int | str,
     role_column: str,
+    *,
+    library_id: str | None = None,
 ) -> int:
-    """Keep existing slot order; append new Role-score exports for the role.
-
-    Slot depth is a fixed id list once seeded. Later saves from Role scores do
-    not appear until Refresh. Players removed from the slot stay excluded until
-    Recently removed restore or a newer export (saved_at after the remove).
-    """
+    """Backward-compatible single-slot wrapper; prefer ``sync_formation_depth_from_exports``."""
     role = str(role_column or "").strip()
     if not role:
         return 0
-    role_entries = [
-        entry for entry in list_role_profiles() if _entry_role(entry) == role
-    ]
-    by_id = {
-        str(entry.get("id") or "").strip(): entry
-        for entry in role_entries
-        if str(entry.get("id") or "").strip()
-    }
-    role_ids = set(by_id)
-    current = get_slot_order_ids(formation_id, slot_index, role, seed=True)
-    kept = [pid for pid in current if pid in role_ids]
-    present = set(kept)
-    excluded_at = get_slot_excluded_at(formation_id, slot_index)
-    still_excluded = _still_excluded_ids(excluded_at, by_id)
-    if set(excluded_at) != still_excluded:
-        pruned = {pid: excluded_at[pid] for pid in still_excluded if pid in excluded_at}
-        _write_slot_excluded_map(formation_id, slot_index, pruned)
-    missing = [
-        entry
-        for entry in role_entries
-        if (pid := str(entry.get("id") or "").strip())
-        and pid not in present
-        and pid not in still_excluded
-    ]
-    if not missing and kept == current:
-        return 0
-    missing.sort(key=_score_name_sort_key)
-    new_ids = kept + [
-        str(entry.get("id") or "").strip()
-        for entry in missing
-        if str(entry.get("id") or "").strip()
-    ]
-    if new_ids == current:
-        return 0
-    set_slot_order_ids(formation_id, slot_index, new_ids)
-    return len(missing)
+    return sync_formation_depth_from_exports(
+        formation_id,
+        [{"index": slot_index, "column": role}],
+        library_id=library_id,
+    )
 
 
 def reinstate_exported_profile_on_slots(
@@ -1925,6 +2062,12 @@ def save_profile_rows(
     if meta:
         meta["updated_at"] = now
         _write_json(_meta_path(target), meta)
+    if saved_from == "role_scores":
+        for entry in saved:
+            pid = str(entry.get("id") or "").strip()
+            role_col = str(entry.get("role_column") or "").strip()
+            if pid and role_col:
+                stage_role_export(pid, role_col, library_id=target, saved_at=now)
     if reinstate_slots and saved_from == "role_scores":
         for entry in saved:
             pid = str(entry.get("id") or "").strip()

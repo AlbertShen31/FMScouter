@@ -6675,6 +6675,78 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     width: 100%;
 }
 
+.pf-squad-depth-refresh-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.pf-export-staging-notice-wrap {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.pf-export-staging-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    max-width: min(100%, 22rem);
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--app-accent) 45%, var(--app-line));
+    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-card));
+    color: var(--app-text);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.pf-export-staging-notice.is-empty {
+    display: none;
+}
+
+.pf-export-staging-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--app-accent) 70%, #111);
+    color: #111;
+    font-size: 0.72rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.pf-export-staging-text strong {
+    font-weight: 700;
+    color: var(--app-text);
+}
+
+html[data-theme="light"] .pf-export-staging-notice,
+body[data-theme="light"] .pf-export-staging-notice {
+    background: color-mix(in srgb, var(--app-accent) 10%, #fff);
+    border-color: color-mix(in srgb, var(--app-accent) 35%, var(--app-line));
+}
+
+html[data-theme="light"] .pf-export-staging-badge,
+body[data-theme="light"] .pf-export-staging-badge {
+    background: var(--app-accent);
+    color: #fff;
+}
+
+.pf-squad-depth-refresh.mantine-Button-root.pf-squad-depth-refresh--pending {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--app-accent) 55%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--app-accent) 22%, transparent);
+}
+
 .pf-squad-depth-refresh.mantine-Button-root {
     flex: 0 0 auto;
     margin-left: auto;
