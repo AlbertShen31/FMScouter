@@ -86,6 +86,7 @@ from components.scouting_shell import (
 from scoring.comparison import delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
     POS_GROUPS,
+    adaptive_bound_options,
     adaptive_metric_bound_maps,
     adaptive_metric_p100_map,
     band_metric,
@@ -227,6 +228,22 @@ def _parsed_players(data) -> list:
 
 def _unpack_parsed(data) -> dict | None:
     return unpack_parsed(data)
+
+
+def _limited_divisions_for_parsed(parsed, players: list[dict]) -> list[str]:
+    store = _unpack_parsed(parsed) or {}
+    file_id = str(store.get("file_id") or "").strip()
+    limited = lib.list_limited_tracking_divisions(file_id=file_id or None)
+    if not limited and players:
+        limited = sorted(
+            {
+                str(p.get("division") or "").strip()
+                for p in players
+                if p.get("limited_division_tracking")
+                and str(p.get("division") or "").strip() not in ("", "-", "—")
+            }
+        )
+    return limited
 
 
 def _colored_cell(text: str, color: str | None) -> str:
@@ -1548,20 +1565,7 @@ def refresh_table(
     sort_memory,
 ):
     players = _parsed_players(parsed)
-    store = _unpack_parsed(parsed) or {}
-    file_id = str(store.get("file_id") or "").strip()
-    limited_divisions = lib.list_limited_tracking_divisions(
-        file_id=file_id or None
-    )
-    if not limited_divisions and players:
-        limited_divisions = sorted(
-            {
-                str(p.get("division") or "").strip()
-                for p in players
-                if p.get("stats_unavailable")
-                and str(p.get("division") or "").strip() not in ("", "-", "—")
-            }
-        )
+    limited_divisions = _limited_divisions_for_parsed(parsed, players)
     pos = pos or "all"
     settings = us.normalize(settings)
     minutes_required = float(
@@ -1571,15 +1575,24 @@ def refresh_table(
     )
     g, category = _resolve_category(pos, category or "")
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players, thresh, min_minutes=minutes_required
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=minutes_required,
+        limited_divisions=limited_divisions,
     )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     compare = bool(parsed_historical_players(hist_parsed))
     hist_percentiles: dict[str, dict[str, float | None]] = {}
     if compare:
         hist_players = parsed_historical_players(hist_parsed)
+        hist_limited = _limited_divisions_for_parsed(hist_parsed, hist_players)
+        hist_bound_opts = adaptive_bound_options(
+            settings,
+            min_minutes=minutes_required,
+            limited_divisions=hist_limited,
+        )
         hist_p0, hist_p100 = adaptive_metric_bound_maps(
-            hist_players, thresh, min_minutes=minutes_required
+            hist_players, thresh, **hist_bound_opts
         )
         for hp in hist_players:
             pkey = player_key(hp)
@@ -1764,9 +1777,13 @@ def open_player(
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players, thresh, min_minutes=minutes_required
+    limited_divisions = _limited_divisions_for_parsed(parsed, players)
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=minutes_required,
+        limited_divisions=limited_divisions,
     )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         True,
         player.get("name"),
@@ -1827,14 +1844,18 @@ def switch_player_view(
         return view, html.Div("Player not found.")
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
+    players = _parsed_players(parsed)
     mins_req = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        _parsed_players(parsed), thresh, min_minutes=mins_req
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=mins_req,
+        limited_divisions=_limited_divisions_for_parsed(parsed, players),
     )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         view,
         _player_modal_body(
@@ -1880,14 +1901,18 @@ def switch_player_group(
         return no_update, no_update
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
+    players = _parsed_players(parsed)
     mins_req = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        _parsed_players(parsed), thresh, min_minutes=mins_req
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=mins_req,
+        limited_divisions=_limited_divisions_for_parsed(parsed, players),
     )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         group,
         _player_modal_body(
@@ -1916,10 +1941,16 @@ def _build_stats_compare_body(
 ) -> html.Div:
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    mins_req = float(us.default_minutes_required(settings))
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players, thresh, min_minutes=mins_req
+    limited = sorted(
+        {
+            str(p.get("division") or "").strip()
+            for p in players
+            if p.get("limited_division_tracking")
+            and str(p.get("division") or "").strip() not in ("", "-", "—")
+        }
     )
+    bound_opts = adaptive_bound_options(settings, limited_divisions=limited or None)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
     label_a = str(player_a.get("name") or "Player A")
     label_b = str(player_b.get("name") or "Player B")

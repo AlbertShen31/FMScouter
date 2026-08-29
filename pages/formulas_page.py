@@ -193,14 +193,16 @@ higher_is_better:
   value ≤ t20  → interpolate toward 0 at p0
                  (p0 = min of settings-implied floor t20-|t20|
                   and the dataset min for that phase group among players
-                  meeting the default minutes requirement; lower-is-better
-                  uses max with t20+|t20| / dataset max)
+                  meeting the default minutes requirement and not in
+                  limited-tracking leagues (when that exclusion is enabled);
+                  lower-is-better uses max with t20+|t20| / dataset max)
   t20 < value ≤ t80 → linear steps 20 → 40 → 60 → 80
   value > t80  → interpolate toward 100 at p100
                  (p100 = max of settings-implied ceiling t80+|t80|
                   and the dataset max for that phase group among players
-                  meeting the default minutes requirement; lower-is-better
-                  uses min with t80-|t80| / dataset min so top values still spread)
+                  meeting the default minutes requirement and not in
+                  limited-tracking leagues (when that exclusion is enabled);
+                  lower-is-better uses min with t80-|t80| / dataset min so top values still spread)
 
 lower_is_better:
   mirror the above (quality improves as values fall)

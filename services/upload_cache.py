@@ -20,7 +20,7 @@ import services.export_library as lib
 import services.role_config as rc
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v10"
+FORMULA_VERSION = "v11"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -69,6 +69,9 @@ def current_signature() -> dict[str, Any]:
         "stats_tree_sha": _sha(stats_tree),
         "stats_benchmarks_sha": bench_hash,
         "default_minutes_required": us.default_minutes_required(settings),
+        "exclude_limited_leagues_adaptive_bounds": us.exclude_limited_leagues_adaptive_bounds(
+            settings
+        ),
     }
 
 
@@ -273,6 +276,8 @@ def _precompute_stats_percentiles(
     threshold_tree: dict[str, Any] | None,
     *,
     min_minutes: float | None = None,
+    limited_divisions: list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """player_key → group → metric_id → percentile."""
     from scoring.stats_scorer import (
@@ -287,7 +292,11 @@ def _precompute_stats_percentiles(
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = ["defending", "final_third", "possession", "all"]
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players, threshold_tree, min_minutes=min_minutes
+        players,
+        threshold_tree,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
     out: dict[str, dict[str, dict[str, float]]] = {}
     for player in players:
@@ -379,6 +388,10 @@ def compute_file(file_id: str) -> dict[str, Any]:
                 players,
                 tree,
                 min_minutes=float(us.default_minutes_required(settings)),
+                limited_divisions=limited_divisions,
+                exclude_limited_leagues=us.exclude_limited_leagues_adaptive_bounds(
+                    settings
+                ),
             )
             payload["stats"] = {
                 "players": players,

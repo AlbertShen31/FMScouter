@@ -346,14 +346,14 @@ def stats_player_detail_card(
         else us.default_minutes_required(settings)
     )
     if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
-        from scoring.stats_scorer import adaptive_metric_bound_maps
+        from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
 
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
             cohort_players,
             threshold_overrides
             if threshold_overrides is not None
             else settings.get("stats_thresholds"),
-            min_minutes=minutes_required,
+            **adaptive_bound_options(settings, min_minutes=minutes_required),
         )
         if metric_p0 is None:
             metric_p0 = auto_p0
@@ -550,11 +550,12 @@ def profile_detail_body(
         metric_p0 = None
         metric_p100 = None
         if cohort:
-            from scoring.stats_scorer import adaptive_metric_bound_maps
+            from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
 
-            mins_req = float(us.default_minutes_required(settings))
             metric_p0, metric_p100 = adaptive_metric_bound_maps(
-                cohort, settings.get("stats_thresholds"), min_minutes=mins_req
+                cohort,
+                settings.get("stats_thresholds"),
+                **adaptive_bound_options(settings),
             )
         from scoring.stats_scorer import pos_group_label, resolve_player_pos_group
 

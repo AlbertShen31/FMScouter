@@ -89,6 +89,7 @@ from scoring.role_scorer import (
     to_int,
 )
 from scoring.stats_scorer import (
+    adaptive_bound_options,
     adaptive_metric_bound_maps,
     category_abbr,
     minutes_color,
@@ -6404,8 +6405,14 @@ def _build_profile_stats_compare_body(
     mins_req = float(us.default_minutes_required(settings))
     cohort_note = None
     if same_file and cohort_a:
+        bound_opts = adaptive_bound_options(
+            settings,
+            min_minutes=mins_req,
+            limited_divisions=lib.list_limited_tracking_divisions(file_id=file_a or None)
+            or None,
+        )
         metric_p0, metric_p100 = adaptive_metric_bound_maps(
-            cohort_a, thresh, min_minutes=mins_req
+            cohort_a, thresh, **bound_opts
         )
         metric_p0_a = metric_p0_b = metric_p0
         metric_p100_a = metric_p100_b = metric_p100
@@ -6416,12 +6423,34 @@ def _build_profile_stats_compare_body(
                 "are directly comparable."
             )
         metric_p0_a, metric_p100_a = (
-            adaptive_metric_bound_maps(cohort_a, thresh, min_minutes=mins_req)
+            adaptive_metric_bound_maps(
+                cohort_a,
+                thresh,
+                **adaptive_bound_options(
+                    settings,
+                    min_minutes=mins_req,
+                    limited_divisions=lib.list_limited_tracking_divisions(
+                        file_id=file_a or None
+                    )
+                    or None,
+                ),
+            )
             if cohort_a
             else ({}, {})
         )
         metric_p0_b, metric_p100_b = (
-            adaptive_metric_bound_maps(cohort_b, thresh, min_minutes=mins_req)
+            adaptive_metric_bound_maps(
+                cohort_b,
+                thresh,
+                **adaptive_bound_options(
+                    settings,
+                    min_minutes=mins_req,
+                    limited_divisions=lib.list_limited_tracking_divisions(
+                        file_id=file_b or None
+                    )
+                    or None,
+                ),
+            )
             if cohort_b
             else ({}, {})
         )

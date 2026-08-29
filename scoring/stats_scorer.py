@@ -445,16 +445,79 @@ def players_meeting_min_minutes(
     return out
 
 
+def player_in_limited_league(
+    player: dict[str, Any] | None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> bool:
+    """True when the player's division lacks full advanced stat tracking."""
+    from scoring.stats_availability import division_has_limited_tracking
+
+    if not player:
+        return False
+    if player.get("limited_division_tracking"):
+        return True
+    return division_has_limited_tracking(
+        player.get("division"),
+        limited_divisions,
+    )
+
+
+def players_for_adaptive_bounds(
+    players: list[dict[str, Any]] | None,
+    *,
+    min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
+) -> list[dict[str, Any]]:
+    """Cohort for dataset min/max used by adaptive percentile bounds."""
+    pool = players_meeting_min_minutes(players, min_minutes)
+    if not exclude_limited_leagues:
+        return pool
+    return [
+        player
+        for player in pool
+        if not player_in_limited_league(player, limited_divisions)
+    ]
+
+
+def adaptive_bound_options(
+    settings=None,
+    *,
+    min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> dict[str, Any]:
+    """Keyword args for :func:`adaptive_metric_bound_maps` from UI settings."""
+    import services.ui_settings as us
+
+    norm = us.normalize(settings) if settings is not None else {}
+    return {
+        "min_minutes": (
+            float(min_minutes)
+            if min_minutes is not None
+            else float(us.default_minutes_required(norm))
+        ),
+        "limited_divisions": limited_divisions,
+        "exclude_limited_leagues": us.exclude_limited_leagues_adaptive_bounds(norm),
+    }
+
+
 def metric_extreme_among_players(
     players: list[dict[str, Any]] | None,
     metric_id: str,
     *,
     higher_is_better: bool,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> float | None:
     """Best raw metric value among scorable players in the loaded set."""
     values: list[float] = []
-    for player in players_meeting_min_minutes(players, min_minutes):
+    for player in players_for_adaptive_bounds(
+        players,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
+    ):
         raw = scoring_stats(player).get(metric_id)
         if raw is None:
             continue
@@ -476,10 +539,17 @@ def metric_floor_among_players(
     *,
     higher_is_better: bool,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> float | None:
     """Worst raw metric value among scorable players (adaptive 0th floor)."""
     values: list[float] = []
-    for player in players_meeting_min_minutes(players, min_minutes):
+    for player in players_for_adaptive_bounds(
+        players,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
+    ):
         raw = scoring_stats(player).get(metric_id)
         if raw is None:
             continue
@@ -503,6 +573,8 @@ def adaptive_metric_p100(
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> float | None:
     """100th cut: max/min of settings ceiling and the extreme in the phase cohort."""
     thresholds = resolve_thresholds(
@@ -514,7 +586,12 @@ def adaptive_metric_p100(
     setting = implied_percentile_ceiling(thresholds, higher_is_better=hib)
     cohort = players_in_pos_group(players, group) or list(players or [])
     observed = metric_extreme_among_players(
-        cohort, metric_id, higher_is_better=hib, min_minutes=min_minutes
+        cohort,
+        metric_id,
+        higher_is_better=hib,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
     if observed is None:
         return setting
@@ -529,6 +606,8 @@ def adaptive_metric_p0(
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> float | None:
     """0th cut: min/max of settings floor and the worst value in the phase cohort."""
     thresholds = resolve_thresholds(
@@ -540,7 +619,12 @@ def adaptive_metric_p0(
     setting = implied_percentile_floor(thresholds, higher_is_better=hib)
     cohort = players_in_pos_group(players, group) or list(players or [])
     observed = metric_floor_among_players(
-        cohort, metric_id, higher_is_better=hib, min_minutes=min_minutes
+        cohort,
+        metric_id,
+        higher_is_better=hib,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
     if observed is None:
         return setting
@@ -552,6 +636,8 @@ def xg_prevented_p100(
     threshold_overrides: dict[str, Any] | None = None,
     *,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> float | None:
     """Adaptive 100th ceiling for GK xGP/90 (settings vs loaded dataset)."""
     return adaptive_metric_p100(
@@ -561,6 +647,8 @@ def xg_prevented_p100(
         category="final_third",
         threshold_overrides=threshold_overrides,
         min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
 
 
@@ -606,13 +694,15 @@ def adaptive_metric_bound_maps(
     threshold_overrides: dict[str, Any] | None = None,
     *,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> tuple[dict[str, float], dict[str, float]]:
     """Phase-scoped adaptive 0th and 100th maps.
 
     Returns ``(p0_map, p100_map)``. Keys are ``group:metric_id`` (preferred by
     ``band_metric``) and bare ``metric_id``. Extremes use players in that phase
     group only (Defenders / Midfielders / Forwards / Goalkeepers) who meet
-    ``min_minutes`` (default from settings / benchmarks).
+    ``min_minutes`` and, by default, are not in limited-tracking leagues.
     """
     p0_out: dict[str, float] = {}
     p100_out: dict[str, float] = {}
@@ -631,6 +721,8 @@ def adaptive_metric_bound_maps(
                     category=category,
                     threshold_overrides=threshold_overrides,
                     min_minutes=min_minutes,
+                    limited_divisions=limited_divisions,
+                    exclude_limited_leagues=exclude_limited_leagues,
                 )
                 p100 = adaptive_metric_p100(
                     players,
@@ -639,6 +731,8 @@ def adaptive_metric_bound_maps(
                     category=category,
                     threshold_overrides=threshold_overrides,
                     min_minutes=min_minutes,
+                    limited_divisions=limited_divisions,
+                    exclude_limited_leagues=exclude_limited_leagues,
                 )
                 if p0 is not None:
                     # Floor: keep the more extreme (worse) bound across groups.
@@ -667,10 +761,16 @@ def adaptive_metric_p100_map(
     threshold_overrides: dict[str, Any] | None = None,
     *,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> dict[str, float]:
     """Backward-compatible 100th-only map (see :func:`adaptive_metric_bound_maps`)."""
     _p0, p100 = adaptive_metric_bound_maps(
-        players, threshold_overrides, min_minutes=min_minutes
+        players,
+        threshold_overrides,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
     return p100
 
@@ -680,10 +780,16 @@ def adaptive_metric_p0_map(
     threshold_overrides: dict[str, Any] | None = None,
     *,
     min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
 ) -> dict[str, float]:
     """Adaptive 0th floor map (see :func:`adaptive_metric_bound_maps`)."""
     p0, _p100 = adaptive_metric_bound_maps(
-        players, threshold_overrides, min_minutes=min_minutes
+        players,
+        threshold_overrides,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
     )
     return p0
 
@@ -856,6 +962,11 @@ def parse_stats_export_with_meta(
             player_payload, row, division_unavailable=division_unavailable
         )
         stats = player_payload["stats"]
+        division_name = pick(row, IDENTITY["Division"])
+        div_key = str(division_name or "").strip()
+        if div_key in ("-", "—"):
+            div_key = ""
+        limited_division_tracking = bool(div_key and div_key in division_unavailable)
         all_attrs = extract_attrs(row)
         attrs = {
             code: all_attrs[code]
@@ -918,6 +1029,7 @@ def parse_stats_export_with_meta(
                 "stats_unavailable": list(
                     player_payload.get("stats_unavailable") or []
                 ),
+                "limited_division_tracking": limited_division_tracking,
                 "attrs": attrs,
                 "positions": positions,
                 "left_foot_n": int(foot_strength(pick(row, IDENTITY["LeftFoot"])) or 0),
@@ -1120,7 +1232,9 @@ def format_stat_export_rows(
     """
     category = canonical_category(category)
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players, min_minutes=minutes_required
+        players,
+        min_minutes=minutes_required,
+        limited_divisions=limited_divisions,
     )
     if category == "all":
         cats = labeled_view_categories(group=group, dual_final_third=True)

@@ -737,7 +737,8 @@ def _general_panel(settings: dict) -> list:
                 _card_header(
                     "Minutes requirement",
                     "Default minutes used to seed the Player stats minutes filter, "
-                    "adaptive percentile bounds (dataset min/max), and related Profiles views.",
+                    "adaptive percentile bounds (dataset min/max), and related Profiles views. "
+                    "Limited-tracking leagues can be excluded from those bounds by default.",
                     help_id="st-help-minutes",
                 ),
                 dbc.CardBody(
@@ -749,6 +750,14 @@ def _general_panel(settings: dict) -> list:
                             min=0,
                             max=20000,
                             step=90,
+                        ),
+                        dmc.Switch(
+                            id="st-exclude-limited-adaptive",
+                            label="Exclude limited data leagues from adaptive percentile bounds",
+                            checked=settings.get(
+                                "exclude_limited_leagues_adaptive_bounds", True
+                            ),
+                            className="mt-3",
                         ),
                         _section_save_row("st-save-general", "st-status-general"),
                     ]
@@ -1235,6 +1244,7 @@ def _role_form_values(
         us.format_page_size_options(settings),
         settings["default_minutes_required"],
         settings["depth_undo_max"],
+        settings["exclude_limited_leagues_adaptive_bounds"],
     )
 
 
@@ -1435,6 +1445,7 @@ def _ui_draft_from_state(
     page_size_options,
     default_minutes,
     depth_undo_max,
+    exclude_limited_adaptive,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
     pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
@@ -1464,6 +1475,7 @@ def _ui_draft_from_state(
         "page_size_options": page_size_options,
         "default_minutes_required": default_minutes,
         "depth_undo_max": depth_undo_max,
+        "exclude_limited_leagues_adaptive_bounds": bool(exclude_limited_adaptive),
     }
 
 
@@ -1515,6 +1527,7 @@ def apply_preferred_theme_select(preferred_values, current):
     Output("st-page-size-options", "value"),
     Output("st-default-minutes", "value"),
     Output("st-depth-undo-max", "value"),
+    Output("st-exclude-limited-adaptive", "checked"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
@@ -1551,6 +1564,7 @@ def apply_preferred_theme_select(preferred_values, current):
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),
     State("st-depth-undo-max", "value"),
+    State("st-exclude-limited-adaptive", "checked"),
     State("st-role-weights-pack", "value"),
     prevent_initial_call=True,
 )
@@ -1585,10 +1599,11 @@ def handle_ui_settings(
     page_size_options,
     default_minutes,
     depth_undo_max,
+    exclude_limited_adaptive,
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 34
+    n_out = 35
     if not triggered:
         return (no_update,) * n_out
 
@@ -1632,6 +1647,7 @@ def handle_ui_settings(
         page_size_options,
         default_minutes,
         depth_undo_max,
+        exclude_limited_adaptive,
     )
     status_general = no_update
     status_role = no_update

@@ -174,6 +174,7 @@ PACK_DATA_KEYS = (
     "hybrid_weights",
     "set_piece_profiles",
     "default_minutes_required",
+    "exclude_limited_leagues_adaptive_bounds",
     "depth_undo_max",
     "page_size",
     "page_size_options",
@@ -204,6 +205,7 @@ DEFAULTS: dict[str, Any] = {
         "scopes": dict(DEFAULT_SHORTLIST_SCOPES),
     },
     "default_minutes_required": 900,
+    "exclude_limited_leagues_adaptive_bounds": True,
     "depth_undo_max": 10,
     "page_size": 50,
     "page_size_options": [25, 50, 100],
@@ -721,6 +723,21 @@ def normalize_default_minutes_required(value) -> int:
     return max(0, min(20000, number))
 
 
+def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
+    if value is None:
+        return bool(DEFAULTS["exclude_limited_leagues_adaptive_bounds"])
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off"):
+        return False
+    return bool(DEFAULTS["exclude_limited_leagues_adaptive_bounds"])
+
+
 def normalize_depth_undo_max(value) -> int:
     try:
         number = int(float(value))
@@ -771,6 +788,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "shortlist_columns": normalize_shortlist_columns(),
         "default_minutes_required": normalize_default_minutes_required(
             raw.get("default_minutes_required")
+        ),
+        "exclude_limited_leagues_adaptive_bounds": normalize_exclude_limited_leagues_adaptive_bounds(
+            raw.get("exclude_limited_leagues_adaptive_bounds")
         ),
         "depth_undo_max": normalize_depth_undo_max(raw.get("depth_undo_max")),
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
@@ -1093,6 +1113,11 @@ def page_size_options(settings=None) -> list[str]:
 def default_minutes_required(settings=None) -> int:
     """Minutes threshold from UI settings (defaults to 900)."""
     return int(normalize(settings)["default_minutes_required"])
+
+
+def exclude_limited_leagues_adaptive_bounds(settings=None) -> bool:
+    """When True, adaptive p0/p100 dataset extremes ignore limited-tracking leagues."""
+    return bool(normalize(settings)["exclude_limited_leagues_adaptive_bounds"])
 
 
 def depth_undo_max(settings=None) -> int:

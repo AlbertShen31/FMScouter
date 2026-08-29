@@ -1277,6 +1277,7 @@ def build_stats_row_snapshot(
     """One shortlist-style row: identity + overall / category percentiles."""
     import services.ui_settings as us
     from scoring.stats_scorer import (
+        adaptive_bound_options,
         adaptive_metric_bound_maps,
         category_average_band,
         labeled_view_categories,
@@ -1323,10 +1324,10 @@ def build_stats_row_snapshot(
     out["percentile_phase_label"] = pos_group_label(group)
     out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
     thresh = settings.get("stats_thresholds")
-    mins_req = float(us.default_minutes_required(settings))
+    bound_opts = adaptive_bound_options(settings)
     if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
-            cohort_players, thresh, min_minutes=mins_req
+            cohort_players, thresh, **bound_opts
         )
         if metric_p0 is None:
             metric_p0 = auto_p0
@@ -1424,13 +1425,13 @@ def expand_role_profile_rows(
         for p in (stats_players or [])
         if stats_player_key(p)
     }
-    from scoring.stats_scorer import adaptive_metric_bound_maps
+    from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
     import services.ui_settings as us
 
     settings = us.normalize(settings)
-    mins_req = float(us.default_minutes_required(settings))
+    bound_opts = adaptive_bound_options(settings)
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds"), min_minutes=mins_req
+        stats_players, settings.get("stats_thresholds"), **bound_opts
     )
 
     out: list[dict[str, Any]] = []
@@ -1524,15 +1525,16 @@ def refresh_profile_percentiles(settings=None) -> int:
     ceilings or phase scoping change, those snapshots stay stale until
     refreshed. Returns how many profiles were updated.
     """
+    import services.export_library as lib
     import services.ui_settings as us
     from scoring.stats_scorer import (
+        adaptive_bound_options,
         adaptive_metric_bound_maps,
         resolve_player_pos_group,
     )
 
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    mins_req = float(us.default_minutes_required(settings))
     index = _read_index()
     if not index:
         return 0
@@ -1558,8 +1560,12 @@ def refresh_profile_percentiles(settings=None) -> int:
         if file_id not in cohort_cache:
             players = load_stats_players_for_file(file_id)
             cohort_cache[file_id] = players
+            limited = lib.list_limited_tracking_divisions(file_id=file_id)
+            bound_opts = adaptive_bound_options(
+                settings, limited_divisions=limited or None
+            )
             bounds_cache[file_id] = adaptive_metric_bound_maps(
-                players, thresh, min_minutes=mins_req
+                players, thresh, **bound_opts
             )
         p0_map, p100_map = bounds_cache[file_id]
         return cohort_cache[file_id], p0_map, p100_map
@@ -1627,8 +1633,9 @@ def refresh_profile_percentiles(settings=None) -> int:
         if not isinstance(stats_player, dict):
             return False
         cohort = [stats_player]
+        bound_opts = adaptive_bound_options(settings)
         metric_p0, metric_p100 = adaptive_metric_bound_maps(
-            cohort, thresh, min_minutes=mins_req
+            cohort, thresh, **bound_opts
         )
         return _apply(entry, cohort, metric_p0, metric_p100)
 
@@ -1767,7 +1774,7 @@ def replace_profiles_from_saved_file(
     Players missing from the file are left unchanged and reported under ``missing``.
     """
     import services.ui_settings as us
-    from scoring.stats_scorer import adaptive_metric_bound_maps
+    from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
 
     file_id = str(file_id or "").strip()
     if not file_id:
@@ -1847,9 +1854,10 @@ def replace_profiles_from_saved_file(
         stats_players,
         name_of=lambda player: player.get("name"),
     )
-    mins_req = float(us.default_minutes_required(settings))
+    limited = lib.list_limited_tracking_divisions(file_id=file_id)
+    bound_opts = adaptive_bound_options(settings, limited_divisions=limited or None)
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds"), min_minutes=mins_req
+        stats_players, settings.get("stats_thresholds"), **bound_opts
     )
 
     items: list[dict[str, Any]] = []
