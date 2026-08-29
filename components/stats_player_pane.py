@@ -763,9 +763,15 @@ def stats_charts_bottom_pane(
 
     if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
         from scoring.stats_scorer import adaptive_metric_bound_maps
+        import services.ui_settings as us
 
+        min_minutes = (
+            float(us.default_minutes_required(settings))
+            if settings is not None
+            else None
+        )
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
-            cohort_players, threshold_overrides
+            cohort_players, threshold_overrides, min_minutes=min_minutes
         )
         if metric_p0 is None:
             metric_p0 = auto_p0

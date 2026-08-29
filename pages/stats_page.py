@@ -1571,12 +1571,16 @@ def refresh_table(
     )
     g, category = _resolve_category(pos, category or "")
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        players, thresh, min_minutes=minutes_required
+    )
     compare = bool(parsed_historical_players(hist_parsed))
     hist_percentiles: dict[str, dict[str, float | None]] = {}
     if compare:
         hist_players = parsed_historical_players(hist_parsed)
-        hist_p0, hist_p100 = adaptive_metric_bound_maps(hist_players, thresh)
+        hist_p0, hist_p100 = adaptive_metric_bound_maps(
+            hist_players, thresh, min_minutes=minutes_required
+        )
         for hp in hist_players:
             pkey = player_key(hp)
             if pkey:
@@ -1760,7 +1764,9 @@ def open_player(
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        players, thresh, min_minutes=minutes_required
+    )
     return (
         True,
         player.get("name"),
@@ -1821,16 +1827,19 @@ def switch_player_view(
         return view, html.Div("Player not found.")
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(_parsed_players(parsed), thresh)
+    mins_req = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        _parsed_players(parsed), thresh, min_minutes=mins_req
+    )
     return (
         view,
         _player_modal_body(
             player,
-            float(
-                minutes_required
-                if minutes_required is not None
-                else us.default_minutes_required(settings)
-            ),
+            mins_req,
             view=view,
             eval_group=eval_group,
             theme=theme,
@@ -1871,16 +1880,19 @@ def switch_player_group(
         return no_update, no_update
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(_parsed_players(parsed), thresh)
+    mins_req = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        _parsed_players(parsed), thresh, min_minutes=mins_req
+    )
     return (
         group,
         _player_modal_body(
             player,
-            float(
-                minutes_required
-                if minutes_required is not None
-                else us.default_minutes_required(settings)
-            ),
+            mins_req,
             view=normalize_compare_view(view),
             eval_group=group,
             theme=theme,
@@ -1904,7 +1916,10 @@ def _build_stats_compare_body(
 ) -> html.Div:
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh)
+    mins_req = float(us.default_minutes_required(settings))
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        players, thresh, min_minutes=mins_req
+    )
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
     label_a = str(player_a.get("name") or "Player A")
     label_b = str(player_b.get("name") or "Player B")

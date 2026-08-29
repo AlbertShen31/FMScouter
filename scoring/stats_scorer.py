@@ -414,15 +414,47 @@ def players_in_pos_group(
     ]
 
 
+def _resolve_min_minutes(min_minutes: float | None) -> float:
+    if min_minutes is None:
+        return float(default_minutes_required())
+    try:
+        return float(min_minutes)
+    except (TypeError, ValueError):
+        return float(default_minutes_required())
+
+
+def players_meeting_min_minutes(
+    players: list[dict[str, Any]] | None,
+    min_minutes: float | None = None,
+) -> list[dict[str, Any]]:
+    """Players with at least ``min_minutes`` (defaults to settings / benchmarks)."""
+    required = _resolve_min_minutes(min_minutes)
+    if required <= 0:
+        return list(players or [])
+    out: list[dict[str, Any]] = []
+    for player in players or []:
+        raw = player.get("minutes")
+        if raw is None:
+            continue
+        try:
+            minutes = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if minutes >= required:
+            out.append(player)
+    return out
+
+
 def metric_extreme_among_players(
     players: list[dict[str, Any]] | None,
     metric_id: str,
     *,
     higher_is_better: bool,
+    min_minutes: float | None = None,
 ) -> float | None:
     """Best raw metric value among scorable players in the loaded set."""
     values: list[float] = []
-    for player in players or []:
+    for player in players_meeting_min_minutes(players, min_minutes):
         raw = scoring_stats(player).get(metric_id)
         if raw is None:
             continue
@@ -443,10 +475,11 @@ def metric_floor_among_players(
     metric_id: str,
     *,
     higher_is_better: bool,
+    min_minutes: float | None = None,
 ) -> float | None:
     """Worst raw metric value among scorable players (adaptive 0th floor)."""
     values: list[float] = []
-    for player in players or []:
+    for player in players_meeting_min_minutes(players, min_minutes):
         raw = scoring_stats(player).get(metric_id)
         if raw is None:
             continue
@@ -469,6 +502,7 @@ def adaptive_metric_p100(
     group: str,
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
+    min_minutes: float | None = None,
 ) -> float | None:
     """100th cut: max/min of settings ceiling and the extreme in the phase cohort."""
     thresholds = resolve_thresholds(
@@ -480,7 +514,7 @@ def adaptive_metric_p100(
     setting = implied_percentile_ceiling(thresholds, higher_is_better=hib)
     cohort = players_in_pos_group(players, group) or list(players or [])
     observed = metric_extreme_among_players(
-        cohort, metric_id, higher_is_better=hib
+        cohort, metric_id, higher_is_better=hib, min_minutes=min_minutes
     )
     if observed is None:
         return setting
@@ -494,6 +528,7 @@ def adaptive_metric_p0(
     group: str,
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
+    min_minutes: float | None = None,
 ) -> float | None:
     """0th cut: min/max of settings floor and the worst value in the phase cohort."""
     thresholds = resolve_thresholds(
@@ -505,7 +540,7 @@ def adaptive_metric_p0(
     setting = implied_percentile_floor(thresholds, higher_is_better=hib)
     cohort = players_in_pos_group(players, group) or list(players or [])
     observed = metric_floor_among_players(
-        cohort, metric_id, higher_is_better=hib
+        cohort, metric_id, higher_is_better=hib, min_minutes=min_minutes
     )
     if observed is None:
         return setting
@@ -515,6 +550,8 @@ def adaptive_metric_p0(
 def xg_prevented_p100(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
+    *,
+    min_minutes: float | None = None,
 ) -> float | None:
     """Adaptive 100th ceiling for GK xGP/90 (settings vs loaded dataset)."""
     return adaptive_metric_p100(
@@ -523,6 +560,7 @@ def xg_prevented_p100(
         group="gk",
         category="final_third",
         threshold_overrides=threshold_overrides,
+        min_minutes=min_minutes,
     )
 
 
@@ -566,12 +604,15 @@ def _store_group_metric_bound(
 def adaptive_metric_bound_maps(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
+    *,
+    min_minutes: float | None = None,
 ) -> tuple[dict[str, float], dict[str, float]]:
     """Phase-scoped adaptive 0th and 100th maps.
 
     Returns ``(p0_map, p100_map)``. Keys are ``group:metric_id`` (preferred by
     ``band_metric``) and bare ``metric_id``. Extremes use players in that phase
-    group only (Defenders / Midfielders / Forwards / Goalkeepers).
+    group only (Defenders / Midfielders / Forwards / Goalkeepers) who meet
+    ``min_minutes`` (default from settings / benchmarks).
     """
     p0_out: dict[str, float] = {}
     p100_out: dict[str, float] = {}
@@ -589,6 +630,7 @@ def adaptive_metric_bound_maps(
                     group=group,
                     category=category,
                     threshold_overrides=threshold_overrides,
+                    min_minutes=min_minutes,
                 )
                 p100 = adaptive_metric_p100(
                     players,
@@ -596,6 +638,7 @@ def adaptive_metric_bound_maps(
                     group=group,
                     category=category,
                     threshold_overrides=threshold_overrides,
+                    min_minutes=min_minutes,
                 )
                 if p0 is not None:
                     # Floor: keep the more extreme (worse) bound across groups.
@@ -622,18 +665,26 @@ def adaptive_metric_bound_maps(
 def adaptive_metric_p100_map(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
+    *,
+    min_minutes: float | None = None,
 ) -> dict[str, float]:
     """Backward-compatible 100th-only map (see :func:`adaptive_metric_bound_maps`)."""
-    _p0, p100 = adaptive_metric_bound_maps(players, threshold_overrides)
+    _p0, p100 = adaptive_metric_bound_maps(
+        players, threshold_overrides, min_minutes=min_minutes
+    )
     return p100
 
 
 def adaptive_metric_p0_map(
     players: list[dict[str, Any]] | None,
     threshold_overrides: dict[str, Any] | None = None,
+    *,
+    min_minutes: float | None = None,
 ) -> dict[str, float]:
     """Adaptive 0th floor map (see :func:`adaptive_metric_bound_maps`)."""
-    p0, _p100 = adaptive_metric_bound_maps(players, threshold_overrides)
+    p0, _p100 = adaptive_metric_bound_maps(
+        players, threshold_overrides, min_minutes=min_minutes
+    )
     return p0
 
 
@@ -1068,7 +1119,9 @@ def format_stat_export_rows(
     ``possession`` / ``all``). Keepers use the mapped GK benchmark blocks.
     """
     category = canonical_category(category)
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        players, min_minutes=minutes_required
+    )
     if category == "all":
         cats = labeled_view_categories(group=group, dual_final_third=True)
         fieldnames = [

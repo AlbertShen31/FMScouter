@@ -1323,8 +1323,11 @@ def build_stats_row_snapshot(
     out["percentile_phase_label"] = pos_group_label(group)
     out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
     thresh = settings.get("stats_thresholds")
+    mins_req = float(us.default_minutes_required(settings))
     if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
-        auto_p0, auto_p100 = adaptive_metric_bound_maps(cohort_players, thresh)
+        auto_p0, auto_p100 = adaptive_metric_bound_maps(
+            cohort_players, thresh, min_minutes=mins_req
+        )
         if metric_p0 is None:
             metric_p0 = auto_p0
         if metric_p100 is None:
@@ -1425,8 +1428,9 @@ def expand_role_profile_rows(
     import services.ui_settings as us
 
     settings = us.normalize(settings)
+    mins_req = float(us.default_minutes_required(settings))
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds")
+        stats_players, settings.get("stats_thresholds"), min_minutes=mins_req
     )
 
     out: list[dict[str, Any]] = []
@@ -1528,6 +1532,7 @@ def refresh_profile_percentiles(settings=None) -> int:
 
     settings = us.normalize(settings)
     thresh = settings.get("stats_thresholds")
+    mins_req = float(us.default_minutes_required(settings))
     index = _read_index()
     if not index:
         return 0
@@ -1553,7 +1558,9 @@ def refresh_profile_percentiles(settings=None) -> int:
         if file_id not in cohort_cache:
             players = load_stats_players_for_file(file_id)
             cohort_cache[file_id] = players
-            bounds_cache[file_id] = adaptive_metric_bound_maps(players, thresh)
+            bounds_cache[file_id] = adaptive_metric_bound_maps(
+                players, thresh, min_minutes=mins_req
+            )
         p0_map, p100_map = bounds_cache[file_id]
         return cohort_cache[file_id], p0_map, p100_map
 
@@ -1620,7 +1627,9 @@ def refresh_profile_percentiles(settings=None) -> int:
         if not isinstance(stats_player, dict):
             return False
         cohort = [stats_player]
-        metric_p0, metric_p100 = adaptive_metric_bound_maps(cohort, thresh)
+        metric_p0, metric_p100 = adaptive_metric_bound_maps(
+            cohort, thresh, min_minutes=mins_req
+        )
         return _apply(entry, cohort, metric_p0, metric_p100)
 
     for file_id, entries in by_file.items():
@@ -1838,8 +1847,9 @@ def replace_profiles_from_saved_file(
         stats_players,
         name_of=lambda player: player.get("name"),
     )
+    mins_req = float(us.default_minutes_required(settings))
     metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds")
+        stats_players, settings.get("stats_thresholds"), min_minutes=mins_req
     )
 
     items: list[dict[str, Any]] = []

@@ -736,8 +736,8 @@ def _general_panel(settings: dict) -> list:
             [
                 _card_header(
                     "Minutes requirement",
-                    "Default minutes used to seed the Player stats minutes filter "
-                    "(and related Profiles views).",
+                    "Default minutes used to seed the Player stats minutes filter, "
+                    "adaptive percentile bounds (dataset min/max), and related Profiles views.",
                     help_id="st-help-minutes",
                 ),
                 dbc.CardBody(

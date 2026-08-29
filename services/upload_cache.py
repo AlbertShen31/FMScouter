@@ -20,7 +20,7 @@ import services.export_library as lib
 import services.role_config as rc
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v9"
+FORMULA_VERSION = "v10"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -68,6 +68,7 @@ def current_signature() -> dict[str, Any]:
         "stats_pack_id": stats_id,
         "stats_tree_sha": _sha(stats_tree),
         "stats_benchmarks_sha": bench_hash,
+        "default_minutes_required": us.default_minutes_required(settings),
     }
 
 
@@ -270,6 +271,8 @@ def cache_status(file_id: str, entry: dict[str, Any] | None = None) -> dict[str,
 def _precompute_stats_percentiles(
     players: list[dict[str, Any]],
     threshold_tree: dict[str, Any] | None,
+    *,
+    min_minutes: float | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """player_key → group → metric_id → percentile."""
     from scoring.stats_scorer import (
@@ -283,7 +286,9 @@ def _precompute_stats_percentiles(
 
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = ["defending", "final_third", "possession", "all"]
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, threshold_tree)
+    metric_p0, metric_p100 = adaptive_metric_bound_maps(
+        players, threshold_tree, min_minutes=min_minutes
+    )
     out: dict[str, dict[str, dict[str, float]]] = {}
     for player in players:
         key = player_key(player)
@@ -370,7 +375,11 @@ def compute_file(file_id: str) -> dict[str, Any]:
         try:
             players, limited_divisions = parse_stats_export_with_meta(text)
             tree = stp.load_tree(sig.get("stats_pack_id"))
-            percentiles = _precompute_stats_percentiles(players, tree)
+            percentiles = _precompute_stats_percentiles(
+                players,
+                tree,
+                min_minutes=float(us.default_minutes_required(settings)),
+            )
             payload["stats"] = {
                 "players": players,
                 "percentiles": percentiles,

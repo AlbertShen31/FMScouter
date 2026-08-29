@@ -6401,9 +6401,12 @@ def _build_profile_stats_compare_body(
     file_b = str(profile_b.get("file_id") or "").strip()
     same_file = bool(file_a and file_a == file_b)
     thresh = settings.get("stats_thresholds")
+    mins_req = float(us.default_minutes_required(settings))
     cohort_note = None
     if same_file and cohort_a:
-        metric_p0, metric_p100 = adaptive_metric_bound_maps(cohort_a, thresh)
+        metric_p0, metric_p100 = adaptive_metric_bound_maps(
+            cohort_a, thresh, min_minutes=mins_req
+        )
         metric_p0_a = metric_p0_b = metric_p0
         metric_p100_a = metric_p100_b = metric_p100
     else:
@@ -6413,10 +6416,14 @@ def _build_profile_stats_compare_body(
                 "are directly comparable."
             )
         metric_p0_a, metric_p100_a = (
-            adaptive_metric_bound_maps(cohort_a, thresh) if cohort_a else ({}, {})
+            adaptive_metric_bound_maps(cohort_a, thresh, min_minutes=mins_req)
+            if cohort_a
+            else ({}, {})
         )
         metric_p0_b, metric_p100_b = (
-            adaptive_metric_bound_maps(cohort_b, thresh) if cohort_b else ({}, {})
+            adaptive_metric_bound_maps(cohort_b, thresh, min_minutes=mins_req)
+            if cohort_b
+            else ({}, {})
         )
     eval_group = normalize_compare_eval_group(eval_group, stats_a, stats_b)
 
