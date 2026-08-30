@@ -6,9 +6,10 @@ import re
 from dash import html
 
 from components.player_modal import player_detail_body
-from scoring.role_scorer import player_role_highlights, score_band
+from scoring.role_scorer import apply_set_piece_scores, player_role_highlights, score_band
 from scoring.stats_scorer import (
     band_metric,
+    band_set_piece_metric,
     categories_for_group,
     is_gk_group,
     metric_defs,
@@ -16,7 +17,10 @@ from scoring.stats_scorer import (
     minutes_color,
     minutes_status,
     percentile_color,
+    resolve_player_pos_group,
+    scoring_set_piece_stats,
     scoring_stats,
+    set_piece_metrics_for_group,
 )
 import services.ui_settings as us
 from components.attr_columns import attr_grid, attr_group_columns, attr_row
@@ -168,6 +172,161 @@ def player_role_fit_section(player: dict, settings=None) -> html.Div | None:
     )
 
 
+def _try_float_score(value) -> float | None:
+    if value in (None, "", "-", "—"):
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if score != score:
+        return None
+    return score
+
+
+def player_set_piece_scores_section(player: dict, settings=None) -> html.Div | None:
+    """Computed set-piece scores (Corners, DFK, IFK, …) from player attributes."""
+    attrs = player.get("attrs") or {}
+    if not isinstance(attrs, dict) or not attrs:
+        return None
+    settings = us.normalize(settings)
+    profiles = us.set_piece_profiles(settings)
+    tier_weights = us.tier_weights(settings)
+    bands = settings["bands"]
+    scores: dict[str, float] = {}
+    apply_set_piece_scores(
+        scores,
+        attrs,
+        tier_weights=tier_weights,
+        profiles=profiles,
+    )
+    rows: list[html.Div] = []
+    seen_scores: set[str] = set()
+    for profile in profiles:
+        score_col = profile.get("score")
+        if not score_col or score_col in seen_scores:
+            continue
+        seen_scores.add(score_col)
+        score = _try_float_score(scores.get(score_col))
+        if score is None or score <= 0:
+            continue
+        band = score_band(score, **bands)
+        label = profile.get("abbr") or profile.get("label") or score_col
+        detail = profile.get("detail") or ""
+        rows.append(
+            html.Div(
+                [
+                    html.Span(label, className="rs-set-piece-score-label"),
+                    html.Span(
+                        detail,
+                        className="rs-set-piece-score-detail",
+                        title=profile.get("label") or "",
+                    ),
+                    html.Span(
+                        f"{score:.2f}",
+                        className=f"rs-set-piece-score-val rs-band-{band}",
+                    ),
+                ],
+                className="rs-set-piece-score-row",
+            )
+        )
+    if not rows:
+        return None
+    return html.Div(
+        [
+            html.Div("Set pieces", className="rs-player-id-section-title"),
+            html.Div(rows, className="rs-set-piece-score-rows"),
+        ],
+        className="rs-player-id-section rs-set-piece-scores-section",
+    )
+
+
+def _set_piece_metric_items(
+    player: dict,
+    *,
+    eval_group: str | None = None,
+    cohort_players=None,
+    minutes_required: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> list[html.Div]:
+    group = _normalize_eval_group(player, eval_group)
+    stats = scoring_set_piece_stats(player)
+    metric_ids = set_piece_metrics_for_group(group)
+    items: list[html.Div] = []
+    for metric_id in metric_ids:
+        band = band_set_piece_metric(
+            metric_id,
+            stats.get(metric_id),
+            group,
+            cohort_players=cohort_players,
+            min_minutes=minutes_required,
+            limited_divisions=limited_divisions,
+        )
+        if band.get("value") is None:
+            continue
+        if band.get("percentile") is None:
+            value = html.Div(
+                [
+                    html.Span(band["display"], className="rs-player-id-value st-metric-val"),
+                    html.Span("—", className="st-metric-pct is-missing"),
+                ],
+                className="st-metric-row",
+            )
+        else:
+            value = html.Div(
+                [
+                    html.Span(
+                        band["display"],
+                        className="rs-player-id-value st-metric-val",
+                        style={"color": band["color"]} if band.get("color") else None,
+                    ),
+                    html.Span(
+                        f"~{band['percentile']:.0f}th",
+                        className="st-metric-pct",
+                    ),
+                ],
+                className="st-metric-row",
+            )
+        items.append(
+            html.Div(
+                [
+                    html.Span(band["abbr"], className="st-metric-abbr"),
+                    html.Span(band["label"], className="st-metric-name"),
+                    value,
+                ],
+                className="st-metric-item",
+            )
+        )
+    return items
+
+
+def player_set_piece_metrics_section(
+    player: dict,
+    *,
+    eval_group: str | None = None,
+    cohort_players=None,
+    minutes_required: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> html.Div | None:
+    """Set-piece stat counts from the Moneyball export (goals OB, pens, FK shots, …)."""
+    items = _set_piece_metric_items(
+        player,
+        eval_group=eval_group,
+        cohort_players=cohort_players,
+        minutes_required=minutes_required,
+        limited_divisions=limited_divisions,
+    )
+    if not items:
+        return None
+    return html.Div(
+        [
+            html.Div("Set pieces", className="rs-player-id-section-title"),
+            html.Div(items, className="st-metrics-values rs-set-piece-metrics-values"),
+        ],
+        className="rs-player-id-section st-player-values-section rs-set-piece-metrics-section",
+    )
+
+
 def role_player_detail_card(
     player: dict,
     settings=None,
@@ -177,13 +336,17 @@ def role_player_detail_card(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
+    bottom_sections = [
+        player_set_piece_scores_section(player, settings),
+        player_attributes(player, settings),
+    ]
     return player_detail_body(
         player,
         id_prefix="rs",
         position_eligible=position_eligible,
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
         after_identity=player_role_fit_section(player, settings),
-        bottom=player_attributes(player, settings),
+        bottom=[section for section in bottom_sections if section is not None],
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
@@ -396,6 +559,15 @@ def stats_player_detail_card(
             className="st-overall-avg pf-stats-overall",
         ),
     ]
+    bottom_sections = [
+        player_set_piece_metrics_section(
+            player,
+            cohort_players=cohort_players,
+            minutes_required=minutes_required,
+            limited_divisions=limited_divisions,
+        ),
+        html.Div(_metrics_values(sections), className="st-player-metrics"),
+    ]
     return player_detail_body(
         player,
         id_prefix="st",
@@ -406,7 +578,7 @@ def stats_player_detail_card(
         },
         field_formatters={"minutes": _format_minutes_identity},
         after_identity=after_identity,
-        bottom=html.Div(_metrics_values(sections), className="st-player-metrics"),
+        bottom=[section for section in bottom_sections if section is not None],
         settings=settings,
         limited_divisions=limited_divisions,
     )

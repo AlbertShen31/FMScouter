@@ -832,6 +832,231 @@ def scoring_stats(player: dict[str, Any] | None) -> dict[str, Any]:
     return player.get("stats") or {}
 
 
+SET_PIECE_METRICS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "goals_outside_box",
+        "label": "Goals outside box",
+        "abbr": "G OB",
+        "csv": ["Goals From Outside The Box"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "free_kick_shots",
+        "label": "Free kick shots",
+        "abbr": "FK Sh",
+        "csv": ["Free Kick Shots"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "shots_outside_box_per90",
+        "label": "Shots outside box",
+        "abbr": "Sh OB/90",
+        "csv": ["Shots From Outside The Box Per 90 minutes"],
+        "higher_is_better": True,
+        "unit": "per90",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "penalties_scored",
+        "label": "Penalties scored",
+        "abbr": "Pen G",
+        "csv": ["Penalties Scored"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "penalties_taken",
+        "label": "Penalties taken",
+        "abbr": "Pen T",
+        "csv": ["Penalties Taken"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "penalties_scored_ratio",
+        "label": "Penalty conversion",
+        "abbr": "Pen %",
+        "csv": ["Penalties Scored Ratio"],
+        "higher_is_better": True,
+        "unit": "percent",
+        "groups": ("def", "mid", "fwd"),
+    },
+    {
+        "id": "penalties_faced",
+        "label": "Penalties faced",
+        "abbr": "Pen F",
+        "csv": ["Penalties Faced"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("gk",),
+    },
+    {
+        "id": "penalties_saved",
+        "label": "Penalties saved",
+        "abbr": "Pen S",
+        "csv": ["Penalties Saved"],
+        "higher_is_better": True,
+        "unit": "count",
+        "groups": ("gk",),
+    },
+    {
+        "id": "penalties_saved_ratio",
+        "label": "Penalty save rate",
+        "abbr": "Pen Save %",
+        "csv": ["Penalties Saved Ratio"],
+        "higher_is_better": True,
+        "unit": "percent",
+        "groups": ("gk",),
+    },
+)
+
+
+@lru_cache(maxsize=1)
+def set_piece_metric_defs() -> dict[str, dict[str, Any]]:
+    return {item["id"]: dict(item) for item in SET_PIECE_METRICS}
+
+
+def set_piece_metrics_for_group(group: str) -> list[str]:
+    want = str(group or "").strip().lower()
+    return [
+        item["id"]
+        for item in SET_PIECE_METRICS
+        if want in item.get("groups") or ()
+    ]
+
+
+def scoring_set_piece_stats(player: dict[str, Any] | None) -> dict[str, float]:
+    """Set-piece stat counts from the Moneyball export (modal / detail views)."""
+    if not player or not has_scorable_minutes(player.get("minutes")):
+        return {}
+    return dict(player.get("set_piece_stats") or {})
+
+
+def _pick_set_piece_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
+    meta = set_piece_metric_defs().get(metric_id) or {}
+    aliases = list(meta.get("csv") or [])
+    for alias in aliases:
+        val = parse_number(pick(row, [alias]))
+        if val is not None:
+            return val
+    return None
+
+
+def extract_set_piece_stats(row: dict[str, str], group: str) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for metric_id in set_piece_metrics_for_group(group):
+        value = _pick_set_piece_metric_raw(row, metric_id)
+        if value is not None:
+            out[metric_id] = value
+    return out
+
+
+def _format_set_piece_metric_display(value: float, unit: str) -> str:
+    if unit == "percent":
+        return f"{value:.1f}%"
+    if unit == "count":
+        return str(int(round(value)))
+    if abs(value) >= 10:
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    return f"{value:.2f}"
+
+
+def set_piece_cohort_values(
+    players: list[dict[str, Any]] | None,
+    metric_id: str,
+    group: str,
+    *,
+    min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
+) -> list[float]:
+    values: list[float] = []
+    cohort = players_in_pos_group(players, group)
+    for player in players_for_adaptive_bounds(
+        cohort,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
+    ):
+        raw = scoring_set_piece_stats(player).get(metric_id)
+        if raw is None:
+            continue
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if number != number:
+            continue
+        values.append(number)
+    return values
+
+
+def set_piece_rank_percentile(
+    value: float,
+    cohort_values: list[float],
+    *,
+    higher_is_better: bool = True,
+) -> float | None:
+    if not cohort_values:
+        return None
+    if higher_is_better:
+        below = sum(1 for item in cohort_values if item < value)
+        equal = sum(1 for item in cohort_values if item == value)
+    else:
+        below = sum(1 for item in cohort_values if item > value)
+        equal = sum(1 for item in cohort_values if item == value)
+    return max(1.0, min(99.0, (below + 0.5 * equal) / len(cohort_values) * 100))
+
+
+def band_set_piece_metric(
+    metric_id: str,
+    value: float | None,
+    group: str,
+    *,
+    cohort_players: list[dict[str, Any]] | None = None,
+    min_minutes: float | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    exclude_limited_leagues: bool = True,
+) -> dict[str, Any]:
+    meta = set_piece_metric_defs().get(metric_id) or {}
+    hib = bool(meta.get("higher_is_better", True))
+    if value is None:
+        return {
+            "value": None,
+            "display": "—",
+            "percentile": None,
+            "color": None,
+            "higher_is_better": hib,
+            "label": meta.get("label") or metric_id,
+            "abbr": meta.get("abbr") or metric_id,
+        }
+    cohort_values = set_piece_cohort_values(
+        cohort_players,
+        metric_id,
+        group,
+        min_minutes=min_minutes,
+        limited_divisions=limited_divisions,
+        exclude_limited_leagues=exclude_limited_leagues,
+    )
+    pct = set_piece_rank_percentile(value, cohort_values, higher_is_better=hib)
+    unit = meta.get("unit") or ""
+    return {
+        "value": value,
+        "display": _format_set_piece_metric_display(float(value), unit),
+        "percentile": pct,
+        "color": percentile_color(pct) if pct is not None else None,
+        "higher_is_better": hib,
+        "label": meta.get("label") or metric_id,
+        "abbr": meta.get("abbr") or metric_id,
+    }
+
+
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
     meta = metric_defs()[metric_id]
     aliases = list(meta.get("csv") or [])
@@ -948,15 +1173,18 @@ def parse_stats_export_with_meta(
         minutes = parse_number(pick(row, ["Minutes"]))
         group = classify_best_pos(best_pos, position)
         stats: dict[str, float] = {}
+        set_piece_stats: dict[str, float] = {}
         if has_scorable_minutes(minutes):
             for metric_id in metric_defs():
                 value = _pick_metric_raw(row, metric_id)
                 if value is not None:
                     stats[metric_id] = value
+            set_piece_stats = extract_set_piece_stats(row, group)
         player_payload: dict[str, Any] = {
             "minutes": minutes,
             "pos_group": group,
             "stats": stats,
+            "set_piece_stats": set_piece_stats,
         }
         apply_limited_tracking(
             player_payload, row, division_unavailable=division_unavailable

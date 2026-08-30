@@ -14,6 +14,8 @@ from components.player_filters import help_icon
 from components.player_detail import (
     player_attributes,
     player_role_fit_section,
+    player_set_piece_metrics_section,
+    player_set_piece_scores_section,
     role_player_detail_card,
 )
 from components.player_modal import player_detail_body, player_modal
@@ -6166,6 +6168,9 @@ def _build_profile_modal_body(
         role_fit = player_role_fit_section(display_player, settings)
         if role_fit:
             role_blocks.append(role_fit)
+        set_pieces = player_set_piece_scores_section(display_player, settings)
+        if set_pieces:
+            role_blocks.append(set_pieces)
         role_blocks.append(player_attributes(display_player, settings))
         bottom = html.Div(role_blocks)
     else:
@@ -6177,6 +6182,12 @@ def _build_profile_modal_body(
                 threshold_overrides=settings.get("stats_thresholds"),
                 cohort_players=stats_cohort,
             )
+            set_piece_metrics = player_set_piece_metrics_section(
+                stats_player,
+                cohort_players=stats_cohort,
+                minutes_required=us.default_minutes_required(settings),
+                limited_divisions=limited_divisions,
+            )
         else:
             stats_content = html.P(
                 "Player stats not available. This profile was saved from an "
@@ -6185,9 +6196,15 @@ def _build_profile_modal_body(
                 "cache on the Uploads page.",
                 className="text-muted small",
             )
-        bottom = html.Div(
-            [html.Div("Player stats", className="rs-player-id-section-title"), stats_content]
+            set_piece_metrics = None
+        stats_sections = []
+        if set_piece_metrics:
+            stats_sections.append(set_piece_metrics)
+        stats_sections.append(
+            html.Div("Player stats", className="rs-player-id-section-title")
         )
+        stats_sections.append(stats_content)
+        bottom = html.Div(stats_sections)
 
     return player_detail_body(
         display_player,

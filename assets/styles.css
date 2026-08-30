@@ -4758,6 +4758,8 @@ body[data-theme="light"] .st-pizza-legend-pct {
 .rs-player-detail > .rs-player-id-section:not(:first-child),
 .rs-player-detail > .rs-player-identity-block:not(:first-child),
 .rs-player-detail > .rs-role-fit-section:not(:first-child),
+.rs-player-detail > .rs-set-piece-scores-section:not(:first-child),
+.rs-player-detail > .rs-set-piece-metrics-section:not(:first-child),
 .rs-player-detail > .rs-player-attrs:not(:first-child),
 .rs-player-detail > .st-player-controls:not(:first-child),
 .rs-player-detail > .st-player-metrics:not(:first-child),
@@ -5011,6 +5013,59 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 .rs-role-fit-score.rs-band-poor {
     background: var(--band-poor-bg);
     color: var(--band-poor-fg);
+}
+
+.rs-set-piece-scores-section {
+    display: block;
+    grid-template-columns: none;
+}
+
+.rs-set-piece-score-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.rs-set-piece-score-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.45rem 0.65rem;
+    align-items: center;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--app-card) 88%, var(--app-line));
+    border: 1px solid color-mix(in srgb, var(--app-line) 70%, transparent);
+}
+
+.rs-set-piece-score-label {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--app-text);
+}
+
+.rs-set-piece-score-detail {
+    font-size: 11px;
+    color: var(--app-muted);
+}
+
+.rs-set-piece-score-val {
+    font-weight: 700;
+    font-size: 12px;
+    padding: 0.1rem 0.45rem;
+    border-radius: 5px;
+    text-align: center;
+    min-width: 2.5rem;
+}
+
+.rs-set-piece-metrics-section {
+    display: block;
+    grid-template-columns: none;
+}
+
+.rs-set-piece-metrics-values {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.45rem 0.75rem;
 }
 
 .rs-player-attrs .rc-attr-grid {

@@ -24,6 +24,7 @@ from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division
 import services.export_library as lib
 from components.player_filters import help_icon, player_filters, player_filters_host
+from components.player_detail import player_set_piece_metrics_section
 from components.player_modal import player_detail_body, player_modal
 from components.stats_compare import (
     compare_title,
@@ -1084,6 +1085,7 @@ def _player_modal_body(
     settings=None,
     metric_p100=None,
     metric_p0=None,
+    cohort_players=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
@@ -1105,6 +1107,16 @@ def _player_modal_body(
     else:
         metrics = _metrics_values(sections)
     status = minutes_status(player.get("minutes"), minutes_required)
+    bottom_sections = [
+        player_set_piece_metrics_section(
+            player,
+            eval_group=eval_group,
+            cohort_players=cohort_players,
+            minutes_required=minutes_required,
+            limited_divisions=limited_divisions,
+        ),
+        html.Div(metrics, className="st-player-metrics"),
+    ]
     return player_detail_body(
         player,
         id_prefix="st",
@@ -1139,7 +1151,7 @@ def _player_modal_body(
             ],
             className="st-player-controls",
         ),
-        bottom=html.Div(metrics, className="st-player-metrics"),
+        bottom=[section for section in bottom_sections if section is not None],
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
@@ -1802,6 +1814,7 @@ def open_player(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            cohort_players=players,
             limited_divisions=limited_divisions,
         ),
         key,
@@ -1875,6 +1888,7 @@ def switch_player_view(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            cohort_players=players,
             limited_divisions=limited,
         ),
     )
@@ -1934,6 +1948,7 @@ def switch_player_group(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            cohort_players=players,
             limited_divisions=limited,
         ),
     )
