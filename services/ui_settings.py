@@ -167,9 +167,11 @@ DEFAULT_MODAL_IDENTITY_SCOPES = {
 PACK_DATA_KEYS = (
     "age_tiers",
     "bands",
+    "attribute_bands",
     "foot_thresholds",
     "hist_edges",
     "colors",
+    "attribute_colors",
     "tier_weights",
     "hybrid_weights",
     "set_piece_profiles",
@@ -188,10 +190,18 @@ DEFAULTS: dict[str, Any] = {
     "name": "Default",
     "age_tiers": [21, 25, 30],
     "bands": {"elite": 14.0, "good": 12.0, "ok": 10.0},
+    # FM attributes are 1–20; default bands map to 16–20, 11–15, 6–10, 1–5.
+    "attribute_bands": {"elite": 16, "good": 11, "ok": 6},
     # Left / Right default to Very Strong (6); Both to Fairly Strong (4).
     "foot_thresholds": {"left": 6, "both": 4, "right": 6},
     "hist_edges": [10.0, 11.0, 12.0, 13.0, 14.0],
     "colors": {
+        "elite": {"bg": "#dcfce7", "fg": "#15803d", "bar": "#22c55e"},
+        "good": {"bg": "#dbeafe", "fg": "#1d4ed8", "bar": "#3b82f6"},
+        "ok": {"bg": "#fef3c7", "fg": "#b45309", "bar": "#f59e0b"},
+        "poor": {"bg": "#fee2e2", "fg": "#b91c1c", "bar": "#ef4444"},
+    },
+    "attribute_colors": {
         "elite": {"bg": "#dcfce7", "fg": "#15803d", "bar": "#22c55e"},
         "good": {"bg": "#dbeafe", "fg": "#1d4ed8", "bar": "#3b82f6"},
         "ok": {"bg": "#fef3c7", "fg": "#b45309", "bar": "#f59e0b"},
@@ -352,6 +362,63 @@ def stats_thresholds_differ(tree: dict[str, Any] | None) -> bool:
     import services.stats_threshold_packs as stp
 
     return stp.thresholds_differ(tree)
+
+
+def _clamp_attr_threshold(value, default: int) -> int:
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(20, number))
+
+
+def normalize_attribute_bands(raw, edited: str | None = None) -> dict[str, int]:
+    raw = raw or {}
+    defaults = DEFAULTS["attribute_bands"]
+    elite = _clamp_attr_threshold(raw.get("elite"), defaults["elite"])
+    good = _clamp_attr_threshold(raw.get("good"), defaults["good"])
+    ok = _clamp_attr_threshold(raw.get("ok"), defaults["ok"])
+    if edited == "elite":
+        if good >= elite:
+            good = max(1, elite - 1)
+        if ok >= good:
+            ok = max(1, good - 1)
+    elif edited == "ok":
+        if ok >= good:
+            good = min(19, ok + 1)
+        if good >= elite:
+            elite = min(20, good + 1)
+    else:
+        if good >= elite:
+            elite = min(20, good + 1)
+        if ok >= good:
+            ok = max(1, good - 1)
+    ok = min(ok, 19)
+    good = min(max(good, ok + 1), 19)
+    elite = min(max(elite, good + 1), 20)
+    return {"elite": elite, "good": good, "ok": max(1, ok)}
+
+
+def normalize_attribute_colors(
+    raw=None,
+    *,
+    score_colors: dict[str, dict[str, str]] | None = None,
+) -> dict[str, dict[str, str]]:
+    src = raw if isinstance(raw, dict) else {}
+    score_fallback = score_colors or DEFAULTS["colors"]
+    out: dict[str, dict[str, str]] = {}
+    for band in BAND_KEYS:
+        entry = src.get(band) if isinstance(src.get(band), dict) else {}
+        fallback = DEFAULTS["attribute_colors"][band]
+        score_band_colors = score_fallback.get(band) or {}
+        out[band] = {
+            part: _hex_color(
+                entry.get(part),
+                _hex_color(score_band_colors.get(part), fallback[part]),
+            )
+            for part in COLOR_PARTS
+        }
+    return out
 
 
 def normalize_bands(raw, edited: str | None = None) -> dict[str, float]:
@@ -766,6 +833,10 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         colors[band] = {
             part: _hex_color(src.get(part), fallback[part]) for part in COLOR_PARTS
         }
+    attribute_colors = normalize_attribute_colors(
+        raw.get("attribute_colors"),
+        score_colors=colors,
+    )
 
     page_opts = normalize_page_size_options(raw.get("page_size_options"))
     pack_id = pack_id or raw.get("id") or BUILTIN
@@ -779,9 +850,11 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "name": label,
         "age_tiers": ages,
         "bands": normalize_bands(raw.get("bands") or raw),
+        "attribute_bands": normalize_attribute_bands(raw.get("attribute_bands")),
         "foot_thresholds": normalize_foot_thresholds(raw),
         "hist_edges": edges,
         "colors": colors,
+        "attribute_colors": attribute_colors,
         "tier_weights": normalize_tier_weights(raw.get("tier_weights")),
         "hybrid_weights": normalize_hybrid_weights(raw.get("hybrid_weights")),
         "set_piece_profiles": normalize_set_piece_profiles(raw.get("set_piece_profiles")),
@@ -877,6 +950,19 @@ def _default_settings() -> dict[str, Any]:
     if overrides.get("colors"):
         merged["colors"] = {
             band: {**base["colors"].get(band, {}), **(overrides["colors"].get(band) or {})}
+            for band in BAND_KEYS
+        }
+    if overrides.get("attribute_bands"):
+        merged["attribute_bands"] = {
+            **base["attribute_bands"],
+            **(overrides.get("attribute_bands") or {}),
+        }
+    if overrides.get("attribute_colors"):
+        merged["attribute_colors"] = {
+            band: {
+                **base["attribute_colors"].get(band, {}),
+                **((overrides.get("attribute_colors") or {}).get(band) or {}),
+            }
             for band in BAND_KEYS
         }
     if overrides.get("tier_weights"):
@@ -1064,6 +1150,11 @@ def css_vars(settings=None) -> dict[str, str]:
         vars_[f"--band-{band}-bg"] = colors["bg"]
         vars_[f"--band-{band}-fg"] = colors["fg"]
         vars_[f"--band-{band}-bar"] = colors["bar"]
+    for band in BAND_KEYS:
+        colors = settings["attribute_colors"][band]
+        vars_[f"--attr-band-{band}-bg"] = colors["bg"]
+        vars_[f"--attr-band-{band}-fg"] = colors["fg"]
+        vars_[f"--attr-band-{band}-bar"] = colors["bar"]
     badge = settings["tier_badge_colors"]
     vars_["--rc-key"] = badge["key"]
     vars_["--rc-green"] = badge["preferred"]

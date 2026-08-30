@@ -31,6 +31,18 @@
     --band-poor-bg: #fee2e2;
     --band-poor-fg: #b91c1c;
     --band-poor-bar: #ef4444;
+    --attr-band-elite-bg: #dcfce7;
+    --attr-band-elite-fg: #15803d;
+    --attr-band-elite-bar: #22c55e;
+    --attr-band-good-bg: #dbeafe;
+    --attr-band-good-fg: #1d4ed8;
+    --attr-band-good-bar: #3b82f6;
+    --attr-band-ok-bg: #fef3c7;
+    --attr-band-ok-fg: #b45309;
+    --attr-band-ok-bar: #f59e0b;
+    --attr-band-poor-bg: #fee2e2;
+    --attr-band-poor-fg: #b91c1c;
+    --attr-band-poor-bar: #ef4444;
     --pers-tier-exemplary-bg: #dcfce7;
     --pers-tier-exemplary-fg: #15803d;
     --pers-tier-commendable-bg: #dbeafe;
@@ -4990,24 +5002,24 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     font-weight: 800;
 }
 
-.rs-player-attrs .rc-attr-val.score.rs-band-elite {
-    background: var(--band-elite-bg);
-    color: var(--band-elite-fg);
+.rs-player-attrs .rc-attr-val.score.rs-attr-band-elite {
+    background: var(--attr-band-elite-bg);
+    color: var(--attr-band-elite-fg);
 }
 
-.rs-player-attrs .rc-attr-val.score.rs-band-good {
-    background: var(--band-good-bg);
-    color: var(--band-good-fg);
+.rs-player-attrs .rc-attr-val.score.rs-attr-band-good {
+    background: var(--attr-band-good-bg);
+    color: var(--attr-band-good-fg);
 }
 
-.rs-player-attrs .rc-attr-val.score.rs-band-ok {
-    background: var(--band-ok-bg);
-    color: var(--band-ok-fg);
+.rs-player-attrs .rc-attr-val.score.rs-attr-band-ok {
+    background: var(--attr-band-ok-bg);
+    color: var(--attr-band-ok-fg);
 }
 
-.rs-player-attrs .rc-attr-val.score.rs-band-poor {
-    background: var(--band-poor-bg);
-    color: var(--band-poor-fg);
+.rs-player-attrs .rc-attr-val.score.rs-attr-band-poor {
+    background: var(--attr-band-poor-bg);
+    color: var(--attr-band-poor-fg);
 }
 
 .rs-player-attrs .rc-attr-val.none {

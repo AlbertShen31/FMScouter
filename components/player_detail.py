@@ -63,12 +63,14 @@ def _player_attr_row(code: str, label: str, attrs: dict, bands: dict):
     return attr_row(
         label,
         str(value),
-        value_class=f"score rs-band-{band}",
+        value_class=f"score rs-attr-band-{band}",
         title=code,
     )
 
 
-def player_attributes(player: dict, bands: dict) -> html.Div:
+def player_attributes(player: dict, settings=None) -> html.Div:
+    settings = us.normalize(settings)
+    bands = settings["attribute_bands"]
     attrs = player.get("attrs") or {}
     columns = attr_group_columns(
         is_gk=player_is_gk(player),
@@ -180,7 +182,7 @@ def role_player_detail_card(
         position_eligible=position_eligible,
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
         after_identity=player_role_fit_section(player, settings),
-        bottom=player_attributes(player, settings["bands"]),
+        bottom=player_attributes(player, settings),
         settings=settings,
     )
 
@@ -535,7 +537,7 @@ def profile_detail_body(
         fit = player_role_fit_section(role_player, settings)
         if fit:
             children.append(fit)
-        children.append(player_attributes(role_player, settings["bands"]))
+        children.append(player_attributes(role_player, settings))
     elif show_roles and file_entry.get("role_scores") and not role_column:
         children.append(
             _unavailable_section(

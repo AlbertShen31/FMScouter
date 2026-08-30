@@ -6150,7 +6150,7 @@ def _build_profile_modal_body(
         role_fit = player_role_fit_section(display_player, settings)
         if role_fit:
             role_blocks.append(role_fit)
-        role_blocks.append(player_attributes(display_player, settings["bands"]))
+        role_blocks.append(player_attributes(display_player, settings))
         bottom = html.Div(role_blocks)
     else:
         if stats_player:

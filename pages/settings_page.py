@@ -225,7 +225,7 @@ def _pers_color_row(tier: str, label: str, colors: dict, description: str = "") 
     )
 
 
-def _color_row(band: str, label: str, colors: dict) -> html.Div:
+def _color_row(band: str, label: str, colors: dict, *, id_type: str = "st-color") -> html.Div:
     return html.Div(
         [
             html.Div(label, className="st-color-name"),
@@ -244,7 +244,7 @@ def _color_row(band: str, label: str, colors: dict) -> html.Div:
                                     style={"backgroundColor": colors[part]},
                                 ),
                                 dmc.TextInput(
-                                    id={"type": "st-color", "band": band, "part": part},
+                                    id={"type": id_type, "band": band, "part": part},
                                     value=colors[part],
                                     debounce=500,
                                     className="st-color-text",
@@ -384,6 +384,7 @@ def _panel(section_id: str, children: list, *, active: bool) -> html.Div:
 
 def _general_panel(settings: dict) -> list:
     bands = settings["bands"]
+    attr_bands = settings["attribute_bands"]
     default_note = (
         "Default uses built-in values until you save; those are stored "
         "locally and can be restored with Reset defaults."
@@ -394,7 +395,7 @@ def _general_panel(settings: dict) -> list:
         _section_heading(
             "General",
             "Shared settings used across Role scores, Player stats, and Profiles: "
-            "packs, appearance, filters, score bands, colors, and minutes.",
+            "packs, appearance, filters, score and attribute bands, colors, and minutes.",
         ),
         dbc.Card(
             [
@@ -686,6 +687,71 @@ def _general_panel(settings: dict) -> list:
         dbc.Card(
             [
                 _card_header(
+                    "Attribute bands",
+                    "Used for attribute value highlighting in player modals on Role scores "
+                    "and Profiles. FM attributes are whole numbers from 1–20; defaults "
+                    "map to 16–20 (Elite), 11–15 (Good), 6–10 (OK), and 1–5 (Poor).",
+                    help_id="st-help-attribute-bands",
+                ),
+                dbc.CardBody(
+                    [
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-attr-band-elite",
+                                        label="Elite ≥",
+                                        min=1,
+                                        max=20,
+                                        step=1,
+                                        value=attr_bands["elite"],
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-attr-band-good",
+                                        label="Good ≥",
+                                        min=1,
+                                        max=20,
+                                        step=1,
+                                        value=attr_bands["good"],
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    dmc.NumberInput(
+                                        id="st-attr-band-ok",
+                                        label="OK ≥",
+                                        min=1,
+                                        max=20,
+                                        step=1,
+                                        value=attr_bands["ok"],
+                                    ),
+                                    md=3,
+                                ),
+                                dbc.Col(
+                                    [
+                                        html.Label("Poor"),
+                                        html.Div(
+                                            id="st-attr-poor-cut",
+                                            children=f"< {attr_bands['ok']}",
+                                            className="st-poor-cut",
+                                        ),
+                                    ],
+                                    md=3,
+                                ),
+                            ],
+                            className="g-3",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                _card_header(
                     "Band colors",
                     "Background and text color table cells and legend chips. "
                     "Bar is the squad-depth segment. Enter hex colors like #dcfce7.",
@@ -696,6 +762,33 @@ def _general_panel(settings: dict) -> list:
                         html.Div(
                             [
                                 _color_row(band, label, settings["colors"][band])
+                                for band, label in BAND_LABELS
+                            ],
+                            className="st-color-list",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+        dbc.Card(
+            [
+                _card_header(
+                    "Attribute band colors",
+                    "Background and text colors for attribute cells in player modals. "
+                    "Defaults match score band colors until you change them.",
+                    help_id="st-help-attribute-colors",
+                ),
+                dbc.CardBody(
+                    [
+                        html.Div(
+                            [
+                                _color_row(
+                                    band,
+                                    label,
+                                    settings["attribute_colors"][band],
+                                    id_type="st-attr-color",
+                                )
                                 for band, label in BAND_LABELS
                             ],
                             className="st-color-list",
@@ -1132,19 +1225,22 @@ def _section_view(section: str) -> tuple:
     return section, nav_classes, hidden, panel_classes
 
 
-def _colors_from_state(color_values, specs) -> dict[str, dict[str, str]]:
+def _color_values_for(settings: dict, specs, *, colors_key: str = "colors") -> list[str]:
+    colors = settings[colors_key]
+    return [
+        colors[spec["id"]["band"]][spec["id"]["part"]]
+        for spec in specs
+    ]
+
+
+def _colors_from_state(color_values, specs, *, id_type: str = "st-color") -> dict[str, dict[str, str]]:
     color_map = {band: {} for band in us.BAND_KEYS}
     for spec, value in zip(specs or [], color_values or []):
         ident = spec["id"]
+        if ident.get("type") != id_type:
+            continue
         color_map[ident["band"]][ident["part"]] = value
     return color_map
-
-
-def _color_values_for(settings: dict, specs) -> list[str]:
-    return [
-        settings["colors"][spec["id"]["band"]][spec["id"]["part"]]
-        for spec in specs
-    ]
 
 
 def _badge_colors_from_state(values, specs) -> dict[str, str]:
@@ -1206,6 +1302,7 @@ def _sp_values_for(settings: dict, specs, tier: str) -> list:
 def _role_form_values(
     settings: dict,
     color_specs,
+    attr_color_specs,
     badge_specs,
     pers_specs,
     sp_key_specs,
@@ -1223,11 +1320,15 @@ def _role_form_values(
         settings["bands"]["elite"],
         settings["bands"]["good"],
         settings["bands"]["ok"],
+        settings["attribute_bands"]["elite"],
+        settings["attribute_bands"]["good"],
+        settings["attribute_bands"]["ok"],
         str(feet["left"]),
         str(feet["both"]),
         str(feet["right"]),
         us.format_list(settings["hist_edges"]),
         _color_values_for(settings, color_specs),
+        _color_values_for(settings, attr_color_specs, colors_key="attribute_colors"),
         tw["key"],
         tw["preferred"],
         tw["useful"],
@@ -1291,6 +1392,15 @@ def preview_hist(edges):
 )
 def preview_poor(ok):
     return f"< {us.format_cut(ok if ok is not None else us.DEFAULTS['bands']['ok'])}"
+
+
+@callback(
+    Output("st-attr-poor-cut", "children"),
+    Input("st-attr-band-ok", "value"),
+)
+def preview_attr_poor(ok):
+    threshold = ok if ok is not None else us.DEFAULTS["attribute_bands"]["ok"]
+    return f"< {int(threshold)}"
 
 
 @callback(
@@ -1419,12 +1529,17 @@ def _ui_draft_from_state(
     elite,
     good,
     ok,
+    attr_elite,
+    attr_good,
+    attr_ok,
     foot_left,
     foot_both,
     foot_right,
     edges,
     color_values,
     color_specs,
+    attr_color_values,
+    attr_color_specs,
     tier_key,
     tier_preferred,
     tier_useful,
@@ -1454,13 +1569,17 @@ def _ui_draft_from_state(
         "id": pack_id,
         "age_tiers": ages,
         "bands": {"elite": elite, "good": good, "ok": ok},
+        "attribute_bands": {"elite": attr_elite, "good": attr_good, "ok": attr_ok},
         "foot_thresholds": {
             "left": foot_left,
             "both": foot_both,
             "right": foot_right,
         },
         "hist_edges": edges,
-        "colors": _colors_from_state(color_values, color_specs),
+        "colors": _colors_from_state(color_values, color_specs, id_type="st-color"),
+        "attribute_colors": _colors_from_state(
+            attr_color_values, attr_color_specs, id_type="st-attr-color"
+        ),
         "tier_weights": {
             "key": tier_key,
             "preferred": tier_preferred,
@@ -1506,11 +1625,15 @@ def apply_preferred_theme_select(preferred_values, current):
     Output("st-band-elite", "value"),
     Output("st-band-good", "value"),
     Output("st-band-ok", "value"),
+    Output("st-attr-band-elite", "value"),
+    Output("st-attr-band-good", "value"),
+    Output("st-attr-band-ok", "value"),
     Output("st-foot-left", "value"),
     Output("st-foot-both", "value"),
     Output("st-foot-right", "value"),
     Output("st-hist-edges", "value"),
     Output({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    Output({"type": "st-attr-color", "band": ALL, "part": ALL}, "value"),
     Output("st-tier-key", "value"),
     Output("st-tier-preferred", "value"),
     Output("st-tier-useful", "value"),
@@ -1544,11 +1667,15 @@ def apply_preferred_theme_select(preferred_values, current):
     State("st-band-elite", "value"),
     State("st-band-good", "value"),
     State("st-band-ok", "value"),
+    State("st-attr-band-elite", "value"),
+    State("st-attr-band-good", "value"),
+    State("st-attr-band-ok", "value"),
     State("st-foot-left", "value"),
     State("st-foot-both", "value"),
     State("st-foot-right", "value"),
     State("st-hist-edges", "value"),
     State({"type": "st-color", "band": ALL, "part": ALL}, "value"),
+    State({"type": "st-attr-color", "band": ALL, "part": ALL}, "value"),
     State("st-tier-key", "value"),
     State("st-tier-preferred", "value"),
     State("st-tier-useful", "value"),
@@ -1579,11 +1706,15 @@ def handle_ui_settings(
     elite,
     good,
     ok,
+    attr_elite,
+    attr_good,
+    attr_ok,
     foot_left,
     foot_both,
     foot_right,
     edges,
     color_values,
+    attr_color_values,
     tier_key,
     tier_preferred,
     tier_useful,
@@ -1603,17 +1734,18 @@ def handle_ui_settings(
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 35
+    n_out = 39
     if not triggered:
         return (no_update,) * n_out
 
     states = ctx.states_list or []
-    color_specs = states[9] if len(states) > 9 else []
-    badge_specs = states[15] if len(states) > 15 else []
-    pers_specs = states[16] if len(states) > 16 else []
-    sp_key_specs = states[17] if len(states) > 17 else []
-    sp_pref_specs = states[18] if len(states) > 18 else []
-    sp_useful_specs = states[19] if len(states) > 19 else []
+    color_specs = states[12] if len(states) > 12 else []
+    attr_color_specs = states[13] if len(states) > 13 else []
+    badge_specs = states[19] if len(states) > 19 else []
+    pers_specs = states[20] if len(states) > 20 else []
+    sp_key_specs = states[21] if len(states) > 21 else []
+    sp_pref_specs = states[22] if len(states) > 22 else []
+    sp_useful_specs = states[23] if len(states) > 23 else []
 
     draft = _ui_draft_from_state(
         pack_id,
@@ -1621,12 +1753,17 @@ def handle_ui_settings(
         elite,
         good,
         ok,
+        attr_elite,
+        attr_good,
+        attr_ok,
         foot_left,
         foot_both,
         foot_right,
         edges,
         color_values,
         color_specs,
+        attr_color_values,
+        attr_color_specs,
         tier_key,
         tier_preferred,
         tier_useful,
@@ -1716,6 +1853,7 @@ def handle_ui_settings(
     role_values = _role_form_values(
         settings,
         color_specs,
+        attr_color_specs,
         badge_specs,
         pers_specs,
         sp_key_specs,

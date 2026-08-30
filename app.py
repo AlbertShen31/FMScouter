@@ -146,6 +146,7 @@ app.clientside_callback(
     """
     function(settings) {
         const colors = (settings && settings.colors) || {};
+        const attrColors = (settings && settings.attribute_colors) || {};
         const badges = (settings && settings.tier_badge_colors) || {};
         const pers = (settings && settings.personality_tier_colors) || {};
         const root = document.documentElement;
@@ -154,6 +155,12 @@ app.clientside_callback(
             if (c.bg) root.style.setProperty("--band-" + band + "-bg", c.bg);
             if (c.fg) root.style.setProperty("--band-" + band + "-fg", c.fg);
             if (c.bar) root.style.setProperty("--band-" + band + "-bar", c.bar);
+        });
+        ["elite", "good", "ok", "poor"].forEach(function(band) {
+            const c = attrColors[band] || colors[band] || {};
+            if (c.bg) root.style.setProperty("--attr-band-" + band + "-bg", c.bg);
+            if (c.fg) root.style.setProperty("--attr-band-" + band + "-fg", c.fg);
+            if (c.bar) root.style.setProperty("--attr-band-" + band + "-bar", c.bar);
         });
         if (badges.key) root.style.setProperty("--rc-key", badges.key);
         if (badges.preferred) root.style.setProperty("--rc-green", badges.preferred);
