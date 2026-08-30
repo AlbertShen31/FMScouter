@@ -4554,8 +4554,21 @@ body[data-theme="light"] .st-metric-pct {
 .st-player-chart .nsewdrag,
 .st-compare-chart .draglayer,
 .st-compare-chart .nsewdrag {
+    /* Plotly listens for hover on the drag layer — do not disable pointer events. */
     cursor: default !important;
-    pointer-events: none !important;
+}
+
+/* Plotly hover tooltips — readable in dark and light themes. */
+.st-player-chart .hoverlayer path,
+.st-compare-chart .hoverlayer path {
+    fill: var(--app-elev) !important;
+    stroke: var(--app-line) !important;
+}
+
+.st-player-chart .hoverlayer text,
+.st-compare-chart .hoverlayer text {
+    fill: var(--app-text) !important;
+    text-shadow: none !important;
 }
 
 .st-metric-nodata {

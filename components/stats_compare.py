@@ -607,7 +607,7 @@ def _bars_figure_compare(
                 customdata=hover_labels,
                 hovertemplate=(
                     f"{label_a}<br>%{{customdata}}<br>"
-                    "%{{x:.0f}}th pct · %{text}<extra></extra>"
+                    "~%{x:.0f}th percentile<br>%{text}<extra></extra>"
                 ),
             ),
             go.Bar(
@@ -624,7 +624,7 @@ def _bars_figure_compare(
                 customdata=hover_labels,
                 hovertemplate=(
                     f"{label_b}<br>%{{customdata}}<br>"
-                    "%{{x:.0f}}th pct · %{text}<extra></extra>"
+                    "~%{x:.0f}th percentile<br>%{text}<extra></extra>"
                 ),
             ),
         ]

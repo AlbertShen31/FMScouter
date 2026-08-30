@@ -260,7 +260,7 @@ def _metrics_values(sections: list[dict]) -> list:
     return blocks
 
 
-# Hover-only charts: zoom/pan/select/edit disabled in config + layout; drag layer blocked in CSS.
+# Hover tooltips: zoom/pan/select/edit disabled in config + layout (not drag-layer CSS).
 PLAYER_CHART_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
@@ -291,6 +291,15 @@ def _chart_layout(theme: str | None, *, height: int, margin: dict | None = None)
             size=14,
             family="IBM Plex Sans, Segoe UI, sans-serif",
         ),
+        hoverlabel=dict(
+            bgcolor="rgba(30, 41, 59, 0.96)" if dark else "rgba(255, 255, 255, 0.98)",
+            bordercolor="rgba(148, 163, 184, 0.5)" if dark else "rgba(100, 116, 139, 0.45)",
+            font=dict(
+                color="#f8fafc" if dark else "#0f172a",
+                size=13,
+                family="IBM Plex Sans, Segoe UI, sans-serif",
+            ),
+        ),
         margin=margin or dict(l=130, r=72, t=12, b=36),
         height=height,
         showlegend=False,
@@ -308,15 +317,23 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
     pcts = []
     colors = []
     texts = []
+    hovers = []
     for metric in metrics[::-1]:
         if metric["missing"]:
             pcts.append(0)
             colors.append("rgba(148, 163, 184, 0.35)")
             texts.append(_missing_metric_label(metric))
+            hovers.append(
+                f"{metric['label']}<br>{_missing_metric_label(metric)}"
+            )
         else:
-            pcts.append(float(metric["percentile"]))
+            pct = float(metric["percentile"])
+            pcts.append(pct)
             colors.append(metric["color"] or "rgb(64, 220, 120)")
             texts.append(metric["display"])
+            hovers.append(
+                f"{metric['label']}<br>~{pct:.0f}th percentile<br>{metric['display']}"
+            )
     fig = go.Figure(
         go.Bar(
             x=pcts,
@@ -327,7 +344,8 @@ def _bars_figure(metrics: list[dict], theme: str | None) -> go.Figure:
             textposition="outside",
             textfont=dict(color=label_color, size=15),
             cliponaxis=False,
-            hovertemplate="%{y}<br>%{x:.0f}th pct · %{text}<extra></extra>",
+            customdata=hovers,
+            hovertemplate="%{customdata}<extra></extra>",
         )
     )
     fig.update_layout(
@@ -400,12 +418,17 @@ def _pizza_figure(metrics: list[dict], theme: str | None) -> go.Figure:
         if metric["missing"]:
             radius.append(5.0)
             colors.append(missing_fill)
-            custom.append(f"{metric['abbr']} · {_missing_metric_label(metric)}")
+            custom.append(
+                f"{metric['label']} ({metric['abbr']})<br>{_missing_metric_label(metric)}"
+            )
         else:
             pct = float(metric["percentile"])
             radius.append(_pizza_radius(pct))
             colors.append(metric["color"] or ("rgb(61, 255, 136)" if dark else "rgb(22, 163, 74)"))
-            custom.append(f"{metric['abbr']} · {metric['display']}<br>{pct:.0f}th pct")
+            custom.append(
+                f"{metric['label']} ({metric['abbr']})<br>"
+                f"~{pct:.0f}th percentile<br>{metric['display']}"
+            )
 
     tickvals = [i * width for i in range(n)]
     ticktext = [metric["abbr"] for metric in metrics]
@@ -561,10 +584,7 @@ def _metrics_pizzas(sections: list[dict], theme: str | None) -> list:
                         [
                             dcc.Graph(
                                 figure=_pizza_figure(cat["metrics"], theme),
-                                config={
-                                    **PLAYER_CHART_CONFIG,
-                                    "staticPlot": True,
-                                },
+                                config=PLAYER_CHART_CONFIG,
                                 className="st-player-chart st-player-pizza",
                             ),
                             _pizza_infobox(cat["metrics"]),
