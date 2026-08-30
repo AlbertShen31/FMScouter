@@ -212,22 +212,17 @@ def player_set_piece_scores_section(player: dict, settings=None) -> html.Div | N
             continue
         band = score_band(score, **bands)
         label = profile.get("abbr") or profile.get("label") or score_col
-        detail = profile.get("detail") or ""
         rows.append(
             html.Div(
                 [
-                    html.Span(label, className="rs-set-piece-score-label"),
-                    html.Span(
-                        detail,
-                        className="rs-set-piece-score-detail",
-                        title=profile.get("label") or "",
-                    ),
+                    html.Span(label, className="rs-player-id-label"),
                     html.Span(
                         f"{score:.2f}",
-                        className=f"rs-set-piece-score-val rs-band-{band}",
+                        className=f"rs-player-id-value rs-set-piece-band-{band}",
+                        title=profile.get("label") or "",
                     ),
                 ],
-                className="rs-set-piece-score-row",
+                className="rs-player-id-item",
             )
         )
     if not rows:
@@ -235,7 +230,7 @@ def player_set_piece_scores_section(player: dict, settings=None) -> html.Div | N
     return html.Div(
         [
             html.Div("Set pieces", className="rs-player-id-section-title"),
-            html.Div(rows, className="rs-set-piece-score-rows"),
+            html.Div(rows, className="rs-player-identity"),
         ],
         className="rs-player-id-section rs-set-piece-scores-section",
     )

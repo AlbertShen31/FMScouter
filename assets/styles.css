@@ -5015,51 +5015,20 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     color: var(--band-poor-fg);
 }
 
-.rs-set-piece-scores-section {
-    display: block;
-    grid-template-columns: none;
+.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-elite {
+    color: var(--band-elite-fg);
 }
 
-.rs-set-piece-score-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-good {
+    color: var(--band-good-fg);
 }
 
-.rs-set-piece-score-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 0.45rem 0.65rem;
-    align-items: center;
-    padding: 0.35rem 0.55rem;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--app-card) 88%, var(--app-line));
-    border: 1px solid color-mix(in srgb, var(--app-line) 70%, transparent);
+.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-ok {
+    color: var(--band-ok-fg);
 }
 
-.rs-set-piece-score-label {
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--app-text);
-}
-
-.rs-set-piece-score-detail {
-    font-size: 11px;
-    color: var(--app-muted);
-}
-
-.rs-set-piece-score-val {
-    font-weight: 700;
-    font-size: 12px;
-    padding: 0.1rem 0.45rem;
-    border-radius: 5px;
-    text-align: center;
-    min-width: 2.5rem;
-}
-
-.rs-set-piece-metrics-section {
-    display: block;
-    grid-template-columns: none;
+.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-poor {
+    color: var(--band-poor-fg);
 }
 
 .rs-player-attrs .rc-attr-grid {
