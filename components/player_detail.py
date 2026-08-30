@@ -58,13 +58,12 @@ def player_is_gk(player: dict) -> bool:
 def _player_attr_row(code: str, label: str, attrs: dict, bands: dict):
     value = attrs.get(code)
     if value is None:
-        return attr_row(label, "—", value_class="none", title=code)
+        return attr_row(label, "—", value_class="none")
     band = score_band(float(value), **bands)
     return attr_row(
         label,
         str(value),
         value_class=f"score rs-attr-band-{band}",
-        title=code,
     )
 
 
