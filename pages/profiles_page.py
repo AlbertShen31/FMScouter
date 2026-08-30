@@ -6134,9 +6134,15 @@ def _build_profile_modal_body(
             "rec",
             "injury",
             "pos_group",
+            "limited_division_tracking",
         ):
             if display_player.get(key) in (None, "", [], {}):
                 display_player[key] = stats_player.get(key)
+
+    file_id = str(profile.get("file_id") or "").strip()
+    import services.export_library as lib
+
+    limited_divisions = lib.list_limited_tracking_divisions(file_id=file_id or None)
 
     field_status = minutes_status(
         display_player.get("minutes"), us.default_minutes_required(settings)
@@ -6193,6 +6199,7 @@ def _build_profile_modal_body(
         bottom=bottom,
         settings=settings,
         theme=theme,
+        limited_divisions=limited_divisions,
     )
 
 

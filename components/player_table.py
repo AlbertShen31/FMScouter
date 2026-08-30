@@ -505,6 +505,24 @@ def rec_grade_style(value, theme: str | None = None) -> dict[str, str] | None:
     }
 
 
+def _identity_pill_chrome(*, font_weight: str = "700") -> dict[str, str]:
+    """Shared pill sizing for identity fields in player modals."""
+    return {
+        "borderRadius": "6px",
+        "padding": "2px 8px",
+        "fontWeight": font_weight,
+    }
+
+
+def rec_identity_style(value, theme: str | None = None) -> dict[str, str] | None:
+    """Rec grade pill for player modals (matches shortlist table colors)."""
+    base = rec_grade_style(value, theme)
+    if not base:
+        return None
+    weight = str(base.get("fontWeight", "750"))
+    return {**base, **_identity_pill_chrome(font_weight=weight)}
+
+
 def rec_highlight_styles(theme: str | None = None) -> list[dict]:
     """Color Rec from green (A+) to red (F)."""
     rules = []
@@ -668,17 +686,9 @@ def identity_data_styles(
     return rules
 
 
-def division_highlight_styles(theme: str | None = None) -> list[dict]:
-    """Color Division: top (green), pro (yellow), semi-pro/amateur (red).
-
-    Leagues with incomplete FM match-stat tracking (``DivisionLimited`` = yes)
-    use a striped background instead of a solid tint.
-    """
-    from scoring.division_tiers import division_tier_colors
-
-    colors = division_tier_colors(theme)
+def _division_stripe_images(theme: str | None = None) -> dict[str, str]:
     dark = is_dark_theme(theme)
-    stripe = {
+    return {
         "top": (
             "repeating-linear-gradient(135deg, rgba(74, 222, 128, 0.22) 0 2px, "
             "transparent 2px 9px)"
@@ -700,14 +710,91 @@ def division_highlight_styles(theme: str | None = None) -> list[dict]:
             else "repeating-linear-gradient(135deg, rgba(185, 28, 28, 0.12) 0 2px, "
             "transparent 2px 9px)"
         ),
+        "unknown": (
+            "repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.18) 0 2px, "
+            "transparent 2px 9px)"
+            if dark
+            else "repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.12) 0 2px, "
+            "transparent 2px 9px)"
+        ),
     }
-    unknown_stripe = (
-        "repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.18) 0 2px, "
-        "transparent 2px 9px)"
-        if dark
-        else "repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.12) 0 2px, "
-        "transparent 2px 9px)"
+
+
+def resolve_division_highlight(
+    player: dict,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> tuple[str, bool]:
+    """Return ``(tier, limited_tracking)`` for division pill styling."""
+    from scoring.division_tiers import classify_division
+    from scoring.stats_availability import division_has_limited_tracking
+
+    division = player.get("division") or player.get("Division") or ""
+    nation = (
+        player.get("nation")
+        or player.get("based_in")
+        or player.get("Nation")
+        or ""
     )
+    tier = str(player.get("DivisionTier") or "").strip()
+    if not tier:
+        tier = classify_division(division, nation) or ""
+
+    limited_flag = player.get("DivisionLimited")
+    if limited_flag == "yes":
+        limited = True
+    elif limited_flag == "no":
+        limited = False
+    elif player.get("limited_division_tracking"):
+        limited = True
+    elif limited_divisions is not None:
+        limited = division_has_limited_tracking(division, limited_divisions)
+    else:
+        limited = False
+    return tier, limited
+
+
+def division_identity_style(
+    player: dict,
+    *,
+    theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> dict[str, str] | None:
+    """Inline styles for Division in player modals (matches shortlist table rules)."""
+    tier, limited = resolve_division_highlight(player, limited_divisions)
+    if not tier and not limited:
+        return None
+
+    from scoring.division_tiers import division_tier_colors
+
+    dark = is_dark_theme(theme)
+    stripes = _division_stripe_images(theme)
+    colors = division_tier_colors(theme)
+    style: dict[str, str] = dict(_identity_pill_chrome())
+    if tier and tier in colors:
+        bg, fg = colors[tier]
+        style["backgroundColor"] = bg
+        style["color"] = fg
+        if limited:
+            style["backgroundImage"] = stripes[tier]
+    elif limited:
+        style["backgroundColor"] = "rgba(148, 163, 184, 0.16)" if dark else "#e2e8f0"
+        style["backgroundImage"] = stripes["unknown"]
+        style["color"] = "#94a3b8" if dark else "#475569"
+    return style
+
+
+def division_highlight_styles(theme: str | None = None) -> list[dict]:
+    """Color Division: top (green), pro (yellow), semi-pro/amateur (red).
+
+    Leagues with incomplete FM match-stat tracking (``DivisionLimited`` = yes)
+    use a striped background instead of a solid tint.
+    """
+    from scoring.division_tiers import division_tier_colors
+
+    colors = division_tier_colors(theme)
+    dark = is_dark_theme(theme)
+    stripe = _division_stripe_images(theme)
+    unknown_stripe = stripe["unknown"]
     rules = []
     for tier, (bg, fg) in colors.items():
         rules.append(
@@ -735,7 +822,7 @@ def division_highlight_styles(theme: str | None = None) -> list[dict]:
                     "column_id": "Division",
                 },
                 "backgroundColor": bg,
-                "backgroundImage": stripe[tier],
+                "backgroundImage": stripe.get(tier, unknown_stripe),
                 "color": fg,
                 "fontWeight": "700",
                 "borderRadius": "6px",

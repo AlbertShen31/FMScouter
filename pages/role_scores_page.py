@@ -2199,6 +2199,7 @@ def open_player_modal(
             settings,
             position_eligible=position_eligible,
             theme=theme,
+            limited_divisions=_limited_tracking_divisions(payload),
         ),
         None,
     )

@@ -688,6 +688,7 @@ def _player_modal_body(
     settings=None,
     metric_p100=None,
     metric_p0=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     from scoring.stats_scorer import pos_group_label
@@ -744,6 +745,7 @@ def _player_modal_body(
         bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
         theme=theme,
+        limited_divisions=limited_divisions,
     )
 
 

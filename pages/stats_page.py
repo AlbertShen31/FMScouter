@@ -1084,6 +1084,7 @@ def _player_modal_body(
     settings=None,
     metric_p100=None,
     metric_p0=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     view = _normalize_player_view(view)
@@ -1138,6 +1139,7 @@ def _player_modal_body(
         bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
         theme=theme,
+        limited_divisions=limited_divisions,
     )
 
 
@@ -1797,6 +1799,7 @@ def open_player(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            limited_divisions=limited_divisions,
         ),
         key,
         eval_group,
@@ -1850,10 +1853,11 @@ def switch_player_view(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
+    limited = _limited_divisions_for_parsed(parsed, players)
     bound_opts = adaptive_bound_options(
         settings,
         min_minutes=mins_req,
-        limited_divisions=_limited_divisions_for_parsed(parsed, players),
+        limited_divisions=limited,
     )
     metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
@@ -1868,6 +1872,7 @@ def switch_player_view(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            limited_divisions=limited,
         ),
     )
 
@@ -1907,10 +1912,11 @@ def switch_player_group(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
+    limited = _limited_divisions_for_parsed(parsed, players)
     bound_opts = adaptive_bound_options(
         settings,
         min_minutes=mins_req,
-        limited_divisions=_limited_divisions_for_parsed(parsed, players),
+        limited_divisions=limited,
     )
     metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
@@ -1925,6 +1931,7 @@ def switch_player_group(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
+            limited_divisions=limited,
         ),
     )
 

@@ -4870,6 +4870,13 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     font-weight: 700;
 }
 
+.rs-player-id-value.rs-identity-pill {
+    align-self: flex-start;
+    width: fit-content;
+    max-width: 100%;
+    line-height: 1.3;
+}
+
 .rs-role-fit-section {
     margin-top: 0.15rem;
 }

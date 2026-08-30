@@ -174,6 +174,7 @@ def role_player_detail_card(
     *,
     position_eligible: str | None = None,
     theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     return player_detail_body(
@@ -185,6 +186,7 @@ def role_player_detail_card(
         bottom=player_attributes(player, settings),
         settings=settings,
         theme=theme,
+        limited_divisions=limited_divisions,
     )
 
 
@@ -341,6 +343,7 @@ def stats_player_detail_card(
     metric_p100=None,
     metric_p0=None,
     cohort_players=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     minutes_required = (
@@ -405,6 +408,7 @@ def stats_player_detail_card(
         after_identity=after_identity,
         bottom=html.Div(_metrics_values(sections), className="st-player-metrics"),
         settings=settings,
+        limited_divisions=limited_divisions,
     )
 
 
