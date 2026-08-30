@@ -276,6 +276,21 @@ def player_set_piece_metrics_section(
     )
 
 
+def player_stats_modal_section(content) -> html.Div:
+    """Shared shell for the stats-page chart area (title + controls + metrics)."""
+    if isinstance(content, (list, tuple)):
+        body_children = [child for child in content if child is not None]
+    else:
+        body_children = [content] if content is not None else []
+    return html.Div(
+        [
+            html.Div("Player stats", className="rs-player-id-section-title"),
+            html.Div(body_children, className="rs-player-stats-body"),
+        ],
+        className="rs-player-id-section rs-player-stats-section",
+    )
+
+
 def role_player_detail_card(
     player: dict,
     settings=None,
@@ -286,6 +301,7 @@ def role_player_detail_card(
 ) -> html.Div:
     settings = us.normalize(settings)
     bottom_sections = [
+        player_role_fit_section(player, settings),
         player_set_piece_scores_section(player, settings),
         player_attributes(player, settings),
     ]
@@ -294,7 +310,6 @@ def role_player_detail_card(
         id_prefix="rs",
         position_eligible=position_eligible,
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
-        after_identity=player_role_fit_section(player, settings),
         bottom=[section for section in bottom_sections if section is not None],
         settings=settings,
         theme=theme,
@@ -495,23 +510,6 @@ def stats_player_detail_card(
     set_piece_section = player_set_piece_metrics_section(player)
     if set_piece_section is not None:
         after_identity.append(set_piece_section)
-    after_identity.append(
-        html.Div(
-            [
-                html.Div("Overall average", className="st-player-switch-label"),
-                html.Span(
-                    f"~{overall_avg:.0f}th percentile" if overall_avg is not None else "—",
-                    className="st-overall-avg-val",
-                    style=(
-                        {"color": percentile_color(overall_avg)}
-                        if overall_avg is not None
-                        else None
-                    ),
-                ),
-            ],
-            className="st-overall-avg pf-stats-overall",
-        )
-    )
     return player_detail_body(
         player,
         id_prefix="st",
@@ -521,8 +519,31 @@ def stats_player_detail_card(
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
         },
         field_formatters={"minutes": _format_minutes_identity},
-        after_identity=after_identity,
-        bottom=html.Div(_metrics_values(sections), className="st-player-metrics"),
+        after_identity=after_identity or None,
+        bottom=player_stats_modal_section(
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div("Overall average", className="st-player-switch-label"),
+                            html.Span(
+                                f"~{overall_avg:.0f}th percentile"
+                                if overall_avg is not None
+                                else "—",
+                                className="st-overall-avg-val",
+                                style=(
+                                    {"color": percentile_color(overall_avg)}
+                                    if overall_avg is not None
+                                    else None
+                                ),
+                            ),
+                        ],
+                        className="st-overall-avg pf-stats-overall",
+                    ),
+                    html.Div(_metrics_values(sections), className="st-player-metrics"),
+                ]
+            )
+        ),
         settings=settings,
         limited_divisions=limited_divisions,
     )

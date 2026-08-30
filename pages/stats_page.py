@@ -24,7 +24,7 @@ from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division
 import services.export_library as lib
 from components.player_filters import help_icon, player_filters, player_filters_host
-from components.player_detail import player_set_piece_metrics_section
+from components.player_detail import player_set_piece_metrics_section, player_stats_modal_section
 from components.player_modal import player_detail_body, player_modal
 from components.stats_compare import (
     compare_title,
@@ -1132,9 +1132,6 @@ def _player_modal_body(
     after_identity: list = []
     if set_piece_section is not None:
         after_identity.append(set_piece_section)
-    after_identity.append(
-        html.Div(control_children, className="st-player-controls")
-    )
     return player_detail_body(
         player,
         id_prefix="st",
@@ -1144,8 +1141,13 @@ def _player_modal_body(
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
         },
         field_formatters={"minutes": _format_minutes_identity},
-        after_identity=after_identity,
-        bottom=html.Div(metrics, className="st-player-metrics"),
+        after_identity=after_identity or None,
+        bottom=player_stats_modal_section(
+            [
+                html.Div(control_children, className="st-player-controls"),
+                html.Div(metrics, className="st-player-metrics"),
+            ]
+        ),
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,

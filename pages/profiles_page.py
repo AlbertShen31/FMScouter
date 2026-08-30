@@ -16,6 +16,7 @@ from components.player_detail import (
     player_role_fit_section,
     player_set_piece_metrics_section,
     player_set_piece_scores_section,
+    player_stats_modal_section,
     role_player_detail_card,
 )
 from components.player_modal import player_detail_body, player_modal
@@ -6164,15 +6165,15 @@ def _build_profile_modal_body(
     )
 
     if (mode or "roles") == "roles":
-        role_blocks = []
-        role_fit = player_role_fit_section(display_player, settings)
-        if role_fit:
-            role_blocks.append(role_fit)
-        set_pieces = player_set_piece_scores_section(display_player, settings)
-        if set_pieces:
-            role_blocks.append(set_pieces)
-        role_blocks.append(player_attributes(display_player, settings))
-        bottom = html.Div(role_blocks)
+        bottom = [
+            section
+            for section in (
+                player_role_fit_section(display_player, settings),
+                player_set_piece_scores_section(display_player, settings),
+                player_attributes(display_player, settings),
+            )
+            if section is not None
+        ]
     else:
         if stats_player:
             stats_content = stats_charts_bottom_pane(
@@ -6192,14 +6193,10 @@ def _build_profile_modal_body(
                 className="text-muted small",
             )
             set_piece_metrics = None
-        stats_sections = []
+        bottom = []
         if set_piece_metrics:
-            stats_sections.append(set_piece_metrics)
-        stats_sections.append(
-            html.Div("Player stats", className="rs-player-id-section-title")
-        )
-        stats_sections.append(stats_content)
-        bottom = html.Div(stats_sections)
+            bottom.append(set_piece_metrics)
+        bottom.append(player_stats_modal_section(stats_content))
 
     return player_detail_body(
         display_player,
