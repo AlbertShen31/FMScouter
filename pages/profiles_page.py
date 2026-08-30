@@ -6182,12 +6182,7 @@ def _build_profile_modal_body(
                 threshold_overrides=settings.get("stats_thresholds"),
                 cohort_players=stats_cohort,
             )
-            set_piece_metrics = player_set_piece_metrics_section(
-                stats_player,
-                cohort_players=stats_cohort,
-                minutes_required=us.default_minutes_required(settings),
-                limited_divisions=limited_divisions,
-            )
+            set_piece_metrics = player_set_piece_metrics_section(stats_player)
         else:
             stats_content = html.P(
                 "Player stats not available. This profile was saved from an "

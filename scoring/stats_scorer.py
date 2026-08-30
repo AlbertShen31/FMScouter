@@ -957,7 +957,7 @@ def extract_set_piece_stats(row: dict[str, str], group: str) -> dict[str, float]
     return out
 
 
-def _format_set_piece_metric_display(value: float, unit: str) -> str:
+def format_set_piece_metric_display(value: float, unit: str) -> str:
     if unit == "percent":
         return f"{value:.1f}%"
     if unit == "count":
@@ -965,96 +965,6 @@ def _format_set_piece_metric_display(value: float, unit: str) -> str:
     if abs(value) >= 10:
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return f"{value:.2f}"
-
-
-def set_piece_cohort_values(
-    players: list[dict[str, Any]] | None,
-    metric_id: str,
-    group: str,
-    *,
-    min_minutes: float | None = None,
-    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
-    exclude_limited_leagues: bool = True,
-) -> list[float]:
-    values: list[float] = []
-    cohort = players_in_pos_group(players, group)
-    for player in players_for_adaptive_bounds(
-        cohort,
-        min_minutes=min_minutes,
-        limited_divisions=limited_divisions,
-        exclude_limited_leagues=exclude_limited_leagues,
-    ):
-        raw = scoring_set_piece_stats(player).get(metric_id)
-        if raw is None:
-            continue
-        try:
-            number = float(raw)
-        except (TypeError, ValueError):
-            continue
-        if number != number:
-            continue
-        values.append(number)
-    return values
-
-
-def set_piece_rank_percentile(
-    value: float,
-    cohort_values: list[float],
-    *,
-    higher_is_better: bool = True,
-) -> float | None:
-    if not cohort_values:
-        return None
-    if higher_is_better:
-        below = sum(1 for item in cohort_values if item < value)
-        equal = sum(1 for item in cohort_values if item == value)
-    else:
-        below = sum(1 for item in cohort_values if item > value)
-        equal = sum(1 for item in cohort_values if item == value)
-    return max(1.0, min(99.0, (below + 0.5 * equal) / len(cohort_values) * 100))
-
-
-def band_set_piece_metric(
-    metric_id: str,
-    value: float | None,
-    group: str,
-    *,
-    cohort_players: list[dict[str, Any]] | None = None,
-    min_minutes: float | None = None,
-    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
-    exclude_limited_leagues: bool = True,
-) -> dict[str, Any]:
-    meta = set_piece_metric_defs().get(metric_id) or {}
-    hib = bool(meta.get("higher_is_better", True))
-    if value is None:
-        return {
-            "value": None,
-            "display": "—",
-            "percentile": None,
-            "color": None,
-            "higher_is_better": hib,
-            "label": meta.get("label") or metric_id,
-            "abbr": meta.get("abbr") or metric_id,
-        }
-    cohort_values = set_piece_cohort_values(
-        cohort_players,
-        metric_id,
-        group,
-        min_minutes=min_minutes,
-        limited_divisions=limited_divisions,
-        exclude_limited_leagues=exclude_limited_leagues,
-    )
-    pct = set_piece_rank_percentile(value, cohort_values, higher_is_better=hib)
-    unit = meta.get("unit") or ""
-    return {
-        "value": value,
-        "display": _format_set_piece_metric_display(float(value), unit),
-        "percentile": pct,
-        "color": percentile_color(pct) if pct is not None else None,
-        "higher_is_better": hib,
-        "label": meta.get("label") or metric_id,
-        "abbr": meta.get("abbr") or metric_id,
-    }
 
 
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
@@ -1251,6 +1161,7 @@ def parse_stats_export_with_meta(
                 "pos_group": group,
                 "pos_cards": player_pos_groups(positions),
                 "stats": stats,
+                "set_piece_stats": dict(player_payload.get("set_piece_stats") or {}),
                 "stats_limited_tracking": player_payload.get(
                     "stats_limited_tracking", False
                 ),

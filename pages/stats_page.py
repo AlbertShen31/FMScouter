@@ -1085,7 +1085,6 @@ def _player_modal_body(
     settings=None,
     metric_p100=None,
     metric_p0=None,
-    cohort_players=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
@@ -1107,16 +1106,35 @@ def _player_modal_body(
     else:
         metrics = _metrics_values(sections)
     status = minutes_status(player.get("minutes"), minutes_required)
-    bottom_sections = [
-        player_set_piece_metrics_section(
-            player,
-            eval_group=eval_group,
-            cohort_players=cohort_players,
-            minutes_required=minutes_required,
-            limited_divisions=limited_divisions,
+    set_piece_section = player_set_piece_metrics_section(player, eval_group=eval_group)
+    control_children = [
+        html.Div(
+            [
+                html.Div("Evaluate as", className="st-player-switch-label"),
+                _group_switcher(eval_group, player),
+            ],
+            className="st-player-switch-block",
         ),
-        html.Div(metrics, className="st-player-metrics"),
+        html.Div(
+            [
+                html.Div("Display", className="st-player-switch-label"),
+                _view_switcher(view),
+            ],
+            className="st-player-switch-block",
+        ),
+        _overall_avg_banner(sections),
+        *(
+            [note]
+            if (note := _limited_tracking_note(player)) is not None
+            else []
+        ),
     ]
+    after_identity: list = []
+    if set_piece_section is not None:
+        after_identity.append(set_piece_section)
+    after_identity.append(
+        html.Div(control_children, className="st-player-controls")
+    )
     return player_detail_body(
         player,
         id_prefix="st",
@@ -1126,32 +1144,8 @@ def _player_modal_body(
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
         },
         field_formatters={"minutes": _format_minutes_identity},
-        after_identity=html.Div(
-            [
-                html.Div(
-                    [
-                        html.Div("Evaluate as", className="st-player-switch-label"),
-                        _group_switcher(eval_group, player),
-                    ],
-                    className="st-player-switch-block",
-                ),
-                html.Div(
-                    [
-                        html.Div("Display", className="st-player-switch-label"),
-                        _view_switcher(view),
-                    ],
-                    className="st-player-switch-block",
-                ),
-                _overall_avg_banner(sections),
-                *(
-                    [note]
-                    if (note := _limited_tracking_note(player)) is not None
-                    else []
-                ),
-            ],
-            className="st-player-controls",
-        ),
-        bottom=[section for section in bottom_sections if section is not None],
+        after_identity=after_identity,
+        bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
@@ -1814,7 +1808,6 @@ def open_player(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
-            cohort_players=players,
             limited_divisions=limited_divisions,
         ),
         key,
@@ -1888,7 +1881,6 @@ def switch_player_view(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
-            cohort_players=players,
             limited_divisions=limited,
         ),
     )
@@ -1948,7 +1940,6 @@ def switch_player_group(
             settings=settings,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
-            cohort_players=players,
             limited_divisions=limited,
         ),
     )

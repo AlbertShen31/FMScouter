@@ -5062,12 +5062,6 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     grid-template-columns: none;
 }
 
-.rs-set-piece-metrics-values {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.45rem 0.75rem;
-}
-
 .rs-player-attrs .rc-attr-grid {
     margin-top: 0;
     gap: 8px;

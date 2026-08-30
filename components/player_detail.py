@@ -9,17 +9,17 @@ from components.player_modal import player_detail_body
 from scoring.role_scorer import apply_set_piece_scores, player_role_highlights, score_band
 from scoring.stats_scorer import (
     band_metric,
-    band_set_piece_metric,
     categories_for_group,
+    format_set_piece_metric_display,
     is_gk_group,
     metric_defs,
     metrics_for,
     minutes_color,
     minutes_status,
     percentile_color,
-    resolve_player_pos_group,
     scoring_set_piece_stats,
     scoring_stats,
+    set_piece_metric_defs,
     set_piece_metrics_for_group,
 )
 import services.ui_settings as us
@@ -241,89 +241,43 @@ def player_set_piece_scores_section(player: dict, settings=None) -> html.Div | N
     )
 
 
-def _set_piece_metric_items(
-    player: dict,
-    *,
-    eval_group: str | None = None,
-    cohort_players=None,
-    minutes_required: float | None = None,
-    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
-) -> list[html.Div]:
-    group = _normalize_eval_group(player, eval_group)
-    stats = scoring_set_piece_stats(player)
-    metric_ids = set_piece_metrics_for_group(group)
-    items: list[html.Div] = []
-    for metric_id in metric_ids:
-        band = band_set_piece_metric(
-            metric_id,
-            stats.get(metric_id),
-            group,
-            cohort_players=cohort_players,
-            min_minutes=minutes_required,
-            limited_divisions=limited_divisions,
-        )
-        if band.get("value") is None:
-            continue
-        if band.get("percentile") is None:
-            value = html.Div(
-                [
-                    html.Span(band["display"], className="rs-player-id-value st-metric-val"),
-                    html.Span("—", className="st-metric-pct is-missing"),
-                ],
-                className="st-metric-row",
-            )
-        else:
-            value = html.Div(
-                [
-                    html.Span(
-                        band["display"],
-                        className="rs-player-id-value st-metric-val",
-                        style={"color": band["color"]} if band.get("color") else None,
-                    ),
-                    html.Span(
-                        f"~{band['percentile']:.0f}th",
-                        className="st-metric-pct",
-                    ),
-                ],
-                className="st-metric-row",
-            )
-        items.append(
-            html.Div(
-                [
-                    html.Span(band["abbr"], className="st-metric-abbr"),
-                    html.Span(band["label"], className="st-metric-name"),
-                    value,
-                ],
-                className="st-metric-item",
-            )
-        )
-    return items
-
-
 def player_set_piece_metrics_section(
     player: dict,
     *,
     eval_group: str | None = None,
-    cohort_players=None,
-    minutes_required: float | None = None,
-    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div | None:
-    """Set-piece stat counts from the Moneyball export (goals OB, pens, FK shots, …)."""
-    items = _set_piece_metric_items(
-        player,
-        eval_group=eval_group,
-        cohort_players=cohort_players,
-        minutes_required=minutes_required,
-        limited_divisions=limited_divisions,
-    )
-    if not items:
+    """Set-piece stat counts from the Moneyball export (raw values, not percentiles)."""
+    group = _normalize_eval_group(player, eval_group)
+    stats = scoring_set_piece_stats(player)
+    metric_ids = set_piece_metrics_for_group(group)
+    if not metric_ids:
         return None
+    items: list[html.Div] = []
+    for metric_id in metric_ids:
+        meta = set_piece_metric_defs().get(metric_id) or {}
+        label = str(meta.get("label") or metric_id)
+        raw = stats.get(metric_id)
+        if raw is None:
+            display = "—"
+        else:
+            display = format_set_piece_metric_display(
+                float(raw), str(meta.get("unit") or "")
+            )
+        items.append(
+            html.Div(
+                [
+                    html.Span(label, className="rs-player-id-label"),
+                    html.Span(display, className="rs-player-id-value"),
+                ],
+                className="rs-player-id-item",
+            )
+        )
     return html.Div(
         [
             html.Div("Set pieces", className="rs-player-id-section-title"),
-            html.Div(items, className="st-metrics-values rs-set-piece-metrics-values"),
+            html.Div(items, className="rs-player-identity"),
         ],
-        className="rs-player-id-section st-player-values-section rs-set-piece-metrics-section",
+        className="rs-player-id-section rs-set-piece-metrics-section",
     )
 
 
@@ -542,7 +496,11 @@ def stats_player_detail_card(
         if m.get("percentile") is not None
     ]
     overall_avg = sum(pcts) / len(pcts) if pcts else None
-    after_identity = [
+    after_identity: list = []
+    set_piece_section = player_set_piece_metrics_section(player)
+    if set_piece_section is not None:
+        after_identity.append(set_piece_section)
+    after_identity.append(
         html.Div(
             [
                 html.Div("Overall average", className="st-player-switch-label"),
@@ -557,17 +515,8 @@ def stats_player_detail_card(
                 ),
             ],
             className="st-overall-avg pf-stats-overall",
-        ),
-    ]
-    bottom_sections = [
-        player_set_piece_metrics_section(
-            player,
-            cohort_players=cohort_players,
-            minutes_required=minutes_required,
-            limited_divisions=limited_divisions,
-        ),
-        html.Div(_metrics_values(sections), className="st-player-metrics"),
-    ]
+        )
+    )
     return player_detail_body(
         player,
         id_prefix="st",
@@ -578,7 +527,7 @@ def stats_player_detail_card(
         },
         field_formatters={"minutes": _format_minutes_identity},
         after_identity=after_identity,
-        bottom=[section for section in bottom_sections if section is not None],
+        bottom=html.Div(_metrics_values(sections), className="st-player-metrics"),
         settings=settings,
         limited_divisions=limited_divisions,
     )
