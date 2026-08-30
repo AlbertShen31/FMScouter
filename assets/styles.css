@@ -7841,7 +7841,8 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-setpiece-chart-cols .pf-depth-chart-rank,
 .pf-setpiece-chart-cols .pf-depth-chart-age,
 .pf-setpiece-chart-cols .pf-depth-chart-height,
-.pf-setpiece-chart-cols .pf-depth-chart-feet {
+.pf-setpiece-chart-cols .pf-depth-chart-feet,
+.pf-setpiece-chart-cols .pf-depth-chart-rec {
     text-align: center;
 }
 
@@ -7852,13 +7853,11 @@ body[data-theme="light"] .pf-depth-undo-row {
     text-align: left;
 }
 
-/* Rec → Rk: stretch to the track and center so headers match body pills. */
-.pf-setpiece-chart-cols .pf-depth-chart-rec,
+/* Injury / score / slot cols stretch; Rec stays a compact pill like depth chart. */
 .pf-setpiece-chart-cols .pf-depth-chart-injury,
 .pf-setpiece-chart-cols .pf-depth-chart-score,
 .pf-setpiece-chart-cols .pf-setpiece-chart-slot,
 .pf-setpiece-chart-cols .pf-setpiece-chart-slot-rank,
-.pf-setpiece-chart-row .pf-depth-chart-rec,
 .pf-setpiece-chart-row .pf-depth-chart-injury,
 .pf-setpiece-chart-row .pf-depth-chart-score,
 .pf-setpiece-chart-row .pf-setpiece-chart-slot,
