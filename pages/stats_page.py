@@ -1114,28 +1114,31 @@ def _player_modal_body(
             "injury": {"color": "#fbbf24", "fontWeight": "600"},
         },
         field_formatters={"minutes": _format_minutes_identity},
-        after_identity=[
-            html.Div(
-                [
-                    html.Div("Evaluate as", className="st-player-switch-label"),
-                    _group_switcher(eval_group, player),
-                ],
-                className="st-player-switch-block",
-            ),
-            html.Div(
-                [
-                    html.Div("Display", className="st-player-switch-label"),
-                    _view_switcher(view),
-                ],
-                className="st-player-switch-block",
-            ),
-            _overall_avg_banner(sections),
-            *(
-                [note]
-                if (note := _limited_tracking_note(player)) is not None
-                else []
-            ),
-        ],
+        after_identity=html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div("Evaluate as", className="st-player-switch-label"),
+                        _group_switcher(eval_group, player),
+                    ],
+                    className="st-player-switch-block",
+                ),
+                html.Div(
+                    [
+                        html.Div("Display", className="st-player-switch-label"),
+                        _view_switcher(view),
+                    ],
+                    className="st-player-switch-block",
+                ),
+                _overall_avg_banner(sections),
+                *(
+                    [note]
+                    if (note := _limited_tracking_note(player)) is not None
+                    else []
+                ),
+            ],
+            className="st-player-controls",
+        ),
         bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
         theme=theme,

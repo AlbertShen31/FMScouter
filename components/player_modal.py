@@ -290,7 +290,9 @@ def player_identity_sections(
                 )
             )
         else:
-            sections.extend(row_nodes)
+            sections.append(
+                html.Div(row_nodes, className="rs-player-identity-block")
+            )
     return sections
 
 

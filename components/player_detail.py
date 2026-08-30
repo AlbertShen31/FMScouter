@@ -77,10 +77,10 @@ def player_attributes(player: dict, settings=None) -> html.Div:
     )
     return html.Div(
         [
-            html.Div("Attributes", className="rs-player-attrs-title"),
+            html.Div("Attributes", className="rs-player-id-section-title"),
             attr_grid(columns),
         ],
-        className="rs-player-attrs",
+        className="rs-player-attrs rs-player-id-section",
     )
 
 
