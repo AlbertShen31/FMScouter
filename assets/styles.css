@@ -8274,7 +8274,8 @@ body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
     cursor: pointer;
 }
 
-.pf-depth-chart-name {
+.pf-depth-chart-name,
+.pf-setpiece-chart-name {
     appearance: none;
     background: transparent;
     border: none;
@@ -8293,7 +8294,8 @@ body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
     text-underline-offset: 3px;
 }
 
-.pf-depth-chart-name:hover {
+.pf-depth-chart-name:hover,
+.pf-setpiece-chart-name:hover {
     opacity: 0.9;
 }
 
@@ -8420,7 +8422,8 @@ body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
     border-color: rgba(185, 28, 28, 0.28);
 }
 
-.pf-depth-chart-name.is-empty {
+.pf-depth-chart-name.is-empty,
+.pf-setpiece-chart-name.is-empty {
     color: var(--app-muted);
     font-style: italic;
 }

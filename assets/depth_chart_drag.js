@@ -311,6 +311,12 @@
           ? event.target.closest(".pf-depth-chart-name")
           : null;
       if (!nameBtn) return;
+      // Set-piece rows reuse similar styling but must stay clickable after depth drags.
+      if (
+        !nameBtn.closest(".pf-depth-chart-row.is-sortable[data-profile-id]")
+      ) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       if (typeof event.stopImmediatePropagation === "function") {

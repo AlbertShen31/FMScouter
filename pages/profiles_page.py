@@ -2276,6 +2276,7 @@ def _setpiece_chart_player_row(
     show_height: bool = False,
     slot_label: str | None = None,
     slot_rank: int | None = None,
+    foot_side: str | None = None,
 ) -> html.Div:
     """Read-only depth-style row for the set-piece leaderboard."""
     settings = us.normalize(settings)
@@ -2316,6 +2317,8 @@ def _setpiece_chart_player_row(
     profile_id = str(entry.get("id") or "").strip()
     name, club = profiles.profile_identity(entry)
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    side_key = str(foot_side or "").strip().lower()
+    slot_key = f"{side_key}-{index}" if side_key in ("left", "right") else str(index)
     feet_row = dict(row)
     if feet_row.get("Left Foot") in (None, "", "-", "—") and player.get("left_foot"):
         feet_row["Left Foot"] = player.get("left_foot")
@@ -2352,15 +2355,15 @@ def _setpiece_chart_player_row(
                     "type": "pf-depth-name",
                     "id": profile_id,
                     "src": "setpiece",
-                    "slot": str(index),
+                    "slot": slot_key,
                 },
                 n_clicks=0,
-                className="pf-depth-chart-name",
+                className="pf-setpiece-chart-name",
                 title="Open player details",
                 type="button",
             )
             if profile_id
-            else html.Span("—", className="pf-depth-chart-name is-empty")
+            else html.Span("—", className="pf-setpiece-chart-name is-empty")
         ),
         _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
     ]
@@ -2423,6 +2426,7 @@ def _setpiece_ranked_table(
     score_abbr: str = "Score",
     slot_map: dict[str, tuple[int, str]] | None = None,
     empty_message: str = "No matching players.",
+    foot_side: str | None = None,
 ) -> html.Div:
     if not ranked:
         return html.Div(empty_message, className="text-muted small pf-setpiece-empty")
@@ -2443,6 +2447,7 @@ def _setpiece_ranked_table(
                 show_height=show_height,
                 slot_label=slot_label,
                 slot_rank=slot_rank,
+                foot_side=foot_side,
             )
         )
     return html.Div(
@@ -2531,6 +2536,7 @@ def _build_setpiece_chart(
             score_abbr=abbr,
             slot_map=slot_map,
             empty_message="No strong left-footed takers yet.",
+            foot_side="left",
         )
         right_table = _setpiece_ranked_table(
             right_ranked,
@@ -2540,6 +2546,7 @@ def _build_setpiece_chart(
             score_abbr=abbr,
             slot_map=slot_map,
             empty_message="No strong right-footed takers yet.",
+            foot_side="right",
         )
         return html.Div(
             [
@@ -3609,6 +3616,7 @@ def layout(**_kwargs):
                 [
                     {"type": "compare-view", "view": "_"},
                     {"type": "compare-group", "group": "_"},
+                    {"type": "depth-name", "id": "_", "src": "_", "slot": "_"},
                 ],
             ),
             player_modal(prefix="pf"),
@@ -4022,7 +4030,6 @@ def layout(**_kwargs):
                                     _profiles_busy_overlay(
                                         "pf-setpiece-chart-busy",
                                         "Updating set pieces…",
-                                        on=True,
                                     ),
                                 ],
                                 id="pf-setpiece-wrap",
@@ -4630,13 +4637,19 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Set pieces panel: spinner on category / formation / rev / hydrate.
+# Set pieces panel: show spinner on rebuild triggers; hide when chart body finishes.
 clientside_callback(
     """
-    function(pieceView, formation, rev, hydrated) {
+    function(pieceView, formation, rev, hydrated, _bodyChildren) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
+        }
+        for (var i = 0; i < trig.length; i += 1) {
+            var prop = trig[i].prop_id || "";
+            if (prop.indexOf("pf-setpiece-chart-body") !== -1) {
+                return "rs-shortlist-busy";
+            }
         }
         return "rs-shortlist-busy is-on t-" + String(Date.now());
     }
@@ -4646,20 +4659,6 @@ clientside_callback(
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
     Input("pf-hydrated", "data"),
-    prevent_initial_call=True,
-)
-
-clientside_callback(
-    """
-    function(_children) {
-        var el = document.getElementById("pf-setpiece-chart-busy");
-        if (!el || el.className.indexOf("is-on") === -1) {
-            return window.dash_clientside.no_update;
-        }
-        return "rs-shortlist-busy";
-    }
-    """,
-    Output("pf-setpiece-chart-busy", "className", allow_duplicate=True),
     Input("pf-setpiece-chart-body", "children"),
     prevent_initial_call=True,
 )
