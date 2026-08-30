@@ -6192,6 +6192,7 @@ def _build_profile_modal_body(
         after_identity=segmented,
         bottom=bottom,
         settings=settings,
+        theme=theme,
     )
 
 

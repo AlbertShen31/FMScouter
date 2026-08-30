@@ -743,6 +743,7 @@ def _player_modal_body(
         ],
         bottom=html.Div(metrics, className="st-player-metrics"),
         settings=settings,
+        theme=theme,
     )
 
 

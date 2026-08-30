@@ -2127,6 +2127,7 @@ def reveal_workflow(parsed, payload):
     State("rs-hybrids-only", "checked"),
     State("rs-config", "data"),
     State("ui-settings", "data"),
+    State("theme", "data"),
     prevent_initial_call=True,
 )
 def open_player_modal(
@@ -2140,6 +2141,7 @@ def open_player_modal(
     hybrids_only,
     pack_id,
     settings,
+    theme,
 ):
     if ctx.triggered_id == "rs-player-modal":
         # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
@@ -2196,6 +2198,7 @@ def open_player_modal(
             player,
             settings,
             position_eligible=position_eligible,
+            theme=theme,
         ),
         None,
     )

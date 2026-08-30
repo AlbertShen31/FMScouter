@@ -173,6 +173,7 @@ def role_player_detail_card(
     settings=None,
     *,
     position_eligible: str | None = None,
+    theme: str | None = None,
 ) -> html.Div:
     settings = us.normalize(settings)
     return player_detail_body(
@@ -183,6 +184,7 @@ def role_player_detail_card(
         after_identity=player_role_fit_section(player, settings),
         bottom=player_attributes(player, settings),
         settings=settings,
+        theme=theme,
     )
 
 

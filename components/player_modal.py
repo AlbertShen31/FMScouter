@@ -18,6 +18,7 @@ from scoring.personality_tiers import (
     tier_label,
 )
 import services.ui_settings as us
+from components.player_table import rec_grade_style
 
 # FM26 Moneyball export: star ratings are unreliable — never show in the UI.
 STAR_ATTRIBUTES_BROKEN = frozenset({"ability", "potential", "world_reputation"})
@@ -185,6 +186,7 @@ def _identity_row_items(
     position_eligible: str | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
 ) -> list:
     items = []
     for key in keys:
@@ -198,6 +200,7 @@ def _identity_row_items(
             position_eligible=position_eligible,
             field_styles=field_styles,
             field_formatters=field_formatters,
+            theme=theme,
         )
         if item is not None:
             items.append(item)
@@ -212,6 +215,7 @@ def player_identity_sections(
     extra_identity_fields: Sequence[tuple[str, str]] | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
 ) -> list:
     """Build identity + international section nodes (no personality)."""
     configured = [
@@ -249,6 +253,7 @@ def player_identity_sections(
                 position_eligible=position_eligible,
                 field_styles=field_styles,
                 field_formatters=field_formatters,
+                theme=theme,
             )
             if items:
                 row_class = "rs-player-identity"
@@ -266,6 +271,7 @@ def player_identity_sections(
                 position_eligible=position_eligible,
                 field_styles=field_styles,
                 field_formatters=field_formatters,
+                theme=theme,
             )
             if items:
                 row_nodes.append(html.Div(items, className="rs-player-identity"))
@@ -341,6 +347,7 @@ def player_identity_item(
     position_eligible: str | None = None,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
 ) -> html.Div | None:
     display_key = key
     raw_key = _CLAUSE_RAW_KEYS.get(key)
@@ -368,6 +375,10 @@ def player_identity_item(
     formatter = (field_formatters or {}).get(key)
     text = formatter(raw) if formatter else str(raw or "—")
     style = dict((field_styles or {}).get(key) or {})
+    if key == "rec":
+        rec_style = rec_grade_style(text, theme)
+        if rec_style:
+            style = {"color": rec_style["color"], **style}
     return html.Div(
         [
             html.Span(label, className="rs-player-id-label"),
@@ -517,8 +528,12 @@ def player_detail_body(
     after_identity=None,
     bottom=None,
     settings=None,
+    theme: str | None = None,
 ) -> html.Div:
     """Shared modal body: identity → international → finance → career → discipline → personality → page content."""
+    effective_theme = theme
+    if effective_theme is None and settings:
+        effective_theme = us.preferred_theme(settings)
     section_kwargs = {
         "field_styles": field_styles,
         "field_formatters": field_formatters,
@@ -531,6 +546,7 @@ def player_detail_body(
             extra_identity_fields=extra_identity_fields,
             field_styles=field_styles,
             field_formatters=field_formatters,
+            theme=effective_theme,
         ),
         player_finance_section(player, **section_kwargs),
         player_career_section(player, **section_kwargs),
