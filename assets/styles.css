@@ -4960,9 +4960,15 @@ body[data-theme="light"] .rs-player-id-value.is-partial {
     grid-template-columns: 2.4rem minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.35rem 0.65rem;
-    padding: 0;
-    background: none;
-    border: none;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--app-head) 80%, transparent);
+    border: 1px solid var(--app-line);
+}
+
+html[data-theme="light"] .rs-role-fit-row,
+body[data-theme="light"] .rs-role-fit-row {
+    background: color-mix(in srgb, var(--app-card) 88%, var(--app-line));
 }
 
 .rs-role-fit-phase {
@@ -4999,48 +5005,63 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 }
 
 .rs-role-fit-score {
-    min-width: 2.5rem;
-    text-align: right;
-    padding: 0;
-    border-radius: 0;
+    min-width: 2.6rem;
+    text-align: center;
+    border-radius: 5px;
+    padding: 0.1rem 0.4rem;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 .rs-role-fit-score.rs-band-elite {
-    background: none;
+    background: var(--band-elite-bg);
     color: var(--band-elite-fg);
 }
 
 .rs-role-fit-score.rs-band-good {
-    background: none;
+    background: var(--band-good-bg);
     color: var(--band-good-fg);
 }
 
 .rs-role-fit-score.rs-band-ok {
-    background: none;
+    background: var(--band-ok-bg);
     color: var(--band-ok-fg);
 }
 
 .rs-role-fit-score.rs-band-poor {
-    background: none;
+    background: var(--band-poor-bg);
     color: var(--band-poor-fg);
 }
 
-.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-elite {
+.rs-set-piece-scores-section .rs-set-piece-score-val {
+    align-self: flex-start;
+    width: fit-content;
+    min-width: 2.5rem;
+    text-align: center;
+    padding: 0.1rem 0.45rem;
+    border-radius: 5px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.rs-set-piece-scores-section .rs-set-piece-score-val.rs-band-elite {
+    background: var(--band-elite-bg);
     color: var(--band-elite-fg);
 }
 
-.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-good {
+.rs-set-piece-scores-section .rs-set-piece-score-val.rs-band-good {
+    background: var(--band-good-bg);
     color: var(--band-good-fg);
 }
 
-.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-ok {
+.rs-set-piece-scores-section .rs-set-piece-score-val.rs-band-ok {
+    background: var(--band-ok-bg);
     color: var(--band-ok-fg);
 }
 
-.rs-set-piece-scores-section .rs-player-id-value.rs-set-piece-band-poor {
+.rs-set-piece-scores-section .rs-set-piece-score-val.rs-band-poor {
+    background: var(--band-poor-bg);
     color: var(--band-poor-fg);
 }
 

@@ -218,7 +218,7 @@ def player_set_piece_scores_section(player: dict, settings=None) -> html.Div | N
                     html.Span(label, className="rs-player-id-label"),
                     html.Span(
                         f"{score:.2f}",
-                        className=f"rs-player-id-value rs-set-piece-band-{band}",
+                        className=f"rs-player-id-value rs-set-piece-score-val rs-band-{band}",
                         title=profile.get("label") or "",
                     ),
                 ],
