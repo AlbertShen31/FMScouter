@@ -256,10 +256,7 @@ def player_identity_sections(
                 theme=theme,
             )
             if items:
-                row_class = "rs-player-identity"
-                if keys_in_row == ["int_apps_season", "avg_rating_int", "last_5_int"]:
-                    row_class += " rs-player-identity-int-season"
-                row_nodes.append(html.Div(items, className=row_class))
+                row_nodes.append(html.Div(items, className="rs-player-identity"))
             placed.update(keys_in_row)
 
         leftover_keys = [key for _label, key in by_section[title] if key not in placed]

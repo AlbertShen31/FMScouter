@@ -4754,20 +4754,20 @@ body[data-theme="light"] .st-pizza-legend-pct {
     gap: 0.4rem 0.85rem;
 }
 
-.rs-player-identity.rs-player-identity-int-season {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-@media (max-width: 520px) {
-    .rs-player-identity.rs-player-identity-int-season {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    }
-}
-
 .rs-player-id-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.4rem 0.85rem;
+    align-items: start;
+}
+
+.rs-player-id-section > :not(.rs-player-identity) {
+    grid-column: 1 / -1;
+}
+
+.rs-player-id-section > .rs-player-identity {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
 }
 
 .rs-player-id-section-title {
