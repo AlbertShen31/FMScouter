@@ -51,6 +51,7 @@ CAREER_MODAL_FIELDS = (
 
 DISCIPLINE_MODAL_FIELDS = (
     ("Appearances", "appearances"),
+    ("Minutes", "minutes"),
     ("Yellow cards", "yellow_cards"),
     ("Red cards", "red_cards"),
     ("Fouls made", "fouls_made"),
@@ -124,6 +125,8 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Int apps (season)", "int_apps_season"),
                 ("Int rating", "avg_rating_int"),
                 ("Last 5 int", "last_5_int"),
+            ],
+            [
                 ("Int form", "form_int"),
             ],
         ],
@@ -166,6 +169,41 @@ def iter_modal_field_defs() -> list[tuple[str, str, str]]:
     return out
 
 
+def _identity_section_rows(title: str | None) -> list[list[str]]:
+    """Field keys per visual row for a section title (None = main identity block)."""
+    for section_title, rows in PLAYER_IDENTITY_SECTIONS:
+        if section_title == title:
+            return [[key for _label, key in row] for row in rows]
+    return []
+
+
+def _identity_row_items(
+    keys: Sequence[str],
+    field_map: Mapping[str, str],
+    player: dict,
+    *,
+    position_eligible: str | None = None,
+    field_styles: Mapping[str, dict] | None = None,
+    field_formatters: Mapping[str, FieldFormatter] | None = None,
+) -> list:
+    items = []
+    for key in keys:
+        label = field_map.get(key)
+        if not label:
+            continue
+        item = player_identity_item(
+            label,
+            key,
+            player,
+            position_eligible=position_eligible,
+            field_styles=field_styles,
+            field_formatters=field_formatters,
+        )
+        if item is not None:
+            items.append(item)
+    return items
+
+
 def player_identity_sections(
     player: dict,
     *,
@@ -200,36 +238,52 @@ def player_identity_sections(
     for title in (None, "International & youth"):
         if title not in by_section:
             continue
-        items = [
-            item
-            for item in (
-                player_identity_item(
-                    label,
-                    key,
-                    player,
-                    position_eligible=position_eligible,
-                    field_styles=field_styles,
-                    field_formatters=field_formatters,
-                )
-                for label, key in by_section[title]
+        field_map = {key: label for label, key in by_section[title]}
+        row_nodes: list = []
+        placed: set[str] = set()
+        for keys_in_row in _identity_section_rows(title):
+            items = _identity_row_items(
+                keys_in_row,
+                field_map,
+                player,
+                position_eligible=position_eligible,
+                field_styles=field_styles,
+                field_formatters=field_formatters,
             )
-            if item is not None
-        ]
-        if not items:
+            if items:
+                row_class = "rs-player-identity"
+                if keys_in_row == ["int_apps_season", "avg_rating_int", "last_5_int"]:
+                    row_class += " rs-player-identity-int-season"
+                row_nodes.append(html.Div(items, className=row_class))
+            placed.update(keys_in_row)
+
+        leftover_keys = [key for _label, key in by_section[title] if key not in placed]
+        if leftover_keys:
+            items = _identity_row_items(
+                leftover_keys,
+                field_map,
+                player,
+                position_eligible=position_eligible,
+                field_styles=field_styles,
+                field_formatters=field_formatters,
+            )
+            if items:
+                row_nodes.append(html.Div(items, className="rs-player-identity"))
+
+        if not row_nodes:
             continue
-        row = html.Div(items, className="rs-player-identity")
         if title:
             sections.append(
                 html.Div(
                     [
                         html.Div(title, className="rs-player-id-section-title"),
-                        row,
+                        *row_nodes,
                     ],
                     className="rs-player-id-section",
                 )
             )
         else:
-            sections.append(row)
+            sections.extend(row_nodes)
     return sections
 
 

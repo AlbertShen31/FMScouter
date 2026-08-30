@@ -514,6 +514,16 @@ def _resolve_minutes_required(value, settings=None) -> float:
     return float(us.default_minutes_required(settings))
 
 
+def _format_profile_minutes(value) -> str:
+    if value in (None, "", "-"):
+        return "—"
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return str(int(num)) if num == int(num) else str(num)
+
+
 def _minutes_cell(mins_raw, settings, *, minutes_required=None) -> str:
     if mins_raw in (None, "", "-", "—", "undefined", "null", "None"):
         return "—"
@@ -6177,8 +6187,8 @@ def _build_profile_modal_body(
         display_player,
         id_prefix="pf",
         modal_fields=us.modal_identity_fields_for("player_stats", settings),
-        extra_identity_fields=[("Minutes", "minutes")],
         field_styles=field_styles,
+        field_formatters={"minutes": _format_profile_minutes},
         after_identity=segmented,
         bottom=bottom,
         settings=settings,

@@ -394,7 +394,6 @@ def stats_player_detail_card(
     return player_detail_body(
         player,
         id_prefix="st",
-        extra_identity_fields=[("Minutes", "minutes")],
         modal_fields=us.modal_identity_fields_for("player_stats", settings),
         field_styles={
             "minutes": {"color": minutes_color(status)},

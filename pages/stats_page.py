@@ -1107,7 +1107,6 @@ def _player_modal_body(
     return player_detail_body(
         player,
         id_prefix="st",
-        extra_identity_fields=[("Minutes", "minutes")],
         modal_fields=us.modal_identity_fields_for("player_stats", settings) if settings else None,
         field_styles={
             "minutes": {"color": minutes_color(status)},
