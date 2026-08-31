@@ -931,6 +931,42 @@ def auto_rank_slot_by_score(
     return len(ids)
 
 
+def _export_pending_handled_on_slots(
+    profile_id: str,
+    role_column: str,
+    *,
+    formation_id: str,
+    slots: list[dict[str, Any]],
+    entries_by_id: dict[str, dict[str, Any]],
+) -> bool:
+    """True when a staged export is on or excluded from every matching slot."""
+    pid = str(profile_id or "").strip()
+    role = str(role_column or "").strip()
+    if not pid or not role:
+        return True
+    matched = False
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        slot_role = str(slot.get("column") or "").strip()
+        if slot_role != role:
+            continue
+        try:
+            slot_index = slot["index"]
+        except KeyError:
+            continue
+        matched = True
+        current = get_slot_order_ids(formation_id, slot_index, role, seed=True)
+        if pid in current:
+            continue
+        excluded_at = get_slot_excluded_at(formation_id, slot_index)
+        still_excluded = _still_excluded_ids(excluded_at, entries_by_id)
+        if pid in still_excluded:
+            continue
+        return False
+    return matched
+
+
 def sync_formation_depth_from_exports(
     formation_id: str | None,
     slots: list[dict[str, Any]],
@@ -939,10 +975,10 @@ def sync_formation_depth_from_exports(
 ) -> int:
     """Pull staged Role-score exports into formation slots (append at bottom only).
 
-    Each staged profile is placed on at most one slot: the first matching slot
-    (by lineup order) where it is not already listed anywhere in the formation.
-    Existing slot order is preserved; removed players stay excluded until restore
-    or a newer export (saved_at after the remove).
+    Each staged profile is added to every formation slot whose role column
+    matches (e.g. shared RW/LW hybrids), unless it is already listed or
+    excluded on that slot. Existing slot order is preserved; removed players
+    stay excluded until restore or a newer export (saved_at after the remove).
     """
     pack = str(formation_id or "").strip()
     if not pack or not slots:
@@ -957,12 +993,6 @@ def sync_formation_depth_from_exports(
         str(entry.get("id") or "").strip(): entry
         for entry in role_profiles
         if str(entry.get("id") or "").strip()
-    }
-    in_formation = _profile_ids_in_slot_depth(library_id=lid, formation_id=pack)
-    consumed: set[str] = {
-        str(item.get("profile_id") or "").strip()
-        for item in pending
-        if str(item.get("profile_id") or "").strip() in in_formation
     }
     total_added = 0
 
@@ -992,7 +1022,7 @@ def sync_formation_depth_from_exports(
         for item in pending:
             pid = str(item.get("profile_id") or "").strip()
             item_role = str(item.get("role_column") or "").strip()
-            if not pid or item_role != role or pid in consumed:
+            if not pid or item_role != role:
                 continue
             if pid in present or pid in still_excluded:
                 continue
@@ -1012,14 +1042,17 @@ def sync_formation_depth_from_exports(
             set_slot_order_ids(pack, slot_index, new_ids)
         if append_ids:
             total_added += len(append_ids)
-            for pid in append_ids:
-                consumed.add(pid)
-                in_formation.add(pid)
 
     remaining = [
         item
         for item in pending
-        if str(item.get("profile_id") or "").strip() not in consumed
+        if not _export_pending_handled_on_slots(
+            str(item.get("profile_id") or "").strip(),
+            str(item.get("role_column") or "").strip(),
+            formation_id=pack,
+            slots=slots,
+            entries_by_id=by_id,
+        )
     ]
     if len(remaining) != len(pending):
         _write_export_staging(remaining, lid)

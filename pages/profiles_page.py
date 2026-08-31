@@ -124,7 +124,7 @@ PF_REPLACE_TIP = (
 )
 PF_SQUAD_DEPTH_TIP = (
     "One card per formation position (up to 11). Save from Role scores queues exports "
-    "until Refresh exports places them on the matching slot (one slot each, bottom of depth). "
+    "until Refresh exports places them on every matching slot (bottom of depth). "
     "Click a card to edit that role's depth; click again to return to the XI. "
     "Auto-rank sorts players still on the slot (Score, then Ovr). Removals stay off until "
     "Recently removed restore or a new Role-scores export."
