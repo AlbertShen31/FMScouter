@@ -7460,7 +7460,16 @@ body[data-theme="light"] .pf-export-staging-badge {
 }
 
 .pf-depth-undo-wrap {
+    position: relative;
     margin: 0.85rem 0 0;
+}
+
+.pf-depth-undo-wrap .pf-depth-undo-clear-btn.mantine-Button-root {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.75rem;
+    z-index: 2;
+    margin-left: 0;
 }
 
 .pf-depth-undo-panel {
@@ -7471,6 +7480,10 @@ body[data-theme="light"] .pf-export-staging-badge {
     padding: 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
     overflow: hidden;
+}
+
+.pf-depth-undo-panel .pf-depth-undo-summary {
+    padding-right: 4.75rem;
 }
 
 .pf-depth-undo-panel.is-empty {
@@ -7486,6 +7499,34 @@ body[data-theme="light"] .pf-export-staging-badge {
     list-style: none;
     user-select: none;
     background: color-mix(in srgb, #eab308 14%, var(--app-head));
+}
+
+.pf-depth-undo-summary-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.pf-depth-undo-clear-btn.mantine-Button-root {
+    flex-shrink: 0;
+    color: var(--app-muted);
+    border-color: var(--app-line);
+    background: color-mix(in srgb, var(--app-card) 88%, var(--app-elev));
+}
+
+.pf-depth-undo-clear-btn.mantine-Button-root:hover {
+    color: var(--app-text);
+    background: color-mix(in srgb, var(--app-danger) 12%, var(--app-elev));
+    border-color: color-mix(in srgb, var(--app-danger) 45%, var(--app-line));
+}
+
+html[data-theme="light"] .pf-depth-undo-clear-btn.mantine-Button-root:hover,
+body[data-theme="light"] .pf-depth-undo-clear-btn.mantine-Button-root:hover {
+    color: #991b1b;
+    background: color-mix(in srgb, #dc2626 10%, #fff);
+    border-color: color-mix(in srgb, #dc2626 35%, #cbd5e1);
 }
 
 .pf-depth-undo-summary::-webkit-details-marker {
@@ -7758,9 +7799,20 @@ body[data-theme="light"] .pf-depth-undo-row {
     flex-wrap: wrap;
 }
 
-.pf-depth-chart-wrap .st-compare-status-wrap {
+.pf-depth-chart-wrap .st-compare-status-wrap,
+.pf-depth-chart-wrap .pf-depth-compare-status {
     margin-top: -0.15rem;
     margin-bottom: 0.35rem;
+}
+
+.pf-depth-chart-section .pf-depth-compare-status {
+    padding: 0 1rem 0.15rem;
+    margin-top: -0.35rem;
+    margin-bottom: 0.15rem;
+}
+
+.pf-depth-compare-fallback {
+    display: none !important;
 }
 
 .pf-xi-view-field {
@@ -8083,6 +8135,31 @@ body[data-theme="light"] .pf-setpiece-chart-row.is-odd {
 .pf-depth-role-btn-rank.mantine-Button-root:hover {
     background: color-mix(in srgb, var(--app-accent) 34%, var(--app-elev));
     border-color: var(--app-accent);
+}
+
+.pf-depth-role-btn-compare.mantine-Button-root {
+    border: 1px solid var(--app-line);
+    color: var(--app-text);
+    background: var(--app-elev);
+}
+
+.pf-depth-role-btn-compare.mantine-Button-root:not(:disabled):hover {
+    background: color-mix(in srgb, var(--app-accent) 18%, var(--app-elev));
+    border-color: color-mix(in srgb, var(--app-accent) 45%, var(--app-line));
+}
+
+html[data-theme="light"] .pf-depth-role-btn-compare.mantine-Button-root,
+body[data-theme="light"] .pf-depth-role-btn-compare.mantine-Button-root {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    box-shadow: none;
+}
+
+html[data-theme="light"] .pf-depth-role-btn-compare.mantine-Button-root:not(:disabled):hover,
+body[data-theme="light"] .pf-depth-role-btn-compare.mantine-Button-root:not(:disabled):hover {
+    background: color-mix(in srgb, var(--app-accent) 14%, #fff);
+    border-color: color-mix(in srgb, var(--app-accent) 40%, #64748b);
 }
 
 html[data-theme="light"] .pf-depth-role-btn-remove.mantine-Button-root:not(:disabled),

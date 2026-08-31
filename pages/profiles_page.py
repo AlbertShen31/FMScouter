@@ -2650,8 +2650,45 @@ def _build_setpiece_chart(
     )
 
 
+def _depth_compare_button(*, visible: bool = True) -> dmc.Button:
+    style = {"display": "none"} if not visible else None
+    return dmc.Button(
+        "Compare selected",
+        id="pf-compare-btn",
+        size="sm",
+        variant="light",
+        n_clicks=0,
+        disabled=True,
+        className="pf-depth-role-btn pf-depth-role-btn-compare st-compare-btn",
+        style=style,
+    )
+
+
+def _depth_compare_status(*, visible: bool = True) -> html.Div:
+    return html.Div(
+        id="pf-compare-status",
+        className="st-compare-status-wrap pf-depth-compare-status",
+        style={"display": "none"} if not visible else None,
+    )
+
+
+def _depth_compare_fallback(*, visible: bool = False) -> html.Div:
+    """Keep compare ids mounted when slot actions are not shown."""
+    return html.Div(
+        [_depth_compare_button(visible=visible), _depth_compare_status(visible=visible)],
+        className="pf-depth-compare-fallback",
+        hidden=not visible,
+    )
+
+
 def _depth_chart_empty_hint(message: str) -> html.Div:
-    return html.Div(message, className="text-muted small pf-depth-chart-empty-hint")
+    return html.Div(
+        [
+            html.Div(message, className="text-muted small pf-depth-chart-empty-hint"),
+            _depth_compare_fallback(),
+        ],
+        className="pf-depth-chart-empty-wrap",
+    )
 
 
 def _depth_chart_role_tone(column: str, meta: dict) -> str:
@@ -2790,6 +2827,7 @@ def _build_depth_chart(
                     "No saved profiles for this formation slot’s role.",
                     className="text-muted small pf-depth-chart-empty",
                 ),
+                _depth_compare_fallback(),
             ],
             className="pf-depth-chart-section is-empty",
         )
@@ -2871,6 +2909,7 @@ def _build_depth_chart(
                                         disabled=True,
                                         className="pf-depth-role-btn pf-depth-role-btn-remove",
                                     ),
+                                    _depth_compare_button(visible=True),
                                     dmc.Button(
                                         "Auto-rank by Score",
                                         id={
@@ -2890,6 +2929,7 @@ def _build_depth_chart(
                         ],
                         className="pf-depth-chart-role-head",
                     ),
+                    _depth_compare_status(visible=True),
                     _depth_chart_col_headers(
                         selectable=True, slot_index=slot_index
                     ),
@@ -3520,30 +3560,34 @@ def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
     if not rows:
         return html.Div(className="pf-depth-undo-panel is-empty")
     count = len(rows)
-    return html.Details(
-        [
-            html.Summary(
-                html.Div(
-                    [
-                        html.Span("Recently removed", className="pf-depth-undo-title"),
-                        html.Span(
-                            str(count),
-                            className="pf-depth-undo-badge",
-                            **{"aria-label": f"{count} recently removed"},
-                        ),
-                        *help_icon(PF_UNDO_TIP, "pf-help-recently-removed"),
-                    ],
-                    className="pf-depth-undo-title-row",
+    return html.Div(
+        html.Details(
+            [
+                html.Summary(
+                    html.Div(
+                        [
+                            html.Span(
+                                "Recently removed", className="pf-depth-undo-title"
+                            ),
+                            html.Span(
+                                str(count),
+                                className="pf-depth-undo-badge",
+                                **{"aria-label": f"{count} recently removed"},
+                            ),
+                            *help_icon(PF_UNDO_TIP, "pf-help-recently-removed"),
+                        ],
+                        className="pf-depth-undo-title-row",
+                    ),
+                    className="pf-depth-undo-summary",
                 ),
-                className="pf-depth-undo-summary",
-            ),
-            html.Div(
-                [
+                html.Div(
                     html.Div(rows, className="pf-depth-undo-list"),
-                ],
-                className="pf-depth-undo-body",
-            ),
-        ],
+                    className="pf-depth-undo-body",
+                ),
+            ],
+            className="pf-depth-undo-details",
+            open=True,
+        ),
         className="pf-depth-undo-panel",
     )
 
@@ -3972,30 +4016,30 @@ def layout(**_kwargs):
                                                             "pf-depth-minutes-field"
                                                         ),
                                                     ),
-                                                    dmc.Button(
-                                                        "Compare selected",
-                                                        id="pf-compare-btn",
-                                                        size="sm",
-                                                        variant="light",
-                                                        n_clicks=0,
-                                                        disabled=True,
-                                                        className="st-compare-btn",
-                                                    ),
                                                 ],
                                                 className="pf-depth-chart-toolbar-actions",
                                             ),
                                         ],
                                         className="pf-depth-chart-toolbar",
                                     ),
-                                    html.Div(
-                                        id="pf-compare-status",
-                                        className="st-compare-status-wrap",
-                                    ),
                                     html.Div(id="pf-depth-chart-body"),
                                     html.Div(
+                                        [
+                                            html.Div(
+                                                id="pf-depth-undo-panel-mount",
+                                                children=_depth_undo_panel([]),
+                                            ),
+                                            dmc.Button(
+                                                "Clear",
+                                                id="pf-depth-undo-clear",
+                                                size="xs",
+                                                variant="light",
+                                                n_clicks=0,
+                                                className="pf-depth-undo-clear-btn",
+                                            ),
+                                        ],
                                         id="pf-depth-undo-wrap",
                                         className="pf-depth-undo-wrap",
-                                        children=_depth_undo_panel([]),
                                         hidden=True,
                                     ),
                                     _profiles_busy_overlay(
@@ -5995,7 +6039,7 @@ def remove_selected_from_depth_chart(
 
 
 @callback(
-    Output("pf-depth-undo-wrap", "children"),
+    Output("pf-depth-undo-panel-mount", "children"),
     Output("pf-depth-undo-wrap", "hidden"),
     Input("pf-depth-undo", "data"),
     Input("ui-settings", "data"),
@@ -6035,6 +6079,18 @@ def restore_depth_undo(n_clicks, undo_items, rev, settings):
     if not restored:
         return _save_depth_undo(remaining, settings=settings), no_update
     return _save_depth_undo(remaining, settings=settings), int(rev or 0) + 1
+
+
+@callback(
+    Output("pf-depth-undo", "data", allow_duplicate=True),
+    Input("pf-depth-undo-clear", "n_clicks"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def clear_depth_undo(n_clicks, settings):
+    if ctx.triggered_id != "pf-depth-undo-clear" or not n_clicks:
+        return no_update
+    return _save_depth_undo([], settings=settings)
 
 
 @callback(
