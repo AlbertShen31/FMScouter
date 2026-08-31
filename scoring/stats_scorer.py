@@ -967,40 +967,54 @@ def format_set_piece_metric_display(value: float, unit: str) -> str:
     return f"{value:.2f}"
 
 
+def _is_per90_alias(alias: str) -> bool:
+    lower = str(alias or "").lower()
+    return "per 90" in lower or "/90" in lower
+
+
+def _split_csv_aliases(aliases: list[str]) -> tuple[list[str], list[str]]:
+    totals: list[str] = []
+    per90: list[str] = []
+    for alias in aliases:
+        if _is_per90_alias(alias):
+            per90.append(alias)
+        else:
+            totals.append(alias)
+    return totals, per90
+
+
+def _first_parsed(row: dict[str, str], aliases: list[str]) -> float | None:
+    for alias in aliases:
+        val = parse_number(pick(row, [alias]))
+        if val is not None:
+            return val
+    return None
+
+
+def _minutes_for_per90(row: dict[str, str]) -> float | None:
+    minutes = parse_number(pick(row, ["Minutes"]))
+    if minutes is not None and minutes > 0:
+        return minutes
+    return None
+
+
+def _per90_from_total(total: float, minutes: float) -> float:
+    return total / (minutes / 90.0)
+
+
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
     meta = metric_defs()[metric_id]
     aliases = list(meta.get("csv") or [])
-    prefer_per90 = bool(meta.get("prefer_per90"))
-    if prefer_per90:
-        # Prefer first alias that looks like per90 when present and non-empty
-        for alias in aliases:
-            if "90" in alias or alias.endswith("/90"):
-                val = parse_number(pick(row, [alias]))
-                if val is not None:
-                    return val
-        for alias in aliases:
-            val = parse_number(pick(row, [alias]))
-            if val is not None:
-                # raw total — convert if minutes available
-                if meta.get("unit") == "per90":
-                    minutes = parse_number(pick(row, ["Minutes"]))
-                    if minutes and minutes > 0:
-                        return val / (minutes / 90.0)
-                return val
-        return None
-
-    if meta.get("derive") == "per90_from_total":
-        total = None
-        for alias in aliases:
-            total = parse_number(pick(row, [alias]))
+    if meta.get("unit") == "per90":
+        totals, per90_aliases = _split_csv_aliases(aliases)
+        minutes = _minutes_for_per90(row)
+        if totals and minutes is not None:
+            total = _first_parsed(row, totals)
             if total is not None:
-                break
-        if total is None:
-            return None
-        minutes = parse_number(pick(row, ["Minutes"]))
-        if not minutes or minutes <= 0:
-            return None
-        return total / (minutes / 90.0)
+                return _per90_from_total(total, minutes)
+        if per90_aliases:
+            return _first_parsed(row, per90_aliases)
+        return None
 
     for alias in aliases:
         val = parse_number(pick(row, [alias]))

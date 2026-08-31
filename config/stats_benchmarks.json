@@ -62,8 +62,8 @@
       "label": "xG Prevented",
       "abbr": "xGP/90",
       "csv": [
-        "xGP/90",
-        "xGP"
+        "xGP",
+        "xGP/90"
       ],
       "higher_is_better": true,
       "unit": "per90"
@@ -74,7 +74,6 @@
       "csv": [
         "Goals Allowed"
       ],
-      "derive": "per90_from_total",
       "higher_is_better": false,
       "unit": "per90"
     },
@@ -91,6 +90,7 @@
       "label": "Progressive Passes",
       "abbr": "Prog Pass",
       "csv": [
+        "PsP",
         "Progressive Passes per 90"
       ],
       "higher_is_better": true,
@@ -100,6 +100,7 @@
       "label": "Passes Attempted",
       "abbr": "Pass Att",
       "csv": [
+        "Passes Attempted",
         "Passes Attempted per 90"
       ],
       "higher_is_better": true,
@@ -127,6 +128,7 @@
       "label": "Headers Attempted",
       "abbr": "Hdr Att",
       "csv": [
+        "Headers Attempted",
         "Headers Attempted per 90"
       ],
       "higher_is_better": true,
@@ -147,7 +149,6 @@
       "csv": [
         "Tackles Attempted"
       ],
-      "derive": "per90_from_total",
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -155,6 +156,7 @@
       "label": "Interceptions",
       "abbr": "Int",
       "csv": [
+        "Interceptions",
         "Interceptions per 90"
       ],
       "higher_is_better": true,
@@ -164,6 +166,7 @@
       "label": "Clearances",
       "abbr": "Clr",
       "csv": [
+        "Clearances",
         "Clearances per 90"
       ],
       "higher_is_better": true,
@@ -173,6 +176,8 @@
       "label": "Blocks",
       "abbr": "Blk",
       "csv": [
+        "Blk",
+        "Shts Blckd",
         "Blk/90",
         "Shts Blckd/90"
       ],
@@ -183,10 +188,9 @@
       "label": "Goals",
       "abbr": "Gls",
       "csv": [
-        "Goals per 90 minutes",
-        "Goals"
+        "Goals",
+        "Goals per 90 minutes"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -194,8 +198,8 @@
       "label": "Expected Goals",
       "abbr": "xG",
       "csv": [
-        "xG/90",
-        "xG"
+        "xG",
+        "xG/90"
       ],
       "higher_is_better": true,
       "unit": "per90"
@@ -204,10 +208,9 @@
       "label": "Shots",
       "abbr": "Shots",
       "csv": [
-        "Shot/90",
-        "Shots"
+        "Shots",
+        "Shot/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -215,10 +218,9 @@
       "label": "Assists",
       "abbr": "Ast",
       "csv": [
-        "Asts/90",
-        "Assists"
+        "Assists",
+        "Asts/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -226,8 +228,8 @@
       "label": "Expected Assists",
       "abbr": "xA",
       "csv": [
-        "xA/90",
-        "xA"
+        "xA",
+        "xA/90"
       ],
       "higher_is_better": true,
       "unit": "per90"
@@ -236,10 +238,9 @@
       "label": "Key Passes",
       "abbr": "Key Ps",
       "csv": [
-        "Key Passes per 90",
-        "Key Passes"
+        "Key Passes",
+        "Key Passes per 90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -247,10 +248,9 @@
       "label": "Dribbles",
       "abbr": "Drb",
       "csv": [
-        "Dribbles per 90",
-        "Dribbles"
+        "Dribbles",
+        "Dribbles per 90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -270,11 +270,11 @@
       "label": "Pressures Completed",
       "abbr": "Pres C",
       "csv": [
-        "Pressures Completed per 90",
         "Pressures Completed",
+        "Pres C",
+        "Pressures Completed per 90",
         "Pres C/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -282,12 +282,13 @@
       "label": "Open-Play Crosses Completed",
       "abbr": "OP Cr C",
       "csv": [
+        "Open Play Crosses Completed",
+        "Crosses Completed",
         "Open Play Crosses Completed per 90",
         "OP Crosses Completed per 90",
         "Crosses Completed per 90",
         "OP Cr C/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -295,14 +296,13 @@
       "label": "Shots On Target",
       "abbr": "SOT",
       "csv": [
+        "Shots on Target",
+        "Shots On Target",
         "Shots on Target per 90",
         "Shots On Target per 90",
         "Shots on Target/90",
-        "SOT/90",
-        "Shots on Target",
-        "Shots On Target"
+        "SOT/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -310,11 +310,10 @@
       "label": "Sprints",
       "abbr": "Spr",
       "csv": [
+        "Sprints",
         "Sprints per 90",
-        "Sprints/90",
-        "Sprints"
+        "Sprints/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     },
@@ -335,11 +334,10 @@
       "label": "Headers Won",
       "abbr": "Hdrs W",
       "csv": [
+        "Headers Won",
         "Headers Won per 90",
-        "Hdrs W/90",
-        "Headers Won"
+        "Hdrs W/90"
       ],
-      "prefer_per90": true,
       "higher_is_better": true,
       "unit": "per90"
     }
