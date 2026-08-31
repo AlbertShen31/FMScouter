@@ -2,7 +2,7 @@
   "generated_by": "scripts/audit_column_usage.py",
   "source_snapshot": "config/export_formats/fm26_moneyball_combined_columns.json",
   "column_count_snapshot": 248,
-  "mapped_entry_count": 269,
+  "mapped_entry_count": 276,
   "snapshot_columns_covered": 248,
   "undocumented_in_snapshot": [],
   "aliases_not_in_snapshot": [
@@ -1592,6 +1592,23 @@
       "notes": ""
     },
     {
+      "primary_csv": "Average Rating Club",
+      "csv_aliases": [
+        "Average Rating Club",
+        "Rating"
+      ],
+      "category": "identity",
+      "internal_key": "avg_rating_club",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
       "primary_csv": "Average Rating International",
       "csv_aliases": [
         "Average Rating International",
@@ -1688,6 +1705,22 @@
         "Uploads"
       ],
       "usage": "Division tier + limited-tracking stripe (Player stats / Profiles)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Form Club",
+      "csv_aliases": [
+        "Form Club"
+      ],
+      "category": "identity",
+      "internal_key": "form_club",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
       "notes": ""
     },
     {
@@ -1846,6 +1879,22 @@
       ],
       "category": "identity",
       "internal_key": "int_goals_conceded",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Last 5 Games Club",
+      "csv_aliases": [
+        "Last 5 Games Club"
+      ],
+      "category": "identity",
+      "internal_key": "last5_club",
       "pages": [
         "Player stats",
         "Profiles",
@@ -2239,51 +2288,6 @@
       "notes": ""
     },
     {
-      "primary_csv": "Clearances",
-      "csv_aliases": [
-        "Clearances"
-      ],
-      "category": "stats_availability",
-      "internal_key": "Clearances",
-      "pages": [
-        "Player stats",
-        "Profiles",
-        "Uploads"
-      ],
-      "usage": "Limited-tracking league detection (not a scored percentile)",
-      "notes": ""
-    },
-    {
-      "primary_csv": "Interceptions",
-      "csv_aliases": [
-        "Interceptions"
-      ],
-      "category": "stats_availability",
-      "internal_key": "Interceptions",
-      "pages": [
-        "Player stats",
-        "Profiles",
-        "Uploads"
-      ],
-      "usage": "Limited-tracking league detection (not a scored percentile)",
-      "notes": ""
-    },
-    {
-      "primary_csv": "Passes Attempted",
-      "csv_aliases": [
-        "Passes Attempted"
-      ],
-      "category": "stats_availability",
-      "internal_key": "Passes Attempted",
-      "pages": [
-        "Player stats",
-        "Profiles",
-        "Uploads"
-      ],
-      "usage": "Limited-tracking league detection (not a scored percentile)",
-      "notes": ""
-    },
-    {
       "primary_csv": "Assists",
       "csv_aliases": [
         "Assists"
@@ -2314,6 +2318,21 @@
       "notes": ""
     },
     {
+      "primary_csv": "Blk",
+      "csv_aliases": [
+        "Blk"
+      ],
+      "category": "stats_metric",
+      "internal_key": "blocks",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Blocks per 90» (blocks)",
+      "notes": ""
+    },
+    {
       "primary_csv": "Blk/90",
       "csv_aliases": [
         "Blk/90"
@@ -2326,6 +2345,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Blocks per 90» (blocks)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Clearances",
+      "csv_aliases": [
+        "Clearances"
+      ],
+      "category": "stats_metric",
+      "internal_key": "clearances",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Clearances per 90» (clearances); limited-tracking probe",
       "notes": ""
     },
     {
@@ -2386,6 +2420,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Conversion Rate» (conversion_rate)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Crosses Completed",
+      "csv_aliases": [
+        "Crosses Completed"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
       "notes": ""
     },
     {
@@ -2494,6 +2543,21 @@
       "notes": ""
     },
     {
+      "primary_csv": "Headers Attempted",
+      "csv_aliases": [
+        "Headers Attempted"
+      ],
+      "category": "stats_metric",
+      "internal_key": "headers_attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Headers Attempted per 90» (headers_attempted)",
+      "notes": ""
+    },
+    {
       "primary_csv": "Headers Attempted per 90",
       "csv_aliases": [
         "Headers Attempted per 90"
@@ -2551,6 +2615,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Headers Won per 90» (headers_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Interceptions",
+      "csv_aliases": [
+        "Interceptions"
+      ],
+      "category": "stats_metric",
+      "internal_key": "interceptions",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Interceptions per 90» (interceptions); limited-tracking probe",
       "notes": ""
     },
     {
@@ -2644,6 +2723,21 @@
       "notes": ""
     },
     {
+      "primary_csv": "Open Play Crosses Completed",
+      "csv_aliases": [
+        "Open Play Crosses Completed"
+      ],
+      "category": "stats_metric",
+      "internal_key": "crosses_completed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed)",
+      "notes": ""
+    },
+    {
       "primary_csv": "Open Play Crosses Completed per 90",
       "csv_aliases": [
         "Open Play Crosses Completed per 90"
@@ -2704,6 +2798,21 @@
       "notes": ""
     },
     {
+      "primary_csv": "Passes Attempted",
+      "csv_aliases": [
+        "Passes Attempted"
+      ],
+      "category": "stats_metric",
+      "internal_key": "passes_attempted",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Passes Attempted per 90» (passes_attempted); basic availability probe",
+      "notes": ""
+    },
+    {
       "primary_csv": "Passes Attempted per 90",
       "csv_aliases": [
         "Passes Attempted per 90"
@@ -2746,6 +2855,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Possession Won per 90» (possession_won)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Pres C",
+      "csv_aliases": [
+        "Pres C"
+      ],
+      "category": "stats_metric",
+      "internal_key": "pressures",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Pressures Completed per 90» (pressures)",
       "notes": ""
     },
     {
@@ -2821,6 +2945,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Pass Completion» (pass_completion)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "PsP",
+      "csv_aliases": [
+        "PsP"
+      ],
+      "category": "stats_metric",
+      "internal_key": "progressive_passes",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Progressive Passes per 90» (progressive_passes)",
       "notes": ""
     },
     {
@@ -2971,6 +3110,21 @@
         "Uploads"
       ],
       "usage": "Stats percentile metric «Shots On Target per 90» (shots_on_target)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Shts Blckd",
+      "csv_aliases": [
+        "Shts Blckd"
+      ],
+      "category": "stats_metric",
+      "internal_key": "blocks",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Uploads"
+      ],
+      "usage": "Stats percentile metric «Blocks per 90» (blocks)",
       "notes": ""
     },
     {
@@ -3165,17 +3319,6 @@
       "notes": "Season overview aggregate"
     },
     {
-      "primary_csv": "Average Rating Club",
-      "csv_aliases": [
-        "Average Rating Club"
-      ],
-      "category": "unused",
-      "internal_key": "Average Rating Club",
-      "pages": [],
-      "usage": "Not parsed by any page",
-      "notes": "Club form rating; international variant is parsed"
-    },
-    {
       "primary_csv": "Blk",
       "csv_aliases": [
         "Blk"
@@ -3308,17 +3451,6 @@
       "notes": "Generic form string; not parsed"
     },
     {
-      "primary_csv": "Form Club",
-      "csv_aliases": [
-        "Form Club"
-      ],
-      "category": "unused",
-      "internal_key": "Form Club",
-      "pages": [],
-      "usage": "Not parsed by any page",
-      "notes": "Club form; Int form fields are parsed via identity"
-    },
-    {
       "primary_csv": "Free Kick Shots",
       "csv_aliases": [
         "Free Kick Shots"
@@ -3449,17 +3581,6 @@
       "pages": [],
       "usage": "Not parsed by any page",
       "notes": "Not in stats benchmarks"
-    },
-    {
-      "primary_csv": "Last 5 Games Club",
-      "csv_aliases": [
-        "Last 5 Games Club"
-      ],
-      "category": "unused",
-      "internal_key": "Last 5 Games Club",
-      "pages": [],
-      "usage": "Not parsed by any page",
-      "notes": "Club form; Last 5 Games International is parsed"
     },
     {
       "primary_csv": "Last Match Rating",
@@ -3778,7 +3899,7 @@
       "internal_key": "Rating",
       "pages": [],
       "usage": "Not parsed by any page",
-      "notes": "Average rating alias; Average Rating Club not parsed either"
+      "notes": "Average rating alias; parsed via Average Rating Club when present"
     },
     {
       "primary_csv": "Save Percentage",

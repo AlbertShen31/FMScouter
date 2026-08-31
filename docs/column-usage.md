@@ -48,12 +48,14 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Ability Gold` | `ability_gold` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `Ability Silver` | `ability_silver` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `Age` | `age` | Player stats, Profiles, Role scores, Uploads | Page eligibility gate + identity |
+| `Average Rating Club`, `Rating` | `avg_rating_club` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Average Rating International`, `Avg Rating International` | `avg_rating_int` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Based In` | `based_in` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Best Pos`, `Best Position` | `best_pos` | Player stats, Profiles, Role scores, Uploads | Role eligibility, position groups, shortlist / modal |
 | `Best Role` | `best_role` | Player stats, Profiles, Role scores, Uploads | Role eligibility, position groups, shortlist / modal |
 | `Club` | `club` | Player stats, Profiles, Role scores, Uploads | Page eligibility gate + identity |
 | `Division`, `Div` | `division` | Player stats, Profiles, Role scores, Uploads | Division tier + limited-tracking stripe (Player stats / Profiles) |
+| `Form Club` | `form_club` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Form International`, `Form Int` | `form_int` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Height` | `height` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Home Grown Status` | `home_grown_status` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
@@ -64,6 +66,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `International Appearances (Season)`, `Int Apps (Season)` | `int_apps_season` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `International Assists`, `Int Assists` | `int_assists` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `International Goals Conceded` | `int_goals_conceded` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
+| `Last 5 Games Club` | `last5_club` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Last 5 Games International`, `Last 5 Games Int` | `last5_int` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Left Foot`, `LFoot`, `L` | `left_foot` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Media Handling` | `media_handling` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
@@ -146,11 +149,14 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 |---------------|--------------|-------|-------|
 | `Assists` | `assists` | Player stats, Profiles, Uploads | Stats percentile metric «Assists per 90» (assists) |
 | `Asts/90` | `assists` | Player stats, Profiles, Uploads | Stats percentile metric «Assists per 90» (assists) |
+| `Blk` | `blocks` | Player stats, Profiles, Uploads | Stats percentile metric «Blocks per 90» (blocks) |
 | `Blk/90` | `blocks` | Player stats, Profiles, Uploads | Stats percentile metric «Blocks per 90» (blocks) |
+| `Clearances` | `clearances` | Player stats, Profiles, Uploads | Stats percentile metric «Clearances per 90» (clearances); limited-tracking probe |
 | `Clearances per 90` | `clearances` | Player stats, Profiles, Uploads | Stats percentile metric «Clearances per 90» (clearances); limited-tracking probe |
 | `Conv %` | `conversion_rate` | Player stats, Profiles, Uploads | Stats percentile metric «Conversion Rate» (conversion_rate) |
 | `Conversion %` | `conversion_rate` | Player stats, Profiles, Uploads | Stats percentile metric «Conversion Rate» (conversion_rate) |
 | `Conversion Rate` | `conversion_rate` | Player stats, Profiles, Uploads | Stats percentile metric «Conversion Rate» (conversion_rate) |
+| `Crosses Completed` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
 | `Crosses Completed per 90` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
 | `Dribbles` | `dribbles` | Player stats, Profiles, Uploads | Stats percentile metric «Dribbles per 90» (dribbles) |
 | `Dribbles per 90` | `dribbles` | Player stats, Profiles, Uploads | Stats percentile metric «Dribbles per 90» (dribbles) |
@@ -158,28 +164,34 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Goals Allowed` | `goals_conceded` | Player stats, Profiles, Uploads | Stats percentile metric «Goals Conceded per 90» (goals_conceded); basic availability probe |
 | `Goals per 90 minutes` | `goals` | Player stats, Profiles, Uploads | Stats percentile metric «Goals per 90» (goals) |
 | `Hdrs W/90` | `headers_won` | Player stats, Profiles, Uploads | Stats percentile metric «Headers Won per 90» (headers_won) |
+| `Headers Attempted` | `headers_attempted` | Player stats, Profiles, Uploads | Stats percentile metric «Headers Attempted per 90» (headers_attempted) |
 | `Headers Attempted per 90` | `headers_attempted` | Player stats, Profiles, Uploads | Stats percentile metric «Headers Attempted per 90» (headers_attempted) |
 | `Headers Won` | `headers_won` | Player stats, Profiles, Uploads | Stats percentile metric «Headers Won per 90» (headers_won) |
 | `Headers Won Percentage` | `header_win_rate` | Player stats, Profiles, Uploads | Stats percentile metric «Header Win Rate» (header_win_rate) |
 | `Headers Won per 90` | `headers_won` | Player stats, Profiles, Uploads | Stats percentile metric «Headers Won per 90» (headers_won) |
+| `Interceptions` | `interceptions` | Player stats, Profiles, Uploads | Stats percentile metric «Interceptions per 90» (interceptions); limited-tracking probe |
 | `Interceptions per 90` | `interceptions` | Player stats, Profiles, Uploads | Stats percentile metric «Interceptions per 90» (interceptions); limited-tracking probe |
 | `Key Passes` | `key_passes` | Player stats, Profiles, Uploads | Stats percentile metric «Key Passes per 90» (key_passes); limited-tracking probe |
 | `Key Passes per 90` | `key_passes` | Player stats, Profiles, Uploads | Stats percentile metric «Key Passes per 90» (key_passes); limited-tracking probe |
 | `Minutes` | `minutes` | Player stats, Profiles, Uploads | Minutes gate, per-90 derivation, limited-tracking aggregates |
 | `OP Cr C/90` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
 | `OP Crosses Completed per 90` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
+| `Open Play Crosses Completed` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
 | `Open Play Crosses Completed per 90` | `crosses_completed` | Player stats, Profiles, Uploads | Stats percentile metric «Open-Play Crosses Completed per 90» (crosses_completed) |
 | `Pass Completion %` | `pass_completion` | Player stats, Profiles, Uploads | Stats percentile metric «Pass Completion» (pass_completion) |
 | `Pass Completion Percentage` | `pass_completion` | Player stats, Profiles, Uploads | Stats percentile metric «Pass Completion» (pass_completion) |
 | `Pass Completion Ratio` | `pass_completion` | Player stats, Profiles, Uploads | Stats percentile metric «Pass Completion» (pass_completion) |
+| `Passes Attempted` | `passes_attempted` | Player stats, Profiles, Uploads | Stats percentile metric «Passes Attempted per 90» (passes_attempted); basic availability probe |
 | `Passes Attempted per 90` | `passes_attempted` | Player stats, Profiles, Uploads | Stats percentile metric «Passes Attempted per 90» (passes_attempted); basic availability probe |
 | `Possession Lost per 90` | `possession_lost` | Player stats, Profiles, Uploads | Stats percentile metric «Possession Lost per 90» (possession_lost) |
 | `Possession Won per 90` | `possession_won` | Player stats, Profiles, Uploads | Stats percentile metric «Possession Won per 90» (possession_won) |
+| `Pres C` | `pressures` | Player stats, Profiles, Uploads | Stats percentile metric «Pressures Completed per 90» (pressures) |
 | `Pres C/90` | `pressures` | Player stats, Profiles, Uploads | Stats percentile metric «Pressures Completed per 90» (pressures) |
 | `Pressures Completed` | `pressures` | Player stats, Profiles, Uploads | Stats percentile metric «Pressures Completed per 90» (pressures) |
 | `Pressures Completed per 90` | `pressures` | Player stats, Profiles, Uploads | Stats percentile metric «Pressures Completed per 90» (pressures) |
 | `Progressive Passes per 90` | `progressive_passes` | Player stats, Profiles, Uploads | Stats percentile metric «Progressive Passes per 90» (progressive_passes); limited-tracking probe |
 | `Ps C %` | `pass_completion` | Player stats, Profiles, Uploads | Stats percentile metric «Pass Completion» (pass_completion) |
+| `PsP` | `progressive_passes` | Player stats, Profiles, Uploads | Stats percentile metric «Progressive Passes per 90» (progressive_passes) |
 | `SOT/90` | `shots_on_target` | Player stats, Profiles, Uploads | Stats percentile metric «Shots On Target per 90» (shots_on_target) |
 | `Shot Conversion %` | `conversion_rate` | Player stats, Profiles, Uploads | Stats percentile metric «Conversion Rate» (conversion_rate) |
 | `Shot/90` | `shots` | Player stats, Profiles, Uploads | Stats percentile metric «Shots per 90» (shots); basic availability probe |
@@ -190,6 +202,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Shots on Target` | `shots_on_target` | Player stats, Profiles, Uploads | Stats percentile metric «Shots On Target per 90» (shots_on_target) |
 | `Shots on Target per 90` | `shots_on_target` | Player stats, Profiles, Uploads | Stats percentile metric «Shots On Target per 90» (shots_on_target) |
 | `Shots on Target/90` | `shots_on_target` | Player stats, Profiles, Uploads | Stats percentile metric «Shots On Target per 90» (shots_on_target) |
+| `Shts Blckd` | `blocks` | Player stats, Profiles, Uploads | Stats percentile metric «Blocks per 90» (blocks) |
 | `Shts Blckd/90` | `blocks` | Player stats, Profiles, Uploads | Stats percentile metric «Blocks per 90» (blocks) |
 | `Sprints` | `sprints` | Player stats, Profiles, Uploads | Stats percentile metric «Sprints per 90» (sprints) |
 | `Sprints per 90` | `sprints` | Player stats, Profiles, Uploads | Stats percentile metric «Sprints per 90» (sprints) |
@@ -202,14 +215,6 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `xG/90` | `expected_goals` | Player stats, Profiles, Uploads | Stats percentile metric «Expected Goals per 90» (expected_goals) |
 | `xGP` | `xg_prevented` | Player stats, Profiles, Uploads | Stats percentile metric «xG Prevented per 90» (xg_prevented) |
 | `xGP/90` | `xg_prevented` | Player stats, Profiles, Uploads | Stats percentile metric «xG Prevented per 90» (xg_prevented) |
-
-## Stats availability probes
-
-| CSV column(s) | Internal key | Pages | Usage |
-|---------------|--------------|-------|-------|
-| `Clearances` | `Clearances` | Player stats, Profiles, Uploads | Limited-tracking league detection (not a scored percentile) |
-| `Interceptions` | `Interceptions` | Player stats, Profiles, Uploads | Limited-tracking league detection (not a scored percentile) |
-| `Passes Attempted` | `Passes Attempted` | Player stats, Profiles, Uploads | Limited-tracking league detection (not a scored percentile) |
 
 ## Career totals
 
@@ -273,7 +278,6 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | CSV column(s) | Internal key | Pages | Usage |
 |---------------|--------------|-------|-------|
 | `All/90` | `All/90` | — | Not parsed by any page — Season overview aggregate |
-| `Average Rating Club` | `Average Rating Club` | — | Not parsed by any page — Club form rating; international variant is parsed |
 | `Blk` | `Blk` | — | Not parsed by any page — Block total; Blk/90 is the scored metric |
 | `Chances Created per 90` | `Chances Created per 90` | — | Not parsed by any page — Not in stats benchmarks |
 | `Clear Cut Chances Created` | `Clear Cut Chances Created` | — | Not parsed by any page — Not in stats benchmarks |
@@ -286,7 +290,6 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Distance` | `Distance` | — | Not parsed by any page — Physical distance total; not scored |
 | `Expected Save Percentage` | `Expected Save Percentage` | — | Not parsed by any page — GK detail; xGP/90 used instead |
 | `Form` | `Form` | — | Not parsed by any page — Generic form string; not parsed |
-| `Form Club` | `Form Club` | — | Not parsed by any page — Club form; Int form fields are parsed via identity |
 | `Free Kick Shots` | `Free Kick Shots` | — | Not parsed by any page — Shooting detail; not scored |
 | `Game Win Ratio` | `Game Win Ratio` | — | Not parsed by any page — Results aggregate; not parsed |
 | `Games Drawn` | `Games Drawn` | — | Not parsed by any page — Results aggregate; not parsed |
@@ -299,7 +302,6 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Key Headers per 90` | `Key Headers per 90` | — | Not parsed by any page — Not in stats benchmarks |
 | `Key Tackles` | `Key Tackles` | — | Not parsed by any page — Tackle detail; not scored |
 | `Key Tackles per 90` | `Key Tackles per 90` | — | Not parsed by any page — Not in stats benchmarks |
-| `Last 5 Games Club` | `Last 5 Games Club` | — | Not parsed by any page — Club form; Last 5 Games International is parsed |
 | `Last Match Rating` | `Last Match Rating` | — | Not parsed by any page — Single-match rating; not parsed |
 | `Mins/Gl` | `Mins/Gl` | — | Not parsed by any page — Minutes per goal; not parsed |
 | `Mins/Gm` | `Mins/Gm` | — | Not parsed by any page — Minutes per game; not parsed |
@@ -328,7 +330,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Pres C` | `Pres C` | — | Not parsed by any page — Pressures completed total; Pres C/90 scored |
 | `PsP` | `PsP` | — | Not parsed by any page — Progressive passes total; per-90 variant scored |
 | `Pts/Gm` | `Pts/Gm` | — | Not parsed by any page — League points per game; not parsed |
-| `Rating` | `Rating` | — | Not parsed by any page — Average rating alias; Average Rating Club not parsed either |
+| `Rating` | `Rating` | — | Not parsed by any page — Average rating alias; parsed via Average Rating Club when present |
 | `Save Percentage` | `Save Percentage` | — | Not parsed by any page — GK save %; not scored |
 | `Saves Held` | `Saves Held` | — | Not parsed by any page — GK save type; not parsed |
 | `Saves Parried` | `Saves Parried` | — | Not parsed by any page — GK save type; not parsed |

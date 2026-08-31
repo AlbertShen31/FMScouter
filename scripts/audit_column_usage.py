@@ -65,7 +65,6 @@ FINANCE_CALC_KEYS = frozenset(
 # Add new unknown columns here as ``unused`` once reviewed, or map them in parsers.
 INTENTIONALLY_UNUSED: dict[str, str] = {
     "All/90": "Season overview aggregate",
-    "Average Rating Club": "Club form rating; international variant is parsed",
     "Blk": "Block total; Blk/90 is the scored metric",
     "Chances Created per 90": "Not in stats benchmarks",
     "Clear Cut Chances Created": "Not in stats benchmarks",
@@ -78,7 +77,6 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Distance": "Physical distance total; not scored",
     "Expected Save Percentage": "GK detail; xGP/90 used instead",
     "Form": "Generic form string; not parsed",
-    "Form Club": "Club form; Int form fields are parsed via identity",
     "Free Kick Shots": "Shooting detail; not scored",
     "Game Win Ratio": "Results aggregate; not parsed",
     "Games Drawn": "Results aggregate; not parsed",
@@ -91,7 +89,6 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Key Headers per 90": "Not in stats benchmarks",
     "Key Tackles": "Tackle detail; not scored",
     "Key Tackles per 90": "Not in stats benchmarks",
-    "Last 5 Games Club": "Club form; Last 5 Games International is parsed",
     "Last Match Rating": "Single-match rating; not parsed",
     "Mins/Gl": "Minutes per goal; not parsed",
     "Mins/Gm": "Minutes per game; not parsed",
@@ -120,7 +117,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Pres C": "Pressures completed total; Pres C/90 scored",
     "PsP": "Progressive passes total; per-90 variant scored",
     "Pts/Gm": "League points per game; not parsed",
-    "Rating": "Average rating alias; Average Rating Club not parsed either",
+    "Rating": "Average rating alias; parsed via Average Rating Club when present",
     "Save Percentage": "GK save %; not scored",
     "Saves Held": "GK save type; not parsed",
     "Saves Parried": "GK save type; not parsed",

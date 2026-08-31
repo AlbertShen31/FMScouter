@@ -523,6 +523,70 @@ def rec_identity_style(value, theme: str | None = None) -> dict[str, str] | None
     return {**base, **_identity_pill_chrome(font_weight=weight)}
 
 
+_RATING_COLOR_RED = (255, 92, 92)
+_RATING_COLOR_YELLOW = (255, 210, 64)
+_RATING_COLOR_GREEN = (64, 220, 120)
+_RATING_COLOR_DEEP_RED = (185, 48, 48)
+_RATING_COLOR_BRIGHT_GREEN = (34, 197, 94)
+
+
+def _parse_avg_rating(value) -> float | None:
+    text = str(value or "").strip().replace(",", ".")
+    if not text or text in ("-", "—"):
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def avg_rating_rgb(rating: float) -> tuple[int, int, int]:
+    """Graduated match rating color: <6 red, 6–6.99 yellow, 7+ green."""
+    value = max(0.0, min(10.0, float(rating)))
+    if value < 6.0:
+        floor = 4.0
+        span = max(6.0 - floor, 0.01)
+        t = max(0.0, min(1.0, (value - floor) / span))
+        return (
+            _lerp_channel(_RATING_COLOR_DEEP_RED[0], _RATING_COLOR_RED[0], t),
+            _lerp_channel(_RATING_COLOR_DEEP_RED[1], _RATING_COLOR_RED[1], t),
+            _lerp_channel(_RATING_COLOR_DEEP_RED[2], _RATING_COLOR_RED[2], t),
+        )
+    if value < 7.0:
+        t = max(0.0, min(1.0, value - 6.0))
+        return (
+            _lerp_channel(_RATING_COLOR_YELLOW[0], 255, t),
+            _lerp_channel(_RATING_COLOR_YELLOW[1], 170, t),
+            _lerp_channel(_RATING_COLOR_YELLOW[2], 40, t),
+        )
+    t = max(0.0, min(1.0, (value - 7.0) / 2.0))
+    return (
+        _lerp_channel(_RATING_COLOR_GREEN[0], _RATING_COLOR_BRIGHT_GREEN[0], t),
+        _lerp_channel(_RATING_COLOR_GREEN[1], _RATING_COLOR_BRIGHT_GREEN[1], t),
+        _lerp_channel(_RATING_COLOR_GREEN[2], _RATING_COLOR_BRIGHT_GREEN[2], t),
+    )
+
+
+def avg_rating_identity_style(value, theme: str | None = None) -> dict[str, str] | None:
+    """Avg match rating pill: graduated red / yellow / green."""
+    rating = _parse_avg_rating(value)
+    if rating is None:
+        return None
+    r, g, b = avg_rating_rgb(rating)
+    dark = is_dark_theme(theme)
+    if dark:
+        bg = f"rgba({r}, {g}, {b}, 0.24)"
+        fg = f"rgb({min(255, r + 24)}, {min(255, g + 24)}, {min(255, b + 24)})"
+    else:
+        bg = f"rgba({r}, {g}, {b}, 0.2)"
+        fg = f"rgb({max(0, r - 72)}, {max(0, g - 72)}, {max(0, b - 72)})"
+    return {
+        **_identity_pill_chrome(font_weight="750"),
+        "backgroundColor": bg,
+        "color": fg,
+    }
+
+
 def rec_highlight_styles(theme: str | None = None) -> list[dict]:
     """Color Rec from green (A+) to red (F)."""
     rules = []

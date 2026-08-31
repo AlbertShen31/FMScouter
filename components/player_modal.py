@@ -25,14 +25,12 @@ STAR_ATTRIBUTES_BROKEN = frozenset({"ability", "potential", "world_reputation"})
 # Optional identity fields hidden by default (personality section covers personality/media).
 PLAYER_IDENTITY_HIDDEN = frozenset(
     {
-        "squad",
         "personality",
         "media_handling",
     }
 )
 
 MODAL_EXTRA_FIELD_DEFS = (
-    ("Squad", "squad"),
     ("Personality", "personality"),
     ("Media handling", "media_handling"),
     ("Based in", "based_in"),
@@ -106,6 +104,8 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Rec", "rec"),
                 ("Inf", "inf"),
                 ("Injury", "injury"),
+                ("Avg rating", "avg_rating_club"),
+                ("Last 5", "last_5_club"),
             ],
         ],
     ),
@@ -386,6 +386,13 @@ def player_identity_item(
         if rec_style:
             value_class += " rs-identity-pill"
             style = {**rec_style, **style}
+    if key in ("avg_rating_club", "avg_rating_int"):
+        from components.player_table import avg_rating_identity_style
+
+        rating_style = avg_rating_identity_style(raw, theme)
+        if rating_style:
+            value_class += " rs-identity-pill"
+            style = {**rating_style, **style}
     if key == "division":
         from components.player_table import division_identity_style
 
