@@ -1805,6 +1805,8 @@ def replace_profiles_from_saved_file(
     Role profiles keep their ``role_column`` and profile ``id`` (depth/slots stay valid).
     Only profiles actively listed in the library formation's squad depth are updated.
     Players missing from the file are left unchanged and reported under ``missing``.
+    Does not stage exports or change slot membership — use Role-scores save + Refresh
+    exports to add players to slots.
     """
     import services.ui_settings as us
     from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
@@ -2015,6 +2017,8 @@ def replace_profiles_from_saved_file(
         saved_from=saved_from,
         source_label=source_label,
         reinstate_slots=False,
+        stage_exports=False,
+        touch_saved_at=False,
     )
     return {
         "updated": len(saved),
@@ -2063,8 +2067,15 @@ def save_profile_rows(
     note: str | None = None,
     library_id: str | None = None,
     reinstate_slots: bool = True,
+    stage_exports: bool = True,
+    touch_saved_at: bool = True,
 ) -> list[dict[str, Any]]:
-    """Upsert profile entries that already include a ``row`` snapshot."""
+    """Upsert profile entries that already include a ``row`` snapshot.
+
+    ``stage_exports`` queues Role-scores exports for Refresh exports on Profiles.
+    ``touch_saved_at`` bumps ``saved_at`` (and ``saved_from``); leave false for
+    data-only refreshes so slot removals stay excluded until a real re-export.
+    """
     if saved_from not in SAVED_FROM_LABELS:
         raise ValueError(f"Invalid saved_from: {saved_from}")
     note_text = str(note or "").strip()
@@ -2092,8 +2103,9 @@ def save_profile_rows(
         pair = (player_key_value, role_column)
         existing = by_key.get(pair)
         if existing:
-            existing["saved_at"] = now
-            existing["saved_from"] = saved_from
+            if touch_saved_at:
+                existing["saved_at"] = now
+                existing["saved_from"] = saved_from
             existing["row"] = row
             # Keep player_key aligned with the latest Name|Club (club transfers).
             refreshed_key = player_row_key(row)
@@ -2138,7 +2150,7 @@ def save_profile_rows(
     if meta:
         meta["updated_at"] = now
         _write_json(_meta_path(target), meta)
-    if saved_from == "role_scores":
+    if stage_exports and saved_from == "role_scores":
         for entry in saved:
             pid = str(entry.get("id") or "").strip()
             role_col = str(entry.get("role_column") or "").strip()
