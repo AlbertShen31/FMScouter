@@ -386,7 +386,7 @@ def player_identity_item(
         if rec_style:
             value_class += " rs-identity-pill"
             style = {**rec_style, **style}
-    if key in ("avg_rating_club", "avg_rating_int"):
+    if key in ("avg_rating_club", "avg_rating_int", "last_5_club", "last_5_int"):
         from components.player_table import avg_rating_identity_style
 
         rating_style = avg_rating_identity_style(raw, theme)
