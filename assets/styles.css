@@ -3680,7 +3680,11 @@ body:has(.rc-page) .navbar {
     grid-template-columns: 200px minmax(0, 1fr);
     gap: 1.25rem;
     align-items: start;
-    margin-top: 0.75rem;
+    margin-top: 0;
+}
+
+.st-settings-pack-bar {
+    margin-bottom: 1rem;
 }
 
 @media (max-width: 900px) {
@@ -3897,6 +3901,45 @@ body:has(.rc-page) .navbar {
 
 .st-thresh-reset-btn {
     margin-bottom: 2px;
+}
+
+.st-partial-rules-table {
+    display: grid;
+    gap: 8px;
+}
+
+.st-partial-rule-row {
+    display: grid;
+    grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    background: var(--app-head);
+}
+
+.st-partial-rule-header {
+    background: transparent;
+    border-style: dashed;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--app-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.st-partial-head-mutual {
+    justify-self: start;
+}
+
+.st-partial-rules-empty {
+    padding: 8px 2px 12px;
+    font-size: 0.9rem;
+}
+
+.st-partial-mutual .mantine-Checkbox-label {
+    color: var(--app-text);
 }
 
 .st-thresh-table {

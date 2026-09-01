@@ -22,7 +22,7 @@ from config.paths import (
     PROFILES_PACKS_DIR,
 )
 import services.export_library as lib
-from scoring.role_scorer import is_fully_eligible, player_row_key
+from scoring.role_scorer import default_partial_adjacency, is_fully_eligible, player_row_key
 from scoring.stats_scorer import player_key as stats_player_key
 
 SAVED_FROM_LABELS = {
@@ -1792,6 +1792,7 @@ def _load_role_score_bundle(
             needed,
             tier_weights=us.tier_weights(settings),
             set_piece_profiles=us.set_piece_profiles(settings),
+            partial_adjacency=default_partial_adjacency(),
         )
 
     if combos:

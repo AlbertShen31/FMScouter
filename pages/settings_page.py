@@ -1,6 +1,7 @@
 """Settings page: packs, Role scores options, and Player stats threshold packs."""
 from __future__ import annotations
 
+import copy
 from urllib.parse import parse_qs
 
 from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update, register_page
@@ -46,10 +47,42 @@ _THRESH_CATEGORY_ORDER = {
 }
 
 SETTINGS_SECTIONS = (
-    ("general", "General"),
+    ("app-filters", "App & filters"),
+    ("display", "Display"),
     ("role-scores", "Role scores"),
     ("player-stats", "Player stats"),
 )
+
+_LEGACY_SECTION_MAP = {
+    "general": "app-filters",
+}
+
+SECTION_SAVE_KEYS: dict[str, tuple[str, ...]] = {
+    "st-save-app-filters": (
+        "preferred_theme",
+        "page_size",
+        "page_size_options",
+        "depth_undo_max",
+        "age_tiers",
+        "foot_thresholds",
+        "default_minutes_required",
+        "exclude_limited_leagues_adaptive_bounds",
+    ),
+    "st-save-display": (
+        "bands",
+        "attribute_bands",
+        "colors",
+        "attribute_colors",
+        "personality_tier_colors",
+        "tier_badge_colors",
+    ),
+    "st-save-role": (
+        "tier_weights",
+        "hybrid_weights",
+        "set_piece_profiles",
+        "hist_edges",
+    ),
+}
 
 def _card_header(title: str, tip: str | None = None, *, help_id: str | None = None) -> dbc.CardHeader:
     if not tip:
@@ -273,6 +306,63 @@ def _section_save_row(save_id: str, status_id: str) -> html.Div:
     )
 
 
+def _settings_pack_bar(settings: dict) -> dbc.Card:
+    default_note = (
+        "Default uses built-in values until you save; those are stored "
+        "locally and can be restored with Reset defaults."
+        if us.is_builtin(settings.get("id"))
+        else "Named settings packs save to their own files."
+    )
+    return dbc.Card(
+        [
+            _card_header("Settings pack", default_note, help_id="st-help-settings-pack"),
+            dbc.CardBody(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dmc.Select(
+                                    id="st-pack",
+                                    data=us.pack_options(),
+                                    value=settings.get("id") or us.BUILTIN,
+                                    clearable=False,
+                                    searchable=False,
+                                ),
+                                md=4,
+                            ),
+                            dbc.Col(
+                                dmc.TextInput(
+                                    id="st-new-name",
+                                    placeholder="New settings name",
+                                ),
+                                md=3,
+                            ),
+                            dbc.Col(
+                                [
+                                    dmc.Button(
+                                        "New",
+                                        id="st-new",
+                                        variant="light",
+                                        className="me-2",
+                                    ),
+                                    dmc.Button(
+                                        "Reset defaults",
+                                        id="st-reset",
+                                        variant="light",
+                                    ),
+                                ],
+                                md=5,
+                            ),
+                        ],
+                        className="g-2 align-items-center",
+                    ),
+                ]
+            ),
+        ],
+        className="mb-3 st-settings-pack-bar",
+    )
+
+
 def _category_options(group: str) -> list[dict[str, str]]:
     """Category choices for the threshold editor, ordered Defending → Final third/GK → Possession."""
     block = benchmarks()["benchmarks"].get(group) or {}
@@ -382,68 +472,11 @@ def _panel(section_id: str, children: list, *, active: bool) -> html.Div:
     )
 
 
-def _general_panel(settings: dict) -> list:
-    bands = settings["bands"]
-    attr_bands = settings["attribute_bands"]
-    default_note = (
-        "Default uses built-in values until you save; those are stored "
-        "locally and can be restored with Reset defaults."
-        if us.is_builtin(settings.get("id"))
-        else "Named settings packs save to their own files."
-    )
+def _app_filters_panel(settings: dict) -> list:
     return [
         _section_heading(
-            "General",
-            "Shared settings used across Role scores, Player stats, and Profiles: "
-            "packs, appearance, filters, score and attribute bands, colors, and minutes.",
-        ),
-        dbc.Card(
-            [
-                _card_header("Settings pack", default_note, help_id="st-help-settings-pack"),
-                dbc.CardBody(
-                    [
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    dmc.Select(
-                                        id="st-pack",
-                                        data=us.pack_options(),
-                                        value=settings.get("id") or us.BUILTIN,
-                                        clearable=False,
-                                        searchable=False,
-                                    ),
-                                    md=4,
-                                ),
-                                dbc.Col(
-                                    dmc.TextInput(
-                                        id="st-new-name",
-                                        placeholder="New settings name",
-                                    ),
-                                    md=3,
-                                ),
-                                dbc.Col(
-                                    [
-                                        dmc.Button(
-                                            "New",
-                                            id="st-new",
-                                            variant="light",
-                                            className="me-2",
-                                        ),
-                                        dmc.Button(
-                                            "Reset defaults",
-                                            id="st-reset",
-                                            variant="light",
-                                        ),
-                                    ],
-                                    md=5,
-                                ),
-                            ],
-                            className="g-2 align-items-center",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
+            "App & filters",
+            "App shell and shared filter defaults for Role scores, Player stats, and Profiles.",
         ),
         dbc.Card(
             [
@@ -520,36 +553,6 @@ def _general_panel(settings: dict) -> list:
         dbc.Card(
             [
                 _card_header(
-                    "Active scoring weights pack",
-                    "Attribute key / preferred / useful weights used on Role scores. "
-                    "Percentile threshold packs are managed under Player stats.",
-                    help_id="st-help-scoring-weights-pack",
-                ),
-                dbc.CardBody(
-                    [
-                        dmc.Select(
-                            id="st-role-weights-pack",
-                            label="Scoring weights",
-                            data=rc.pack_options(),
-                            value=rc.active_pack_id(),
-                            clearable=False,
-                            searchable=False,
-                        ),
-                        html.Small(
-                            [
-                                dcc.Link("Edit on Role configs", href="/role-config"),
-                                ".",
-                            ],
-                            className="text-muted d-block mt-1",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
-                _card_header(
                     "Age filter",
                     "Comma-separated maximum ages for the Max age menu on Role scores "
                     "and Player stats. Any is always included.",
@@ -616,6 +619,52 @@ def _general_panel(settings: dict) -> list:
                 ),
             ],
             className="mb-3",
+        ),
+        dbc.Card(
+            [
+                _card_header(
+                    "Minutes requirement",
+                    "Default minutes used to seed the Player stats minutes filter, "
+                    "adaptive percentile bounds (dataset min/max), and related Profiles views. "
+                    "Limited-tracking leagues can be excluded from those bounds by default.",
+                    help_id="st-help-minutes",
+                ),
+                dbc.CardBody(
+                    [
+                        dmc.NumberInput(
+                            id="st-default-minutes",
+                            label="Default minutes required",
+                            value=settings.get("default_minutes_required"),
+                            min=0,
+                            max=20000,
+                            step=90,
+                        ),
+                        dmc.Switch(
+                            id="st-exclude-limited-adaptive",
+                            label="Exclude limited data leagues from adaptive percentile bounds",
+                            checked=settings.get(
+                                "exclude_limited_leagues_adaptive_bounds", True
+                            ),
+                            className="mt-3",
+                        ),
+                        _section_save_row("st-save-app-filters", "st-status-app-filters"),
+                    ]
+                ),
+            ],
+            className="mb-3",
+        ),
+    ]
+
+
+def _display_panel(settings: dict) -> list:
+    bands = settings["bands"]
+    attr_bands = settings["attribute_bands"]
+    badge = settings["tier_badge_colors"]
+    return [
+        _section_heading(
+            "Display",
+            "Score and attribute bands, colors, and legend styling across Role scores, "
+            "Player stats, Profiles, and Role configs.",
         ),
         dbc.Card(
             [
@@ -828,31 +877,23 @@ def _general_panel(settings: dict) -> list:
         dbc.Card(
             [
                 _card_header(
-                    "Minutes requirement",
-                    "Default minutes used to seed the Player stats minutes filter, "
-                    "adaptive percentile bounds (dataset min/max), and related Profiles views. "
-                    "Limited-tracking leagues can be excluded from those bounds by default.",
-                    help_id="st-help-minutes",
+                    "Role config badge colors",
+                    "Colors for key / preferred / useful on the Role configs page "
+                    "(CSS variables --rc-key, --rc-green, --rc-blue). "
+                    "The same values apply in dark and light themes — pick colors that work for both.",
+                    help_id="st-help-badge-colors",
                 ),
                 dbc.CardBody(
                     [
-                        dmc.NumberInput(
-                            id="st-default-minutes",
-                            label="Default minutes required",
-                            value=settings.get("default_minutes_required"),
-                            min=0,
-                            max=20000,
-                            step=90,
+                        html.Div(
+                            [
+                                _badge_color_row("key", "Key", badge["key"]),
+                                _badge_color_row("preferred", "Preferred", badge["preferred"]),
+                                _badge_color_row("useful", "Useful", badge["useful"]),
+                            ],
+                            className="st-color-list",
                         ),
-                        dmc.Switch(
-                            id="st-exclude-limited-adaptive",
-                            label="Exclude limited data leagues from adaptive percentile bounds",
-                            checked=settings.get(
-                                "exclude_limited_leagues_adaptive_bounds", True
-                            ),
-                            className="mt-3",
-                        ),
-                        _section_save_row("st-save-general", "st-status-general"),
+                        _section_save_row("st-save-display", "st-status-display"),
                     ]
                 ),
             ],
@@ -864,12 +905,40 @@ def _general_panel(settings: dict) -> list:
 def _role_panel(settings: dict) -> list:
     tier_w = settings["tier_weights"]
     hybrid_w = settings["hybrid_weights"]
-    badge = settings["tier_badge_colors"]
     return [
         _section_heading(
             "Role scores",
-            "Role-only options: scoring weights, set-piece formulas, histogram bins, "
-            "and Role configs badge colors.",
+            "Role-only options: scoring weights, set-piece formulas, and histogram bins.",
+        ),
+        dbc.Card(
+            [
+                _card_header(
+                    "Active scoring weights pack",
+                    "Attribute key / preferred / useful weights used on Role scores. "
+                    "Percentile threshold packs are managed under Player stats.",
+                    help_id="st-help-scoring-weights-pack",
+                ),
+                dbc.CardBody(
+                    [
+                        dmc.Select(
+                            id="st-role-weights-pack",
+                            label="Scoring weights",
+                            data=rc.pack_options(),
+                            value=rc.active_pack_id(),
+                            clearable=False,
+                            searchable=False,
+                        ),
+                        html.Small(
+                            [
+                                dcc.Link("Edit on Role configs", href="/role-config"),
+                                ".",
+                            ],
+                            className="text-muted d-block mt-1",
+                        ),
+                    ]
+                ),
+            ],
+            className="mb-3",
         ),
         dbc.Card(
             [
@@ -992,30 +1061,6 @@ def _role_panel(settings: dict) -> list:
                             id="st-hist-preview",
                             children=us.hist_preview(settings),
                             className="st-preview-line",
-                        ),
-                    ]
-                ),
-            ],
-            className="mb-3",
-        ),
-        dbc.Card(
-            [
-                _card_header(
-                    "Role config badge colors",
-                    "Colors for key / preferred / useful on the Role configs page "
-                    "(CSS variables --rc-key, --rc-green, --rc-blue). "
-                    "The same values apply in dark and light themes — pick colors that work for both.",
-                    help_id="st-help-badge-colors",
-                ),
-                dbc.CardBody(
-                    [
-                        html.Div(
-                            [
-                                _badge_color_row("key", "Key", badge["key"]),
-                                _badge_color_row("preferred", "Preferred", badge["preferred"]),
-                                _badge_color_row("useful", "Useful", badge["useful"]),
-                            ],
-                            className="st-color-list",
                         ),
                         _section_save_row("st-save-role", "st-status-role"),
                     ]
@@ -1148,7 +1193,9 @@ def layout(section: str | None = None, **_kwargs):
     settings = us.load()
     thresh_pack = stp.load()
     allowed = {sid for sid, _label in SETTINGS_SECTIONS}
-    active = section if section in allowed else "general"
+    active = section if section in allowed else _LEGACY_SECTION_MAP.get(section or "", "app-filters")
+    if active not in allowed:
+        active = "app-filters"
     return dbc.Container(
         [
             html.Div(
@@ -1156,7 +1203,8 @@ def layout(section: str | None = None, **_kwargs):
                     html.H1("Settings", className="mb-0"),
                     *help_icon(
                         "Use the side nav to jump between sections. Each section has its own Save. "
-                        f"Player stats percentiles are separate named packs (built-in: {stp.BUILTIN_NAME}).",
+                        "The settings pack applies across all tabs; Player stats percentiles use "
+                        f"separate named packs (built-in: {stp.BUILTIN_NAME}).",
                         "st-help-page",
                     ),
                 ],
@@ -1166,6 +1214,7 @@ def layout(section: str | None = None, **_kwargs):
             dcc.Store(id="st-settings-section", data=active),
             dcc.Store(id="st-thresh-data", data=thresh_pack["thresholds"]),
             dcc.Store(id="st-thresh-revision", data=0),
+            _settings_pack_bar(settings),
             html.Div(
                 [
                     html.Aside(
@@ -1178,9 +1227,14 @@ def layout(section: str | None = None, **_kwargs):
                     html.Div(
                         [
                             _panel(
-                                "general",
-                                _general_panel(settings),
-                                active=active == "general",
+                                "app-filters",
+                                _app_filters_panel(settings),
+                                active=active == "app-filters",
+                            ),
+                            _panel(
+                                "display",
+                                _display_panel(settings),
+                                active=active == "display",
                             ),
                             _panel(
                                 "role-scores",
@@ -1208,7 +1262,11 @@ def _section_from_search(search: str | None) -> str | None:
     qs = parse_qs((search or "").lstrip("?"))
     requested = (qs.get("section") or [None])[0]
     allowed = {sid for sid, _label in SETTINGS_SECTIONS}
-    return requested if requested in allowed else None
+    if requested in allowed:
+        return requested
+    if requested in _LEGACY_SECTION_MAP:
+        return _LEGACY_SECTION_MAP[requested]
+    return None
 
 
 def _section_view(section: str) -> tuple:
@@ -1354,6 +1412,33 @@ def _refresh_ui_settings(settings: dict) -> dict:
     return us.normalize(settings)
 
 
+def _preferred_theme_value(raw) -> str:
+    if isinstance(raw, (list, tuple)):
+        raw = (raw or [None])[0]
+    return us.normalize_preferred_theme(raw)
+
+
+def _save_settings_pack(pack_id: str, draft: dict, *, section: str | None = None) -> dict:
+    """Persist the active settings pack, optionally updating one section only."""
+    current = us.read_pack(pack_id)
+    name = current.get("name")
+    if section:
+        keys = SECTION_SAVE_KEYS[section]
+        patch = {key: draft[key] for key in keys}
+        normalized = us.normalize({**current, **patch}, pack_id=pack_id, name=name)
+        merged = copy.deepcopy(current)
+        for key in keys:
+            merged[key] = normalized[key]
+        merged["id"] = pack_id
+        if not us.is_builtin(pack_id):
+            merged["name"] = name
+        return us.save(merged, pack_id)
+    payload = dict(draft)
+    if not us.is_builtin(pack_id):
+        payload["name"] = name
+    return us.save(payload, pack_id)
+
+
 @callback(
     Output("st-settings-section", "data"),
     Output({"type": "st-settings-nav", "section": ALL}, "className"),
@@ -1368,13 +1453,13 @@ def switch_settings_section(search, n_clicks, current):
     if isinstance(triggered, dict) and triggered.get("type") == "st-settings-nav":
         if not any(n_clicks or []):
             return no_update, no_update, no_update, no_update
-        section = triggered.get("section") or current or "general"
+        section = triggered.get("section") or current or "app-filters"
         return _section_view(section)
     from_url = _section_from_search(search)
     if from_url:
         return _section_view(from_url)
     if triggered == "st-settings-url" or triggered is None:
-        return _section_view(current or "general")
+        return _section_view(current or "app-filters")
     return no_update, no_update, no_update, no_update
 
 
@@ -1589,7 +1674,7 @@ def _ui_draft_from_state(
         "tier_badge_colors": _badge_colors_from_state(badge_values, badge_specs),
         "personality_tier_colors": _pers_colors_from_state(pers_values, pers_specs),
         "set_piece_profiles": _set_piece_profiles_from_state(key_map, pref_map, useful_map),
-        "preferred_theme": preferred_theme,
+        "preferred_theme": _preferred_theme_value(preferred_theme),
         "page_size": page_size_default,
         "page_size_options": page_size_options,
         "default_minutes_required": default_minutes,
@@ -1654,13 +1739,15 @@ def apply_preferred_theme_select(preferred_values, current):
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
-    Output("st-status-general", "children"),
+    Output("st-status-app-filters", "children"),
+    Output("st-status-display", "children"),
     Output("st-status-role", "children"),
     Output("st-new-name", "value"),
     Input("st-pack", "value"),
     Input("st-new", "n_clicks"),
     Input("st-reset", "n_clicks"),
-    Input("st-save-general", "n_clicks"),
+    Input("st-save-app-filters", "n_clicks"),
+    Input("st-save-display", "n_clicks"),
     Input("st-save-role", "n_clicks"),
     State("st-new-name", "value"),
     State("st-age-tiers", "value"),
@@ -1686,7 +1773,7 @@ def apply_preferred_theme_select(preferred_values, current):
     State({"type": "st-sp-key", "profile": ALL}, "value"),
     State({"type": "st-sp-preferred", "profile": ALL}, "value"),
     State({"type": "st-sp-useful", "profile": ALL}, "value"),
-    State("theme", "data"),
+    State({"type": "st-preferred-theme", "index": ALL}, "value"),
     State("st-page-size-default", "value"),
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),
@@ -1699,7 +1786,8 @@ def handle_ui_settings(
     pack_id,
     new_n,
     reset_n,
-    save_general_n,
+    save_app_filters_n,
+    save_display_n,
     save_role_n,
     new_name,
     ages,
@@ -1734,7 +1822,7 @@ def handle_ui_settings(
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 39
+    n_out = 40
     if not triggered:
         return (no_update,) * n_out
 
@@ -1786,7 +1874,8 @@ def handle_ui_settings(
         depth_undo_max,
         exclude_limited_adaptive,
     )
-    status_general = no_update
+    status_app_filters = no_update
+    status_display = no_update
     status_role = no_update
     clear_name = no_update
     update_pack_options = True
@@ -1794,20 +1883,20 @@ def handle_ui_settings(
 
     if triggered == "st-pack":
         settings = us.load(pack_id)
-        status_general = f"Loaded {settings['name']}."
+        status_app_filters = f"Loaded {settings['name']}."
         sync_theme = True
     elif triggered == "st-reset":
         if pack_id == us.BUILTIN:
             us.clear_default_overrides()
             settings = us.load(us.BUILTIN)
-            status_general = "Default restored to built-in values."
+            status_app_filters = "Default restored to built-in values."
         else:
             settings = us.normalize(us.DEFAULTS, pack_id=pack_id, name=None)
             current = us.read_pack(pack_id)
             settings["id"] = current["id"]
             settings["name"] = current["name"]
-            status_general = (
-                "Form reset to built-in defaults. Save Role scores to keep them on this pack."
+            status_app_filters = (
+                "Form reset to built-in defaults. Save a section to keep them on this pack."
             )
         update_pack_options = False
         sync_theme = True
@@ -1815,37 +1904,28 @@ def handle_ui_settings(
         label = str(new_name or "").strip()
         if not label:
             return (
-                (no_update,) * (n_out - 3)
-                + ("Enter a name to create a new settings file.", no_update, no_update)
+                (no_update,) * (n_out - 4)
+                + ("Enter a name to create a new settings file.", no_update, no_update, no_update)
             )
-        settings = us.create_pack(label, draft)
-        status_general = f"Created {settings['name']}."
+        settings = us.create_pack(label, {**us.read_pack(pack_id), **draft})
+        status_app_filters = f"Created {settings['name']}."
         clear_name = ""
         sync_theme = True
-    elif triggered == "st-save-general":
-        if us.is_builtin(pack_id):
-            settings = us.save(draft, pack_id)
-            status_general = f"Saved {settings['name']} overrides."
+    elif triggered in ("st-save-app-filters", "st-save-display"):
+        settings = _save_settings_pack(pack_id, draft, section=triggered)
+        saved_msg = f"Saved {settings['name']}."
+        if triggered == "st-save-app-filters":
+            status_app_filters = saved_msg
         else:
-            current = us.read_pack(pack_id)
-            draft["name"] = current["name"]
-            settings = us.save(draft, pack_id)
-            status_general = f"Saved {settings['name']}."
-            update_pack_options = False
+            status_display = saved_msg
         sync_theme = True
-        # Active scoring weights pack.
         if role_weights_pack:
             rc.load_pack(role_weights_pack)
     elif triggered == "st-save-role":
-        if us.is_builtin(pack_id):
-            settings = us.save(draft, pack_id)
-            status_role = f"Saved Role scores to {settings['name']}."
-        else:
-            current = us.read_pack(pack_id)
-            draft["name"] = current["name"]
-            settings = us.save(draft, pack_id)
-            status_role = f"Saved Role scores to {settings['name']}."
-            update_pack_options = False
+        settings = _save_settings_pack(pack_id, draft, section=triggered)
+        status_role = f"Saved Role scores to {settings['name']}."
+        if role_weights_pack:
+            rc.load_pack(role_weights_pack)
     else:
         return (no_update,) * n_out
 
@@ -1873,7 +1953,8 @@ def handle_ui_settings(
         role_weights_options,
         role_weights_value,
         theme_value,
-        status_general,
+        status_app_filters,
+        status_display,
         status_role,
         clear_name,
     )

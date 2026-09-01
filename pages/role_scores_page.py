@@ -48,6 +48,7 @@ from scoring.role_scorer import (
     combo_meta,
     combo_score_labels,
     column_display_abbr,
+    default_partial_adjacency,
     expand_view_role_columns,
     foot_match,
     group_abbr_tone,
@@ -2640,6 +2641,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     tier_w = us.tier_weights(settings)
     hybrid_w = us.hybrid_weights(settings)
     profiles = us.set_piece_profiles(settings)
+    partial_adj = default_partial_adjacency()
     combos = normalize_combos(combos)
     role_ids = _as_list(role_ids)
     needed = list(role_ids)
@@ -2665,6 +2667,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
             needed,
             tier_weights=tier_w,
             set_piece_profiles=profiles,
+            partial_adjacency=partial_adj,
         )
     rows = apply_combos(
         scored,
@@ -2681,6 +2684,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
                 needed,
                 tier_weights=tier_w,
                 set_piece_profiles=profiles,
+                partial_adjacency=partial_adj,
             ),
             combos,
             ip_weight=hybrid_w["ip"],

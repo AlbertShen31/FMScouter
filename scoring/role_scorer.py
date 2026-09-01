@@ -444,6 +444,16 @@ GROUP_DEFS = [
     ("st", "Strikers", pc.st_positions),
 ]
 
+GROUP_LABELS = {gid: label for gid, label, _roles in GROUP_DEFS}
+
+DEFAULT_PARTIAL_ELIGIBILITY_RULES = (
+    {"primary": "fb", "secondary": "wb", "mutual": True},
+    {"primary": "dm", "secondary": "cm", "mutual": True},
+    {"primary": "cm", "secondary": "am", "mutual": True},
+    {"primary": "wm", "secondary": "w", "mutual": True},
+    {"primary": "st", "secondary": "w", "mutual": True},
+)
+
 _ROLE_GROUP = {}
 for _group, _label, _roles in GROUP_DEFS:
     for _role in _roles:
@@ -760,17 +770,43 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
     return False
 
 
-# Adjacent position groups → partial eligibility (RB↔RWB, DM↔CM, CM↔AM, LM↔LW, …).
-PARTIAL_ADJACENT_GROUPS: dict[str, frozenset[str]] = {
-    "fb": frozenset({"wb"}),
-    "wb": frozenset({"fb"}),
-    "dm": frozenset({"cm"}),
-    "cm": frozenset({"dm", "am"}),
-    "am": frozenset({"cm"}),
-    "wm": frozenset({"w"}),
-    "w": frozenset({"wm", "st"}),
-    "st": frozenset({"w"}),
-}
+# Built-in partial adjacency for yellow position match.
+def build_partial_adjacency(rules: list[dict] | None) -> dict[str, frozenset[str]]:
+    """Map each role group to groups that grant partial eligibility."""
+    adj: dict[str, set[str]] = {}
+    for rule in rules or []:
+        if not isinstance(rule, dict):
+            continue
+        primary = str(rule.get("primary") or "").strip().lower()
+        secondary = str(rule.get("secondary") or "").strip().lower()
+        if primary not in pc.GROUP_IDS or secondary not in pc.GROUP_IDS:
+            continue
+        if primary == secondary:
+            continue
+        adj.setdefault(primary, set()).add(secondary)
+        if rule.get("mutual", True):
+            adj.setdefault(secondary, set()).add(primary)
+    return {key: frozenset(values) for key, values in adj.items()}
+
+
+def default_partial_eligibility_rules() -> list[dict]:
+    return [dict(rule) for rule in DEFAULT_PARTIAL_ELIGIBILITY_RULES]
+
+
+def default_partial_adjacency() -> dict[str, frozenset[str]]:
+    return build_partial_adjacency(list(DEFAULT_PARTIAL_ELIGIBILITY_RULES))
+
+
+def _default_partial_adjacency() -> dict[str, frozenset[str]]:
+    return default_partial_adjacency()
+
+
+def _resolve_partial_adjacency(
+    partial_adjacency: dict[str, frozenset[str]] | None,
+) -> dict[str, frozenset[str]]:
+    if partial_adjacency is not None:
+        return partial_adjacency
+    return _default_partial_adjacency()
 
 ELIGIBILITY_FULL = "full"
 ELIGIBILITY_PARTIAL = "partial"
@@ -808,17 +844,23 @@ def combine_eligibility_levels(*values) -> str:
     return ELIGIBILITY_PARTIAL
 
 
-def role_eligibility_level(positions: list[dict[str, str]], groups: list[str]) -> str:
+def role_eligibility_level(
+    positions: list[dict[str, str]],
+    groups: list[str],
+    *,
+    partial_adjacency: dict[str, frozenset[str]] | None = None,
+) -> str:
     """Full = exact group match; partial = adjacent group only; else none."""
     if not groups:
         return ELIGIBILITY_NONE
+    adjacency = _resolve_partial_adjacency(partial_adjacency)
     player_groups = player_matched_groups(positions)
     role_set = set(groups)
     if player_groups & role_set:
         return ELIGIBILITY_FULL
     neighbor_groups: set[str] = set()
     for group in role_set:
-        neighbor_groups |= PARTIAL_ADJACENT_GROUPS.get(group, frozenset())
+        neighbor_groups |= adjacency.get(group, frozenset())
     if player_groups & neighbor_groups:
         return ELIGIBILITY_PARTIAL
     return ELIGIBILITY_NONE
@@ -955,6 +997,7 @@ def player_role_highlights(
     player: dict[str, Any],
     *,
     tier_weights: dict[str, float] | None = None,
+    partial_adjacency: dict[str, frozenset[str]] | None = None,
 ) -> dict[str, Any]:
     """Best IP/OOP roles in Best Pos group, and best IP/OOP in other available groups.
 
@@ -988,7 +1031,9 @@ def player_role_highlights(
         groups = role_groups(role_id)
         if not groups:
             continue
-        eligible_level = role_eligibility_level(positions, groups)
+        eligible_level = role_eligibility_level(
+            positions, groups, partial_adjacency=partial_adjacency
+        )
         eligible = eligible_level != ELIGIBILITY_NONE
         in_best = bool(best_group and best_group in groups)
         # Score roles for Best Pos even if the Position string omits that slot.
@@ -1621,7 +1666,10 @@ def score_players(
     *,
     tier_weights: dict[str, float] | None = None,
     set_piece_profiles: list[dict] | None = None,
+    partial_adjacency: dict[str, frozenset[str]] | None = None,
 ) -> list[dict[str, Any]]:
+    if partial_adjacency is None:
+        partial_adjacency = default_partial_adjacency()
     weights = _resolve_tier_weights(tier_weights) if tier_weights else None
     configs = []
     for role_ref in role_ids:
@@ -1694,7 +1742,7 @@ def score_players(
             )
             row[label] = score
             row[f"{label} eligible"] = role_eligibility_level(
-                player["positions"], groups
+                player["positions"], groups, partial_adjacency=partial_adjacency
             )
             if score > best_score:
                 best_score = score

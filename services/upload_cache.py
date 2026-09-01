@@ -18,9 +18,10 @@ from typing import Any
 from config.paths import ROOT_DIR, UPLOAD_CACHE_DIR
 import services.export_library as lib
 import services.role_config as rc
+import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v15"
+FORMULA_VERSION = "v16"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -65,6 +66,7 @@ def current_signature() -> dict[str, Any]:
         "role_pack_sha": _sha(role_snap),
         "tier_weights": us.tier_weights(settings),
         "set_piece_profiles": us.set_piece_profiles(settings),
+        "partial_eligibility_rules": rs.default_partial_eligibility_rules(),
         "stats_pack_id": stats_id,
         "stats_tree_sha": _sha(stats_tree),
         "stats_benchmarks_sha": bench_hash,
@@ -368,6 +370,7 @@ def compute_file(file_id: str) -> dict[str, Any]:
                 role_ids,
                 tier_weights=us.tier_weights(settings),
                 set_piece_profiles=us.set_piece_profiles(settings),
+                partial_adjacency=rs.default_partial_adjacency(),
             )
             payload["role_scores"] = {
                 "players": players,

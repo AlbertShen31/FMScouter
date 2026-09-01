@@ -10,6 +10,7 @@ from scoring.role_scorer import (
     ELIGIBILITY_FULL,
     ELIGIBILITY_PARTIAL,
     apply_set_piece_scores,
+    default_partial_adjacency,
     normalize_eligibility,
     player_role_highlights,
     score_band,
@@ -122,6 +123,7 @@ def player_role_fit_section(player: dict, settings=None) -> html.Div | None:
     highlights = player_role_highlights(
         player,
         tier_weights=us.tier_weights(settings),
+        partial_adjacency=default_partial_adjacency(),
     )
     blocks = []
     in_best_rows = [

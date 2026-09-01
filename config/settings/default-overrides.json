@@ -10,6 +10,11 @@
     "good": 12.0,
     "ok": 10.0
   },
+  "attribute_bands": {
+    "elite": 16,
+    "good": 11,
+    "ok": 6
+  },
   "foot_thresholds": {
     "left": 4,
     "both": 4,
@@ -23,6 +28,28 @@
     14.0
   ],
   "colors": {
+    "elite": {
+      "bg": "#dcfce7",
+      "fg": "#15803d",
+      "bar": "#22c55e"
+    },
+    "good": {
+      "bg": "#dbeafe",
+      "fg": "#1d4ed8",
+      "bar": "#3b82f6"
+    },
+    "ok": {
+      "bg": "#fef3c7",
+      "fg": "#b45309",
+      "bar": "#f59e0b"
+    },
+    "poor": {
+      "bg": "#fee2e2",
+      "fg": "#b91c1c",
+      "bar": "#ef4444"
+    }
+  },
+  "attribute_colors": {
     "elite": {
       "bg": "#dcfce7",
       "fg": "#15803d",
@@ -151,6 +178,7 @@
     }
   ],
   "default_minutes_required": 900,
+  "exclude_limited_leagues_adaptive_bounds": true,
   "depth_undo_max": 10,
   "page_size": 25,
   "page_size_options": [

@@ -118,7 +118,9 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 `is_eligible(positions, group)` tests a parsed FM Position string against one **role group** (whether a player can be scored as eligible for that role).
 
-Adjacent groups get **partial** eligibility when scoring roles (`role_eligibility_level` in `scoring/role_scorer.py`):
+Adjacent groups get **partial** eligibility when scoring roles. Rules are editable under **Settings → Role scores → Partial position eligibility** (`partial_eligibility_rules` in UI settings packs). Each rule has a **role group** (primary), **player group** (secondary), and optional **Mutual** flag. Non-mutual rules only grant partial match when the role needs the primary group and the player has the secondary group.
+
+Factory defaults:
 
 - `fb` ↔ `wb` (RB/LB ↔ RWB/LWB)
 - `dm` ↔ `cm`
