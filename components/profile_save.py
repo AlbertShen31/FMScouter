@@ -285,6 +285,7 @@ def register_role_profile_save_callbacks(
                 payload if isinstance(payload, dict) else None,
                 focus_roles=focus_role,
                 hybrids_only=bool(hybrids_only),
+                eligible_only=False,
             )
             n_players = len(marked_list)
             n_rows = len(items)
@@ -338,6 +339,7 @@ def register_role_profile_save_callbacks(
                 payload,
                 focus_roles=focus_role,
                 hybrids_only=bool(hybrids_only),
+                eligible_only=False,
                 role_players=parsed_players(parsed),
                 stats_players=profiles.load_stats_players_for_file(file_id or ""),
                 file_id=file_id or "",
@@ -345,7 +347,7 @@ def register_role_profile_save_callbacks(
             )
             if not items:
                 raise ValueError(
-                    "No eligible role rows to save for the marked players."
+                    "No role profile rows to save for the marked players."
                 )
             saved = profiles.save_profile_rows(
                 items,

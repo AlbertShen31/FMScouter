@@ -1403,7 +1403,9 @@ def expand_role_profile_rows(
     file_id: str = "",
     settings=None,
 ) -> list[dict[str, Any]]:
-    """Build one snapshot entry dict per (player, eligible role) for saving.
+    """Build one snapshot entry dict per (player, role) for saving.
+
+    When ``eligible_only`` is True (default), skip roles the player cannot play.
 
     Each item includes ``row`` (shortlist fields + percentiles) and ``player``
     (single parsed role player for the Role scores modal).
