@@ -499,15 +499,16 @@ def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
     return " ".join(parts)
 
 # Player-position filter cards. Matching is exact FM positions (see
-# matches_pos_card), not role-group eligibility (is_eligible still allows
-# ST for the `w` role bucket when scoring). CM players match both DM and AM.
+# matches_pos_card), aligned with role position groups. ST still counts for
+# the `w` role bucket in is_eligible when scoring wingers.
 POS_CARDS = [
     ("all", "All", "", "all"),
     ("GK", "Goalkeeper", "GK", "gk"),
     ("DEF", "Center Back", "CB", "def"),
     ("FB", "Full Back", "FB / WB", "fb"),
-    ("DM", "Defensive Midfield", "DM / CM", "dm"),
-    ("AM", "Attacking Midfield", "CM / AM", "am"),
+    ("DM", "Defensive Midfield", "DM", "dm"),
+    ("CM", "Central Midfield", "M (C)", "cm"),
+    ("AM", "Attacking Midfield", "AM (C)", "am"),
     ("WM", "Wide Midfielders", "ML / MR", "wm"),
     ("W", "Winger", "AML / AMR", "w"),
     ("ST", "Striker", "ST", "st"),
@@ -519,8 +520,9 @@ POS_CARD_GROUPS = {
     "GK": ("gk",),
     "DEF": ("cb",),
     "FB": ("fb", "wb"),
-    "DM": ("dm", "cm"),
-    "AM": ("cm", "am"),
+    "DM": ("dm",),
+    "CM": ("cm",),
+    "AM": ("am",),
     "WM": ("wm",),
     "W": ("w",),
     "ST": ("st",),
@@ -532,7 +534,7 @@ GROUP_ABBR_TONE = {
     "FB": "fb",
     "WB": "fb",
     "DM": "dm",
-    "CM": "mid",
+    "CM": "cm",
     "AM": "am",
     "WM": "wm",
     "W": "w",
@@ -663,11 +665,11 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
                 return True
             if pos == "D" and ("L" in area or "R" in area):
                 return True
-        if group in ("dm", "cm") and (pos == "DM" or (pos == "M" and "C" in area)):
+        if group == "dm" and pos == "DM":
             return True
-        if group == "am" and (
-            (pos == "AM" and "C" in area) or (pos == "M" and "C" in area)
-        ):
+        if group == "cm" and pos == "M" and "C" in area:
+            return True
+        if group == "am" and pos == "AM" and "C" in area:
             return True
         # Wide midfielders: ML / MR only.
         if group == "wm" and pos == "M" and ("L" in area or "R" in area):
@@ -694,13 +696,11 @@ def matches_pos_card(positions: list[dict[str, str]], card: str) -> bool:
             pos == "WB" or (pos == "D" and ("L" in area or "R" in area))
         ):
             return True
-        if card == "DM" and (
-            pos == "DM" or (pos == "M" and "C" in area)
-        ):
+        if card == "DM" and pos == "DM":
             return True
-        if card == "AM" and (
-            (pos == "M" and "C" in area) or (pos == "AM" and "C" in area)
-        ):
+        if card == "CM" and pos == "M" and "C" in area:
+            return True
+        if card == "AM" and pos == "AM" and "C" in area:
             return True
         if card == "WM" and pos == "M" and ("L" in area or "R" in area):
             return True

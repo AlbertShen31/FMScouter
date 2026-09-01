@@ -122,12 +122,13 @@ import services.stats_threshold_packs as stp
 register_page(__name__, path="/stats", name="Player stats")
 
 # Role-scores-style position cards → Mustermann threshold group.
-# DEF/FB → def, DM/AM/WM → mid, W/ST → fwd, GK → gk.
+# DEF/FB → def, DM/CM/AM/WM → mid, W/ST → fwd, GK → gk.
 POS_CARD_BENCH = {
     "GK": "gk",
     "DEF": "def",
     "FB": "def",
     "DM": "mid",
+    "CM": "mid",
     "AM": "mid",
     "WM": "mid",
     "W": "fwd",
