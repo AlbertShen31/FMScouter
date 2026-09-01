@@ -364,7 +364,8 @@ def sync_slot_role_buckets(ip_pos, oop_pos, ips, oops):
         if next_ip != ip_value or next_oop != oop_value:
             changed = True
     if not changed:
-        return no_update, no_update
+        skip = [no_update] * fm.MAX_SLOTS
+        return skip, skip
     return new_ips, new_oops
 
 
