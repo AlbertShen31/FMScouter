@@ -579,8 +579,7 @@ def compact_role_label(
     return " ".join(parts)
 
 # Player-position filter cards. Matching is exact FM positions (see
-# matches_pos_card), aligned with role position groups. ST still counts for
-# the `w` role bucket in is_eligible when scoring wingers.
+# matches_pos_card), aligned with role position groups.
 POS_CARDS = [
     ("all", "All", "", "all"),
     ("GK", "Goalkeeper", "GK", "gk"),
@@ -753,10 +752,8 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
         # Wide midfielders: ML / MR only.
         if group == "wm" and pos == "M" and ("L" in area or "R" in area):
             return True
-        # Wingers: AML / AMR (ST still counts for role eligibility).
-        if group == "w" and (
-            (pos == "AM" and ("L" in area or "R" in area)) or pos == "ST"
-        ):
+        # Wingers: AML / AMR only (ST is partial via st↔w).
+        if group == "w" and pos == "AM" and ("L" in area or "R" in area):
             return True
         if group == "st" and pos == "ST":
             return True
@@ -771,7 +768,8 @@ PARTIAL_ADJACENT_GROUPS: dict[str, frozenset[str]] = {
     "cm": frozenset({"dm", "am"}),
     "am": frozenset({"cm"}),
     "wm": frozenset({"w"}),
-    "w": frozenset({"wm"}),
+    "w": frozenset({"wm", "st"}),
+    "st": frozenset({"w"}),
 }
 
 ELIGIBILITY_FULL = "full"

@@ -124,11 +124,12 @@ Adjacent groups get **partial** eligibility when scoring roles (`role_eligibilit
 - `dm` ↔ `cm`
 - `cm` ↔ `am`
 - `wm` ↔ `w` (LM/RM ↔ LW/RW)
+- `st` ↔ `w` (ST ↔ LW/RW; strikers are not natural wingers)
 
 Full match still requires an exact group hit (OR across the role’s `groups` list).
 
 - `wm`: `M` on L/R (ML / MR)
-- `w`: `AM` on L/R (AML / AMR), or `ST`
+- `w`: `AM` on L/R (AML / AMR)
 
 Position-bar filters use `matches_pos_card` — exact FM positions only, aligned with role groups:
 
