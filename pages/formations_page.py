@@ -7,7 +7,7 @@ import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
 import services.formations as fm
-from scoring.role_scorer import combo_meta, role_options
+from scoring.role_scorer import canonical_role_ref, combo_meta, role_options
 
 register_page(__name__, path="/formations", name="Formations")
 
@@ -17,7 +17,9 @@ FM_PAGE_TIP = (
     "Save writes a new file if none is selected."
 )
 FM_HYBRID_SLOTS_TIP = (
-    "IP position is required. Leave OOP position blank to use the IP position for both role lists."
+    "IP position is required. Leave OOP position blank to use the IP position for both role lists. "
+    "Roles that span position buckets (e.g. Wing Back as FB or WB) appear once per bucket in the "
+    "role lists; the slot position picks the default bucket."
 )
 
 POS_OPTIONS = fm.position_options()
@@ -328,6 +330,42 @@ def filter_slot_roles(ip_pos, oop_pos, ips, oops):
         ip_data.append(role_options(phase="IP", group=ip_group, keep=keep_ip) or [])
         oop_data.append(role_options(phase="OOP", group=oop_group, keep=keep_oop) or [])
     return ip_data, oop_data
+
+
+@callback(
+    Output({"type": "fm-slot-ip", "index": ALL}, "value", allow_duplicate=True),
+    Output({"type": "fm-slot-oop", "index": ALL}, "value", allow_duplicate=True),
+    Input({"type": "fm-slot-ip-pos", "index": ALL}, "value"),
+    Input({"type": "fm-slot-oop-pos", "index": ALL}, "value"),
+    State({"type": "fm-slot-ip", "index": ALL}, "value"),
+    State({"type": "fm-slot-oop", "index": ALL}, "value"),
+    prevent_initial_call=True,
+)
+def sync_slot_role_buckets(ip_pos, oop_pos, ips, oops):
+    """Re-pin cross-bucket role picks when the slot position changes."""
+    ip_pos_specs = ctx.inputs_list[0] if ctx.inputs_list else []
+    oop_pos_specs = ctx.inputs_list[1] if len(ctx.inputs_list) > 1 else []
+    ip_pos_map = _by_index(ip_pos_specs, ip_pos)
+    oop_pos_map = _by_index(oop_pos_specs, oop_pos)
+    ip_map = _by_index(ctx.states_list[0] if ctx.states_list else [], ips)
+    oop_map = _by_index(ctx.states_list[1] if len(ctx.states_list) > 1 else [], oops)
+    new_ips = []
+    new_oops = []
+    changed = False
+    for index in range(fm.MAX_SLOTS):
+        ip_group = fm.group_for_position(ip_pos_map.get(index))
+        oop_group = fm.group_for_position(oop_pos_map.get(index) or ip_pos_map.get(index))
+        ip_value = ip_map.get(index) or ""
+        oop_value = oop_map.get(index) or ""
+        next_ip = canonical_role_ref(ip_value, position_group=ip_group) if ip_value else ""
+        next_oop = canonical_role_ref(oop_value, position_group=oop_group) if oop_value else ""
+        new_ips.append(next_ip or None)
+        new_oops.append(next_oop or None)
+        if next_ip != ip_value or next_oop != oop_value:
+            changed = True
+    if not changed:
+        return no_update, no_update
+    return new_ips, new_oops
 
 
 @callback(

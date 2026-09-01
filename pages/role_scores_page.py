@@ -47,16 +47,22 @@ from scoring.role_scorer import (
     combo_column_labels,
     combo_meta,
     combo_score_labels,
+    column_display_abbr,
     expand_view_role_columns,
     foot_match,
     group_abbr_tone,
+    has_bucket_role_refs,
     normalize_combos,
     normalize_eligibility,
+    parse_bucket_column,
     parse_combo_id,
     parse_export,
     player_row_key,
     role_meta,
     role_options,
+    role_groups,
+    encode_role_ref,
+    is_cross_bucket,
     score_band,
     score_players,
     to_int,
@@ -362,7 +368,8 @@ def _hybrid_help(settings=None) -> str:
     return (
         f"Hybrid score = ({weights['ip']:g}× in possession + {weights['oop']:g}× out of possession) "
         f"÷ {total:g}. Both part scores stay in the table. "
-        "A player is eligible if they can play either part."
+        "A player is eligible if they can play either part. "
+        "Cross-bucket roles list each bucket separately (e.g. FB vs WB Wing Back)."
     )
 
 ROLE_MODE_DATA = [
@@ -961,7 +968,11 @@ def layout():
                                         _field_label(
                                             "Scored roles",
                                             primary=True,
-                                            tip="Every player is scored against the roles you pick here.",
+                                            tip=(
+                                                "Every player is scored against the roles you pick here. "
+                                                "Roles that span position buckets (e.g. Wing Back as FB or WB) "
+                                                "appear once per bucket."
+                                            ),
                                             help_id="rs-help-scored-roles",
                                         ),
                                         html.Div(
@@ -1447,6 +1458,11 @@ def _strip_phase_suffix(label: str) -> str:
     return label
 
 
+def _column_header_abbr(col_id: str) -> str:
+    """Abbreviated score column without bucket prefix or phase suffix."""
+    return column_display_abbr(col_id)
+
+
 def _column_display_name(col_id: str) -> str:
     """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM; set pieces as COR/AER/…"""
     if col_id in TABLE_TEXT_COLS:
@@ -1458,8 +1474,18 @@ def _column_display_name(col_id: str) -> str:
         ip, _, oop = col_id.partition("+")
         if not ip or not oop:
             return col_id
-        return f"{_strip_phase_suffix(ip)}+\n{_strip_phase_suffix(oop)}"
-    return _strip_phase_suffix(col_id)
+        ip_bucket, _ = parse_bucket_column(ip)
+        oop_bucket, _ = parse_bucket_column(oop)
+        ip_abbr = _column_header_abbr(ip)
+        oop_abbr = _column_header_abbr(oop)
+        left = f"{ip_bucket.upper()}\n{ip_abbr}" if ip_bucket else ip_abbr
+        right = f"{oop_bucket.upper()}\n{oop_abbr}" if oop_bucket else oop_abbr
+        return f"{left}+\n{right}"
+    bucket, _ = parse_bucket_column(col_id)
+    abbr = _column_header_abbr(col_id)
+    if bucket:
+        return f"{bucket.upper()}\n{abbr}"
+    return abbr
 
 
 _ROLE_COLUMN_FULL_NAMES: dict[str, str] | None = None
@@ -1473,11 +1499,16 @@ def _role_column_full_names() -> dict[str, str]:
 
         names: dict[str, str] = {}
         for role_id in pc.all_positions:
-            meta = role_meta(role_id)
-            phase = meta.get("phase") or ""
-            names[meta["column"]] = (
-                f"{meta['name']} ({phase})" if phase else meta["name"]
-            )
+            refs = [role_id]
+            if is_cross_bucket(role_id):
+                refs.extend(encode_role_ref(role_id, group) for group in role_groups(role_id))
+            for role_ref in refs:
+                meta = role_meta(role_ref)
+                phase = meta.get("phase") or ""
+                label = meta["name"]
+                if meta.get("group_label"):
+                    label = f"{label} · {meta['group_label']}"
+                names[meta["column"]] = f"{label} ({phase})" if phase else label
         _ROLE_COLUMN_FULL_NAMES = names
     return _ROLE_COLUMN_FULL_NAMES
 
@@ -1520,10 +1551,14 @@ def _column_tone_map() -> dict[str, str]:
     if _COLUMN_TONE_BY_ID is None:
         import config.role_weights.fm26_role_weight_config as pc
 
-        _COLUMN_TONE_BY_ID = {
-            role_meta(role_id)["column"]: role_meta(role_id)["tone"]
-            for role_id in pc.all_positions
-        }
+        _COLUMN_TONE_BY_ID = {}
+        for role_id in pc.all_positions:
+            refs = [role_id]
+            if is_cross_bucket(role_id):
+                refs.extend(encode_role_ref(role_id, group) for group in role_groups(role_id))
+            for role_ref in refs:
+                meta = role_meta(role_ref)
+                _COLUMN_TONE_BY_ID[meta["column"]] = meta["tone"]
     return _COLUMN_TONE_BY_ID
 
 
@@ -1843,7 +1878,7 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
     ]
     return html.Button(
         children,
-        id={"type": "rs-depth", "role": meta["id"]},
+        id={"type": "rs-depth", "role": meta.get("ref") or meta["id"]},
         n_clicks=0,
         className="rs-depth-card" + active,
         title=meta.get("compact") or meta["name"],
@@ -2616,7 +2651,8 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
         return None, no_update, no_update
     scored = None
     file_id = (parsed or {}).get("file_id")
-    if file_id and (parsed or {}).get("from_cache"):
+    bucket_refs = has_bucket_role_refs(needed)
+    if file_id and (parsed or {}).get("from_cache") and not bucket_refs:
         try:
             import services.upload_cache as upload_cache
 

@@ -459,6 +459,78 @@ def role_groups(role_id: str) -> list[str]:
     return [home] if home else []
 
 
+ROLE_REF_SEP = "@"
+
+
+def decode_role_ref(value: str) -> tuple[str, str | None]:
+    """Split a stored role ref into ``(role_id, scoring_group | None)``."""
+    text = str(value or "").strip()
+    if ROLE_REF_SEP not in text:
+        return text, None
+    role_id, _, group = text.partition(ROLE_REF_SEP)
+    role_id = role_id.strip()
+    group = group.strip().lower() or None
+    if role_id not in pc.all_positions:
+        return text, None
+    if group and group in role_groups(role_id):
+        return role_id, group
+    return role_id, None
+
+
+def encode_role_ref(role_id: str, group: str | None) -> str:
+    """Persist a bucket-specific pick for cross-bucket roles."""
+    group = str(group or "").strip().lower()
+    groups = role_groups(role_id)
+    if not group or len(groups) <= 1 or group not in groups:
+        return role_id
+    return f"{role_id}{ROLE_REF_SEP}{group}"
+
+
+def is_cross_bucket(role_id: str) -> bool:
+    return len(role_groups(role_id)) > 1
+
+
+def scoring_groups(role_id: str, group: str | None = None) -> list[str]:
+    """Position groups used for eligibility; one bucket when explicitly chosen."""
+    groups = role_groups(role_id)
+    if group and group in groups:
+        return [group]
+    return groups
+
+
+def canonical_role_ref(role_ref: str, *, position_group: str | None = None) -> str:
+    """Normalize a role ref, inferring bucket from slot position when needed."""
+    role_ref = str(role_ref or "").strip()
+    if not role_ref:
+        return ""
+    role_id, group = decode_role_ref(role_ref)
+    if role_id not in pc.all_positions:
+        return role_ref
+    if group:
+        return encode_role_ref(role_id, group)
+    pos_group = str(position_group or "").strip().lower()
+    groups = role_groups(role_id)
+    if len(groups) > 1 and pos_group in groups:
+        return encode_role_ref(role_id, pos_group)
+    return role_id
+
+
+def _role_ref_kept(role_id: str, bucket: str | None, keep: set[str]) -> bool:
+    if not keep:
+        return False
+    if role_id in keep:
+        return True
+    if bucket and encode_role_ref(role_id, bucket) in keep:
+        return True
+    for item in keep:
+        kept_id, kept_bucket = decode_role_ref(item)
+        if kept_id != role_id:
+            continue
+        if not kept_bucket or not bucket or kept_bucket == bucket:
+            return True
+    return False
+
+
 PHASE_SORT_ORDER = {"IP": 0, "OOP": 1, "GK": 2}
 
 
@@ -487,9 +559,17 @@ def group_abbr(role_id: str) -> str:
     return "/".join(group.upper() for group in role_groups(role_id))
 
 
-def compact_role_label(role_id: str, *, with_phase: bool = True) -> str:
-    """Compact UI name, e.g. 'WM/W Inside Winger IP'."""
-    abbr = group_abbr(role_id)
+def compact_role_label(
+    role_id: str,
+    *,
+    with_phase: bool = True,
+    group: str | None = None,
+) -> str:
+    """Compact UI name, e.g. 'WM/W Inside Winger IP' or 'FB Wing Back IP'."""
+    if group:
+        abbr = group.upper()
+    else:
+        abbr = group_abbr(role_id)
     name = pretty_role_name(role_id)
     parts = [part for part in (abbr, name) if part]
     if with_phase:
@@ -958,36 +1038,80 @@ def display_code(role_id: str, cfg: dict | None = None) -> str:
     return cfg.get("role_code", role_id)
 
 
-def column_label(role_id: str, cfg: dict | None = None) -> str:
+def has_bucket_role_refs(role_refs: list[str] | None) -> bool:
+    """True when any selection uses an explicit position-bucket suffix."""
+    for item in role_refs or []:
+        if decode_role_ref(str(item))[1]:
+            return True
+    return False
+
+
+def parse_bucket_column(column: str) -> tuple[str | None, str]:
+    """Split a bucket-prefixed column id (``FB-WB-IP``) into group + remainder."""
+    col = str(column or "")
+    for gid in sorted(pc.GROUP_IDS, key=len, reverse=True):
+        prefix = f"{gid.upper()}-"
+        if col.startswith(prefix):
+            return gid, col[len(prefix) :]
+    return None, col
+
+
+def column_display_abbr(column: str) -> str:
+    """Compact header text: strip bucket prefix and phase suffix."""
+    _, base = parse_bucket_column(column)
+    for suffix in ("-IP", "-OOP", "-GK"):
+        if base.endswith(suffix):
+            return base[: -len(suffix)]
+    return base
+
+
+def column_label(
+    role_id: str,
+    cfg: dict | None = None,
+    *,
+    scoring_group: str | None = None,
+) -> str:
     """Score / CSV column key; disambiguates duplicate codes (e.g. CF-IP)."""
     cfg = cfg or pc.all_positions.get(role_id, {})
     code = cfg.get("role_code", role_id)
     if _code_uses(code) > 1:
         tone = phase_tone(cfg.get("phase", "")).upper()
         if tone:
-            return f"{code}-{tone}"
-    return code
+            base = f"{code}-{tone}"
+        else:
+            base = code
+    else:
+        base = code
+    if scoring_group and is_cross_bucket(role_id):
+        return f"{scoring_group.upper()}-{base}"
+    return base
 
 
-def role_meta(role_id: str) -> dict[str, str]:
+def role_meta(role_ref: str) -> dict[str, str]:
+    role_id, scoring_group = decode_role_ref(role_ref)
     cfg = pc.all_positions.get(role_id, {})
     phase = cfg.get("phase", "")
     groups = role_groups(role_id)
-    group = groups[0] if groups else _ROLE_GROUP.get(role_id, "")
+    group = scoring_group or (groups[0] if groups else _ROLE_GROUP.get(role_id, ""))
+    group_abbr_text = group.upper() if scoring_group else group_abbr(role_id)
     return {
         "id": role_id,
+        "ref": encode_role_ref(role_id, scoring_group) if scoring_group else role_id,
         "code": display_code(role_id, cfg),
-        "column": column_label(role_id, cfg),
+        "column": column_label(role_id, cfg, scoring_group=scoring_group),
         "name": pretty_role_name(role_id),
         "phase": phase_label(phase),
         "tone": phase_tone(phase),
         "is_gk": "yes" if phase_is_gk(phase, role_id, group) or "gk" in groups else "",
         "group": group,
         "groups": ",".join(groups),
-        "group_label": group_labels(role_id),
-        "group_abbr": group_abbr(role_id),
-        "compact": compact_role_label(role_id),
-        "compact_name": compact_role_label(role_id, with_phase=False),
+        "group_label": group_label(group) if scoring_group else group_labels(role_id),
+        "group_abbr": group_abbr_text,
+        "compact": compact_role_label(role_id, group=scoring_group),
+        "compact_name": compact_role_label(role_id, with_phase=False, group=scoring_group),
+        "short_label": column_display_abbr(
+            column_label(role_id, cfg, scoring_group=scoring_group)
+        ),
     }
 
 
@@ -1019,14 +1143,18 @@ def normalize_combos(raw) -> list[dict[str, str]]:
     for item in raw or []:
         if not isinstance(item, dict):
             continue
-        ip = item.get("ip") or ""
-        oop = item.get("oop") or ""
-        if ip not in pc.all_positions or oop not in pc.all_positions:
+        ip_ref = str(item.get("ip") or "").strip()
+        oop_ref = str(item.get("oop") or "").strip()
+        ip_id, _ip_group = decode_role_ref(ip_ref)
+        oop_id, _oop_group = decode_role_ref(oop_ref)
+        if ip_id not in pc.all_positions or oop_id not in pc.all_positions:
             continue
-        if phase_tone(pc.all_positions[ip].get("phase")) != "ip":
+        if phase_tone(pc.all_positions[ip_id].get("phase")) != "ip":
             continue
-        if phase_tone(pc.all_positions[oop].get("phase")) != "oop":
+        if phase_tone(pc.all_positions[oop_id].get("phase")) != "oop":
             continue
+        ip = canonical_role_ref(ip_ref)
+        oop = canonical_role_ref(oop_ref)
         key = (ip, oop)
         if key in seen:
             continue
@@ -1036,7 +1164,7 @@ def normalize_combos(raw) -> list[dict[str, str]]:
 
 
 def combo_column(ip: str, oop: str) -> str:
-    return f"{column_label(ip)}+{column_label(oop)}"
+    return f"{role_meta(ip)['column']}+{role_meta(oop)['column']}"
 
 
 def combo_meta(ip: str, oop: str) -> dict[str, str]:
@@ -1051,7 +1179,7 @@ def combo_meta(ip: str, oop: str) -> dict[str, str]:
     abbr = "/".join(groups)
     ip_col = ip_meta["column"]
     oop_col = oop_meta["column"]
-    role_codes = f"{ip_col}+{oop_col}"
+    role_codes = f"{ip_meta['short_label']}+{oop_meta['short_label']}"
     same_name = ip_meta["name"] == oop_meta["name"]
     name = ip_meta["name"] if same_name else f"{ip_meta['name']} / {oop_meta['name']}"
     return {
@@ -1109,8 +1237,8 @@ def combo_score_labels(role_ids: list[str], combos: list[dict[str, str]] | None 
             if column not in seen:
                 labels.append(column)
                 seen.add(column)
-    for role_id in role_ids:
-        column = column_label(role_id)
+    for role_ref in role_ids:
+        column = role_meta(role_ref)["column"]
         if column not in seen:
             labels.append(column)
             seen.add(column)
@@ -1122,31 +1250,82 @@ def role_options(
     group: str | None = None,
     keep: list[str] | None = None,
 ) -> list[dict]:
-    """Flat `{label, value}` options. `phase` is All/IP/OOP."""
-    keep = set(keep or [])
+    """Flat `{label, value}` options. Cross-bucket roles get one entry per bucket."""
+    keep_set = {str(item).strip() for item in (keep or []) if str(item).strip()}
     phase = (phase or "all").upper()
     if phase == "GK":
         phase = "ALL"
-    group = (group or "all").lower()
+    group_filter = (group or "all").lower()
     options = []
+    seen_values: set[str] = set()
+
     for role_id in iter_roles():
         cfg_phase = pc.all_positions[role_id].get("phase", "")
         groups = role_groups(role_id)
         home = groups[0] if groups else _ROLE_GROUP.get(role_id, "")
+        phase_group = "gk" if "gk" in groups else home
+        kept = _role_ref_kept(role_id, None, keep_set)
+
         if (
             phase not in ("", "ALL")
-            and not phase_matches(cfg_phase, phase, role_id, "gk" if "gk" in groups else home)
-            and role_id not in keep
+            and not phase_matches(cfg_phase, phase, role_id, phase_group)
+            and not kept
+            and not any(decode_role_ref(item)[0] == role_id for item in keep_set)
         ):
             continue
-        if group not in ("", "all") and group not in groups and role_id not in keep:
+
+        if not is_cross_bucket(role_id):
+            if (
+                group_filter not in ("", "all")
+                and group_filter not in groups
+                and not _role_ref_kept(role_id, None, keep_set)
+            ):
+                continue
+            value = role_id
+            if value in seen_values:
+                continue
+            options.append(
+                {
+                    "label": compact_role_label(role_id),
+                    "value": value,
+                }
+            )
+            seen_values.add(value)
             continue
-        options.append(
-            {
-                "label": compact_role_label(role_id),
-                "value": role_id,
-            }
-        )
+
+        buckets = list(groups)
+        if group_filter not in ("", "all"):
+            buckets = [bucket for bucket in buckets if bucket == group_filter]
+        if not buckets and not kept:
+            continue
+
+        for bucket in buckets:
+            value = encode_role_ref(role_id, bucket)
+            if value in seen_values:
+                continue
+            if (
+                phase not in ("", "ALL")
+                and not phase_matches(cfg_phase, phase, role_id, phase_group)
+                and not _role_ref_kept(role_id, bucket, keep_set)
+            ):
+                continue
+            options.append(
+                {
+                    "label": compact_role_label(role_id, group=bucket),
+                    "value": value,
+                }
+            )
+            seen_values.add(value)
+
+        if role_id in keep_set and role_id not in seen_values:
+            options.append(
+                {
+                    "label": compact_role_label(role_id),
+                    "value": role_id,
+                }
+            )
+            seen_values.add(role_id)
+
     return options
 
 
@@ -1447,16 +1626,17 @@ def score_players(
 ) -> list[dict[str, Any]]:
     weights = _resolve_tier_weights(tier_weights) if tier_weights else None
     configs = []
-    for role_id in role_ids:
+    for role_ref in role_ids:
+        role_id, scoring_group = decode_role_ref(role_ref)
         if role_id not in pc.all_positions:
             continue
         cfg = pc.all_positions[role_id]
         configs.append(
             (
-                role_id,
-                column_label(role_id, cfg),
+                role_ref,
+                role_meta(role_ref)["column"],
                 cfg,
-                role_groups(role_id),
+                scoring_groups(role_id, scoring_group),
             )
         )
     scored = []
@@ -1489,7 +1669,7 @@ def score_players(
         )
         best_label = ""
         best_score = -1.0
-        for role_id, label, cfg, groups in configs:
+        for role_ref, label, cfg, groups in configs:
             if weights:
                 key_w = weights["key"]
                 pref_w = weights["preferred"]

@@ -13,7 +13,7 @@ from typing import Any
 from scoring.phases import phase_tone
 import config.fm26_role_weight_config as pc
 from config.paths import FORMATIONS_ACTIVE_PATH, FORMATIONS_PACKS_DIR
-from scoring.role_scorer import normalize_combos
+from scoring.role_scorer import canonical_role_ref, decode_role_ref, normalize_combos
 
 PACKS_DIR = FORMATIONS_PACKS_DIR
 ACTIVE_PATH = FORMATIONS_ACTIVE_PATH
@@ -102,11 +102,13 @@ def _normalize_pos(value, fallback: str = "") -> str:
     return fallback
 
 
-def _valid_ip(role_id: str) -> bool:
+def _valid_ip(role_ref: str) -> bool:
+    role_id, _ = decode_role_ref(role_ref)
     return role_id in pc.all_positions and phase_tone(pc.all_positions[role_id].get("phase")) == "ip"
 
 
-def _valid_oop(role_id: str) -> bool:
+def _valid_oop(role_ref: str) -> bool:
+    role_id, _ = decode_role_ref(role_ref)
     return role_id in pc.all_positions and phase_tone(pc.all_positions[role_id].get("phase")) == "oop"
 
 
@@ -160,12 +162,19 @@ def _parse_slot(raw, index: int) -> dict[str, str]:
     fallback = DEFAULT_SLOT_POSITIONS[index] if 0 <= index < MAX_SLOTS else "cm"
     ip_pos = _normalize_pos(payload.get("ip_pos") or payload.get("label"), fallback)
     oop_pos = _normalize_pos(payload.get("oop_pos"), "")
-    ip = str(payload.get("ip") or "").strip()
-    oop = str(payload.get("oop") or "").strip()
-    if not _valid_ip(ip):
-        ip = ""
-    if not _valid_oop(oop):
-        oop = ""
+    ip_raw = str(payload.get("ip") or "").strip()
+    oop_raw = str(payload.get("oop") or "").strip()
+    ip = (
+        canonical_role_ref(ip_raw, position_group=group_for_position(ip_pos))
+        if _valid_ip(ip_raw)
+        else ""
+    )
+    oop_filter_pos = oop_pos or ip_pos
+    oop = (
+        canonical_role_ref(oop_raw, position_group=group_for_position(oop_filter_pos))
+        if _valid_oop(oop_raw)
+        else ""
+    )
     return {
         "ip_pos": ip_pos,
         "oop_pos": oop_pos,

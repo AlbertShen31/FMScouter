@@ -1705,9 +1705,17 @@ def refresh_goalkeeper_percentiles(settings=None) -> int:
 
 def _column_to_role_id() -> dict[str, str]:
     import config.role_weights.fm26_role_weight_config as pc
-    from scoring.role_scorer import column_label
+    from scoring.role_scorer import column_label, encode_role_ref, role_groups, role_meta
 
-    return {column_label(role_id): role_id for role_id in pc.all_positions}
+    out: dict[str, str] = {}
+    for role_id in pc.all_positions:
+        out[column_label(role_id)] = role_id
+        for group in role_groups(role_id):
+            ref = encode_role_ref(role_id, group)
+            if ref == role_id:
+                continue
+            out[role_meta(ref)["column"]] = ref
+    return out
 
 
 def _resolve_profile_role_column(
