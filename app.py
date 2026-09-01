@@ -104,7 +104,7 @@ app.layout = dmc.MantineProvider(
                             dbc.NavItem(dbc.NavLink("Squad finance", href="/squad-finance")),
                             dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
                             dbc.NavItem(dbc.NavLink("Formations", href="/formations")),
-                            dbc.NavItem(dbc.NavLink("Formulas", href="/formulas")),
+                            dbc.NavItem(dbc.NavLink("Docs", href="/formulas")),
                             dbc.NavItem(dbc.NavLink("Settings", href="/settings")),
                             dbc.NavItem(
                                 dmc.Button(
