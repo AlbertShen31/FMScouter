@@ -1368,6 +1368,9 @@ def register_marks_callbacks(
             const markedKeys = Array.isArray(marked)
                 ? marked.map(function(k) {{ return String(k || ""); }}).filter(Boolean)
                 : [];
+            if (!markedKeys.length) {{
+                return [[], []];
+            }}
             const markedSet = new Set(markedKeys);
             const current = Array.isArray(currentSelectedIds)
                 ? currentSelectedIds.map(function(k) {{ return String(k || ""); }}).filter(Boolean)

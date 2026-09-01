@@ -301,6 +301,7 @@ def register_role_profile_save_callbacks(
     @callback(
         Output(f"{prefix}-profile-status", "children"),
         Output(marked_store, "data", allow_duplicate=True),
+        Output(f"{prefix}-table", "selected_row_ids", allow_duplicate=True),
         Input(f"{prefix}-profile-save-btn", "n_clicks"),
         State(marked_store, "data"),
         State(parsed_id, "data"),
@@ -326,12 +327,12 @@ def register_role_profile_save_callbacks(
         library_id,
     ):
         if not n_clicks:
-            return no_update, no_update
+            return no_update, no_update, no_update
         marked_list = _effective_marked_keys(marked, selected_ids, table_data)
         if not marked_list or not payload:
-            return no_update, no_update
+            return no_update, no_update, no_update
         if not _profiles_stats_eligible(parsed):
-            return html.Div(lib.STATS_REQUIRED_MSG, className="text-danger small"), no_update
+            return html.Div(lib.STATS_REQUIRED_MSG, className="text-danger small"), no_update, no_update
         try:
             file_id = (parsed or {}).get("file_id") if isinstance(parsed, dict) else ""
             items = profiles.expand_role_profile_rows(
@@ -368,5 +369,5 @@ def register_role_profile_save_callbacks(
             )
         except Exception as exc:
             msg = html.Div(str(exc), className="text-danger small")
-            return msg, no_update
-        return msg, []
+            return msg, no_update, no_update
+        return msg, [], []
