@@ -1095,7 +1095,11 @@ def parse_bucket_column(column: str) -> tuple[str | None, str]:
     for gid in sorted(pc.GROUP_IDS, key=len, reverse=True):
         prefix = f"{gid.upper()}-"
         if col.startswith(prefix):
-            return gid, col[len(prefix) :]
+            remainder = col[len(prefix) :]
+            # ``GK-OOP`` / ``FB-OOP`` are role+phase ids, not ``{bucket}-{role}``.
+            if remainder in ("IP", "OOP", "GK"):
+                continue
+            return gid, remainder
     return None, col
 
 
@@ -1106,6 +1110,20 @@ def column_display_abbr(column: str) -> str:
         if base.endswith(suffix):
             return base[: -len(suffix)]
     return base
+
+
+_WB_HYBRID_CODES = frozenset({"AWB", "IWB", "PWB", "HWB"})
+
+
+def hybrid_part_abbr(role_ref: str) -> str:
+    """Short token for one side of a hybrid label (e.g. BGK, WB, FB)."""
+    role_id, _ = decode_role_ref(role_ref)
+    cfg = pc.all_positions.get(role_id, {})
+    code = cfg.get("role_code", role_id)
+    abbr = column_display_abbr(role_meta(role_ref)["column"])
+    if code in _WB_HYBRID_CODES:
+        return "WB"
+    return abbr
 
 
 def column_label(
@@ -1222,7 +1240,7 @@ def combo_meta(ip: str, oop: str) -> dict[str, str]:
     abbr = "/".join(groups)
     ip_col = ip_meta["column"]
     oop_col = oop_meta["column"]
-    role_codes = f"{ip_meta['short_label']}+{oop_meta['short_label']}"
+    role_codes = f"{hybrid_part_abbr(ip)}+{hybrid_part_abbr(oop)}"
     same_name = ip_meta["name"] == oop_meta["name"]
     name = ip_meta["name"] if same_name else f"{ip_meta['name']} / {oop_meta['name']}"
     return {

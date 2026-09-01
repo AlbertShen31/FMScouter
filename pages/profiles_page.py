@@ -82,6 +82,7 @@ from scoring.division_tiers import apply_division_tier, classify_division
 from scoring.role_scorer import (
     FootStrength,
     apply_set_piece_scores,
+    column_display_abbr,
     combo_column,
     combo_meta,
     foot_strength,
@@ -466,8 +467,8 @@ def _role_display_label(column: str) -> str:
         return "—"
     if "+" in text:
         ip, _, oop = text.partition("+")
-        return f"{_strip_phase_suffix(ip)}+{_strip_phase_suffix(oop)}"
-    return _strip_phase_suffix(text)
+        return f"{column_display_abbr(ip)}+{column_display_abbr(oop)}"
+    return column_display_abbr(text)
 
 
 def _role_phase_colors(theme=None) -> dict[str, str]:
