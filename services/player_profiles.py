@@ -22,7 +22,7 @@ from config.paths import (
     PROFILES_PACKS_DIR,
 )
 import services.export_library as lib
-from scoring.role_scorer import player_row_key
+from scoring.role_scorer import is_fully_eligible, player_row_key
 from scoring.stats_scorer import player_key as stats_player_key
 
 SAVED_FROM_LABELS = {
@@ -1238,7 +1238,7 @@ def build_role_row_snapshot(
         score_f = None
     out["Role"] = role_column
     out["Score"] = score_f
-    out["Eligible"] = bool(scored_row.get(f"{role_column} eligible"))
+    out["Eligible"] = is_fully_eligible(scored_row.get(f"{role_column} eligible"))
     pct_keys = (
         "overall",
         "overall_color",
@@ -1413,6 +1413,7 @@ def expand_role_profile_rows(
     from scoring.role_scorer import (
         combo_column_labels,
         expand_view_role_columns,
+        is_fully_eligible,
         normalize_combos,
     )
 
@@ -1484,7 +1485,7 @@ def expand_role_profile_rows(
         )
         minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
-            if eligible_only and not scored.get(f"{role_col} eligible"):
+            if eligible_only and not is_fully_eligible(scored.get(f"{role_col} eligible")):
                 continue
             out.append(
                 {

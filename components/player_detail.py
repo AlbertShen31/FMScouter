@@ -6,7 +6,14 @@ import re
 from dash import html
 
 from components.player_modal import player_detail_body
-from scoring.role_scorer import apply_set_piece_scores, player_role_highlights, score_band
+from scoring.role_scorer import (
+    ELIGIBILITY_FULL,
+    ELIGIBILITY_PARTIAL,
+    apply_set_piece_scores,
+    normalize_eligibility,
+    player_role_highlights,
+    score_band,
+)
 from scoring.stats_scorer import (
     band_metric,
     categories_for_group,
@@ -643,7 +650,13 @@ def profile_detail_body(
         except (TypeError, ValueError):
             score_f = None
         band = score_band(float(score_f), **settings["bands"]) if score_f is not None else None
-        eligible = bool(role_row.get(f"{role_column} eligible"))
+        elig_level = normalize_eligibility(role_row.get(f"{role_column} eligible"))
+        if elig_level == ELIGIBILITY_FULL:
+            elig_label, elig_class = "Eligible", " is-yes"
+        elif elig_level == ELIGIBILITY_PARTIAL:
+            elig_label, elig_class = "Partially eligible", " is-partial"
+        else:
+            elig_label, elig_class = "Not eligible", " is-no"
         children.append(html.Hr(className="pf-section-divider"))
         children.append(
             html.Div(
@@ -661,9 +674,8 @@ def profile_detail_body(
                                 ),
                             ),
                             html.Span(
-                                "Eligible" if eligible else "Not eligible",
-                                className="pf-modal-role-elig"
-                                + (" is-yes" if eligible else " is-no"),
+                                elig_label,
+                                className="pf-modal-role-elig" + elig_class,
                             ),
                         ],
                         className="pf-modal-role-score-row",

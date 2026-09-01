@@ -660,11 +660,10 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
             return True
         if group == "cb" and pos == "D" and "C" in area:
             return True
-        if group in ("fb", "wb"):
-            if pos == "WB":
-                return True
-            if pos == "D" and ("L" in area or "R" in area):
-                return True
+        if group == "fb" and pos == "D" and ("L" in area or "R" in area):
+            return True
+        if group == "wb" and pos == "WB":
+            return True
         if group == "dm" and pos == "DM":
             return True
         if group == "cm" and pos == "M" and "C" in area:
@@ -682,6 +681,69 @@ def is_eligible(positions: list[dict[str, str]], group: str) -> bool:
         if group == "st" and pos == "ST":
             return True
     return False
+
+
+# Adjacent position groups → partial eligibility (RB↔RWB, DM↔CM, CM↔AM, LM↔LW, …).
+PARTIAL_ADJACENT_GROUPS: dict[str, frozenset[str]] = {
+    "fb": frozenset({"wb"}),
+    "wb": frozenset({"fb"}),
+    "dm": frozenset({"cm"}),
+    "cm": frozenset({"dm", "am"}),
+    "am": frozenset({"cm"}),
+    "wm": frozenset({"w"}),
+    "w": frozenset({"wm"}),
+}
+
+ELIGIBILITY_FULL = "full"
+ELIGIBILITY_PARTIAL = "partial"
+ELIGIBILITY_NONE = "none"
+
+
+def normalize_eligibility(value) -> str:
+    """Map stored eligible values (legacy bool or level string) to a level."""
+    if value is True or value in (ELIGIBILITY_FULL, "yes"):
+        return ELIGIBILITY_FULL
+    if value == ELIGIBILITY_PARTIAL:
+        return ELIGIBILITY_PARTIAL
+    return ELIGIBILITY_NONE
+
+
+def is_fully_eligible(value) -> bool:
+    return normalize_eligibility(value) == ELIGIBILITY_FULL
+
+
+def is_scoring_eligible(value) -> bool:
+    """Full or partial — player is position-viable for the role."""
+    return normalize_eligibility(value) != ELIGIBILITY_NONE
+
+
+def player_matched_groups(positions: list[dict[str, str]]) -> set[str]:
+    return {group for group in pc.GROUP_IDS if is_eligible(positions, group)}
+
+
+def combine_eligibility_levels(*values) -> str:
+    levels = [normalize_eligibility(value) for value in values]
+    if all(level == ELIGIBILITY_FULL for level in levels):
+        return ELIGIBILITY_FULL
+    if all(level == ELIGIBILITY_NONE for level in levels):
+        return ELIGIBILITY_NONE
+    return ELIGIBILITY_PARTIAL
+
+
+def role_eligibility_level(positions: list[dict[str, str]], groups: list[str]) -> str:
+    """Full = exact group match; partial = adjacent group only; else none."""
+    if not groups:
+        return ELIGIBILITY_NONE
+    player_groups = player_matched_groups(positions)
+    role_set = set(groups)
+    if player_groups & role_set:
+        return ELIGIBILITY_FULL
+    neighbor_groups: set[str] = set()
+    for group in role_set:
+        neighbor_groups |= PARTIAL_ADJACENT_GROUPS.get(group, frozenset())
+    if player_groups & neighbor_groups:
+        return ELIGIBILITY_PARTIAL
+    return ELIGIBILITY_NONE
 
 
 def matches_pos_card(positions: list[dict[str, str]], card: str) -> bool:
@@ -848,7 +910,8 @@ def player_role_highlights(
         groups = role_groups(role_id)
         if not groups:
             continue
-        eligible = any(is_eligible(positions, group) for group in groups)
+        eligible_level = role_eligibility_level(positions, groups)
+        eligible = eligible_level != ELIGIBILITY_NONE
         in_best = bool(best_group and best_group in groups)
         # Score roles for Best Pos even if the Position string omits that slot.
         if not eligible and not in_best:
@@ -1029,9 +1092,9 @@ def apply_combos(
             row[meta["column"]] = round(
                 (ip_weight * ip_score + oop_weight * oop_score) / total, 1
             )
-            row[f"{meta['column']} eligible"] = bool(
-                row.get(f"{meta['ip_column']} eligible")
-                or row.get(f"{meta['oop_column']} eligible")
+            row[f"{meta['column']} eligible"] = combine_eligibility_levels(
+                row.get(f"{meta['ip_column']} eligible"),
+                row.get(f"{meta['oop_column']} eligible"),
             )
     return rows
 
@@ -1452,8 +1515,8 @@ def score_players(
                 divisor,
             )
             row[label] = score
-            row[f"{label} eligible"] = any(
-                is_eligible(player["positions"], group) for group in groups
+            row[f"{label} eligible"] = role_eligibility_level(
+                player["positions"], groups
             )
             if score > best_score:
                 best_score = score

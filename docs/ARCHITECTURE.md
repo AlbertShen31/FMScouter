@@ -118,6 +118,15 @@ Older packs omit that field (treated as 1). In those files the id `w` meant wide
 
 `is_eligible(positions, group)` tests a parsed FM Position string against one **role group** (whether a player can be scored as eligible for that role).
 
+Adjacent groups get **partial** eligibility when scoring roles (`role_eligibility_level` in `scoring/role_scorer.py`):
+
+- `fb` ↔ `wb` (RB/LB ↔ RWB/LWB)
+- `dm` ↔ `cm`
+- `cm` ↔ `am`
+- `wm` ↔ `w` (LM/RM ↔ LW/RW)
+
+Full match still requires an exact group hit (OR across the role’s `groups` list).
+
 - `wm`: `M` on L/R (ML / MR)
 - `w`: `AM` on L/R (AML / AMR), or `ST`
 

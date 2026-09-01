@@ -7026,6 +7026,13 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 .pf-modal-role-elig.is-yes {
     color: var(--app-accent);
 }
+.pf-modal-role-elig.is-partial {
+    color: #fbbf24;
+}
+html[data-theme="light"] .pf-modal-role-elig.is-partial,
+body[data-theme="light"] .pf-modal-role-elig.is-partial {
+    color: #a16207;
+}
 .pf-modal-role-elig.is-no {
     color: #f87171;
 }

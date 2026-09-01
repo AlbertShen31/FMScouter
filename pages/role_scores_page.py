@@ -36,6 +36,9 @@ from scoring.comparison import score_display
 from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
+    ELIGIBILITY_FULL,
+    ELIGIBILITY_NONE,
+    ELIGIBILITY_PARTIAL,
     GROUP_DEFS,
     POS_CARDS,
     SET_PIECE_PROFILES,
@@ -48,6 +51,7 @@ from scoring.role_scorer import (
     foot_match,
     group_abbr_tone,
     normalize_combos,
+    normalize_eligibility,
     parse_combo_id,
     parse_export,
     player_row_key,
@@ -397,19 +401,23 @@ def _role_match_level(row: dict, role_column: str, combo_by_col: dict | None = N
     """How well Position matches one viewed column: full, partial, or none.
 
     Hybrids require both IP and OOP parts for full; one part is partial.
+    Single roles use full / partial / none from adjacent position groups.
     """
     meta = (combo_by_col or {}).get(role_column)
     if meta:
-        ip_ok = bool(row.get(f"{meta['ip_column']} eligible"))
-        oop_ok = bool(row.get(f"{meta['oop_column']} eligible"))
-        if ip_ok and oop_ok:
-            return "full"
-        if ip_ok or oop_ok:
-            return "partial"
-        return "none"
-    if bool(row.get(f"{role_column} eligible")):
-        return "full"
-    return "none"
+        ip_level = normalize_eligibility(row.get(f"{meta['ip_column']} eligible"))
+        oop_level = normalize_eligibility(row.get(f"{meta['oop_column']} eligible"))
+        if ip_level == ELIGIBILITY_FULL and oop_level == ELIGIBILITY_FULL:
+            return ELIGIBILITY_FULL
+        if ip_level == ELIGIBILITY_NONE and oop_level == ELIGIBILITY_NONE:
+            return ELIGIBILITY_NONE
+        return ELIGIBILITY_PARTIAL
+    level = normalize_eligibility(row.get(f"{role_column} eligible"))
+    if level == ELIGIBILITY_FULL:
+        return ELIGIBILITY_FULL
+    if level == ELIGIBILITY_PARTIAL:
+        return ELIGIBILITY_PARTIAL
+    return ELIGIBILITY_NONE
 
 
 def _position_eligibility(
@@ -424,9 +432,9 @@ def _position_eligibility(
         return None
     lookup = combo_by_col if combo_by_col is not None else _combo_columns_by_label(combos)
     levels = [_role_match_level(row, role, lookup) for role in roles]
-    if all(level == "full" for level in levels):
+    if all(level == ELIGIBILITY_FULL for level in levels):
         return "yes"
-    if any(level != "none" for level in levels):
+    if any(level != ELIGIBILITY_NONE for level in levels):
         return "partial"
     return "no"
 
@@ -1743,7 +1751,11 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> 
 
 def _depth_card_stats(meta: dict, rows: list[dict], bands: dict) -> dict | None:
     column = meta["column"]
-    eligible = [row for row in rows if row.get(f"{column} eligible")]
+    eligible = [
+        row
+        for row in rows
+        if normalize_eligibility(row.get(f"{column} eligible")) != ELIGIBILITY_NONE
+    ]
     if not eligible:
         return None
     scores = [float(row.get(column) or 0) for row in eligible]
