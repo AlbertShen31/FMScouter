@@ -60,25 +60,35 @@ DISCIPLINE_MODAL_FIELDS = (
     ("Fouls against", "fouls_against"),
 )
 
-FINANCE_MODAL_FIELDS = (
-    ("Transfer value", "transfer_value"),
-    ("Salary", "salary"),
-    ("Contract expires", "contract_expires"),
-    ("FFP contribution", "ffp_contribution"),
-    ("Release clause", "min_release_clause"),
-    ("Work permit", "work_permit_required"),
-    ("WP needed", "wp_needed"),
-    ("Appearance fee", "appearance_fee"),
-    ("Unused sub fee", "unused_sub_fee"),
-    ("Goal bonus", "goal_bonus"),
-    ("Assist bonus", "assist_bonus"),
-    ("Shutout bonus", "shutout_bonus"),
-    ("Int cap bonus", "int_cap_bonus"),
-    ("Yearly raise", "yearly_salary_raise"),
-    ("Promotion raise", "promotion_salary_raise"),
-    ("Top-tier promotion raise", "top_division_promotion_salary_raise"),
-    ("Relegation drop", "relegation_salary_drop"),
-    ("Top-tier relegation drop", "top_division_relegation_salary_drop"),
+# Row 1 = transfer / fee-related; row 2 = contract wages & clauses.
+# Empty values are omitted at render time (same as other modal sections).
+FINANCE_MODAL_ROWS = (
+    [
+        ("Transfer value", "transfer_value"),
+        ("Release clause", "min_release_clause"),
+        ("Work permit", "work_permit_required"),
+        ("WP needed", "wp_needed"),
+    ],
+    [
+        ("Salary", "salary"),
+        ("Contract expires", "contract_expires"),
+        ("FFP contribution", "ffp_contribution"),
+        ("Appearance fee", "appearance_fee"),
+        ("Unused sub fee", "unused_sub_fee"),
+        ("Goal bonus", "goal_bonus"),
+        ("Assist bonus", "assist_bonus"),
+        ("Shutout bonus", "shutout_bonus"),
+        ("Int cap bonus", "int_cap_bonus"),
+        ("Yearly raise", "yearly_salary_raise"),
+        ("Promotion raise", "promotion_salary_raise"),
+        ("Top-tier promotion raise", "top_division_promotion_salary_raise"),
+        ("Relegation drop", "relegation_salary_drop"),
+        ("Top-tier relegation drop", "top_division_relegation_salary_drop"),
+    ],
+)
+
+FINANCE_MODAL_FIELDS = tuple(
+    field for row in FINANCE_MODAL_ROWS for field in row
 )
 
 _CLAUSE_RAW_KEYS = {
@@ -303,39 +313,60 @@ def player_identity_sections(
     return sections
 
 
+def _as_field_rows(
+    field_defs: Sequence[tuple[str, str]] | Sequence[Sequence[tuple[str, str]]],
+) -> list[Sequence[tuple[str, str]]]:
+    """Normalize flat field defs or pre-grouped visual rows."""
+    if not field_defs:
+        return []
+    first = field_defs[0]
+    # Nested rows: ((label, key), …) / [(label, key), …]
+    if isinstance(first, (list, tuple)) and first and isinstance(first[0], (list, tuple)):
+        return list(field_defs)  # type: ignore[arg-type]
+    return [field_defs]  # type: ignore[list-item]
+
+
 def player_record_section(
     player: dict,
     title: str,
-    field_defs: Sequence[tuple[str, str]],
+    field_defs: Sequence[tuple[str, str]] | Sequence[Sequence[tuple[str, str]]],
     *,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div | None:
-    """Career totals, discipline, etc. from the stats export."""
-    items = [
-        item
-        for item in (
-            player_identity_item(
-                label,
-                key,
-                player,
-                field_styles=field_styles,
-                field_formatters=field_formatters,
-                theme=theme,
-                limited_divisions=limited_divisions,
+    """Career totals, discipline, finance, etc. from the stats export.
+
+    ``field_defs`` may be a flat list of (label, key) or a sequence of visual
+    rows (each a list of fields), matching identity-section layout.
+    """
+    row_nodes: list = []
+    for field_row in _as_field_rows(field_defs):
+        items = [
+            item
+            for item in (
+                player_identity_item(
+                    label,
+                    key,
+                    player,
+                    field_styles=field_styles,
+                    field_formatters=field_formatters,
+                    theme=theme,
+                    limited_divisions=limited_divisions,
+                )
+                for label, key in field_row
             )
-            for label, key in field_defs
-        )
-        if item is not None
-    ]
-    if not items:
+            if item is not None
+        ]
+        if items:
+            row_nodes.append(html.Div(items, className="rs-player-identity"))
+    if not row_nodes:
         return None
     return html.Div(
         [
             html.Div(title, className="rs-player-id-section-title"),
-            html.Div(items, className="rs-player-identity"),
+            *row_nodes,
         ],
         className="rs-player-id-section",
     )
@@ -354,7 +385,7 @@ def player_discipline_section(player: dict, **kwargs) -> html.Div | None:
 
 
 def player_finance_section(player: dict, **kwargs) -> html.Div | None:
-    return player_record_section(player, "Contract & finance", FINANCE_MODAL_FIELDS, **kwargs)
+    return player_record_section(player, "Contract & finance", FINANCE_MODAL_ROWS, **kwargs)
 
 
 def player_identity_item(
