@@ -6656,6 +6656,43 @@ body[data-theme="light"] .st-compare-cohort-note {
     align-items: center;
     gap: 6px;
 }
+.up-view-file-list,
+.up-view-install,
+.up-view-path-list {
+    color: var(--app-text);
+    margin-bottom: 0;
+}
+.up-view-file-list {
+    padding-left: 1.25rem;
+}
+.up-view-file-list code,
+.up-view-install code {
+    color: var(--app-accent);
+    background: var(--app-input);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+.up-view-install-block {
+    margin-top: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+}
+.up-view-install {
+    padding-left: 1.25rem;
+}
+.up-view-install > li + li {
+    margin-top: 0.45rem;
+}
+.up-view-path-list {
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+.up-view-actions {
+    margin-top: 0.75rem;
+}
 .up-files-table {
     width: 100%;
     border-collapse: collapse;

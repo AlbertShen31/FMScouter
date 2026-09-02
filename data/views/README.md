@@ -1,8 +1,13 @@
 # Football Manager custom views
 
-Place your FM export view file here (any name).
-The Uploads page will offer it as "Download FM export view".
+Ship `.fmf` view files here. The Uploads page offers them as a zip download.
 
-Recommended: one view that includes player identity, attributes,
-Moneyball statistics, Salary, Appearance Fee, and Unused Substitute Fee.
+Current pack (import each into the matching FM screen):
 
+- `Squad View All.fmf` — club squad
+- `Player Search All.fmf` — player search
+- `National Squad View All.fmf` — national squad
+- `National Team All.fmf` — national team
+
+Install: copy the extracted `.fmf` files into Football Manager’s `views` folder,
+then in-game use **Import View** from a column header menu on each screen.

@@ -32,8 +32,9 @@ UP_PAGE_TIP = (
     "do not need."
 )
 UP_VIEW_TIP = (
-    "Use one custom view that includes attributes, Moneyball stats, salary/fees, and player "
-    "identity columns so a single export works on every page."
+    "Download the custom views pack, put the .fmf files in Football Manager’s views folder, "
+    "then Import View on Squad, Player Search, National Squad, and National Team. One export "
+    "shape covers attributes, Moneyball stats, salary/fees, and player identity."
 )
 UP_ELIGIBILITY_TIP = (
     "Eligible means the file has Name/Player, enough player info (Club/Age/Position), plus: "
@@ -208,34 +209,99 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
 
 
 def _view_panel() -> html.Div:
-    view = lib.primary_view_file()
-    if view:
-        status = html.P(
+    views = lib.list_view_files()
+    if views:
+        names = html.Ul(
+            [html.Li(html.Code(p.name)) for p in views],
+            className="up-view-file-list mb-2",
+        )
+        status = html.Div(
             [
-                "View file ready: ",
-                html.Strong(view.name),
-                ". Download it and import into Football Manager’s view editor.",
-            ],
-            className="mb-2",
+                html.P(
+                    [
+                        f"{len(views)} view file"
+                        f"{'' if len(views) == 1 else 's'} ready to download:"
+                    ],
+                    className="mb-1",
+                ),
+                names,
+            ]
         )
         disabled = False
     else:
         status = html.P(
             [
-                "No view file found yet. Place your FM custom view in ",
+                "No view files found yet. Place FM custom views (",
+                html.Code(".fmf"),
+                ") in ",
                 html.Code("data/views/"),
-                " (any file except README), then refresh this page.",
+                ", then refresh this page.",
             ],
             className="mb-2 text-muted",
         )
         disabled = True
+
+    install = html.Div(
+        [
+            html.P("After downloading:", className="mb-1 fw-semibold"),
+            html.Ol(
+                [
+                    html.Li(
+                        [
+                            "Extract the zip and move the ",
+                            html.Code(".fmf"),
+                            " files into your FM views folder:",
+                            html.Ul(
+                                [
+                                    html.Li(
+                                        [
+                                            "Windows: ",
+                                            html.Code(
+                                                "Documents\\Sports Interactive\\"
+                                                "Football Manager 26\\views\\"
+                                            ),
+                                        ]
+                                    ),
+                                    html.Li(
+                                        [
+                                            "Mac: ",
+                                            html.Code(
+                                                "~/Library/Application Support/Sports Interactive/"
+                                                "Football Manager 26/views/"
+                                            ),
+                                        ]
+                                    ),
+                                ],
+                                className="up-view-path-list mt-1 mb-1",
+                            ),
+                            "Create the folder if it does not exist.",
+                        ]
+                    ),
+                    html.Li(
+                        "In-game, open Squad, Player Search, National Squad, or National Team."
+                    ),
+                    html.Li(
+                        [
+                            "Right-click any column header → ",
+                            html.Strong("Import View"),
+                            ", then load the matching custom view.",
+                        ]
+                    ),
+                ],
+                className="up-view-install mb-3",
+            ),
+        ],
+        className="up-view-install-block",
+    )
+
     return html.Div(
         [
             status,
+            install,
             html.Div(
                 [
                     dmc.Button(
-                        "Download FM export view",
+                        "Download FM export views",
                         id="up-view-download-btn",
                         disabled=disabled,
                     ),
@@ -329,7 +395,7 @@ def layout(**_kwargs):
             ),
             dbc.Card(
                 [
-                    _card_header("1. FM export view", UP_VIEW_TIP, "up-help-view"),
+                    _card_header("1. FM export views", UP_VIEW_TIP, "up-help-view"),
                     dbc.CardBody(_view_panel()),
                 ],
                 className="mb-3 rs-section-card",
@@ -659,10 +725,10 @@ def compute_all_saved(n_clicks, rev):
 def download_view(n_clicks):
     if not n_clicks:
         return no_update
-    path = lib.primary_view_file()
-    if not path:
+    payload = lib.views_zip_bytes()
+    if not payload:
         return no_update
-    return dcc.send_file(str(path))
+    return dcc.send_bytes(payload, "FMScouter-FM26-views.zip")
 
 
 clientside_callback(

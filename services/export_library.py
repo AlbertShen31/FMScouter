@@ -10,6 +10,7 @@ import io
 import json
 import re
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -442,6 +443,13 @@ def list_view_files() -> list[Path]:
     return files
 
 
-def primary_view_file() -> Path | None:
+def views_zip_bytes() -> bytes | None:
+    """Zip all custom view files for a single download."""
     files = list_view_files()
-    return files[0] if files else None
+    if not files:
+        return None
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in files:
+            zf.write(path, arcname=path.name)
+    return buf.getvalue()
