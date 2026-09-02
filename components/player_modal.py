@@ -46,9 +46,13 @@ CAREER_MODAL_FIELDS = (
     ("League goals", "at_league_goals"),
 )
 
-DISCIPLINE_MODAL_FIELDS = (
+PLAYING_TIME_MODAL_FIELDS = (
     ("Appearances", "appearances"),
     ("Minutes", "minutes"),
+    ("Avg rating", "avg_rating_club"),
+)
+
+DISCIPLINE_MODAL_FIELDS = (
     ("Yellow cards", "yellow_cards"),
     ("Red cards", "red_cards"),
     ("Fouls made", "fouls_made"),
@@ -92,18 +96,19 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Age", "age"),
                 ("Club", "club"),
                 ("Division", "division"),
-                ("Position", "position"),
-                ("Best pos", "best_pos"),
-                ("Best role", "best_role"),
-                ("Style", "style"),
                 ("Height", "height"),
                 ("Left foot", "left_foot"),
                 ("Right foot", "right_foot"),
                 ("Rec", "rec"),
                 ("Inf", "inf"),
                 ("Injury", "injury"),
-                ("Avg rating", "avg_rating_club"),
                 ("Last 5", "last_5_club"),
+            ],
+            [
+                ("Position", "position"),
+                ("Best pos", "best_pos"),
+                ("Best role", "best_role"),
+                ("Style", "style"),
             ],
         ],
     ),
@@ -305,6 +310,8 @@ def player_record_section(
     *,
     field_styles: Mapping[str, dict] | None = None,
     field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div | None:
     """Career totals, discipline, etc. from the stats export."""
     items = [
@@ -316,6 +323,8 @@ def player_record_section(
                 player,
                 field_styles=field_styles,
                 field_formatters=field_formatters,
+                theme=theme,
+                limited_divisions=limited_divisions,
             )
             for label, key in field_defs
         )
@@ -334,6 +343,10 @@ def player_record_section(
 
 def player_career_section(player: dict, **kwargs) -> html.Div | None:
     return player_record_section(player, "Career totals", CAREER_MODAL_FIELDS, **kwargs)
+
+
+def player_playing_time_section(player: dict, **kwargs) -> html.Div | None:
+    return player_record_section(player, "Season stats", PLAYING_TIME_MODAL_FIELDS, **kwargs)
 
 
 def player_discipline_section(player: dict, **kwargs) -> html.Div | None:
@@ -558,13 +571,15 @@ def player_detail_body(
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
-    """Shared modal body: identity → international → finance → career → discipline → personality → page content."""
+    """Shared modal body: identity → international → finance → career → season stats → discipline → personality → page content."""
     effective_theme = theme
     if effective_theme is None and settings:
         effective_theme = us.preferred_theme(settings)
     section_kwargs = {
         "field_styles": field_styles,
         "field_formatters": field_formatters,
+        "theme": effective_theme,
+        "limited_divisions": limited_divisions,
     }
     children = [
         *player_identity_sections(
@@ -579,6 +594,7 @@ def player_detail_body(
         ),
         player_finance_section(player, **section_kwargs),
         player_career_section(player, **section_kwargs),
+        player_playing_time_section(player, **section_kwargs),
         player_discipline_section(player, **section_kwargs),
         player_personality_section(player, id_prefix=id_prefix, settings=settings),
     ]
