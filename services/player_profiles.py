@@ -1758,17 +1758,32 @@ def _load_role_score_bundle(
     """Return ``(role_players, scored_rows)`` for the library file."""
     import services.ui_settings as us
     import services.upload_cache as upload_cache
-    from scoring.role_scorer import apply_combos, parse_export, score_players
+    from scoring.role_scorer import (
+        apply_combos,
+        has_bucket_role_refs,
+        parse_export,
+        score_players,
+    )
 
     settings = us.normalize(settings)
     hybrid_w = us.hybrid_weights(settings)
+    needed = list(dict.fromkeys(role_ids))
+    for item in combos:
+        for rid in (item.get("ip"), item.get("oop")):
+            if rid and rid not in needed:
+                needed.append(rid)
+    if not needed:
+        import config.role_weights.fm26_role_weight_config as pc
+
+        needed = list(pc.all_positions.keys())
+
     role_players: list[dict[str, Any]] | None = None
     scored: list[dict[str, Any]] | None = None
-
-    hit = upload_cache.try_role_players(file_id)
-    if hit:
-        role_players, _cache = hit
-        scored = upload_cache.cached_role_rows(file_id)
+    if not has_bucket_role_refs(needed):
+        hit = upload_cache.try_role_players(file_id)
+        if hit:
+            role_players, _cache = hit
+            scored = upload_cache.cached_role_rows(file_id)
 
     if role_players is None or scored is None:
         entry = lib.get_file(file_id)
@@ -1778,15 +1793,6 @@ def _load_role_score_bundle(
             return [], []
         text, _ = lib.read_text(file_id)
         role_players = parse_export(text)
-        needed = list(dict.fromkeys(role_ids))
-        for item in combos:
-            for rid in (item.get("ip"), item.get("oop")):
-                if rid and rid not in needed:
-                    needed.append(rid)
-        if not needed:
-            import config.role_weights.fm26_role_weight_config as pc
-
-            needed = list(pc.all_positions.keys())
         scored = score_players(
             role_players,
             needed,
