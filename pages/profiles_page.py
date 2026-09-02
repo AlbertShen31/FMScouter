@@ -745,6 +745,33 @@ def _setpiece_view_switcher(active=None, settings=None) -> html.Div:
     )
 
 
+def _setpiece_gk_switcher(show_gk: bool = True, *, panel: str = "main") -> html.Div:
+    current = "all" if show_gk else "outfield"
+    panel_id = str(panel or "main").strip() or "main"
+    buttons = []
+    for value, label, title in (
+        ("all", "All", "Include goalkeepers"),
+        ("outfield", "Outfield", "Outfield players only"),
+    ):
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": "pf-setpiece-gk", "view": value, "panel": panel_id},
+                n_clicks=0,
+                type="button",
+                title=title,
+                className="st-player-seg-btn"
+                + (" active" if value == current else ""),
+            )
+        )
+    return html.Div(
+        buttons,
+        className="st-player-seg pf-setpiece-gk-seg",
+        role="group",
+        **{"aria-label": "Goalkeeper filter"},
+    )
+
+
 def _try_float_score(value) -> float | None:
     if value is None or value in ("", "-", "—"):
         return None
@@ -887,6 +914,7 @@ def _top_setpiece_entries(
     foot_side: str | None = None,
     cache: _PfProfileCache | None = None,
     formation_id: str | None = None,
+    show_gk: bool = True,
 ) -> tuple[dict | None, list[tuple[dict, float | None]]]:
     """Return (profile meta, [(entry, score), ...]) ranked for the category.
 
@@ -906,6 +934,8 @@ def _top_setpiece_entries(
     side = str(foot_side or "").strip().lower()
     ranked: list[tuple[dict, float | None]] = []
     for entry in unique:
+        if not show_gk and profiles._entry_looks_like_gk(entry):
+            continue
         if side in ("left", "right"):
             left_ok, right_ok = _entry_strong_feet(entry)
             if side == "left" and not left_ok:
@@ -2521,6 +2551,7 @@ def _setpiece_group_section(
     table: html.Div,
     show_height: bool = False,
     help_id: str | None = None,
+    header_actions: html.Div | None = None,
 ) -> html.Div:
     title_row: list = [
         html.Span(title, className="pf-depth-chart-role-name"),
@@ -2533,10 +2564,20 @@ def _setpiece_group_section(
     if hint:
         hid = help_id or f"pf-help-setpiece-{re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')}"
         title_row.extend(help_icon(hint, hid))
+    head_children: list = [
+        html.Div(title_row, className="pf-depth-chart-role-title"),
+    ]
+    if header_actions is not None:
+        head_children.append(
+            html.Div(
+                header_actions,
+                className="pf-depth-chart-role-actions pf-setpiece-head-actions",
+            )
+        )
     return html.Div(
         [
             html.Div(
-                html.Div(title_row, className="pf-depth-chart-role-title"),
+                head_children,
                 className="pf-depth-chart-role-head",
             ),
             table,
@@ -2554,6 +2595,7 @@ def _build_setpiece_chart(
     formation_id: str | None = None,
     formation_slots: list[dict] | None = None,
     cache: _PfProfileCache | None = None,
+    show_gk: bool = True,
 ) -> html.Div:
     """Top set-piece scores among unique players on formation squad depth."""
     settings = us.normalize(settings)
@@ -2574,6 +2616,7 @@ def _build_setpiece_chart(
             foot_side="left",
             cache=cache,
             formation_id=squad_formation_id,
+            show_gk=show_gk,
         )
         _, right_ranked = _top_setpiece_entries(
             piece_id,
@@ -2582,6 +2625,7 @@ def _build_setpiece_chart(
             foot_side="right",
             cache=cache,
             formation_id=squad_formation_id,
+            show_gk=show_gk,
         )
         left_table = _setpiece_ranked_table(
             left_ranked,
@@ -2643,6 +2687,7 @@ def _build_setpiece_chart(
                             ),
                             hint="Left Foot ≥ Strong",
                             table=left_table,
+                            header_actions=_setpiece_gk_switcher(show_gk, panel="left"),
                         ),
                         _setpiece_group_section(
                             title="Right · Strong",
@@ -2653,6 +2698,7 @@ def _build_setpiece_chart(
                             ),
                             hint="Right Foot ≥ Strong",
                             table=right_table,
+                            header_actions=_setpiece_gk_switcher(show_gk, panel="right"),
                         ),
                     ],
                     className="pf-setpiece-footed-grid",
@@ -2667,6 +2713,7 @@ def _build_setpiece_chart(
         limit=SET_PIECE_TOP_N,
         cache=cache,
         formation_id=squad_formation_id,
+        show_gk=show_gk,
     )
     table = _setpiece_ranked_table(
         ranked,
@@ -2690,6 +2737,7 @@ def _build_setpiece_chart(
         ),
         table=table,
         show_height=show_height,
+        header_actions=_setpiece_gk_switcher(show_gk, panel="main"),
     )
 
 
@@ -3702,6 +3750,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
+            dcc.Store(id="pf-setpiece-show-gk", storage_type="local", data=True),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-table-row-cache", data=None),
@@ -4606,6 +4655,19 @@ def sync_xi_view_switch(view):
 
 
 @callback(
+    Output("pf-setpiece-show-gk", "data"),
+    Input({"type": "pf-setpiece-gk", "view": ALL, "panel": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_setpiece_gk(_n_clicks):
+    if not _pattern_click_triggered():
+        return no_update
+    tid = ctx.triggered_id or {}
+    view = str(tid.get("view") or "").strip().lower()
+    return view != "outfield"
+
+
+@callback(
     Output("pf-setpiece-view", "data"),
     Input({"type": "pf-setpiece-view", "view": ALL}, "n_clicks"),
     State("ui-settings", "data"),
@@ -4756,6 +4818,7 @@ clientside_callback(
     """,
     Output("pf-setpiece-chart-busy", "className"),
     Input("pf-setpiece-view", "data"),
+    Input("pf-setpiece-show-gk", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
     Input("pf-hydrated", "data"),
@@ -5291,6 +5354,7 @@ def refresh_profiles_xi_chart(
 @callback(
     Output("pf-setpiece-chart-body", "children"),
     Input("pf-setpiece-view", "data"),
+    Input("pf-setpiece-show-gk", "data"),
     Input("pf-rev", "data"),
     Input("pf-formation-select", "value"),
     Input("ui-settings", "data"),
@@ -5299,6 +5363,7 @@ def refresh_profiles_xi_chart(
 )
 def refresh_profiles_setpiece_chart(
     piece_view,
+    show_gk,
     _rev,
     formation_id,
     settings,
@@ -5321,6 +5386,7 @@ def refresh_profiles_setpiece_chart(
         formation_id=formation_id,
         formation_slots=formation_slots,
         cache=profile_cache,
+        show_gk=True if show_gk is None else bool(show_gk),
     )
 
 

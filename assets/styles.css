@@ -8015,6 +8015,21 @@ body[data-theme="light"] .pf-depth-undo-row {
     min-width: 18rem;
 }
 
+.pf-setpiece-head-actions {
+    flex: 0 0 auto;
+}
+
+.pf-setpiece-gk-seg {
+    width: auto;
+    min-width: 9.5rem;
+}
+
+.pf-setpiece-gk-seg .st-player-seg-btn {
+    flex: 1 1 0;
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
 .pf-setpiece-view-seg {
     width: auto;
     min-width: 17rem;
