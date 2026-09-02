@@ -1228,6 +1228,34 @@ def combo_column(ip: str, oop: str) -> str:
     return f"{role_meta(ip)['column']}+{role_meta(oop)['column']}"
 
 
+def role_ref_variants(role_id: str) -> list[str]:
+    """Plain role id plus bucket-specific refs for cross-bucket roles."""
+    refs = [role_id]
+    for group in role_groups(role_id):
+        ref = encode_role_ref(role_id, group)
+        if ref not in refs:
+            refs.append(ref)
+    return refs
+
+
+def combo_meta_for_column(column: str) -> dict[str, str] | None:
+    """Resolve hybrid meta for a combo column id (incl. cross-bucket refs)."""
+    text = str(column or "").strip()
+    if "+" not in text:
+        return None
+    ip_col, _, oop_col = text.partition("+")
+    for ip_id in pc.all_positions:
+        for ip_ref in role_ref_variants(ip_id):
+            if role_meta(ip_ref)["column"] != ip_col:
+                continue
+            for oop_id in pc.all_positions:
+                for oop_ref in role_ref_variants(oop_id):
+                    if role_meta(oop_ref)["column"] != oop_col:
+                        continue
+                    return combo_meta(ip_ref, oop_ref)
+    return None
+
+
 def combo_meta(ip: str, oop: str) -> dict[str, str]:
     ip_meta = role_meta(ip)
     oop_meta = role_meta(oop)

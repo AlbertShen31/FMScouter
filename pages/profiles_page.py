@@ -85,6 +85,7 @@ from scoring.role_scorer import (
     column_display_abbr,
     combo_column,
     combo_meta,
+    combo_meta_for_column,
     foot_strength,
     group_abbr_tone,
     parse_combo_id,
@@ -1121,7 +1122,13 @@ def _role_column_meta(column: str) -> dict:
         _ROLE_COLUMN_META = mapping
     if column in _ROLE_COLUMN_META:
         return _ROLE_COLUMN_META[column]
-    label = column or "Role"
+    resolved = combo_meta_for_column(column)
+    if resolved:
+        _ROLE_COLUMN_META[column] = resolved
+        return resolved
+    label = _role_display_label(column)
+    if label == "—":
+        label = column or "Role"
     return {
         "id": column,
         "column": column,
@@ -1349,7 +1356,9 @@ def _profile_depth_card(
     else:
         active = " active" if column in _focus_roles(focus_roles) else ""
     empty_cls = " is-empty" if empty else ""
-    role_label = meta.get("short_label") or meta["name"]
+    role_label = _role_display_label(column)
+    if role_label == "—":
+        role_label = meta.get("short_label") or meta["name"]
     slot_label = (slot or {}).get("display_label") or (slot or {}).get("label") or ""
     if empty:
         avg_el = html.Span("—", className="rs-depth-avg")
