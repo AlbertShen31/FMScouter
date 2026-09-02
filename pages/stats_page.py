@@ -1176,7 +1176,7 @@ def _passes_division_tier(player: dict, division_tier: str | None) -> bool:
     mode = (division_tier or "all").strip().lower()
     if mode in ("", "all"):
         return True
-    tier = classify_division(player.get("division"), player.get("nation"))
+    tier = classify_division(player.get("division"), player.get("based_in"))
     if mode == "top":
         return tier == "top"
     if mode == "pro":

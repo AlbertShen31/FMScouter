@@ -92,8 +92,6 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Age", "age"),
                 ("Club", "club"),
                 ("Division", "division"),
-                ("Nationality", "nation"),
-                ("Second nationality", "second_nation"),
                 ("Position", "position"),
                 ("Best pos", "best_pos"),
                 ("Best role", "best_role"),
@@ -113,7 +111,11 @@ PLAYER_IDENTITY_SECTIONS = [
         "International & youth",
         [
             [
+                ("Nationality", "nation"),
+                ("Second nationality", "second_nation"),
                 ("National team", "national_team"),
+            ],
+            [
                 ("Int apps", "int_apps"),
                 ("Int goals", "int_gls"),
                 ("Int assists", "int_assists"),

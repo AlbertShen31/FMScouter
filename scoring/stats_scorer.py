@@ -1134,8 +1134,7 @@ def parse_stats_export_with_meta(
                 "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
-                "nation": pick(row, IDENTITY["Nation"])
-                or pick(row, IDENTITY["BasedIn"]),
+                "nation": pick(row, IDENTITY["Nation"]),
                 "based_in": pick(row, IDENTITY["BasedIn"]),
                 "second_nation": pick(row, IDENTITY["SecondNation"]),
                 "position": position,

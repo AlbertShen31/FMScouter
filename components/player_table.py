@@ -793,15 +793,14 @@ def resolve_division_highlight(
     from scoring.stats_availability import division_has_limited_tracking
 
     division = player.get("division") or player.get("Division") or ""
-    nation = (
-        player.get("nation")
-        or player.get("based_in")
-        or player.get("Nation")
+    based_in = (
+        player.get("based_in")
+        or player.get("Based In")
         or ""
     )
     tier = str(player.get("DivisionTier") or "").strip()
     if not tier:
-        tier = classify_division(division, nation) or ""
+        tier = classify_division(division, based_in) or ""
 
     limited_flag = player.get("DivisionLimited")
     if limited_flag == "yes":
