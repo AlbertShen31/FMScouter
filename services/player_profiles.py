@@ -492,7 +492,7 @@ def pending_staged_export_count(library_id: str | None = None) -> int:
     )
 
 
-def _profile_ids_in_slot_depth(
+def profile_ids_in_slot_depth(
     *,
     library_id: str | None = None,
     formation_id: str | None = None,
@@ -1845,7 +1845,7 @@ def replace_profiles_from_saved_file(
 
     meta = get_library()
     formation_id = str((meta or {}).get("formation_id") or "").strip()
-    active_ids = _profile_ids_in_slot_depth(formation_id=formation_id or None)
+    active_ids = profile_ids_in_slot_depth(formation_id=formation_id or None)
     role_entries = [
         prof
         for prof in list_role_profiles()

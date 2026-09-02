@@ -135,8 +135,8 @@ PF_DEPTH_CHART_TIP = (
     "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only)."
 )
 PF_SET_PIECES_TIP = (
-    "Top set-piece takers in this library. COR / DFK / IFK split into strong left and right foot "
-    "(top 5 each). Slot shows best formation depth rank."
+    "Top set-piece takers among players on formation squad depth. COR / DFK / IFK split into "
+    "strong left and right foot (top 5 each). Slot shows best formation depth rank."
 )
 PF_STARTING_XI_TIP = (
     "Rank #1 or #2 per formation slot. Updates when slot depth changes or you switch First / "
@@ -852,6 +852,33 @@ def _best_slot_by_player_key(
     return best
 
 
+def _resolve_setpiece_formation_id(formation_id: str | None) -> str:
+    """Formation pack used for set-piece squad filtering and slot labels."""
+    pack = str(formation_id or "").strip()
+    if pack:
+        return pack
+    meta = profiles.get_library()
+    return str((meta or {}).get("formation_id") or "").strip()
+
+
+def _filter_setpiece_squad_entries(
+    entries: list[dict],
+    formation_id: str | None,
+) -> list[dict]:
+    """Only players listed on formation slot depth (matches squad depth / depth chart)."""
+    pack = _resolve_setpiece_formation_id(formation_id)
+    if not pack:
+        return entries
+    active_ids = profiles.profile_ids_in_slot_depth(formation_id=pack)
+    if not active_ids:
+        return []
+    return [
+        entry
+        for entry in entries
+        if str(entry.get("id") or "").strip() in active_ids
+    ]
+
+
 def _top_setpiece_entries(
     piece_id: str,
     *,
@@ -859,6 +886,7 @@ def _top_setpiece_entries(
     limit: int = SET_PIECE_TOP_N,
     foot_side: str | None = None,
     cache: _PfProfileCache | None = None,
+    formation_id: str | None = None,
 ) -> tuple[dict | None, list[tuple[dict, float | None]]]:
     """Return (profile meta, [(entry, score), ...]) ranked for the category.
 
@@ -871,6 +899,7 @@ def _top_setpiece_entries(
         entries = cache.list_role_profiles()
     else:
         entries = profiles.list_role_profiles()
+    entries = _filter_setpiece_squad_entries(entries, formation_id)
     unique = _unique_setpiece_entries(
         entries, score_col=score_col, settings=settings
     )
@@ -2526,7 +2555,7 @@ def _build_setpiece_chart(
     formation_slots: list[dict] | None = None,
     cache: _PfProfileCache | None = None,
 ) -> html.Div:
-    """Top set-piece scores among unique players in the active library."""
+    """Top set-piece scores among unique players on formation squad depth."""
     settings = us.normalize(settings)
     piece_id = _normalize_setpiece_view(piece_id, settings)
     profile = _setpiece_profile(piece_id, settings)
@@ -2535,6 +2564,7 @@ def _build_setpiece_chart(
     show_height = piece_id == "aerial"
     slots = list(formation_slots or [])
     slot_map = _best_slot_by_player_key(formation_id, slots, cache=cache)
+    squad_formation_id = _resolve_setpiece_formation_id(formation_id)
 
     if piece_id in SET_PIECE_FOOTED_IDS:
         _, left_ranked = _top_setpiece_entries(
@@ -2543,6 +2573,7 @@ def _build_setpiece_chart(
             limit=SET_PIECE_FOOT_TOP_N,
             foot_side="left",
             cache=cache,
+            formation_id=squad_formation_id,
         )
         _, right_ranked = _top_setpiece_entries(
             piece_id,
@@ -2550,6 +2581,7 @@ def _build_setpiece_chart(
             limit=SET_PIECE_FOOT_TOP_N,
             foot_side="right",
             cache=cache,
+            formation_id=squad_formation_id,
         )
         left_table = _setpiece_ranked_table(
             left_ranked,
@@ -2634,6 +2666,7 @@ def _build_setpiece_chart(
         settings=settings,
         limit=SET_PIECE_TOP_N,
         cache=cache,
+        formation_id=squad_formation_id,
     )
     table = _setpiece_ranked_table(
         ranked,
@@ -2642,7 +2675,7 @@ def _build_setpiece_chart(
         show_height=show_height,
         score_abbr=abbr,
         slot_map=slot_map,
-        empty_message="No saved players in this profile yet.",
+        empty_message="No players on formation squad depth yet.",
     )
     return _setpiece_group_section(
         title=label,
@@ -2651,7 +2684,7 @@ def _build_setpiece_chart(
             f"Top {len(ranked)} of up to {SET_PIECE_TOP_N} by {label} score"
         ),
         hint=(
-            "Unique players in this library, ranked by set-piece score. "
+            "Players on formation squad depth, ranked by set-piece score. "
             "Slot is the best depth rank across the formation; ties keep the "
             "earlier Starting XI slot. Read-only."
         ),
@@ -5272,7 +5305,7 @@ def refresh_profiles_setpiece_chart(
     theme,
     hydrated,
 ):
-    """Top set-piece scores for unique players in the active library."""
+    """Top set-piece scores for players on formation squad depth."""
     if not hydrated:
         return no_update
 
