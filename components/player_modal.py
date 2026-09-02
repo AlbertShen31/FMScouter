@@ -50,6 +50,7 @@ PLAYING_TIME_MODAL_FIELDS = (
     ("Appearances", "appearances"),
     ("Minutes", "minutes"),
     ("Avg rating", "avg_rating_club"),
+    ("Last 5", "last_5_club"),
 )
 
 DISCIPLINE_MODAL_FIELDS = (
@@ -102,7 +103,6 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Rec", "rec"),
                 ("Inf", "inf"),
                 ("Injury", "injury"),
-                ("Last 5", "last_5_club"),
             ],
             [
                 ("Position", "position"),
