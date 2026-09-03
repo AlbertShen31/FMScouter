@@ -81,6 +81,9 @@ def _pattern_click_triggered() -> bool:
 from scoring.comparison import score_display
 from scoring.division_tiers import apply_division_tier, classify_division
 from scoring.role_scorer import (
+    ELIGIBILITY_FULL,
+    ELIGIBILITY_NONE,
+    ELIGIBILITY_PARTIAL,
     FootStrength,
     apply_set_piece_scores,
     column_display_abbr,
@@ -89,6 +92,7 @@ from scoring.role_scorer import (
     combo_meta_for_column,
     foot_strength,
     group_abbr_tone,
+    normalize_eligibility,
     parse_combo_id,
     role_meta,
     score_band,
@@ -1162,6 +1166,62 @@ def _band_legend(settings=None) -> html.Div:
     return html.Div(chips, className="rs-depth-legend")
 
 
+_POS_ELIG_TIPS = {
+    "yes": "Eligible for this slot’s role (hybrids need both parts)",
+    "partial": "Only partially eligible for this slot’s role",
+    "no": "Not eligible for this slot’s role",
+}
+
+
+def _position_eligibility_for_role(row: dict, role_column: str) -> str | None:
+    """Pos highlight for a depth-chart slot role: yes / partial / no."""
+    role = str(role_column or "").strip()
+    if not role or not isinstance(row, dict):
+        return None
+    meta = _role_column_meta(role)
+    ip_col = str(meta.get("ip_column") or "").strip()
+    oop_col = str(meta.get("oop_column") or "").strip()
+    if ip_col and oop_col:
+        ip_raw = row.get(f"{ip_col} eligible")
+        oop_raw = row.get(f"{oop_col} eligible")
+        if ip_raw is not None or oop_raw is not None:
+            ip_level = normalize_eligibility(ip_raw)
+            oop_level = normalize_eligibility(oop_raw)
+            if ip_level == ELIGIBILITY_FULL and oop_level == ELIGIBILITY_FULL:
+                return "yes"
+            if ip_level == ELIGIBILITY_NONE and oop_level == ELIGIBILITY_NONE:
+                return "no"
+            return "partial"
+    raw = row.get(f"{role} eligible")
+    if raw is None:
+        # Legacy snapshots only stored a boolean Eligible for the saved role.
+        if role == str(row.get("Role") or "").strip() and "Eligible" in row:
+            raw = row.get("Eligible")
+        else:
+            return None
+    level = normalize_eligibility(raw)
+    if level == ELIGIBILITY_FULL:
+        return "yes"
+    if level == ELIGIBILITY_PARTIAL:
+        return "partial"
+    return "no"
+
+
+def _depth_pos_cell(position: str, row: dict, role_column: str) -> html.Span:
+    """Position text with Role-scores-style eligibility coloring."""
+    pos_elig = _position_eligibility_for_role(row, role_column)
+    pos_class = "pf-depth-chart-pos"
+    tip = position if position != "—" else ""
+    if pos_elig in _POS_ELIG_TIPS:
+        pos_class += {
+            "yes": " is-eligible",
+            "partial": " is-partial",
+            "no": " is-ineligible",
+        }[pos_elig]
+        tip = _POS_ELIG_TIPS[pos_elig]
+    return html.Span(position, className=pos_class, title=tip or None)
+
+
 def _role_column_meta(column: str) -> dict:
     global _ROLE_COLUMN_META
     if _ROLE_COLUMN_META is None:
@@ -2085,7 +2145,7 @@ def _depth_chart_player_row(
             ),
             _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
             _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
-            html.Span(position, className="pf-depth-chart-pos", title=position),
+            _depth_pos_cell(position, row, role_col),
             html.Span(slot_label or "—", className=slot_class, title=slot_title),
             _depth_role_cell(role_col, theme=theme),
             dcc.Markdown(

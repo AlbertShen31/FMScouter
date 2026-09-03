@@ -9004,6 +9004,26 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
     color: var(--app-text);
 }
 
+.pf-depth-chart-pos.is-eligible {
+    color: var(--app-accent);
+    font-weight: 700;
+}
+
+.pf-depth-chart-pos.is-partial {
+    color: #fbbf24;
+    font-weight: 700;
+}
+
+html[data-theme="light"] .pf-depth-chart-pos.is-partial,
+body[data-theme="light"] .pf-depth-chart-pos.is-partial {
+    color: #ca8a04;
+}
+
+.pf-depth-chart-pos.is-ineligible {
+    color: var(--app-danger);
+    font-weight: 700;
+}
+
 .pf-depth-chart-rec {
     display: inline-flex;
     align-items: center;
