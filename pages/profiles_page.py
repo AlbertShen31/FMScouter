@@ -3684,7 +3684,7 @@ def _depth_undo_panel(items, *, limit: int | None = None) -> html.Div:
                 ),
             ],
             className="pf-depth-undo-details",
-            open=True,
+            open=False,
         ),
         className="pf-depth-undo-panel",
     )

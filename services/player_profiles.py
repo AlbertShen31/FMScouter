@@ -543,8 +543,26 @@ def get_slot_order_ids(
     pack_map = store.get(pack) if isinstance(store.get(pack), dict) else {}
     raw = pack_map.get(key)
     if isinstance(raw, list):
-        valid = {str(entry.get("id") or "") for entry in list_role_profiles()}
-        return [str(pid).strip() for pid in raw if str(pid or "").strip() in valid]
+        # Only keep profiles that still exist *and* match this slot's role.
+        # Stale ids from older non-bucket hybrids (e.g. CHM+WCM-OOP on an
+        # AM-CHM+WCM-OOP slot) used to linger in the list and confuse depth
+        # order / Refresh for shared RAM/LAM-style slots.
+        by_id = {
+            str(entry.get("id") or "").strip(): entry
+            for entry in list_role_profiles()
+            if str(entry.get("id") or "").strip()
+        }
+        cleaned = [
+            pid
+            for pid in (str(item or "").strip() for item in raw)
+            if pid and _entry_role(by_id.get(pid) or {}) == role
+        ]
+        if cleaned != [str(item or "").strip() for item in raw if str(item or "").strip()]:
+            pack_map = dict(pack_map)
+            pack_map[key] = cleaned
+            store[pack] = pack_map
+            _write_slot_depth(store)
+        return cleaned
     if not seed:
         return []
     pack_map = dict(pack_map)
