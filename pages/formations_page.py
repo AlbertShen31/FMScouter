@@ -14,16 +14,19 @@ register_page(__name__, path="/formations", name="Formations")
 FM_PAGE_TIP = (
     "Save up to 11 hybrid roles. Slot names update from IP positions (duplicate CBs become "
     "RCB/LCB). IP position filters both role lists unless you set a separate OOP position. "
-    "Save writes a new file if none is selected."
+    "Optional left/right foot minimum strengths gate which players Profiles can load into a "
+    "slot. Save writes a new file if none is selected."
 )
 FM_HYBRID_SLOTS_TIP = (
     "IP position is required. Leave OOP position blank to use the IP position for both role lists. "
     "Roles that span position buckets (e.g. Wing Back as FB or WB) appear once per bucket in the "
-    "role lists; the slot position picks the default bucket."
+    "role lists; the slot position picks the default bucket. Left/right foot picks a minimum "
+    "strength (Very weak–Very strong); leave as None for no gate."
 )
 
 POS_OPTIONS = fm.position_options()
-_FORM_OUTPUT_COUNT = 13
+FOOT_REQ_OPTIONS = fm.foot_req_options()
+_FORM_OUTPUT_COUNT = 15
 
 
 def _slot_row(index: int, slot: dict) -> html.Div:
@@ -31,6 +34,8 @@ def _slot_row(index: int, slot: dict) -> html.Div:
     oop_pos = slot.get("oop_pos") or None
     ip_group, oop_group = fm.role_filter_groups(ip_pos, oop_pos)
     label = str(slot.get("label") or "").strip() or "—"
+    foot_left = slot.get("foot_left") or fm.FOOT_REQ_NONE
+    foot_right = slot.get("foot_right") or fm.FOOT_REQ_NONE
     return html.Div(
         [
             html.Span(str(index + 1), className="fm-slot-index"),
@@ -76,19 +81,39 @@ def _slot_row(index: int, slot: dict) -> html.Div:
                 searchable=True,
                 className="fm-slot-role",
             ),
+            dmc.Select(
+                id={"type": "fm-slot-foot-left", "index": index},
+                data=FOOT_REQ_OPTIONS,
+                value=foot_left,
+                placeholder="L foot",
+                clearable=False,
+                searchable=False,
+                className="fm-slot-foot",
+            ),
+            dmc.Select(
+                id={"type": "fm-slot-foot-right", "index": index},
+                data=FOOT_REQ_OPTIONS,
+                value=foot_right,
+                placeholder="R foot",
+                clearable=False,
+                searchable=False,
+                className="fm-slot-foot",
+            ),
             html.Div(id={"type": "fm-slot-preview", "index": index}, className="fm-slot-preview"),
         ],
         className="fm-slot-row",
     )
 
 
-def _slot_values(formation: dict) -> tuple[list, list, list, list]:
+def _slot_values(formation: dict) -> tuple[list, list, list, list, list, list]:
     slots = formation.get("slots") or []
     ip_pos = [slot.get("ip_pos") or None for slot in slots]
     oop_pos = [slot.get("oop_pos") or None for slot in slots]
     ips = [slot.get("ip") or None for slot in slots]
     oops = [slot.get("oop") or None for slot in slots]
-    return ip_pos, oop_pos, ips, oops
+    foot_left = [slot.get("foot_left") or fm.FOOT_REQ_NONE for slot in slots]
+    foot_right = [slot.get("foot_right") or fm.FOOT_REQ_NONE for slot in slots]
+    return ip_pos, oop_pos, ips, oops, foot_left, foot_right
 
 
 def _by_index(specs, values) -> dict[int, object]:
@@ -98,12 +123,14 @@ def _by_index(specs, values) -> dict[int, object]:
     return mapped
 
 
-def _collect_slots(ip_pos, oop_pos, ips, oops) -> list[dict]:
-    specs = ctx.states_list[-4:] if ctx.states_list else [[], [], [], []]
+def _collect_slots(ip_pos, oop_pos, ips, oops, foot_left, foot_right) -> list[dict]:
+    specs = ctx.states_list[-6:] if ctx.states_list else [[], [], [], [], [], []]
     ip_pos_map = _by_index(specs[0] if len(specs) > 0 else [], ip_pos)
     oop_pos_map = _by_index(specs[1] if len(specs) > 1 else [], oop_pos)
     ip_map = _by_index(specs[2] if len(specs) > 2 else [], ips)
     oop_map = _by_index(specs[3] if len(specs) > 3 else [], oops)
+    foot_left_map = _by_index(specs[4] if len(specs) > 4 else [], foot_left)
+    foot_right_map = _by_index(specs[5] if len(specs) > 5 else [], foot_right)
     slots = []
     for index in range(fm.MAX_SLOTS):
         slots.append(
@@ -112,23 +139,27 @@ def _collect_slots(ip_pos, oop_pos, ips, oops) -> list[dict]:
                 "oop_pos": oop_pos_map.get(index) or "",
                 "ip": ip_map.get(index) or "",
                 "oop": oop_map.get(index) or "",
+                "foot_left": foot_left_map.get(index) or fm.FOOT_REQ_NONE,
+                "foot_right": foot_right_map.get(index) or fm.FOOT_REQ_NONE,
             }
         )
     return slots
 
 
-def _draft(name, shape, notes, ip_pos, oop_pos, ips, oops, pack_id="") -> dict:
+def _draft(
+    name, shape, notes, ip_pos, oop_pos, ips, oops, foot_left, foot_right, pack_id=""
+) -> dict:
     return {
         "id": pack_id,
         "name": name,
         "shape": shape,
         "notes": notes,
-        "slots": _collect_slots(ip_pos, oop_pos, ips, oops),
+        "slots": _collect_slots(ip_pos, oop_pos, ips, oops, foot_left, foot_right),
     }
 
 
 def _form_outputs(formation: dict, status: str):
-    ip_pos, oop_pos, ips, oops = _slot_values(formation)
+    ip_pos, oop_pos, ips, oops, foot_left, foot_right = _slot_values(formation)
     pack_id = formation.get("id") or None
     has_pack = bool(pack_id)
     return (
@@ -141,6 +172,8 @@ def _form_outputs(formation: dict, status: str):
         oop_pos,
         ips,
         oops,
+        foot_left,
+        foot_right,
         status,
         False,
         not has_pack,
@@ -280,6 +313,8 @@ def layout():
                                     html.Span("OOP position", className="fm-slot-col-label"),
                                     html.Span("In possession role", className="fm-slot-col-label"),
                                     html.Span("Out of possession role", className="fm-slot-col-label"),
+                                    html.Span("Left foot", className="fm-slot-col-label"),
+                                    html.Span("Right foot", className="fm-slot-col-label"),
                                     html.Span("Hybrid", className="fm-slot-col-label"),
                                 ],
                                 className="fm-slot-row fm-slot-head",
@@ -419,6 +454,8 @@ def preview_slots(ips, oops):
     Output({"type": "fm-slot-oop-pos", "index": ALL}, "value"),
     Output({"type": "fm-slot-ip", "index": ALL}, "value"),
     Output({"type": "fm-slot-oop", "index": ALL}, "value"),
+    Output({"type": "fm-slot-foot-left", "index": ALL}, "value"),
+    Output({"type": "fm-slot-foot-right", "index": ALL}, "value"),
     Output("fm-status", "children"),
     Output("fm-save", "disabled"),
     Output("fm-duplicate", "disabled"),
@@ -435,6 +472,8 @@ def preview_slots(ips, oops):
     State({"type": "fm-slot-oop-pos", "index": ALL}, "value"),
     State({"type": "fm-slot-ip", "index": ALL}, "value"),
     State({"type": "fm-slot-oop", "index": ALL}, "value"),
+    State({"type": "fm-slot-foot-left", "index": ALL}, "value"),
+    State({"type": "fm-slot-foot-right", "index": ALL}, "value"),
     prevent_initial_call=True,
 )
 def handle_formations(
@@ -450,6 +489,8 @@ def handle_formations(
     oop_pos,
     ips,
     oops,
+    foot_left,
+    foot_right,
 ):
     triggered = ctx.triggered_id
     if not triggered:
@@ -464,12 +505,23 @@ def handle_formations(
         formation = fm.load(pack_id)
         return finish(formation, f"Loaded {formation['name']}.")
 
-    draft = _draft(name, shape, notes, ip_pos, oop_pos, ips, oops, pack_id or "")
+    draft = _draft(
+        name,
+        shape,
+        notes,
+        ip_pos,
+        oop_pos,
+        ips,
+        oops,
+        foot_left,
+        foot_right,
+        pack_id or "",
+    )
     if triggered == "fm-new":
         return finish(fm.blank(), "Editing a new formation. Save to keep it.")
     if triggered == "fm-duplicate":
         if not pack_id:
-            return (no_update,) * 9 + (
+            return (no_update,) * 11 + (
                 "Select a saved formation to duplicate.",
                 no_update,
                 no_update,
@@ -488,7 +540,7 @@ def handle_formations(
         return finish(formation, f"{verb} {formation['name']}.")
     if triggered == "fm-delete":
         if not pack_id:
-            return (no_update,) * 9 + (
+            return (no_update,) * 11 + (
                 "Select a saved formation to delete.",
                 no_update,
                 no_update,

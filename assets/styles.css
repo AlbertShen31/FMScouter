@@ -4207,7 +4207,9 @@ body:has(.rc-page) .navbar {
         minmax(88px, 0.55fr)
         minmax(0, 1.35fr)
         minmax(0, 1.35fr)
-        minmax(90px, 0.65fr);
+        minmax(138px, 0.45fr)
+        minmax(138px, 0.45fr)
+        minmax(90px, 0.55fr);
     gap: 10px;
     align-items: center;
 }
@@ -4234,7 +4236,8 @@ body:has(.rc-page) .navbar {
 }
 
 .fm-slot-pos,
-.fm-slot-role {
+.fm-slot-role,
+.fm-slot-foot {
     min-width: 0;
 }
 
@@ -4278,6 +4281,7 @@ body:has(.rc-page) .navbar {
     .fm-slot-pos,
     .fm-slot-label,
     .fm-slot-role,
+    .fm-slot-foot,
     .fm-slot-preview {
         grid-column: 2;
     }
@@ -7555,6 +7559,26 @@ body[data-theme="light"] .pf-export-staging-badge {
     align-items: center;
     justify-content: space-between;
     gap: 0.4rem;
+    min-width: 0;
+}
+
+.pf-page #pf-summary .rs-depth-foot-req {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--app-muted);
+    border: 1px solid var(--app-line);
+    border-radius: 999px;
+    padding: 1px 7px;
+    line-height: 1.35;
+}
+
+.pf-page #pf-summary .rs-depth-slot-value {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
     min-width: 0;
 }
 

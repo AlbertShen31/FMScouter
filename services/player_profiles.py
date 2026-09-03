@@ -22,7 +22,12 @@ from config.paths import (
     PROFILES_PACKS_DIR,
 )
 import services.export_library as lib
-from scoring.role_scorer import default_partial_adjacency, is_fully_eligible, player_row_key
+from scoring.role_scorer import (
+    default_partial_adjacency,
+    is_fully_eligible,
+    player_row_key,
+    slot_foot_match,
+)
 from scoring.stats_scorer import player_key as stats_player_key
 
 SAVED_FROM_LABELS = {
@@ -711,18 +716,81 @@ def _still_excluded_ids(
     return held
 
 
+def _slot_foot_thresholds():
+    import services.ui_settings as us
+
+    return us.load().get("foot_thresholds")
+
+
+def _formation_slot_foot_reqs(
+    formation_id: str | None, slot_index: int | str
+) -> tuple[str, str]:
+    """Return ``(foot_left, foot_right)`` for a formation slot index."""
+    import services.formations as fm
+
+    pack = str(formation_id or "").strip()
+    if not pack or not fm.exists(pack):
+        return ("none", "none")
+    try:
+        index = int(slot_index)
+    except (TypeError, ValueError):
+        return ("none", "none")
+    formation = fm.load(pack, persist=False)
+    slots = formation.get("slots") or []
+    if index < 0 or index >= len(slots):
+        return ("none", "none")
+    slot = slots[index] if isinstance(slots[index], dict) else {}
+    return (
+        str(slot.get("foot_left") or "none"),
+        str(slot.get("foot_right") or "none"),
+    )
+
+
+def _entry_foot_row(entry: dict[str, Any] | None) -> dict[str, Any]:
+    row = (entry or {}).get("row") if isinstance(entry, dict) else None
+    payload = row if isinstance(row, dict) else {}
+    return {
+        "Left Foot": payload.get("Left Foot") or "",
+        "Right Foot": payload.get("Right Foot") or "",
+    }
+
+
+def profile_matches_slot_foot(
+    entry: dict[str, Any] | None,
+    *,
+    foot_left: str | None = None,
+    foot_right: str | None = None,
+    thresholds=None,
+) -> bool:
+    """Whether a profile snapshot satisfies optional formation-slot foot gates."""
+    return slot_foot_match(
+        _entry_foot_row(entry),
+        foot_left=foot_left,
+        foot_right=foot_right,
+        thresholds=thresholds if thresholds is not None else _slot_foot_thresholds(),
+    )
+
+
 def ordered_profiles_for_slot(
     formation_id: str | None,
     slot_index: int | str,
     role_column: str,
     *,
     entries: list[dict[str, Any]] | None = None,
+    foot_left: str | None = None,
+    foot_right: str | None = None,
+    foot_thresholds=None,
 ) -> list[dict[str, Any]]:
     """Profiles for one formation slot in that slot’s depth order.
 
     Pass ``entries`` to reuse a preloaded role-profile list (avoids re-reading
-    the library index when many slots are resolved in one request).
+    the library index when many slots are resolved in one request). Optional
+    ``foot_left`` / ``foot_right`` (min strength ``1``–``6``) hide players who
+    do not meet the formation slot’s foot gates; when omitted, requirements
+    are read from the saved formation pack.
     """
+    from services.formations import FOOT_REQ_NONE, _normalize_foot_req
+
     role = str(role_column or "").strip()
     ids = get_slot_order_ids(formation_id, slot_index, role, seed=True)
     source = entries if entries is not None else list_role_profiles()
@@ -731,7 +799,23 @@ def ordered_profiles_for_slot(
         for entry in source
         if _entry_role(entry) == role
     }
-    return [by_id[pid] for pid in ids if pid in by_id]
+    ordered = [by_id[pid] for pid in ids if pid in by_id]
+    if foot_left is None and foot_right is None:
+        foot_left, foot_right = _formation_slot_foot_reqs(formation_id, slot_index)
+    left_n = _normalize_foot_req(foot_left)
+    right_n = _normalize_foot_req(foot_right)
+    if left_n == FOOT_REQ_NONE and right_n == FOOT_REQ_NONE:
+        return ordered
+    return [
+        entry
+        for entry in ordered
+        if profile_matches_slot_foot(
+            entry,
+            foot_left=left_n,
+            foot_right=right_n,
+            thresholds=foot_thresholds,
+        )
+    ]
 
 
 def profile_used_in_formation_slots(
@@ -912,19 +996,26 @@ def restore_to_slot_depth(item: dict[str, Any]) -> list[dict[str, Any]]:
         ref_slot = ref.get("slot")
         if not ref_role or ref_slot is None:
             continue
+        foot_left, foot_right = _formation_slot_foot_reqs(pack, ref_slot)
+        thresholds = _slot_foot_thresholds()
         ids = get_slot_order_ids(pack, ref_slot, ref_role, seed=True)
+        restored_ids: list[str] = []
         for entry in restored:
             pid = str(entry.get("id") or "").strip()
             if not pid:
                 continue
+            if not profile_matches_slot_foot(
+                entry,
+                foot_left=foot_left,
+                foot_right=foot_right,
+                thresholds=thresholds,
+            ):
+                continue
             ids = [item_id for item_id in ids if item_id != pid]
             ids.append(pid)
+            restored_ids.append(pid)
         set_slot_order_ids(pack, ref_slot, ids)
-        clear_slot_excluded(
-            pack,
-            ref_slot,
-            [str(entry.get("id") or "").strip() for entry in restored],
-        )
+        clear_slot_excluded(pack, ref_slot, restored_ids)
     return restored
 
 
@@ -959,13 +1050,19 @@ def _export_pending_handled_on_slots(
     formation_id: str,
     slots: list[dict[str, Any]],
     entries_by_id: dict[str, dict[str, Any]],
+    foot_thresholds=None,
 ) -> bool:
     """True when a staged export is on or excluded from every matching slot."""
     pid = str(profile_id or "").strip()
     role = str(role_column or "").strip()
     if not pid or not role:
         return True
-    matched = False
+    entry = entries_by_id.get(pid)
+    thresholds = (
+        foot_thresholds if foot_thresholds is not None else _slot_foot_thresholds()
+    )
+    role_matched = False
+    foot_eligible = False
     for slot in slots:
         if not isinstance(slot, dict):
             continue
@@ -976,7 +1073,15 @@ def _export_pending_handled_on_slots(
             slot_index = slot["index"]
         except KeyError:
             continue
-        matched = True
+        role_matched = True
+        if not profile_matches_slot_foot(
+            entry,
+            foot_left=slot.get("foot_left"),
+            foot_right=slot.get("foot_right"),
+            thresholds=thresholds,
+        ):
+            continue
+        foot_eligible = True
         current = get_slot_order_ids(formation_id, slot_index, role, seed=True)
         if pid in current:
             continue
@@ -985,7 +1090,12 @@ def _export_pending_handled_on_slots(
         if pid in still_excluded:
             continue
         return False
-    return matched
+    if not role_matched:
+        return False
+    # Role is on the formation but every copy fails the foot gate — nothing to load.
+    if not foot_eligible:
+        return True
+    return True
 
 
 def sync_formation_depth_from_exports(
@@ -998,8 +1108,9 @@ def sync_formation_depth_from_exports(
 
     Each staged profile is added to every formation slot whose role column
     matches (e.g. shared RW/LW hybrids), unless it is already listed or
-    excluded on that slot. Existing slot order is preserved; removed players
-    stay excluded until restore or a newer export (saved_at after the remove).
+    excluded on that slot, or fails that slot’s left/right foot requirement.
+    Existing slot order is preserved; removed players stay excluded until
+    restore or a newer export (saved_at after the remove).
     """
     pack = str(formation_id or "").strip()
     if not pack or not slots:
@@ -1015,6 +1126,7 @@ def sync_formation_depth_from_exports(
         for entry in role_profiles
         if str(entry.get("id") or "").strip()
     }
+    foot_thresholds = _slot_foot_thresholds()
     total_added = 0
 
     for slot in slots:
@@ -1029,7 +1141,17 @@ def sync_formation_depth_from_exports(
             continue
 
         current = get_slot_order_ids(pack, slot_index, role, seed=True)
-        kept = [pid for pid in current if pid in by_id]
+        kept = [
+            pid
+            for pid in current
+            if pid in by_id
+            and profile_matches_slot_foot(
+                by_id[pid],
+                foot_left=slot.get("foot_left"),
+                foot_right=slot.get("foot_right"),
+                thresholds=foot_thresholds,
+            )
+        ]
         present = set(kept)
         excluded_at = get_slot_excluded_at(pack, slot_index)
         still_excluded = _still_excluded_ids(excluded_at, by_id)
@@ -1049,6 +1171,13 @@ def sync_formation_depth_from_exports(
                 continue
             entry = by_id.get(pid)
             if not entry or _entry_role(entry) != role:
+                continue
+            if not profile_matches_slot_foot(
+                entry,
+                foot_left=slot.get("foot_left"),
+                foot_right=slot.get("foot_right"),
+                thresholds=foot_thresholds,
+            ):
                 continue
             staged_entries.append(entry)
 
@@ -1073,6 +1202,7 @@ def sync_formation_depth_from_exports(
             formation_id=pack,
             slots=slots,
             entries_by_id=by_id,
+            foot_thresholds=foot_thresholds,
         )
     ]
     if len(remaining) != len(pending):
@@ -1112,7 +1242,9 @@ def reinstate_exported_profile_on_slots(
     if not pid:
         return 0
     lid = _resolve_library_id(library_id)
+    entry = get_profile(pid)
     store = _read_slot_depth(lid)
+    thresholds = _slot_foot_thresholds()
     changed = 0
     for pack, raw_map in list(store.items()):
         if not isinstance(raw_map, dict):
@@ -1132,6 +1264,15 @@ def reinstate_exported_profile_on_slots(
                 excluded[slot_key] = times
             else:
                 excluded.pop(slot_key, None)
+            foot_left, foot_right = _formation_slot_foot_reqs(pack, slot_key)
+            if not profile_matches_slot_foot(
+                entry,
+                foot_left=foot_left,
+                foot_right=foot_right,
+                thresholds=thresholds,
+            ):
+                changed += 1
+                continue
             raw_ids = pack_map.get(slot_key)
             ids = (
                 [str(item).strip() for item in raw_ids if str(item or "").strip()]

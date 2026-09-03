@@ -1698,6 +1698,54 @@ def foot_match(
     return True
 
 
+def slot_foot_match(
+    row: dict[str, Any] | None,
+    *,
+    foot_left: str | None = None,
+    foot_right: str | None = None,
+    thresholds: dict[str, Any] | int | FootStrength | None = None,
+) -> bool:
+    """True when a player satisfies optional formation-slot left/right foot gates.
+
+    Each side is independent. Values are ``none`` / empty (no gate) or a minimum
+    FootStrength ``1``–``6``. Legacy ``required`` maps to Very strong.
+    Missing foot data fails a gated side.
+
+    ``thresholds`` is accepted for call-site compatibility but ignored — mins are
+    set per slot, not from Settings shortlist foot filters.
+    """
+    _ = thresholds
+    payload = row if isinstance(row, dict) else {}
+
+    def _min_level(raw) -> FootStrength | None:
+        text = str(raw or "").strip().lower()
+        if not text or text in ("none", "any", "off", "no", "0", "false"):
+            return None
+        if text in ("required", "req", "yes", "true"):
+            return FootStrength.VERY_STRONG
+        try:
+            number = int(float(text))
+        except (TypeError, ValueError):
+            return None
+        if number in FootStrength._value2member_map_:
+            return FootStrength(number)
+        return None
+
+    left_min = _min_level(foot_left)
+    right_min = _min_level(foot_right)
+    if left_min is None and right_min is None:
+        return True
+    left = foot_strength(payload.get("Left Foot") or "")
+    right = foot_strength(payload.get("Right Foot") or "")
+    if left_min is not None:
+        if left is None or left < left_min:
+            return False
+    if right_min is not None:
+        if right is None or right < right_min:
+            return False
+    return True
+
+
 def foot_filter_help(thresholds: dict[str, Any] | int | FootStrength | None = None) -> str:
     levels = resolve_foot_thresholds(thresholds)
     left = FOOT_STRENGTH_NAMES[levels["left"]].lower()

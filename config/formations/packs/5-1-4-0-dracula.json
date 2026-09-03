@@ -10,77 +10,99 @@
       "ip_pos": "gk",
       "oop_pos": "",
       "ip": "Ball_Playing_Goalkeeper_IP_GK",
-      "oop": "Goalkeeper_OOP_GK"
+      "oop": "Goalkeeper_OOP_GK",
+      "foot_left": "none",
+      "foot_right": "none"
     },
     {
       "label": "RWB",
       "ip_pos": "rwb",
       "oop_pos": "rb",
       "ip": "Advanced_Wing_Back_IP",
-      "oop": "Full_Back_OOP"
+      "oop": "Full_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "3"
     },
     {
-      "label": "CB",
+      "label": "RCB",
       "ip_pos": "cb",
       "oop_pos": "",
       "ip": "Overlapping_Centre_Back_IP",
-      "oop": "Centre_Back_OOP"
+      "oop": "Centre_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "3"
     },
     {
       "label": "CB",
       "ip_pos": "cb",
       "oop_pos": "",
       "ip": "Ball_Playing_Centre_Back_IP",
-      "oop": "Centre_Back_OOP"
+      "oop": "Centre_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
     },
     {
-      "label": "CB",
+      "label": "LCB",
       "ip_pos": "cb",
       "oop_pos": "",
       "ip": "Overlapping_Centre_Back_IP",
-      "oop": "Centre_Back_OOP"
+      "oop": "Centre_Back_OOP",
+      "foot_left": "3",
+      "foot_right": "none"
     },
     {
       "label": "LWB",
       "ip_pos": "lwb",
       "oop_pos": "lb",
       "ip": "Advanced_Wing_Back_IP",
-      "oop": "Full_Back_OOP"
+      "oop": "Full_Back_OOP",
+      "foot_left": "3",
+      "foot_right": "none"
     },
     {
       "label": "CM",
       "ip_pos": "cm",
       "oop_pos": "dm",
-      "ip": "Attacking_Midfielder_IP",
-      "oop": "Defensive_Midfielder_OOP"
+      "ip": "Attacking_Midfielder_IP@cm",
+      "oop": "Defensive_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
     },
     {
       "label": "RW",
       "ip_pos": "rw",
       "oop_pos": "",
       "ip": "Inside_Forward_IP",
-      "oop": "Winger_OOP"
+      "oop": "Winger_OOP",
+      "foot_left": "3",
+      "foot_right": "none"
     },
     {
-      "label": "AM",
+      "label": "RAM",
       "ip_pos": "am",
       "oop_pos": "cm",
-      "ip": "Channel_Midfielder_IP",
-      "oop": "Wide_Covering_Central_Midfielder_OOP"
+      "ip": "Channel_Midfielder_IP@am",
+      "oop": "Wide_Covering_Central_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "3"
     },
     {
-      "label": "AM",
+      "label": "LAM",
       "ip_pos": "am",
       "oop_pos": "cm",
-      "ip": "Channel_Midfielder_IP",
-      "oop": "Wide_Covering_Central_Midfielder_OOP"
+      "ip": "Channel_Midfielder_IP@am",
+      "oop": "Wide_Covering_Central_Midfielder_OOP",
+      "foot_left": "3",
+      "foot_right": "none"
     },
     {
       "label": "LW",
       "ip_pos": "lw",
       "oop_pos": "",
       "ip": "Inside_Forward_IP",
-      "oop": "Winger_OOP"
+      "oop": "Winger_OOP",
+      "foot_left": "none",
+      "foot_right": "3"
     }
   ]
 }

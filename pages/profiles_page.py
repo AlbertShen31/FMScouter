@@ -132,7 +132,8 @@ PF_REPLACE_TIP = (
 )
 PF_SQUAD_DEPTH_TIP = (
     "One card per formation position (up to 11). Save from Role scores queues exports "
-    "until Refresh exports places them on every matching slot (bottom of depth). "
+    "until Refresh exports places them on every matching slot (bottom of depth) that also "
+    "meets any left/right foot minimum strength on that slot. "
     "Click a card to edit that role's depth; click again to return to the XI. "
     "Auto-rank sorts players still on the slot (Score, then Ovr). Removals stay off until "
     "Recently removed restore or a new Role-scores export."
@@ -626,6 +627,8 @@ def _formation_slots(formation_id: str | None) -> list[dict]:
                 "oop": oop,
                 "ip_pos": str(raw.get("ip_pos") or ""),
                 "oop_pos": str(raw.get("oop_pos") or ""),
+                "foot_left": str(raw.get("foot_left") or fm.FOOT_REQ_NONE),
+                "foot_right": str(raw.get("foot_right") or fm.FOOT_REQ_NONE),
             }
         )
     label_counts: dict[str, int] = {}
@@ -1506,26 +1509,49 @@ def _profile_depth_card(
         ]
     title_bits = []
     if slot_label:
+        foot_bits = []
+        foot_titles = []
+        left_short = fm.foot_req_short_label((slot or {}).get("foot_left"))
+        right_short = fm.foot_req_short_label((slot or {}).get("foot_right"))
+        left_full = fm.foot_req_label((slot or {}).get("foot_left"))
+        right_full = fm.foot_req_label((slot or {}).get("foot_right"))
+        if left_short:
+            foot_bits.append(f"L≥{left_short}")
+            foot_titles.append(f"Left ≥ {left_full}")
+        if right_short:
+            foot_bits.append(f"R≥{right_short}")
+            foot_titles.append(f"Right ≥ {right_full}")
+        slot_value = [
+            html.Span(
+                slot_label,
+                className="rs-depth-slot"
+                + _slot_status_class(
+                    conflicted=slot_conflicted, unique=slot_unique
+                ),
+                title=(
+                    "Same XI player as another formation slot"
+                    if slot_conflicted
+                    else (
+                        "Unique XI player for this formation slot"
+                        if slot_unique
+                        else slot_label
+                    )
+                ),
+            )
+        ]
+        if foot_bits:
+            slot_value.append(
+                html.Span(
+                    " · ".join(foot_bits),
+                    className="rs-depth-foot-req",
+                    title="; ".join(foot_titles),
+                )
+            )
         title_bits.append(
             html.Div(
                 [
                     html.Span("Slot", className="rs-depth-kicker"),
-                    html.Span(
-                        slot_label,
-                        className="rs-depth-slot"
-                        + _slot_status_class(
-                            conflicted=slot_conflicted, unique=slot_unique
-                        ),
-                        title=(
-                            "Same XI player as another formation slot"
-                            if slot_conflicted
-                            else (
-                                "Unique XI player for this formation slot"
-                                if slot_unique
-                                else slot_label
-                            )
-                        ),
-                    ),
+                    html.Div(slot_value, className="rs-depth-slot-value"),
                 ],
                 className="rs-depth-slot-row",
             )

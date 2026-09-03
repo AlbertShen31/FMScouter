@@ -13,13 +13,24 @@ from typing import Any
 from scoring.phases import phase_tone
 import config.fm26_role_weight_config as pc
 from config.paths import FORMATIONS_ACTIVE_PATH, FORMATIONS_PACKS_DIR
-from scoring.role_scorer import canonical_role_ref, decode_role_ref, normalize_combos
+from scoring.role_scorer import (
+    FOOT_STRENGTH_NAMES,
+    FootStrength,
+    canonical_role_ref,
+    decode_role_ref,
+    foot_strength_options,
+    normalize_combos,
+)
 
 PACKS_DIR = FORMATIONS_PACKS_DIR
 ACTIVE_PATH = FORMATIONS_ACTIVE_PATH
 
 SCHEMA = 2
 MAX_SLOTS = 11
+
+# Per-slot preferred-foot gates (Profiles depth load). Default = no requirement.
+# When set, value is a min FootStrength 1–6 (as string). Legacy ``required`` → 6.
+FOOT_REQ_NONE = "none"
 
 # Display code → role group used by role_options().
 SLOT_POSITIONS = (
@@ -157,6 +168,57 @@ def auto_slot_labels(ip_positions: list[str | None]) -> list[str]:
     return labels
 
 
+def _normalize_foot_req(value) -> str:
+    """``none`` or min strength ``1``–``6``. Legacy ``required`` → Very strong."""
+    raw = str(value or "").strip().lower()
+    if not raw or raw in ("none", "any", "off", "no", "0", "false"):
+        return FOOT_REQ_NONE
+    if raw in ("required", "req", "yes", "true"):
+        return str(int(FootStrength.VERY_STRONG))
+    try:
+        number = int(float(raw))
+    except (TypeError, ValueError):
+        return FOOT_REQ_NONE
+    if number in FootStrength._value2member_map_:
+        return str(number)
+    return FOOT_REQ_NONE
+
+
+def foot_req_options() -> list[dict[str, str]]:
+    return [
+        {"label": "None", "value": FOOT_REQ_NONE},
+        *foot_strength_options(),
+    ]
+
+
+def foot_req_label(value) -> str:
+    """Full strength name for tooltips (empty when no requirement)."""
+    normalized = _normalize_foot_req(value)
+    if normalized == FOOT_REQ_NONE:
+        return ""
+    try:
+        level = FootStrength(int(normalized))
+    except (TypeError, ValueError):
+        return ""
+    return FOOT_STRENGTH_NAMES.get(level) or str(int(level))
+
+
+def foot_req_short_label(value) -> str:
+    """Compact badge text like ``VS`` (empty when no requirement)."""
+    normalized = _normalize_foot_req(value)
+    if normalized == FOOT_REQ_NONE:
+        return ""
+    abbrev = {
+        str(int(FootStrength.VERY_WEAK)): "VW",
+        str(int(FootStrength.WEAK)): "W",
+        str(int(FootStrength.REASONABLE)): "Rs",
+        str(int(FootStrength.FAIRLY_STRONG)): "FS",
+        str(int(FootStrength.STRONG)): "S",
+        str(int(FootStrength.VERY_STRONG)): "VS",
+    }
+    return abbrev.get(normalized) or normalized
+
+
 def _parse_slot(raw, index: int) -> dict[str, str]:
     payload = raw if isinstance(raw, dict) else {}
     fallback = DEFAULT_SLOT_POSITIONS[index] if 0 <= index < MAX_SLOTS else "cm"
@@ -180,6 +242,16 @@ def _parse_slot(raw, index: int) -> dict[str, str]:
         "oop_pos": oop_pos,
         "ip": ip,
         "oop": oop,
+        "foot_left": _normalize_foot_req(
+            payload.get("foot_left")
+            if "foot_left" in payload
+            else payload.get("req_left_foot")
+        ),
+        "foot_right": _normalize_foot_req(
+            payload.get("foot_right")
+            if "foot_right" in payload
+            else payload.get("req_right_foot")
+        ),
     }
 
 
@@ -233,6 +305,8 @@ def normalize(raw, pack_id: str | None = None, name: str | None = None) -> dict[
             "oop_pos": slot["oop_pos"],
             "ip": slot["ip"],
             "oop": slot["oop"],
+            "foot_left": slot["foot_left"],
+            "foot_right": slot["foot_right"],
         }
         for index, slot in enumerate(parsed)
     ]
