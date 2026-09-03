@@ -89,9 +89,9 @@ def _table_row_key(row) -> str:
     key = str(row.get("id") or row.get("_key") or "").strip()
     if key:
         return key
-    name = str(row.get("Name") or "").strip()
-    club = str(row.get("Club") or "").strip()
-    return f"{name}|{club}" if name else ""
+    from scoring.role_scorer import player_row_key
+
+    return player_row_key(row)
 
 
 def _effective_marked_keys(marked, selected_ids=None, table_data=None) -> list[str]:

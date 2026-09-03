@@ -84,7 +84,7 @@ from components.scouting_shell import (
     unpack_parsed,
     upload_card,
 )
-from scoring.comparison import delta_html, wrap_cell_with_delta
+from scoring.comparison import compare_name_key, delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
     POS_GROUPS,
     adaptive_bound_options,
@@ -660,10 +660,13 @@ def _row_mark_key(row: dict) -> str:
     key = str(row.get("_key") or "").strip()
     if key:
         return key
-    club = str(row.get("Club") or "").strip()
-    if club in ("—", "-"):
-        club = ""
-    return player_row_key({"Name": row.get("Name"), "Club": club})
+    return player_row_key(
+        {
+            "Name": row.get("Name"),
+            "Unique ID": row.get("Unique ID") or row.get("unique_id"),
+            "Club": row.get("Club"),
+        }
+    )
 
 
 def _hidden_key_column() -> dict:
@@ -759,6 +762,7 @@ def _identity_cells(
     row: dict = {
         "Division": _display_blank(player.get("division")),
         "Nation": _display_blank(player.get("nation")),
+        "Unique ID": str(player.get("unique_id") or "").strip(),
     }
     for col in identity_cols:
         getter = getters.get(col)
@@ -906,7 +910,7 @@ def _build_rows(
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
         row["_key"] = pkey
-        hist_map = hist_percentiles.get(pkey) or {}
+        hist_map = hist_percentiles.get(compare_name_key(p)) or {}
         stats = scoring_stats(p)
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
@@ -1609,7 +1613,7 @@ def refresh_table(
             hist_players, thresh, **hist_bound_opts
         )
         for hp in hist_players:
-            pkey = player_key(hp)
+            pkey = compare_name_key(hp)
             if pkey:
                 hist_percentiles[pkey] = _player_percentile_map(
                     hp,

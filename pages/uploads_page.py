@@ -777,6 +777,33 @@ clientside_callback(
 
 clientside_callback(
     """
+    function(deleteClicks) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        var clicks = deleteClicks || [];
+        var any = false;
+        for (var i = 0; i < clicks.length; i++) {
+            if (clicks[i]) { any = true; break; }
+        }
+        if (!any) {
+            return window.dash_clientside.no_update;
+        }
+        var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
+        if (label) {
+            label.textContent = "Deleting…";
+        }
+        return "rs-shortlist-busy is-on t-" + String(Date.now());
+    }
+    """,
+    Output("up-busy", "className", allow_duplicate=True),
+    Input({"type": "up-delete", "id": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+
+clientside_callback(
+    """
     function(_rev) {
         var el = document.getElementById("up-busy");
         if (!el || el.className.indexOf("is-on") === -1) {

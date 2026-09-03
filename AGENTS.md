@@ -96,7 +96,7 @@ Acceptance examples (do not regress without an explicit rule change):
 - Prefer saved exports via upload library / cache over re-parsing huge CSVs in every callback.
 - Precompute on upload / “Compute All” when extending heavy paths; shortlist callbacks should mostly choose columns/filters, not rescore.
 - Historical compare: when a historical export is loaded, comparison is on; don’t leave redundant enable toggles.
-- Player identity across refresh/replace: match primarily by **player name** (clubs change mid-season).
+- Player identity across refresh/replace: match by FM **Unique ID** (with name in the key as ``Name|Unique ID``). Club is display-only; fall back to name (+ club on collisions) only when Unique ID is missing.
 
 ---
 

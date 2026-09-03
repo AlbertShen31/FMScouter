@@ -21,6 +21,13 @@ def players_lookup(
     return out
 
 
+def compare_name_key(player: dict[str, Any]) -> str:
+    """Historical-compare id — same as app-wide ``Name|Unique ID`` identity."""
+    from scoring.role_scorer import player_row_key
+
+    return player_row_key(player)
+
+
 def strip_cell_text(value: Any) -> str:
     text = "" if value is None else str(value)
     if "<" in text:

@@ -178,8 +178,15 @@ def finance_row(player: dict[str, Any]) -> dict[str, Any]:
     position = player.get("position") or player.get("best_pos") or "—"
     best_pos = player.get("best_pos") or ""
     row: dict[str, Any] = {
-        "key": player_row_key({"Name": name, "Club": club}),
+        "key": player_row_key(
+            {
+                "Name": name,
+                "Unique ID": player.get("unique_id"),
+                "Club": club,
+            }
+        ),
         "name": name,
+        "unique_id": str(player.get("unique_id") or "").strip(),
         "club": club,
         "position": position,
         "best_pos": best_pos,
@@ -394,6 +401,7 @@ def load_squad_finance(text: str) -> list[dict[str, Any]]:
         players.append(
             {
                 "name": name,
+                "unique_id": pick(row, IDENTITY.get("UniqueID", ["Unique ID"])),
                 "club": pick(row, IDENTITY["Club"]),
                 "position": pick(row, IDENTITY["Position"]),
                 "best_pos": pick(row, IDENTITY["BestPos"]),

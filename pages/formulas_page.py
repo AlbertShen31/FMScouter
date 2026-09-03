@@ -198,8 +198,8 @@ def _faq_panel() -> html.Div:
             "How does historical compare work?",
             _para(
                 "When a historical export is loaded alongside the current one, Player stats and ",
-                "Role scores show deltas between the two files. Players are matched primarily by name ",
-                "(clubs can change mid-season). Comparison is on whenever a historical file is present.",
+                "Role scores show deltas between the two files. Players are matched by name + Unique ID ",
+                "(stable across club transfers). Comparison is on whenever a historical file is present.",
             ),
         ),
         _faq_item(

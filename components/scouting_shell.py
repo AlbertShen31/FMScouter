@@ -1397,8 +1397,13 @@ def register_marks_callbacks(
                     let id = String(row.id || row._key || "").trim();
                     if (!id) {{
                         const name = String(row.Name || "").trim();
-                        const club = String(row.Club || "").trim();
-                        id = name ? name + "|" + club : "";
+                        const uid = String(row["Unique ID"] || row.unique_id || "").trim();
+                        if (name && uid) {{
+                            id = name + "|" + uid;
+                        }} else {{
+                            const club = String(row.Club || "").trim();
+                            id = name ? name + "|" + club : "";
+                        }}
                     }}
                     if (id && seen.has(id)) {{
                         ids.push(id);
@@ -1433,8 +1438,13 @@ def register_marks_callbacks(
                     let id = String(row.id || row._key || "").trim();
                     if (!id) {{
                         const name = String(row.Name || "").trim();
-                        const club = String(row.Club || "").trim();
-                        id = name ? name + "|" + club : "";
+                        const uid = String(row["Unique ID"] || row.unique_id || "").trim();
+                        if (name && uid) {{
+                            id = name + "|" + uid;
+                        }} else {{
+                            const club = String(row.Club || "").trim();
+                            id = name ? name + "|" + club : "";
+                        }}
                     }}
                     if (id && idSet.has(id)) {{
                         indices.push(i);

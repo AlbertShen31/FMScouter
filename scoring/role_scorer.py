@@ -287,6 +287,7 @@ ABBRS = set(ATTR_MAP.values()) | set(ATTR_MAP.keys())
 
 IDENTITY = {
     "Name": ["Player", "Name"],
+    "UniqueID": ["Unique ID", "UID"],
     "Age": ["Age"],
     "Club": ["Club"],
     "Division": ["Division", "Div"],
@@ -1522,6 +1523,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
         players.append(
             {
                 "name": name,
+                "unique_id": pick(row, IDENTITY["UniqueID"]),
                 "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
@@ -1766,6 +1768,7 @@ def score_players(
     for player in players:
         row = {
             "Name": player["name"],
+            "Unique ID": str(player.get("unique_id") or "").strip(),
             "Age": to_int(player["age"]) if player.get("age") else "-",
             "Club": player["club"] or "-",
             "Division": player["division"] or "-",
@@ -1886,9 +1889,22 @@ PLANNED_SQUAD_IDENTITY = [
 
 
 def player_row_key(row: dict[str, Any]) -> str:
-    name = str(row.get("Name") or "").strip()
-    club = str(row.get("Club") or "").strip()
-    return f"{name}|{club}" if name else ""
+    """Stable player id: ``Name|Unique ID`` (club is display-only).
+
+    Falls back to ``Name|Club`` when Unique ID is missing (older exports).
+    Accepts scored rows (``Name`` / ``Unique ID``) and parsed players
+    (``name`` / ``unique_id``) via the callers that normalize first.
+    """
+    name = str(row.get("Name") or row.get("name") or "").strip()
+    if not name:
+        return ""
+    unique_id = str(row.get("Unique ID") or row.get("unique_id") or "").strip()
+    if unique_id:
+        return f"{name}|{unique_id}"
+    club = str(row.get("Club") or row.get("club") or "").strip()
+    if club in ("-", "—"):
+        club = ""
+    return f"{name}|{club}" if club else name
 
 
 def expand_view_role_columns(

@@ -38,6 +38,7 @@ _SLOT_EXCLUDED_KEY = "_excluded"
 # Identity fields copied from a scored role shortlist row into the snapshot.
 ROLE_IDENTITY_KEYS = (
     "Name",
+    "Unique ID",
     "Age",
     "Club",
     "Division",
@@ -1164,10 +1165,11 @@ def _write_index(entries: list[dict[str, Any]], library_id: str | None = None) -
 
 
 def split_player_key(key: str) -> tuple[str, str]:
+    """Split ``Name|Unique ID`` (or legacy ``Name|Club``) into (name, rest)."""
     text = str(key or "").strip()
     if "|" in text:
-        name, club = text.split("|", 1)
-        return name.strip(), club.strip()
+        name, rest = text.split("|", 1)
+        return name.strip(), rest.strip()
     return text, ""
 
 
@@ -1175,12 +1177,35 @@ def _norm_player_name(value: Any) -> str:
     return str(value or "").strip().casefold()
 
 
+def _profile_unique_id(profile: dict[str, Any]) -> str:
+    row = profile.get("row") or {}
+    uid = str(row.get("Unique ID") or "").strip()
+    if uid:
+        return uid
+    _name, rest = split_player_key(profile.get("player_key") or "")
+    # FM Unique IDs are numeric; legacy keys used club names here.
+    return rest if rest.isdigit() else ""
+
+
+def _index_by_unique_id(
+    items: list[Any],
+    *,
+    uid_of,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for item in items:
+        uid = str(uid_of(item) or "").strip()
+        if uid:
+            out[uid] = item
+    return out
+
+
 def _index_by_player_name(
     items: list[Any],
     *,
     name_of,
 ) -> dict[str, list[Any]]:
-    """Group file rows/players by casefolded name (club transfers keep the same name)."""
+    """Group file rows/players by casefolded name (legacy fallback)."""
     out: dict[str, list[Any]] = {}
     for item in items:
         name = _norm_player_name(name_of(item))
@@ -1208,13 +1233,37 @@ def _pick_name_match(
     return candidates[0]
 
 
+def _match_file_player(
+    profile: dict[str, Any],
+    *,
+    by_uid: dict[str, Any],
+    by_name: dict[str, list[Any]],
+    club_of,
+) -> Any | None:
+    uid = _profile_unique_id(profile)
+    if uid and uid in by_uid:
+        return by_uid[uid]
+    name, club = profile_identity(profile)
+    name_key = _norm_player_name(name)
+    if not name_key:
+        return None
+    return _pick_name_match(
+        by_name.get(name_key) or [],
+        preferred_club=club,
+        club_of=club_of,
+    )
+
+
 def profile_identity(profile: dict[str, Any]) -> tuple[str, str]:
     row = profile.get("row") or {}
     name = str(row.get("Name") or "").strip()
     club = str(row.get("Club") or "").strip()
     if name:
         return name, club
-    return split_player_key(profile.get("player_key") or "")
+    name, rest = split_player_key(profile.get("player_key") or "")
+    if rest.isdigit():
+        return name, club
+    return name, rest or club
 
 
 def profile_upsert_key(entry: dict[str, Any]) -> tuple[str, str]:
@@ -1344,6 +1393,7 @@ def build_stats_row_snapshot(
     identity_cols = us.shortlist_columns_for("player_stats", settings)
     out: dict[str, Any] = {
         "Name": _clean_cell(player.get("name")),
+        "Unique ID": _clean_cell(player.get("unique_id")),
         "Age": player.get("age"),
         "Club": _clean_cell(player.get("club")),
         "Division": _clean_cell(player.get("division")),
@@ -1362,6 +1412,7 @@ def build_stats_row_snapshot(
     # Keep only configured identity columns + core fields.
     keep = set(identity_cols) | {
         "Name",
+        "Unique ID",
         "Club",
         "Minutes",
         "Injured On",
@@ -1373,7 +1424,11 @@ def build_stats_row_snapshot(
         "percentile_phase",
         "percentile_phase_label",
     }
-    out = {k: v for k, v in out.items() if k in keep or k in ("Name", "Club")}
+    out = {
+        k: v
+        for k, v in out.items()
+        if k in keep or k in ("Name", "Unique ID", "Club")
+    }
 
     stats = scoring_stats(player)
     group = resolve_player_pos_group(player)
@@ -1476,9 +1531,21 @@ def expand_role_profile_rows(
         if player_row_key(row)
     }
     role_by_key = {
-        player_row_key({"Name": p.get("name"), "Club": p.get("club")}): p
+        player_row_key(
+            {
+                "Name": p.get("name"),
+                "Unique ID": p.get("unique_id"),
+                "Club": p.get("club"),
+            }
+        ): p
         for p in (role_players or [])
-        if player_row_key({"Name": p.get("name"), "Club": p.get("club")})
+        if player_row_key(
+            {
+                "Name": p.get("name"),
+                "Unique ID": p.get("unique_id"),
+                "Club": p.get("club"),
+            }
+        )
     }
     stats_by_key = {
         stats_player_key(p): p
@@ -1842,8 +1909,9 @@ def replace_profiles_from_saved_file(
 ) -> dict[str, Any]:
     """Replace profile personal info, role scores, and percentiles from a library file.
 
-    Matches existing profiles by player **name** only (club can change mid-season).
-    When several file rows share a name, prefers the profile's current club if present.
+    Matches existing profiles by FM **Unique ID** when present (stable across club
+    transfers). Falls back to player name (+ club when names collide) for older
+    snapshots that lack Unique ID.
     Role profiles keep their ``role_column`` and profile ``id`` (depth/slots stay valid).
     Only profiles actively listed in the library formation's squad depth are updated.
     Players missing from the file are left unchanged and reported under ``missing``.
@@ -1919,6 +1987,18 @@ def replace_profiles_from_saved_file(
     )
     stats_players = load_stats_players_for_file(file_id)
 
+    scored_by_uid = _index_by_unique_id(
+        scored_rows,
+        uid_of=lambda row: row.get("Unique ID"),
+    )
+    role_by_uid = _index_by_unique_id(
+        role_players,
+        uid_of=lambda player: player.get("unique_id"),
+    )
+    stats_by_uid = _index_by_unique_id(
+        stats_players,
+        uid_of=lambda player: player.get("unique_id"),
+    )
     scored_by_name = _index_by_player_name(
         scored_rows,
         name_of=lambda row: row.get("Name"),
@@ -1947,9 +2027,6 @@ def replace_profiles_from_saved_file(
             seen_missing.add(text)
             missing.append(text)
 
-    def _profile_name_club(prof: dict[str, Any]) -> tuple[str, str]:
-        return profile_identity(prof)
-
     for prof in role_entries:
         player_key_value = str(prof.get("player_key") or "").strip()
         role_col = str(
@@ -1957,23 +2034,25 @@ def replace_profiles_from_saved_file(
         ).strip()
         if not player_key_value or not role_col:
             continue
-        name, club = _profile_name_club(prof)
-        name_key = _norm_player_name(name)
-        if not name_key:
+        name, _club = profile_identity(prof)
+        if not _norm_player_name(name) and not _profile_unique_id(prof):
             continue
-        scored = _pick_name_match(
-            scored_by_name.get(name_key) or [],
-            preferred_club=club,
+        scored = _match_file_player(
+            prof,
+            by_uid=scored_by_uid,
+            by_name=scored_by_name,
             club_of=lambda row: row.get("Club"),
         )
-        player = _pick_name_match(
-            role_by_name.get(name_key) or [],
-            preferred_club=club,
+        player = _match_file_player(
+            prof,
+            by_uid=role_by_uid,
+            by_name=role_by_name,
             club_of=lambda p: p.get("club"),
         )
-        stats_player = _pick_name_match(
-            stats_by_name.get(name_key) or [],
-            preferred_club=club,
+        stats_player = _match_file_player(
+            prof,
+            by_uid=stats_by_uid,
+            by_name=stats_by_name,
             club_of=lambda p: p.get("club"),
         )
         if scored is None:
@@ -2014,13 +2093,13 @@ def replace_profiles_from_saved_file(
         player_key_value = str(prof.get("player_key") or "").strip()
         if not player_key_value:
             continue
-        name, club = _profile_name_club(prof)
-        name_key = _norm_player_name(name)
-        if not name_key:
+        name, _club = profile_identity(prof)
+        if not _norm_player_name(name) and not _profile_unique_id(prof):
             continue
-        stats_player = _pick_name_match(
-            stats_by_name.get(name_key) or [],
-            preferred_club=club,
+        stats_player = _match_file_player(
+            prof,
+            by_uid=stats_by_uid,
+            by_name=stats_by_name,
             club_of=lambda p: p.get("club"),
         )
         if stats_player is None:
@@ -2037,9 +2116,10 @@ def replace_profiles_from_saved_file(
                     metric_p0=metric_p0,
                     cohort_players=stats_players,
                 ),
-                "player": _pick_name_match(
-                    role_by_name.get(name_key) or [],
-                    preferred_club=club,
+                "player": _match_file_player(
+                    prof,
+                    by_uid=role_by_uid,
+                    by_name=role_by_name,
                     club_of=lambda p: p.get("club"),
                 ),
                 "stats_player": stats_player,
@@ -2049,8 +2129,8 @@ def replace_profiles_from_saved_file(
 
     if not items:
         raise ValueError(
-            "No squad-depth players matched players in that file by name. "
-            "Renamed players will not match."
+            "No squad-depth players matched players in that file by Unique ID or name. "
+            "Renamed players without Unique ID will not match."
         )
 
     saved_from = "role_scores" if role_entries else "stats"
@@ -2149,7 +2229,7 @@ def save_profile_rows(
                 existing["saved_at"] = now
                 existing["saved_from"] = saved_from
             existing["row"] = row
-            # Keep player_key aligned with the latest Name|Club (club transfers).
+            # Keep player_key aligned with Name|Unique ID (stable across transfers).
             refreshed_key = player_row_key(row)
             if refreshed_key and refreshed_key != existing.get("player_key"):
                 by_key.pop(pair, None)

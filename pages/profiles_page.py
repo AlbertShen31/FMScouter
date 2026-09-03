@@ -124,8 +124,9 @@ PF_NEW_PROFILE_TIP = (
     "Name and formation are required. Formation sets the Squad depth layout for the new library."
 )
 PF_REPLACE_TIP = (
-    "Replaces personal info, role scores, and percentiles for saved profiles that match by player "
-    "name in the file (club changes are fine). Depth ranking and profile ids are kept. Only "
+    "Replaces personal info, role scores, and percentiles for saved profiles that match by "
+    "Unique ID (name is kept in the player key). Club changes are fine. Depth ranking and "
+    "profile ids are kept. Only "
     "files eligible for Player stats are listed. Compute the file on Uploads first when the "
     "label says Stale."
 )
@@ -647,6 +648,13 @@ def _entry_player_key(entry: dict | None) -> str:
     key = str(entry.get("player_key") or "").strip()
     if key:
         return key
+    row = entry.get("row") or {}
+    if isinstance(row, dict):
+        from scoring.role_scorer import player_row_key
+
+        keyed = player_row_key(row)
+        if keyed:
+            return keyed
     name, club = profiles.profile_identity(entry)
     if name:
         return f"{name}|{club}"
@@ -6318,8 +6326,13 @@ def _resolve_stats_player_for_profile(
     stat_players = profiles.load_stats_players_for_file(file_id) if file_id else None
 
     name = (player.get("name") or "").strip()
+    unique_id = str(player.get("unique_id") or "").strip()
     club = (player.get("club") or "").strip()
-    target_key = stats_player_key({"name": name, "club": club}) if name else ""
+    target_key = (
+        stats_player_key({"name": name, "unique_id": unique_id, "club": club})
+        if name
+        else ""
+    )
 
     if stat_players and target_key:
         for sp in stat_players:

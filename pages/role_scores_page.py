@@ -32,7 +32,7 @@ from components.scouting_shell import (
     shortlist_busy_overlay,
     upload_card,
 )
-from scoring.comparison import score_display
+from scoring.comparison import compare_name_key, score_display
 from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
@@ -112,7 +112,7 @@ register_page(__name__, path="/", name="Role scores")
 
 
 def _shortlist_row_key(row: dict) -> str:
-    """Stable row id for selection sync (id field, then Name|Club)."""
+    """Stable row id for selection sync (id field, then Name|Unique ID)."""
     key = str(row.get("id") or row.get("_key") or "").strip()
     if key:
         return key
@@ -454,20 +454,31 @@ def _sort_by_focus(focus_roles) -> list[dict]:
     return [{"column_id": focused[-1], "direction": "desc"}]
 
 
-def _find_scored_row(payload, name: str, club: str) -> dict | None:
+def _find_scored_row(payload, name: str, club: str = "", *, unique_id: str = "") -> dict | None:
     if not isinstance(payload, dict):
         return None
     name = (name or "").strip()
+    unique_id = (unique_id or "").strip()
     club = (club or "").strip()
     club_key = "" if club in ("", "-") else club
+    if unique_id:
+        for row in payload.get("rows") or []:
+            if str(row.get("Unique ID") or "").strip() == unique_id:
+                return row
     for row in payload.get("rows") or []:
         if str(row.get("Name") or "").strip() != name:
+            continue
+        if unique_id and str(row.get("Unique ID") or "").strip():
             continue
         row_club = str(row.get("Club") or "").strip()
         if row_club in ("", "-"):
             row_club = ""
         if row_club == club_key:
             return row
+    if name and not unique_id:
+        for row in payload.get("rows") or []:
+            if str(row.get("Name") or "").strip() == name:
+                return row
     return None
 
 
@@ -2211,8 +2222,9 @@ def open_player_modal(
         return no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
     name = str(row.get("Name") or "").strip()
+    unique_id = str(row.get("Unique ID") or "").strip()
     club = str(row.get("Club") or "").strip()
-    player = find_parsed_player(parsed, name, club)
+    player = find_parsed_player(parsed, name, club, unique_id=unique_id)
     if not player:
         return (
             True,
@@ -2230,7 +2242,7 @@ def open_player_modal(
         (payload or {}).get("combos"),
         hybrids_only,
     )
-    scored = _find_scored_row(payload, name, club)
+    scored = _find_scored_row(payload, name, club, unique_id=unique_id)
     position_eligible = None
     if scored is not None and view_roles:
         position_eligible = _position_eligibility(
@@ -2691,7 +2703,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
             oop_weight=hybrid_w["oop"],
         )
         historical_by_key = {
-            player_row_key(row): row for row in hist_rows if player_row_key(row)
+            compare_name_key(row): row for row in hist_rows if compare_name_key(row)
         }
     labels = combo_score_labels(needed, combos)
     selected = _focus_roles(current_focus)
@@ -3329,7 +3341,9 @@ def render_shortlist(
     limited_divisions = _limited_tracking_divisions(payload)
     for row in filtered:
         row_key = player_row_key(row)
-        hist_row = historical_by_key.get(row_key) if compare else None
+        hist_row = (
+            historical_by_key.get(compare_name_key(row)) if compare else None
+        )
         item = {}
         tip_row: dict[str, str] = {}
         for key in data_cols:
@@ -3359,6 +3373,7 @@ def render_shortlist(
         item["PosEligible"] = row.get("_PosEligible") or "no"
         _attach_division_style_fields(item, row, limited_divisions)
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
+        item["Unique ID"] = str(row.get("Unique ID") or "").strip()
         if row_key:
             item["id"] = row_key
             item["_key"] = row_key

@@ -1132,6 +1132,7 @@ def parse_stats_export_with_meta(
         players.append(
             {
                 "name": name,
+                "unique_id": pick(row, IDENTITY["UniqueID"]),
                 "age": pick(row, IDENTITY["Age"]),
                 "club": pick(row, IDENTITY["Club"]),
                 "division": pick(row, IDENTITY["Division"]),
@@ -1359,7 +1360,13 @@ def overall_average_band(
 
 
 def player_key(player: dict) -> str:
-    return player_row_key({"Name": player.get("name"), "Club": player.get("club")})
+    return player_row_key(
+        {
+            "Name": player.get("name"),
+            "Unique ID": player.get("unique_id"),
+            "Club": player.get("club"),
+        }
+    )
 
 
 def passes_minutes_filter(status: str, wanted: str) -> bool:

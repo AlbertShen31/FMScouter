@@ -34,26 +34,53 @@ import services.ui_settings as us
 from components.attr_columns import attr_grid, attr_group_columns, attr_row
 
 
-def find_parsed_player(parsed, name: str, club: str) -> dict | None:
+def find_parsed_player(
+    parsed,
+    name: str,
+    club: str = "",
+    *,
+    unique_id: str = "",
+) -> dict | None:
     if not parsed or not parsed.get("players"):
         return None
     name = (name or "").strip()
+    unique_id = (unique_id or "").strip()
     club = (club or "").strip()
     club_key = "" if club in ("", "-") else club
+    if unique_id:
+        for player in parsed["players"]:
+            if str(player.get("unique_id") or "").strip() == unique_id:
+                return player
     for player in parsed["players"]:
         if (player.get("name") or "").strip() != name:
+            continue
+        if unique_id and str(player.get("unique_id") or "").strip():
             continue
         player_club = (player.get("club") or "").strip()
         if player_club == club_key or (not player_club and not club_key):
             return player
+    if name and not unique_id:
+        for player in parsed["players"]:
+            if (player.get("name") or "").strip() == name:
+                return player
     return None
 
 
 def find_parsed_player_by_key(parsed, player_key: str) -> dict | None:
+    from scoring.stats_scorer import player_key as stats_player_key
     from services.player_profiles import split_player_key
 
-    name, club = split_player_key(player_key)
-    return find_parsed_player(parsed, name, club)
+    key = str(player_key or "").strip()
+    if not key or not parsed or not parsed.get("players"):
+        return None
+    for player in parsed["players"]:
+        if stats_player_key(player) == key:
+            return player
+    name, rest = split_player_key(key)
+    # New keys: Name|Unique ID. Legacy keys: Name|Club.
+    if rest and rest.isdigit():
+        return find_parsed_player(parsed, name, unique_id=rest)
+    return find_parsed_player(parsed, name, rest)
 
 
 def player_is_gk(player: dict) -> bool:
