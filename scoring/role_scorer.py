@@ -317,6 +317,9 @@ IDENTITY = {
     "Rec": ["Rec.", "Rec"],
     "Inf": ["Inf"],
     "Injury": ["Injury"],
+    "InjuredOn": ["Injured On"],
+    "TimeMissed": ["Time Missed"],
+    "RecurringInjury": ["Recurring Injury"],
     "Squad": ["Squad"],
     "Picked": ["Picked"],
     "HomeGrownStatus": ["Home Grown Status"],
@@ -403,6 +406,8 @@ FINANCE_CSV = {
     "work_permit_required": ["Work Permit Required"],
     "wp_needed": ["WP Needed"],
     "transfer_value": ["Transfer Value"],
+    "transfer_status": ["Transfer Status"],
+    "loan_status": ["Loan Status"],
     "salary": ["Salary"],
     "appearance_fee": ["Appearance Fee"],
     "unused_sub_fee": ["Unused Substitute Fee"],
@@ -672,12 +677,38 @@ def extract_record_fields(row: dict[str, str]) -> dict[str, str]:
     return out
 
 
+_UNSET_STATUS = frozenset({"not set", "no recurring injuries"})
+
+
+def _present_csv_text(value: str, *, drop_unset: bool = False) -> str:
+    text = str(value or "").strip()
+    if text in ("", "-", "—"):
+        return ""
+    if drop_unset and text.casefold() in _UNSET_STATUS:
+        return ""
+    return text
+
+
+def extract_injury_fields(row: dict[str, str]) -> dict[str, str]:
+    """Injured On / Time Missed / Recurring Injury from the export."""
+    return {
+        "injured_on": _present_csv_text(pick(row, IDENTITY["InjuredOn"])),
+        "time_missed": _present_csv_text(pick(row, IDENTITY["TimeMissed"])),
+        "recurring_injury": _present_csv_text(
+            pick(row, IDENTITY["RecurringInjury"]), drop_unset=True
+        ),
+    }
+
+
 def extract_finance_fields(row: dict[str, str]) -> dict[str, str]:
     """Contract, transfer, wage, and release-clause columns when present."""
     out: dict[str, str] = {}
+    status_keys = {"transfer_status", "loan_status"}
     for key, aliases in FINANCE_CSV.items():
-        value = pick(row, aliases)
-        if value not in ("", "-"):
+        value = _present_csv_text(
+            pick(row, aliases), drop_unset=key in status_keys
+        )
+        if value:
             out[key] = value
     return out
 
@@ -1521,6 +1552,7 @@ def parse_export(text: str) -> list[dict[str, Any]]:
                 "rec": pick(row, IDENTITY["Rec"]),
                 "inf": pick(row, IDENTITY["Inf"]),
                 "injury": pick(row, IDENTITY["Injury"]),
+                **extract_injury_fields(row),
                 "squad": pick(row, IDENTITY["Squad"]),
                 "picked": pick(row, IDENTITY["Picked"]),
                 "home_grown_status": pick(row, IDENTITY["HomeGrownStatus"]),
@@ -1747,6 +1779,8 @@ def score_players(
             "Rec": player["rec"] if player["rec"] not in ("", "-") else "-",
             "Inf": player["inf"] or "-",
             "Injury": player["injury"] if player["injury"] not in ("", "-") else "-",
+            "Injured On": player.get("injured_on") or "-",
+            "Time Missed": player.get("time_missed") or "-",
             "Squad": player["squad"] or "-",
             "PosGroups": player.get("pos_groups") or [],
         }
@@ -1814,6 +1848,8 @@ def scored_csv(rows: list[dict[str, Any]], role_labels: list[str]) -> str:
         "Rec",
         "Inf",
         "Injury",
+        "Injured On",
+        "Time Missed",
         "Squad",
         *role_labels,
         *[f"{label} eligible" for label in role_labels],

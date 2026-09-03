@@ -146,6 +146,40 @@ def injury_label(value) -> str:
     return text
 
 
+def _injury_detail(value, *, skip_zero_days: bool = False) -> str:
+    text = injury_label(value)
+    if skip_zero_days and text.casefold() in ("0 days", "0 day"):
+        return ""
+    return text
+
+
+def injury_tooltip_text(
+    injury=None,
+    *,
+    injured_on=None,
+    time_missed=None,
+    row: dict | None = None,
+) -> str:
+    """Injury name plus Injured On / Time Missed when present."""
+    record = row if isinstance(row, dict) else {}
+    label = injury_label(injury if injury is not None else record.get("Injury") or record.get("injury"))
+    if not label:
+        return ""
+    on = _injury_detail(
+        injured_on if injured_on is not None else record.get("Injured On") or record.get("injured_on")
+    )
+    missed = _injury_detail(
+        time_missed if time_missed is not None else record.get("Time Missed") or record.get("time_missed"),
+        skip_zero_days=True,
+    )
+    parts = [label]
+    if on:
+        parts.append(f"Injured on {on}")
+    if missed:
+        parts.append(f"Time missed: {missed}")
+    return " · ".join(parts)
+
+
 def injury_cell(value) -> str:
     """Markdown cell: medical-cross icon, or empty when fit."""
     if not injury_label(value):
@@ -160,9 +194,17 @@ def injury_cell(value) -> str:
     )
 
 
-def injury_tooltip_entry(value) -> dict[str, str]:
+def injury_tooltip_entry(
+    value=None,
+    *,
+    injured_on=None,
+    time_missed=None,
+    row: dict | None = None,
+) -> dict[str, str]:
     """DataTable tooltip_data row fragment for the Injury column."""
-    text = injury_label(value)
+    text = injury_tooltip_text(
+        value, injured_on=injured_on, time_missed=time_missed, row=row
+    )
     return {"Injury": text} if text else {}
 
 

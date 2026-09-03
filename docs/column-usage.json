@@ -2,7 +2,7 @@
   "generated_by": "scripts/audit_column_usage.py",
   "source_snapshot": "config/export_formats/fm26_moneyball_combined_columns.json",
   "column_count_snapshot": 248,
-  "mapped_entry_count": 276,
+  "mapped_entry_count": 281,
   "snapshot_columns_covered": 248,
   "undocumented_in_snapshot": [],
   "aliases_not_in_snapshot": [
@@ -15,6 +15,7 @@
     "Div",
     "Form Int",
     "Hdrs W/90",
+    "Injured On",
     "Injury",
     "Int Apps (Season)",
     "Int Assists",
@@ -23,6 +24,7 @@
     "L",
     "LFoot",
     "Last 5 Games Int",
+    "Loan Status",
     "Name",
     "Nat",
     "Nationality",
@@ -41,6 +43,7 @@
     "RFoot",
     "Rec",
     "Rec.",
+    "Recurring Injury",
     "Red Cards",
     "Rushing Out",
     "SOT/90",
@@ -57,7 +60,9 @@
     "Sprints per 90",
     "Squad",
     "Teamwork",
+    "Time Missed",
     "Top Division Promotion Salary Raise",
+    "Transfer Status",
     "Youth Apps",
     "Youth Goals"
   ],
@@ -1101,6 +1106,22 @@
       "notes": ""
     },
     {
+      "primary_csv": "Loan Status",
+      "csv_aliases": [
+        "Loan Status"
+      ],
+      "category": "finance",
+      "internal_key": "loan_status",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
+      "notes": ""
+    },
+    {
       "primary_csv": "Minimum Fee Release Clause",
       "csv_aliases": [
         "Minimum Fee Release Clause"
@@ -1424,6 +1445,22 @@
         "Uploads"
       ],
       "usage": "Squad finance wage / match-fee calculations",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Transfer Status",
+      "csv_aliases": [
+        "Transfer Status"
+      ],
+      "category": "finance",
+      "internal_key": "transfer_status",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal → Contract & finance",
       "notes": ""
     },
     {
@@ -1789,6 +1826,22 @@
       "notes": ""
     },
     {
+      "primary_csv": "Injured On",
+      "csv_aliases": [
+        "Injured On"
+      ],
+      "category": "identity",
+      "internal_key": "injured_on",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Injury tooltip (shortlist / depth chart)",
+      "notes": ""
+    },
+    {
       "primary_csv": "Injury",
       "csv_aliases": [
         "Injury"
@@ -2138,6 +2191,22 @@
       "notes": ""
     },
     {
+      "primary_csv": "Recurring Injury",
+      "csv_aliases": [
+        "Recurring Injury"
+      ],
+      "category": "identity",
+      "internal_key": "recurring_injury",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Player modal after Injury",
+      "notes": ""
+    },
+    {
       "primary_csv": "Right Foot",
       "csv_aliases": [
         "Right Foot",
@@ -2203,6 +2272,22 @@
         "Uploads"
       ],
       "usage": "Parsed into player dict; shortlist / modal when configured",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Time Missed",
+      "csv_aliases": [
+        "Time Missed"
+      ],
+      "category": "identity",
+      "internal_key": "time_missed",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Injury tooltip (shortlist / depth chart)",
       "notes": ""
     },
     {

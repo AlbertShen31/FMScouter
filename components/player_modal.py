@@ -65,6 +65,8 @@ DISCIPLINE_MODAL_FIELDS = (
 FINANCE_MODAL_ROWS = (
     [
         ("Transfer value", "transfer_value"),
+        ("Transfer status", "transfer_status"),
+        ("Loan status", "loan_status"),
         ("Release clause", "min_release_clause"),
         ("Work permit", "work_permit_required"),
         ("WP needed", "wp_needed"),
@@ -113,6 +115,7 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Rec", "rec"),
                 ("Inf", "inf"),
                 ("Injury", "injury"),
+                ("Recurring injury", "recurring_injury"),
             ],
             [
                 ("Position", "position"),

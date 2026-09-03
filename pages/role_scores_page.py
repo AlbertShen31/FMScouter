@@ -3351,9 +3351,9 @@ def render_shortlist(
                 if key == "Feet":
                     item[key] = feet_cell(row)
                 elif key == "Injury":
-                    raw = row.get(key)
-                    item[key] = injury_cell(raw)
-                    tip_row = injury_tooltip_entry(raw)
+                    injury_raw = row.get(key)
+                    item[key] = injury_cell(injury_raw)
+                    tip_row = injury_tooltip_entry(injury_raw, row=row)
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"

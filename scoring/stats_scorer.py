@@ -14,6 +14,7 @@ from scoring.role_scorer import (
     IDENTITY,
     extract_attrs,
     extract_finance_fields,
+    extract_injury_fields,
     extract_record_fields,
     foot_strength,
     parse_positions,
@@ -1152,6 +1153,7 @@ def parse_stats_export_with_meta(
                 "rec": pick(row, IDENTITY["Rec"]),
                 "inf": pick(row, IDENTITY["Inf"]),
                 "injury": pick(row, IDENTITY["Injury"]),
+                **extract_injury_fields(row),
                 "squad": pick(row, IDENTITY["Squad"]),
                 "picked": pick(row, IDENTITY.get("Picked", ["Picked"])),
                 "home_grown_status": pick(

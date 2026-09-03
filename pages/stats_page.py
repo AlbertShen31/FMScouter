@@ -1659,7 +1659,7 @@ def refresh_table(
     header_tips = _header_tooltips(pos, category, thresh, settings=settings)
     col_ids = [c["id"] for c in cols]
     injury_by_key = {
-        player_key(p): p.get("injury")
+        player_key(p): p
         for p in filtered
         if player_key(p)
     }
@@ -1675,7 +1675,7 @@ def refresh_table(
             item["id"] = key  # DataTable row id (stable across refreshes)
             item["_key"] = key
         table_rows.append(item)
-        tooltip_data.append(injury_tooltip_entry(injury_by_key.get(key)))
+        tooltip_data.append(injury_tooltip_entry(row=injury_by_key.get(key)))
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]
     page_size_i = int(page_size or 50)

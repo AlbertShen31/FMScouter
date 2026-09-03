@@ -60,6 +60,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Height` | `height` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Home Grown Status` | `home_grown_status` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Inf` | `inf` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
+| `Injured On` | `injured_on` | Player stats, Profiles, Role scores, Uploads | Injury tooltip (shortlist / depth chart) |
 | `Injury` | `injury` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Int Apps`, `International Appearances` | `int_apps` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Int Gls`, `International Goals` | `int_gls` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
@@ -81,10 +82,12 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Potential Gold` | `potential_gold` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `Potential Silver` | `potential_silver` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `Rec.`, `Rec` | `rec` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
+| `Recurring Injury` | `recurring_injury` | Player stats, Profiles, Role scores, Uploads | Player modal after Injury |
 | `Right Foot`, `RFoot`, `R` | `right_foot` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Sec. Position`, `Secondary Position`, `Sec Position` | `sec_position` | Player stats, Profiles, Role scores, Uploads | Role eligibility, position groups, shortlist / modal |
 | `Squad` | `squad` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Style` | `style` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
+| `Time Missed` | `time_missed` | Player stats, Profiles, Role scores, Uploads | Injury tooltip (shortlist / depth chart) |
 | `World Reputation` | `world_reputation` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `World Reputation Gold` | `world_reputation_gold` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `World Reputation Silver` | `world_reputation_silver` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
@@ -247,6 +250,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `FFP Contribution` | `ffp_contribution` | Player stats, Profiles, Role scores, Squad finance, Uploads | Displayed on Squad finance; excluded from totals |
 | `Goal Bonus` | `goal_bonus` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Int Cap Bonus` | `int_cap_bonus` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
+| `Loan Status` | `loan_status` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Minimum Fee Release Clause` | `min_release_clause` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Minimum Fee Release Clause (Clubs in a Continental Competition)` | `min_release_clause_continental` | Player stats, Profiles, Role scores, Uploads | Parsed + stored; not shown in UI (granular release clause) — Consider surfacing or dropping if unused long-term |
 | `Minimum Fee Release Clause (Clubs in a Continental Competition) - Expiry Date` | `min_release_clause_continental_expires` | Player stats, Profiles, Role scores, Uploads | Parsed + stored; not shown in UI (granular release clause) — Consider surfacing or dropping if unused long-term |
@@ -267,6 +271,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Shutout Bonus` | `shutout_bonus` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Top Division Promotion Salary raise`, `Top Division Promotion Salary Raise` | `top_division_promotion_salary_raise` | Player stats, Profiles, Role scores, Squad finance, Uploads | Squad finance wage / match-fee calculations |
 | `Top Division Relegation Salary Drop` | `top_division_relegation_salary_drop` | Player stats, Profiles, Role scores, Squad finance, Uploads | Squad finance wage / match-fee calculations |
+| `Transfer Status` | `transfer_status` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Transfer Value` | `transfer_value` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
 | `Unused Substitute Fee` | `unused_sub_fee` | Player stats, Profiles, Role scores, Squad finance, Uploads | Squad finance wage / match-fee calculations |
 | `WP Needed` | `wp_needed` | Player stats, Profiles, Role scores, Uploads | Player modal → Contract & finance |
@@ -363,6 +368,7 @@ Extra CSV header aliases the parsers accept (older exports / custom views):
 - `Div`
 - `Form Int`
 - `Hdrs W/90`
+- `Injured On`
 - `Injury`
 - `Int Apps (Season)`
 - `Int Assists`
@@ -371,6 +377,7 @@ Extra CSV header aliases the parsers accept (older exports / custom views):
 - `L`
 - `LFoot`
 - `Last 5 Games Int`
+- `Loan Status`
 - `Name`
 - `Nat`
 - `Nationality`
@@ -389,12 +396,10 @@ Extra CSV header aliases the parsers accept (older exports / custom views):
 - `RFoot`
 - `Rec`
 - `Rec.`
+- `Recurring Injury`
 - `Red Cards`
 - `Rushing Out`
-- `SOT/90`
-- `Sec Position`
-- `Second Nation`
-- … and 14 more
+- … and 19 more
 
 ## Maintenance
 

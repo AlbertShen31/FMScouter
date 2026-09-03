@@ -51,6 +51,8 @@ ROLE_IDENTITY_KEYS = (
     "Rec",
     "Inf",
     "Injury",
+    "Injured On",
+    "Time Missed",
     "Squad",
 )
 
@@ -1335,6 +1337,8 @@ def build_stats_row_snapshot(
         "Right Foot": _clean_cell(player.get("right_foot")),
         "Rec": _clean_cell(player.get("rec")),
         "Injury": _clean_cell(player.get("injury")),
+        "Injured On": _clean_cell(player.get("injured_on")),
+        "Time Missed": _clean_cell(player.get("time_missed")),
         "Minutes": player.get("minutes"),
     }
     # Keep only configured identity columns + core fields.
@@ -1342,6 +1346,8 @@ def build_stats_row_snapshot(
         "Name",
         "Club",
         "Minutes",
+        "Injured On",
+        "Time Missed",
         "overall",
         "defending",
         "final_third",

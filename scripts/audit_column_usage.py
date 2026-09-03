@@ -142,6 +142,8 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
 FINANCE_MODAL_KEYS = frozenset(
     {
         "transfer_value",
+        "transfer_status",
+        "loan_status",
         "salary",
         "contract_expires",
         "ffp_contribution",
@@ -254,6 +256,10 @@ def _build_entries() -> dict[str, ColumnEntry]:
             usage = "Player identity key across all pages"
         elif ik in {"club", "age"}:
             usage = "Page eligibility gate + identity"
+        elif ik in {"injured_on", "time_missed"}:
+            usage = "Injury tooltip (shortlist / depth chart)"
+        elif ik == "recurring_injury":
+            usage = "Player modal after Injury"
         add(
             f"identity:{ik}",
             csv_names=list(aliases),

@@ -29,6 +29,7 @@ from components.player_table import (
     identity_header_name,
     injury_cell,
     injury_tooltip_entry,
+    injury_tooltip_text,
     is_dark_theme,
     page_size_select_data,
     player_data_table,
@@ -1837,6 +1838,24 @@ def _depth_rec_cell(value, theme=None) -> html.Span:
     return html.Span(text, **props)
 
 
+def _depth_injury_cell(row: dict, player: dict | None = None):
+    player = player if isinstance(player, dict) else {}
+    injury = row.get("Injury") if row.get("Injury") not in (None, "", "-", "—") else player.get("injury")
+    injury_html = injury_cell(injury)
+    if not injury_html:
+        return html.Span("—", className="pf-depth-chart-injury")
+    tip = injury_tooltip_text(
+        injury,
+        injured_on=row.get("Injured On") or player.get("injured_on"),
+        time_missed=row.get("Time Missed") or player.get("time_missed"),
+    )
+    return html.Div(
+        dcc.Markdown(injury_html, dangerously_allow_html=True),
+        className="pf-depth-chart-injury",
+        title=tip or None,
+    )
+
+
 def _depth_role_cell(column: str, theme=None) -> html.Span:
     label = _role_display_label(column)
     if label == "—":
@@ -1967,6 +1986,7 @@ def _depth_chart_player_row(
             className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
         )
     row = entry.get("row") or {}
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
     profile_id = str(entry.get("id") or "").strip()
     if not role_col:
         role_col = str(
@@ -2027,7 +2047,6 @@ def _depth_chart_player_row(
         ),
         **({"data-profile-id": profile_id} if profile_id else {}),
     }
-    injury_html = injury_cell(row.get("Injury"))
     return html.Div(
         [
             html.Div(
@@ -2077,15 +2096,7 @@ def _depth_chart_player_row(
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=div_title),
             _depth_rec_cell(row.get("Rec"), theme=theme),
-            (
-                dcc.Markdown(
-                    injury_html,
-                    dangerously_allow_html=True,
-                    className="pf-depth-chart-injury",
-                )
-                if injury_html and injury_html not in ("—", "-", "")
-                else html.Span("—", className="pf-depth-chart-injury")
-            ),
+            _depth_injury_cell(row, player),
             html.Div(
                 _depth_score_cell(row.get("Score"), settings, theme=theme),
                 className="pf-depth-chart-score",
@@ -2427,7 +2438,6 @@ def _setpiece_chart_player_row(
     div_title = (
         f"{division} — {LIMITED_DIVISION_TITLE}" if limited and division != "—" else division
     )
-    injury_html = injury_cell(row.get("Injury"))
     cells = [
         html.Span(str(index + 1), className="pf-depth-chart-rank"),
         (
@@ -2462,15 +2472,7 @@ def _setpiece_chart_player_row(
             html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
             html.Span(division, className=div_class, title=div_title),
             _depth_rec_cell(row.get("Rec"), theme=theme),
-            (
-                dcc.Markdown(
-                    injury_html,
-                    dangerously_allow_html=True,
-                    className="pf-depth-chart-injury",
-                )
-                if injury_html and injury_html not in ("—", "-", "")
-                else html.Span("—", className="pf-depth-chart-injury")
-            ),
+            _depth_injury_cell(row, player),
             html.Div(
                 _depth_score_cell(score, settings, theme=theme),
                 className="pf-depth-chart-score",
@@ -3270,6 +3272,7 @@ def _entry_to_role_table_row(
     settings = us.normalize(settings)
     identity = _profile_identity_columns("role_scores", settings)
     raw = dict(entry.get("row") or {})
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
     if not raw.get("Role"):
         raw["Role"] = entry.get("role_column") or ""
     role_column = str(raw.get("Role") or entry.get("role_column") or "").strip()
@@ -3326,7 +3329,11 @@ def _entry_to_role_table_row(
     )
     for pct in PCT_COLS:
         item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
-    return item, injury_tooltip_entry(raw.get("Injury"))
+    return item, injury_tooltip_entry(
+        raw.get("Injury") or player.get("injury"),
+        injured_on=raw.get("Injured On") or player.get("injured_on"),
+        time_missed=raw.get("Time Missed") or player.get("time_missed"),
+    )
 
 
 def _empty_slot_table_row(
@@ -6301,6 +6308,11 @@ def _build_profile_modal_body(
             "right_foot",
             "rec",
             "injury",
+            "recurring_injury",
+            "injured_on",
+            "time_missed",
+            "transfer_status",
+            "loan_status",
             "pos_group",
             "limited_division_tracking",
         ):
