@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from dash import dash_table, html
+from dash import dash_table, dcc, html
 import dash_mantine_components as dmc
 
 from scoring.role_scorer import FOOT_STRENGTH_NAMES, FootStrength, foot_strength
@@ -135,6 +135,62 @@ def feet_cell(row: dict) -> str:
         f'{footprint_svg("L", foot_color(left), f"Left foot: {left_label}")}'
         f'{footprint_svg("R", foot_color(right), f"Right foot: {right_label}")}'
         f"</span></div>"
+    )
+
+
+def slot_foot_req_icons(foot_left=None, foot_right=None):
+    """Colored L/R footprints for a formation slot’s min foot gates.
+
+    Returns a Dash Markdown node, or ``None`` when both sides are unrestricted.
+    Required feet use the same strength colors as the Feet column; unset sides
+    render muted so the pair stays readable.
+    """
+    import services.formations as fm
+
+    left = fm.foot_req_strength(foot_left)
+    right = fm.foot_req_strength(foot_right)
+    if left is None and right is None:
+        return None
+
+    def _side(side: str, level: FootStrength | None) -> str:
+        name = "Left" if side == "L" else "Right"
+        if level is None:
+            label = f"{name} foot: no requirement"
+            return (
+                f'<span class="rs-depth-foot is-unset">'
+                f"{footprint_svg(side, _FOOT_UNKNOWN, label)}"
+                f"</span>"
+            )
+        strength = FOOT_STRENGTH_NAMES.get(level, str(int(level)))
+        color = foot_color(level)
+        label = f"{name} foot at least {strength}"
+        return (
+            f'<span class="rs-depth-foot is-required" data-level="{int(level)}">'
+            f"{footprint_svg(side, color, label)}"
+            f'<span class="rs-depth-foot-min" style="color:{color}">{int(level)}</span>'
+            f"</span>"
+        )
+
+    tips = []
+    if left is not None:
+        tips.append(f"Left ≥ {FOOT_STRENGTH_NAMES[left]}")
+    else:
+        tips.append("Left: none")
+    if right is not None:
+        tips.append(f"Right ≥ {FOOT_STRENGTH_NAMES[right]}")
+    else:
+        tips.append("Right: none")
+    tip = " · ".join(tips)
+    html_str = (
+        f'<div class="rs-depth-feet" title="{tip}">'
+        f'<span class="rs-feet">'
+        f"{_side('L', left)}{_side('R', right)}"
+        f"</span></div>"
+    )
+    return dcc.Markdown(
+        html_str,
+        dangerously_allow_html=True,
+        className="rs-depth-foot-req",
     )
 
 

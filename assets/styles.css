@@ -7564,21 +7564,76 @@ body[data-theme="light"] .pf-export-staging-badge {
 
 .pf-page #pf-summary .rs-depth-foot-req {
     flex: 0 0 auto;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--app-muted);
-    border: 1px solid var(--app-line);
-    border-radius: 999px;
-    padding: 1px 7px;
-    line-height: 1.35;
+    margin: 0;
+    padding: 0;
+    line-height: 0;
+}
+
+.pf-page #pf-summary .rs-depth-foot-req p {
+    margin: 0;
+}
+
+.pf-page #pf-summary .rs-depth-feet {
+    display: inline-flex;
+    align-items: center;
+}
+
+.pf-page #pf-summary .rs-depth-feet .rs-feet {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+}
+
+.pf-page #pf-summary .rs-depth-foot {
+    position: relative;
+    display: inline-grid;
+    grid-template-rows: 21px auto;
+    justify-items: center;
+    align-items: center;
+    gap: 1px;
+    line-height: 0;
+    min-height: 21px;
+}
+
+.pf-page #pf-summary .rs-depth-foot .rs-foot-icon {
+    width: 14px;
+    height: 21px;
+    display: block;
+    grid-row: 1;
+}
+
+.pf-page #pf-summary .rs-depth-foot.is-unset {
+    opacity: 0.28;
+}
+
+.pf-page #pf-summary .rs-depth-foot.is-required {
+    opacity: 1;
+}
+
+.pf-page #pf-summary .rs-depth-foot-min {
+    grid-row: 2;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    min-height: 9px;
+}
+
+/* Keep icon row height even when only one side has a strength numeral. */
+.pf-page #pf-summary .rs-depth-foot.is-unset::after {
+    content: "";
+    grid-row: 2;
+    display: block;
+    min-height: 9px;
 }
 
 .pf-page #pf-summary .rs-depth-slot-value {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.35rem;
+    gap: 0.45rem;
     min-width: 0;
 }
 

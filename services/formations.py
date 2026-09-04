@@ -193,30 +193,37 @@ def foot_req_options() -> list[dict[str, str]]:
 
 def foot_req_label(value) -> str:
     """Full strength name for tooltips (empty when no requirement)."""
-    normalized = _normalize_foot_req(value)
-    if normalized == FOOT_REQ_NONE:
-        return ""
-    try:
-        level = FootStrength(int(normalized))
-    except (TypeError, ValueError):
+    level = foot_req_strength(value)
+    if level is None:
         return ""
     return FOOT_STRENGTH_NAMES.get(level) or str(int(level))
 
 
 def foot_req_short_label(value) -> str:
     """Compact badge text like ``VS`` (empty when no requirement)."""
-    normalized = _normalize_foot_req(value)
-    if normalized == FOOT_REQ_NONE:
+    level = foot_req_strength(value)
+    if level is None:
         return ""
     abbrev = {
-        str(int(FootStrength.VERY_WEAK)): "VW",
-        str(int(FootStrength.WEAK)): "W",
-        str(int(FootStrength.REASONABLE)): "Rs",
-        str(int(FootStrength.FAIRLY_STRONG)): "FS",
-        str(int(FootStrength.STRONG)): "S",
-        str(int(FootStrength.VERY_STRONG)): "VS",
+        FootStrength.VERY_WEAK: "VW",
+        FootStrength.WEAK: "W",
+        FootStrength.REASONABLE: "Rs",
+        FootStrength.FAIRLY_STRONG: "FS",
+        FootStrength.STRONG: "S",
+        FootStrength.VERY_STRONG: "VS",
     }
-    return abbrev.get(normalized) or normalized
+    return abbrev.get(level) or str(int(level))
+
+
+def foot_req_strength(value) -> FootStrength | None:
+    """Parse a slot foot gate into a min ``FootStrength``, or ``None`` if none."""
+    normalized = _normalize_foot_req(value)
+    if normalized == FOOT_REQ_NONE:
+        return None
+    try:
+        return FootStrength(int(normalized))
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_slot(raw, index: int) -> dict[str, str]:

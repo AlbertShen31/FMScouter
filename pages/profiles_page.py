@@ -35,6 +35,7 @@ from components.player_table import (
     player_data_table,
     rec_grade_style,
     rec_sort_key,
+    slot_foot_req_icons,
     style_cell,
     style_cell_conditional,
     style_header,
@@ -1509,18 +1510,10 @@ def _profile_depth_card(
         ]
     title_bits = []
     if slot_label:
-        foot_bits = []
-        foot_titles = []
-        left_short = fm.foot_req_short_label((slot or {}).get("foot_left"))
-        right_short = fm.foot_req_short_label((slot or {}).get("foot_right"))
-        left_full = fm.foot_req_label((slot or {}).get("foot_left"))
-        right_full = fm.foot_req_label((slot or {}).get("foot_right"))
-        if left_short:
-            foot_bits.append(f"L≥{left_short}")
-            foot_titles.append(f"Left ≥ {left_full}")
-        if right_short:
-            foot_bits.append(f"R≥{right_short}")
-            foot_titles.append(f"Right ≥ {right_full}")
+        foot_icons = slot_foot_req_icons(
+            (slot or {}).get("foot_left"),
+            (slot or {}).get("foot_right"),
+        )
         slot_value = [
             html.Span(
                 slot_label,
@@ -1539,14 +1532,8 @@ def _profile_depth_card(
                 ),
             )
         ]
-        if foot_bits:
-            slot_value.append(
-                html.Span(
-                    " · ".join(foot_bits),
-                    className="rs-depth-foot-req",
-                    title="; ".join(foot_titles),
-                )
-            )
+        if foot_icons is not None:
+            slot_value.append(foot_icons)
         title_bits.append(
             html.Div(
                 [
