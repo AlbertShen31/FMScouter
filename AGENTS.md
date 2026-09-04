@@ -10,15 +10,21 @@ Also see: `.cursor/rules/theme-styling.mdc` (always-on dark-first CSS).
 
 Dash + dash-mantine-components scouting app for Football Manager exports.
 
-| Area | Location |
-|------|----------|
+| Area | Key files |
+|------|-----------|
 | Entry | `app.py` |
-| Pages | `pages/` — role scores, player stats, profiles, formations, uploads, settings, squad finance, role config, formulas |
-| Shared UI | `components/` — tables, filters, modals, scouting shell, profile save |
-| Scoring | `scoring/` — role scorer, stats scorer, availability, personality, division tiers |
-| Services | `services/` — upload cache, formations, profile libraries, export library, UI settings |
+| Role scores | `pages/role_scores_page.py`, `scoring/role_scorer.py` |
+| Player stats | `pages/stats_page.py`, `scoring/stats_scorer.py`, `components/stats_*.py` |
+| Profiles / depth | `pages/profiles_page.py`, `services/player_profiles.py`, `components/profile_save.py` |
+| Formations | `pages/formations_page.py`, `services/formations.py`, `config/formations/` |
+| Uploads / cache | `pages/uploads_page.py`, `services/upload_cache.py`, `services/export_library.py` |
+| Settings / UI prefs | `pages/settings_page.py`, `services/ui_settings.py` |
+| Squad finance | `pages/squad_finance_page.py`, `scoring/squad_finance.py` |
+| Role config / formulas | `pages/role_config_page.py`, `pages/formulas_page.py`, `services/role_config.py` |
+| Shared UI | `components/player_table.py`, `player_filters.py`, `player_modal.py`, `scouting_shell.py` |
+| Scoring extras | `scoring/stats_availability.py`, personality, division tiers |
 | Config | `config/` — role weights, formations, stats thresholds, availability, paths |
-| Column / metric map | `docs/column-usage.md` (+ `docs/column-usage.json`); regenerate with `python scripts/audit_column_usage.py` |
+| Column / metric map | Prefer `docs/column-usage.json` (grep); `docs/column-usage.md` is human. Regenerate: `python scripts/audit_column_usage.py` |
 | Styles | `assets/styles.css` — theme tokens (`--app-bg`, `--app-card`, `--app-text`, …) |
 | Profile data | `data/profiles/packs/<id>/` (`meta.json`, `index.json`, `slot_depth.json`) + `data/profiles/active.json` |
 
@@ -32,6 +38,7 @@ Prefer editing existing shared components over duplicating page-local table/moda
 - **Front-load decisions** in the first implementation pass (storage shape, UX toggles, acceptance checks). Avoid build-then-reverse.
 - **Batch UI polish** into one pass after behavior works (widths, centering, labels, dark+light). Do not drip layout nits across many turns unless blocked.
 - **Do not scan the whole repo** for “anything that could be a setting.” Propose settings only when values already differ across pages or the user asked.
+- **Never fully read mega-files.** Grep first; then read ±50–100 lines around the hit. Especially: `pages/profiles_page.py` (~7k), `pages/role_scores_page.py` (~3.5k), `pages/stats_page.py`, `services/player_profiles.py`, `scoring/role_scorer.py`, `components/scouting_shell.py`, `components/player_table.py`.
 - Prefer small, targeted reads/greps over loading entire large page files when fixing a narrow bug.
 - Paste / cite the failing Dash callback id and error text; avoid dumping whole terminal logs unless asked.
 
@@ -109,7 +116,8 @@ Acceptance examples (do not regress without an explicit rule change):
 - Do not attach or re-read entire external HTML/CSV guides when a short extracted rule list suffices.
 
 ## Output style
-- Code changes: unified diffs / minimal patches. No full-file rewrites unless asked.
+
+- Edit in place with small hunks. Do not paste full files or long diffs in chat unless asked.
 - No preamble. No “here’s what I did” recap.
 - Research / “what/where/why” answers: ≤10 lines unless I ask for depth.
 - Bugs / regressions: still short, but include the failing id/error and the root cause.
