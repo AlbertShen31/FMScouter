@@ -169,7 +169,10 @@ def auto_slot_labels(ip_positions: list[str | None]) -> list[str]:
 
 
 def _normalize_foot_req(value) -> str:
-    """``none`` or min strength ``1``–``6``. Legacy ``required`` → Very strong."""
+    """``none`` or min strength ``2``–``6``. Legacy ``required`` → Very strong.
+
+    Very weak (1) is treated as ``none`` — every footed player already meets it.
+    """
     raw = str(value or "").strip().lower()
     if not raw or raw in ("none", "any", "off", "no", "0", "false"):
         return FOOT_REQ_NONE
@@ -179,15 +182,22 @@ def _normalize_foot_req(value) -> str:
         number = int(float(raw))
     except (TypeError, ValueError):
         return FOOT_REQ_NONE
+    if number == int(FootStrength.VERY_WEAK):
+        return FOOT_REQ_NONE
     if number in FootStrength._value2member_map_:
         return str(number)
     return FOOT_REQ_NONE
 
 
 def foot_req_options() -> list[dict[str, str]]:
+    """Dropdown choices for slot foot gates (excludes Very weak — redundant with None)."""
     return [
         {"label": "None", "value": FOOT_REQ_NONE},
-        *foot_strength_options(),
+        *[
+            opt
+            for opt in foot_strength_options()
+            if opt["value"] != str(int(FootStrength.VERY_WEAK))
+        ],
     ]
 
 

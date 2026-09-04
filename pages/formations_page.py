@@ -21,7 +21,7 @@ FM_HYBRID_SLOTS_TIP = (
     "IP position is required. Leave OOP position blank to use the IP position for both role lists. "
     "Roles that span position buckets (e.g. Wing Back as FB or WB) appear once per bucket in the "
     "role lists; the slot position picks the default bucket. Left/right foot picks a minimum "
-    "strength (Very weak–Very strong); leave as None for no gate."
+    "strength (Weak–Very strong); leave as None for no gate."
 )
 
 POS_OPTIONS = fm.position_options()

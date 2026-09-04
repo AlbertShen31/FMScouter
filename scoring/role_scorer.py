@@ -1708,7 +1708,8 @@ def slot_foot_match(
     """True when a player satisfies optional formation-slot left/right foot gates.
 
     Each side is independent. Values are ``none`` / empty (no gate) or a minimum
-    FootStrength ``1``–``6``. Legacy ``required`` maps to Very strong.
+    FootStrength ``2``–``6``. Very weak (1) is treated as no gate. Legacy
+    ``required`` maps to Very strong.
     Missing foot data fails a gated side.
 
     ``thresholds`` is accepted for call-site compatibility but ignored — mins are
@@ -1726,6 +1727,8 @@ def slot_foot_match(
         try:
             number = int(float(text))
         except (TypeError, ValueError):
+            return None
+        if number == int(FootStrength.VERY_WEAK):
             return None
         if number in FootStrength._value2member_map_:
             return FootStrength(number)
