@@ -1413,7 +1413,7 @@ def render_statement(
             "upload (same starters and subs)."
         )
     note = html.Div(
-        *help_icon(note_tip, "sf-help-statement-note"),
+        help_icon(note_tip, "sf-help-statement-note"),
         className="sf-note-row",
     )
     children: list = [
