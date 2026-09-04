@@ -107,3 +107,9 @@ Acceptance examples (do not regress without an explicit rule change):
 - Do not expand scope into refactors, new settings pages, or drive-by cleanup unrelated to the ask.
 - Do not reintroduce removed features (e.g. custom formation slot-name editor, shortlist column settings UI) unless requested again.
 - Do not attach or re-read entire external HTML/CSV guides when a short extracted rule list suffices.
+
+## Output style
+- Code changes: unified diffs / minimal patches. No full-file rewrites unless asked.
+- No preamble. No “here’s what I did” recap.
+- Research / “what/where/why” answers: ≤10 lines unless I ask for depth.
+- Bugs / regressions: still short, but include the failing id/error and the root cause.
