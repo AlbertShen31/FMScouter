@@ -28,6 +28,7 @@ from components.player_table import (
     identity_data_styles,
     identity_header_name,
     injury_cell,
+    injury_icon_element,
     injury_tooltip_entry,
     injury_tooltip_text,
     is_dark_theme,
@@ -1922,18 +1923,17 @@ def _depth_rec_cell(value, theme=None) -> html.Span:
 def _depth_injury_cell(row: dict, player: dict | None = None):
     player = player if isinstance(player, dict) else {}
     injury = row.get("Injury") if row.get("Injury") not in (None, "", "-", "—") else player.get("injury")
-    injury_html = injury_cell(injury)
-    if not injury_html:
-        return html.Span("—", className="pf-depth-chart-injury")
     tip = injury_tooltip_text(
         injury,
         injured_on=row.get("Injured On") or player.get("injured_on"),
         time_missed=row.get("Time Missed") or player.get("time_missed"),
     )
+    if not tip:
+        return html.Span("—", className="pf-depth-chart-injury")
     return html.Div(
-        dcc.Markdown(injury_html, dangerously_allow_html=True),
+        injury_icon_element(),
         className="pf-depth-chart-injury",
-        title=tip or None,
+        title=tip,
     )
 
 

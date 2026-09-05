@@ -237,16 +237,26 @@ def injury_tooltip_text(
 
 
 def injury_cell(value) -> str:
-    """Markdown cell: medical-cross icon, or empty when fit."""
+    """Markdown cell: medical-cross icon, or empty when fit.
+
+    Uses a CSS-drawn cross (``.rs-injury-icon``) instead of inline ``<svg>``.
+    ``dcc.Markdown`` strips ``<svg>`` and leaves bare ``<rect>`` nodes at 0×0.
+    """
     if not injury_label(value):
         return ""
     return (
         '<span class="rs-injury-cell">'
-        '<svg class="rs-injury-icon" viewBox="0 0 24 24" width="16" height="16" '
-        'role="img" aria-hidden="true">'
-        '<rect x="10" y="4" width="4" height="16" rx="0.75" fill="currentColor"/>'
-        '<rect x="4" y="10" width="16" height="4" rx="0.75" fill="currentColor"/>'
-        "</svg></span>"
+        '<span class="rs-injury-icon" aria-hidden="true"></span>'
+        "</span>"
+    )
+
+
+def injury_icon_element(*, title: str | None = None):
+    """Dash node for depth / set-piece charts (no Markdown)."""
+    return html.Span(
+        html.Span(className="rs-injury-icon", **{"aria-hidden": "true"}),
+        className="rs-injury-cell",
+        title=title or None,
     )
 
 
@@ -466,8 +476,30 @@ def _feet_css() -> list[dict]:
         {
             "selector": ".rs-injury-icon",
             "rule": (
-                "display: block !important; color: #fbbf24; "
-                "flex-shrink: 0;"
+                "display: block !important; position: relative !important; "
+                "width: 16px !important; height: 16px !important; "
+                "flex-shrink: 0; color: #fbbf24;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-icon::before, .rs-injury-icon::after",
+            "rule": (
+                'content: "" !important; position: absolute !important; '
+                "background: currentColor !important; border-radius: 0.75px !important;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-icon::before",
+            "rule": (
+                "left: 6px !important; top: 2px !important; "
+                "width: 4px !important; height: 12px !important;"
+            ),
+        },
+        {
+            "selector": ".rs-injury-icon::after",
+            "rule": (
+                "left: 2px !important; top: 6px !important; "
+                "width: 12px !important; height: 4px !important;"
             ),
         },
     ]

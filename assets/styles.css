@@ -2198,17 +2198,40 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     cursor: help;
 }
 
-.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon,
-#st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon {
-    display: block !important;
+/* CSS cross — Markdown strips inline <svg>, leaving 0×0 <rect> nodes. */
+.rs-injury-icon {
+    display: block;
+    position: relative;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
     color: #fbbf24;
 }
 
-html[data-theme="light"] .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon,
-body[data-theme="light"] .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon,
-html[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon,
-body[data-theme="light"] #st-table .dash-spreadsheet-inner td[data-dash-column="Injury"] .rs-injury-icon {
+.rs-injury-icon::before,
+.rs-injury-icon::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+    border-radius: 0.75px;
+}
+
+.rs-injury-icon::before {
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 12px;
+}
+
+.rs-injury-icon::after {
+    left: 2px;
+    top: 6px;
+    width: 12px;
+    height: 4px;
+}
+
+html[data-theme="light"] .rs-injury-icon,
+body[data-theme="light"] .rs-injury-icon {
     color: #b45309;
 }
 
@@ -9072,6 +9095,30 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
     justify-self: center;
     font-variant-numeric: tabular-nums;
     font-size: 0.92rem;
+}
+
+/* Injury icon uses fill="currentColor"; table shells set color, depth chart must too. */
+.pf-depth-chart-row .pf-depth-chart-injury,
+.pf-setpiece-chart-row .pf-depth-chart-injury {
+    line-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-depth-chart-row .pf-depth-chart-injury p,
+.pf-setpiece-chart-row .pf-depth-chart-injury p {
+    margin: 0 !important;
+    line-height: 0;
+}
+
+.pf-depth-chart-row .pf-depth-chart-injury .rs-injury-cell,
+.pf-setpiece-chart-row .pf-depth-chart-injury .rs-injury-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    cursor: help;
 }
 
 .pf-depth-chart-pos {
