@@ -1931,9 +1931,17 @@ def _depth_injury_cell(row: dict, player: dict | None = None):
     if not tip:
         return html.Span("—", className="pf-depth-chart-injury")
     return html.Div(
-        injury_icon_element(),
+        dmc.Tooltip(
+            injury_icon_element(title=tip),
+            label=tip,
+            withArrow=True,
+            position="top",
+            openDelay=200,
+            multiline=True,
+            maw=280,
+            withinPortal=True,
+        ),
         className="pf-depth-chart-injury",
-        title=tip,
     )
 
 
