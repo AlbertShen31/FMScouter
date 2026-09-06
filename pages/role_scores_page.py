@@ -79,7 +79,11 @@ from components.profile_save import (
     register_profile_save_callbacks,
     register_role_profile_save_callbacks,
 )
-from components.player_detail import find_parsed_player, role_player_detail_card
+from components.player_detail import (
+    find_parsed_player,
+    resolve_stats_player_for_file,
+    scout_player_modal_body,
+)
 from components.player_modal import player_modal
 from components.player_table import (
     IDENTITY_LEFT_COLS,
@@ -897,6 +901,7 @@ def layout():
         dcc.Store(id="rs-hydrated", data=False),
         dcc.Store(id="rs-persist-boot"),
         dcc.Store(id="rs-role-mode-prev", data=None),
+        dcc.Store(id="rs-player-key", data=None),
         dcc.Interval(id="rs-hydrate-tick", interval=50, max_intervals=1),
         player_modal(prefix="rs"),
         pattern_matching_stubs(
@@ -1354,6 +1359,42 @@ TABLE_MARKDOWN_COLS = {"Feet", "Injury"}
 def _limited_tracking_divisions(payload: dict | None) -> set[str]:
     file_id = str((payload or {}).get("file_id") or "").strip()
     return set(lib.list_limited_tracking_divisions(file_id=file_id or None))
+
+
+def _upload_has_stats(parsed: dict | None) -> bool:
+    file_id = str((parsed or {}).get("file_id") or "").strip()
+    if not file_id:
+        return False
+    entry = lib.get_file(file_id)
+    return bool(entry and entry.get("stats"))
+
+
+def _build_role_modal_body(
+    player: dict,
+    parsed: dict | None,
+    payload: dict | None,
+    settings: dict,
+    theme: str | None,
+    *,
+    mode: str = "roles",
+    position_eligible: str | None = None,
+) -> html.Div:
+    file_id = str((parsed or {}).get("file_id") or "").strip()
+    stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
+    return scout_player_modal_body(
+        player,
+        settings,
+        mode=mode,
+        file_id=file_id,
+        position_eligible=position_eligible,
+        theme=theme,
+        limited_divisions=_limited_tracking_divisions(payload),
+        id_prefix="rs",
+        modal_mode_id="rs-modal-bottom-mode",
+        stats_player=stats_player,
+        stats_cohort=stats_cohort,
+        upload_has_stats=_upload_has_stats(parsed),
+    )
 
 
 def _attach_division_style_fields(
@@ -2176,6 +2217,7 @@ def reveal_workflow(parsed, payload):
     Output("rs-player-modal-title", "children"),
     Output("rs-player-modal-body", "children"),
     Output("rs-table", "active_cell"),
+    Output("rs-player-key", "data"),
     Input("rs-table", "active_cell"),
     Input("rs-player-modal-close", "n_clicks"),
     Input("rs-player-modal", "is_open"),
@@ -2205,21 +2247,21 @@ def open_player_modal(
     if ctx.triggered_id == "rs-player-modal":
         # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
         if not is_open:
-            return False, no_update, no_update, None
-        return no_update, no_update, no_update, no_update
+            return False, no_update, no_update, None, None
+        return no_update, no_update, no_update, no_update, no_update
     if ctx.triggered_id == "rs-player-modal-close":
-        return False, no_update, no_update, None
+        return False, no_update, no_update, None, None
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     row_idx = active_cell.get("row")
     if not isinstance(viewport, list) or row_idx is None:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     try:
         row_idx = int(row_idx)
     except (TypeError, ValueError):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     if row_idx < 0 or row_idx >= len(viewport):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
     name = str(row.get("Name") or "").strip()
     unique_id = str(row.get("Unique ID") or "").strip()
@@ -2233,6 +2275,7 @@ def open_player_modal(
                 "Could not load full player details from the saved CSV.",
                 className="rs-player-missing",
             ),
+            None,
             None,
         )
     if pack_id:
@@ -2251,17 +2294,57 @@ def open_player_modal(
             (payload or {}).get("combos"),
         )
     title = player.get("name") or name or "Player"
+    settings = us.normalize(settings)
+    player_key = {
+        "name": name,
+        "unique_id": unique_id,
+        "club": club,
+        "position_eligible": position_eligible,
+    }
     return (
         True,
         title,
-        role_player_detail_card(
+        _build_role_modal_body(
             player,
+            parsed,
+            payload,
             settings,
+            theme,
             position_eligible=position_eligible,
-            theme=theme,
-            limited_divisions=_limited_tracking_divisions(payload),
         ),
         None,
+        player_key,
+    )
+
+
+@callback(
+    Output("rs-player-modal-body", "children", allow_duplicate=True),
+    Input("rs-modal-bottom-mode", "value"),
+    State("rs-player-key", "data"),
+    State("rs-parsed", "data"),
+    State("rs-rows", "data"),
+    State("ui-settings", "data"),
+    State("theme", "data"),
+    prevent_initial_call=True,
+)
+def switch_role_modal_bottom(mode, player_key, parsed, payload, settings, theme):
+    if not player_key:
+        return no_update
+    name = str(player_key.get("name") or "").strip()
+    unique_id = str(player_key.get("unique_id") or "").strip()
+    club = str(player_key.get("club") or "").strip()
+    player = find_parsed_player(parsed, name, club, unique_id=unique_id)
+    if not player:
+        return no_update
+    settings = us.normalize(settings)
+    return _build_role_modal_body(
+        player,
+        parsed,
+        payload,
+        settings,
+        theme,
+        mode=mode or "roles",
+        position_eligible=player_key.get("position_eligible"),
     )
 
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 import re
 
 from dash import html
+import dash_mantine_components as dmc
 
 from components.player_modal import player_detail_body
+from components.stats_player_pane import stats_charts_bottom_pane
 from scoring.role_scorer import (
     ELIGIBILITY_FULL,
     ELIGIBILITY_PARTIAL,
@@ -335,18 +337,186 @@ def role_player_detail_card(
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> html.Div:
-    settings = us.normalize(settings)
-    bottom_sections = [
-        player_role_fit_section(player, settings),
-        player_set_piece_scores_section(player, settings),
-        player_attributes(player, settings),
-    ]
-    return player_detail_body(
+    return scout_player_modal_body(
         player,
-        id_prefix="rs",
+        settings,
         position_eligible=position_eligible,
-        modal_fields=us.modal_identity_fields_for("role_scores", settings),
-        bottom=[section for section in bottom_sections if section is not None],
+        theme=theme,
+        limited_divisions=limited_divisions,
+    )
+
+
+def resolve_stats_player_for_file(
+    file_id: str, player: dict
+) -> tuple[dict | None, list[dict] | None]:
+    """Return (stats player, cohort) for a saved upload when stats are available."""
+    from scoring.stats_scorer import player_key as stats_player_key
+    from services.player_profiles import load_stats_players_for_file
+
+    stat_players = load_stats_players_for_file(file_id) if file_id else None
+    name = (player.get("name") or "").strip()
+    unique_id = str(player.get("unique_id") or "").strip()
+    club = (player.get("club") or "").strip()
+    target_key = (
+        stats_player_key({"name": name, "unique_id": unique_id, "club": club})
+        if name
+        else ""
+    )
+    if stat_players and target_key:
+        for sp in stat_players:
+            if stats_player_key(sp) == target_key:
+                return sp, stat_players
+    return None, stat_players
+
+
+def _enrich_stats_player(stats_player: dict | None, player: dict) -> dict | None:
+    if not isinstance(stats_player, dict):
+        return None
+    from scoring.stats_scorer import resolve_player_pos_group
+
+    stats_player = dict(stats_player)
+    for key in ("best_pos", "position", "position_role", "name", "club", "positions"):
+        if not stats_player.get(key) and player.get(key):
+            stats_player[key] = player.get(key)
+    stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+    return stats_player
+
+
+def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
+    display_player = dict(display_player)
+    for key in (
+        "minutes",
+        "age",
+        "club",
+        "division",
+        "nation",
+        "position",
+        "best_pos",
+        "height",
+        "left_foot",
+        "right_foot",
+        "rec",
+        "injury",
+        "recurring_injury",
+        "injured_on",
+        "time_missed",
+        "transfer_status",
+        "loan_status",
+        "pos_group",
+        "limited_division_tracking",
+    ):
+        if display_player.get(key) in (None, "", [], {}):
+            display_player[key] = stats_player.get(key)
+    return display_player
+
+
+def scout_player_modal_body(
+    player: dict,
+    settings=None,
+    *,
+    mode: str = "roles",
+    file_id: str = "",
+    position_eligible: str | None = None,
+    theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    id_prefix: str = "rs",
+    modal_mode_id: str | None = None,
+    stats_player: dict | None = None,
+    stats_cohort: list[dict] | None = None,
+    upload_has_stats: bool = False,
+) -> html.Div:
+    """Role-scores modal body with optional stats pane (Profiles-style toggle)."""
+    settings = us.normalize(settings)
+    upload_has_stats = bool(upload_has_stats)
+    if stats_player is None and file_id:
+        stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
+    stats_player = _enrich_stats_player(stats_player, player)
+    if not upload_has_stats and not stats_player:
+        bottom_sections = [
+            player_role_fit_section(player, settings),
+            player_set_piece_scores_section(player, settings),
+            player_attributes(player, settings),
+        ]
+        return player_detail_body(
+            player,
+            id_prefix=id_prefix,
+            position_eligible=position_eligible,
+            modal_fields=us.modal_identity_fields_for("role_scores", settings),
+            bottom=[section for section in bottom_sections if section is not None],
+            settings=settings,
+            theme=theme,
+            limited_divisions=limited_divisions,
+        )
+
+    display_player = _merge_stats_identity(player, stats_player) if stats_player else dict(player)
+    field_status = minutes_status(
+        display_player.get("minutes"), us.default_minutes_required(settings)
+    )
+    field_styles = {
+        "minutes": {"color": minutes_color(field_status)},
+        "injury": {"color": "#fbbf24", "fontWeight": "600"},
+    }
+    after_identity: list = []
+    if upload_has_stats:
+        after_identity.append(
+            dmc.SegmentedControl(
+                id=modal_mode_id or f"{id_prefix}-modal-bottom-mode",
+                size="sm",
+                value=mode or "roles",
+                data=[
+                    {"label": "Role scores", "value": "roles"},
+                    {"label": "Player stats", "value": "stats"},
+                ],
+            )
+        )
+
+    if (mode or "roles") == "roles":
+        bottom = [
+            section
+            for section in (
+                player_role_fit_section(display_player, settings),
+                player_set_piece_scores_section(display_player, settings),
+                player_attributes(display_player, settings),
+            )
+            if section is not None
+        ]
+        modal_fields = us.modal_identity_fields_for("role_scores", settings)
+        field_formatters = None
+    else:
+        if stats_player:
+            stats_content = stats_charts_bottom_pane(
+                stats_player,
+                theme=theme,
+                view="bars",
+                threshold_overrides=settings.get("stats_thresholds"),
+                settings=settings,
+                cohort_players=stats_cohort,
+            )
+            set_piece_metrics = player_set_piece_metrics_section(stats_player)
+        else:
+            stats_content = html.P(
+                "Player stats not available for this player. The export includes "
+                "stats columns, but this row could not be matched. Try "
+                "recomputing the library cache on the Uploads page.",
+                className="text-muted small",
+            )
+            set_piece_metrics = None
+        bottom = []
+        if set_piece_metrics:
+            bottom.append(set_piece_metrics)
+        bottom.append(player_stats_modal_section(stats_content))
+        modal_fields = us.modal_identity_fields_for("player_stats", settings)
+        field_formatters = {"minutes": _format_minutes_identity}
+
+    return player_detail_body(
+        display_player,
+        id_prefix=id_prefix,
+        position_eligible=position_eligible,
+        modal_fields=modal_fields,
+        field_styles=field_styles if (mode or "roles") != "roles" else None,
+        field_formatters=field_formatters,
+        after_identity=after_identity or None,
+        bottom=bottom,
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
