@@ -54,6 +54,7 @@ MANTINE_THEME = {
 app = dash.Dash(
     __name__,
     use_pages=True,
+    update_title=False,
     suppress_callback_exceptions=True,
     external_stylesheets=[
         dbc.themes.BOOTSTRAP,
