@@ -1221,14 +1221,24 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 }
 
 .rs-filter-score .rs-min-score-fields {
-    display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
-    gap: 10px;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
 }
 
 .rs-min-score-mode-wrap {
+    display: grid;
+    grid-template-columns: minmax(72px, 0.75fr) minmax(0, 1.25fr);
+    gap: 8px;
     min-width: 0;
+}
+
+.rs-min-score-quantifier .mantine-SegmentedControl-label,
+.rs-min-score-scope .mantine-SegmentedControl-label {
+    font-size: 0.72rem;
+    padding-left: 6px;
+    padding-right: 6px;
 }
 
 .rs-filter-hybrids {
@@ -1312,7 +1322,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
         flex-wrap: wrap;
     }
 
-    .rs-filter-score .rs-min-score-fields {
+    .rs-min-score-mode-wrap {
         grid-template-columns: 1fr;
     }
 

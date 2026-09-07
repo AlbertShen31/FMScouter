@@ -178,7 +178,8 @@ PERSIST_DEFAULTS = {
     "search": "",
     "max_age": "99",
     "min_score": None,
-    "min_score_mode": "all",
+    "min_score_quantifier": "all",
+    "min_score_scope": "all",
     "pos_filter": "all",
     "foot_filter": "",
     "phase": "all",
@@ -186,6 +187,33 @@ PERSIST_DEFAULTS = {
     "page_size": None,
     "set_piece_min_score": None,
 }
+
+MIN_SCORE_QUANTIFIERS = frozenset({"all", "any"})
+MIN_SCORE_SCOPES = frozenset({"all", "hybrid", "ip", "oop"})
+
+
+def _normalize_min_score_quantifier(value) -> str:
+    text = str(value or "all").strip().lower()
+    return text if text in MIN_SCORE_QUANTIFIERS else "all"
+
+
+def _normalize_min_score_scope(value) -> str:
+    text = str(value or "all").strip().lower()
+    return text if text in MIN_SCORE_SCOPES else "all"
+
+
+def _migrate_min_score_persist(persist: dict | None) -> tuple[str, str]:
+    """Map legacy min_score_mode or new quantifier/scope fields."""
+    p = persist or {}
+    if "min_score_quantifier" in p or "min_score_scope" in p:
+        return (
+            _normalize_min_score_quantifier(p.get("min_score_quantifier")),
+            _normalize_min_score_scope(p.get("min_score_scope")),
+        )
+    legacy = str(p.get("min_score_mode") or "all").strip().lower()
+    if legacy == "any":
+        return "any", "all"
+    return "all", "all"
 
 
 def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bool:
@@ -215,7 +243,8 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
                 return True
         except (TypeError, ValueError):
             return True
-    if (p.get("min_score_mode") or "all") != "all":
+    min_q, min_s = _migrate_min_score_persist(p)
+    if min_q != "all" or min_s != "all":
         return True
     if (p.get("pos_filter") or "all") != "all":
         return True
@@ -582,7 +611,8 @@ def _set_piece_panel(settings=None) -> html.Details:
                     ),
                     *_help_icon(
                         "Check a type to add its computed score column to the table. "
-                        "Min score filters out anyone below that on every checked type.",
+                        "Min score uses the shortlist quantifier and scope controls "
+                        "(every vs at least one; all, hybrid, IP, or OOP roles).",
                         "rs-help-metrics",
                     ),
                 ],
@@ -1176,8 +1206,12 @@ def layout():
                                                 _field_label(
                                                     "Min score",
                                                     tip=(
-                                                        "Uses scored roles from section 2, or the "
-                                                        "roles focused in squad depth. Leave blank for any."
+                                                        "Uses scored roles from section 2, or roles "
+                                                        "focused in squad depth. Every = all columns in "
+                                                        "the chosen scope must clear the floor; ≥1 = at "
+                                                        "least one. IP/OOP scope includes hybrid parts "
+                                                        "even when part columns are hidden. Leave blank "
+                                                        "for any."
                                                     ),
                                                     help_id="rs-help-min-score",
                                                 ),
@@ -1192,24 +1226,56 @@ def layout():
                                                             decimalScale=1,
                                                             value=settings["bands"]["ok"],
                                                         ),
-                                                        dmc.Select(
-                                                            id="rs-min-score-mode",
-                                                            data=[
-                                                                {
-                                                                    "label": "Every role",
-                                                                    "value": "all",
-                                                                },
-                                                                {
-                                                                    "label": (
-                                                                        "At least one role"
+                                                        html.Div(
+                                                            [
+                                                                dmc.SegmentedControl(
+                                                                    id="rs-min-score-quantifier",
+                                                                    value="all",
+                                                                    data=[
+                                                                        {
+                                                                            "label": "Every",
+                                                                            "value": "all",
+                                                                        },
+                                                                        {
+                                                                            "label": "≥1",
+                                                                            "value": "any",
+                                                                        },
+                                                                    ],
+                                                                    fullWidth=True,
+                                                                    size="xs",
+                                                                    radius="md",
+                                                                    className=(
+                                                                        "rs-min-score-quantifier"
                                                                     ),
-                                                                    "value": "any",
-                                                                },
+                                                                ),
+                                                                dmc.SegmentedControl(
+                                                                    id="rs-min-score-scope",
+                                                                    value="all",
+                                                                    data=[
+                                                                        {
+                                                                            "label": "All",
+                                                                            "value": "all",
+                                                                        },
+                                                                        {
+                                                                            "label": "Hybrid",
+                                                                            "value": "hybrid",
+                                                                        },
+                                                                        {
+                                                                            "label": "IP",
+                                                                            "value": "ip",
+                                                                        },
+                                                                        {
+                                                                            "label": "OOP",
+                                                                            "value": "oop",
+                                                                        },
+                                                                    ],
+                                                                    fullWidth=True,
+                                                                    size="xs",
+                                                                    radius="md",
+                                                                    className="rs-min-score-scope",
+                                                                ),
                                                             ],
-                                                            value="all",
-                                                            clearable=False,
-                                                            searchable=False,
-                                                            className="rs-min-score-mode",
+                                                            className="rs-min-score-mode-wrap",
                                                         ),
                                                     ],
                                                     className="rs-min-score-fields",
@@ -1265,7 +1331,7 @@ def layout():
                                         ),
                                         dmc.Switch(
                                             id="rs-hybrids-only",
-                                            label="Show only hybrid",
+                                            label="Hide IP/OOP part columns",
                                             checked=False,
                                             className="rs-filter-hybrids",
                                         ),
@@ -1423,8 +1489,8 @@ def _reorder_built_rows(
     *,
     raw_by_key: dict[str, dict],
     sort_by,
-    view_roles: list[str],
-    min_score_mode: str,
+    score_cols: list[str],
+    min_score_quantifier: str,
 ) -> tuple[list[dict], list]:
     """Reorder already-rendered table rows without rebuilding markdown cells."""
     tips = list(tooltip_data or [])
@@ -1451,24 +1517,24 @@ def _reorder_built_rows(
             reverse=reverse,
         )
     else:
-        if min_score_mode == "any":
-            paired.sort(
-                key=lambda pair: max(
-                    float(raw_for(pair[0]).get(role) or 0) for role in view_roles
-                ),
-                reverse=True,
-            )
-        else:
-            paired.sort(
-                key=lambda pair: min(
-                    float(raw_for(pair[0]).get(role) or 0) for role in view_roles
-                ),
-                reverse=True,
-            )
+        quantifier = _normalize_min_score_quantifier(min_score_quantifier)
+        paired.sort(
+            key=lambda pair: _min_score_sort_key(
+                raw_for(pair[0]),
+                score_cols,
+                quantifier,
+            ),
+            reverse=True,
+        )
     return [pair[0] for pair in paired], [pair[1] for pair in paired]
 
 
-def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score_mode: str) -> None:
+def _sort_table_rows(
+    rows: list[dict],
+    sort_by,
+    score_cols: list[str],
+    min_score_quantifier: str,
+) -> None:
     if sort_by:
         item = sort_by[0]
         column = item.get("column_id")
@@ -1478,12 +1544,9 @@ def _sort_table_rows(rows: list[dict], sort_by, view_roles: list[str], min_score
             reverse=reverse,
         )
         return
+    quantifier = _normalize_min_score_quantifier(min_score_quantifier)
     rows.sort(
-        key=lambda row: (
-            max(float(row.get(role) or 0) for role in view_roles)
-            if min_score_mode == "any"
-            else min(float(row.get(role) or 0) for role in view_roles)
-        ),
+        key=lambda row: _min_score_sort_key(row, score_cols, quantifier),
         reverse=True,
     )
 
@@ -1749,17 +1812,95 @@ def _clicked(n_clicks) -> bool:
     return clicked(n_clicks)
 
 
-MIN_SCORE_MODES = {
-    "all": "every selected role",
-    "any": "at least one selected role",
+MIN_SCORE_SCOPE_LABELS = {
+    "all": "role",
+    "hybrid": "hybrid role",
+    "ip": "IP role",
+    "oop": "OOP role",
 }
 
 
-def _passes_min_score(row: dict, roles: list[str], min_score: float, mode: str) -> bool:
-    if min_score <= 0 or not roles:
+def _min_score_scope_columns(
+    view_roles: list[str],
+    scope: str,
+    combos,
+) -> list[str]:
+    scope = _normalize_min_score_scope(scope)
+    if scope == "all":
+        return list(view_roles)
+    combo_by_col = _combo_columns_by_label(combos)
+    if scope == "hybrid":
+        return [role for role in view_roles if _is_hybrid_column(role)]
+    cols: list[str] = []
+    seen: set[str] = set()
+
+    def add(column: str) -> None:
+        if column and column not in seen:
+            seen.add(column)
+            cols.append(column)
+
+    for role in view_roles:
+        if _is_hybrid_column(role):
+            meta = combo_by_col.get(role)
+            if not meta:
+                continue
+            add(meta["ip_column"] if scope == "ip" else meta["oop_column"])
+        elif scope == "ip" and _score_column_tone(role) == "ip":
+            add(role)
+        elif scope == "oop" and _score_column_tone(role) == "oop":
+            add(role)
+    return cols
+
+
+def _min_score_mode_label(quantifier: str, scope: str) -> str:
+    q = _normalize_min_score_quantifier(quantifier)
+    s = _normalize_min_score_scope(scope)
+    noun = MIN_SCORE_SCOPE_LABELS.get(s, "role")
+    if q == "any":
+        return f"at least one {noun}"
+    return f"every {noun}"
+
+
+def _min_score_sort_key(row: dict, score_cols: list[str], quantifier: str) -> float:
+    if not score_cols:
+        return 0.0
+    scores = [float(row.get(role) or 0) for role in score_cols]
+    if _normalize_min_score_quantifier(quantifier) == "any":
+        return max(scores)
+    return min(scores)
+
+
+def _min_score_caption_note(
+    min_score: float,
+    view_roles: list[str],
+    quantifier: str,
+    scope: str,
+    combos,
+) -> str:
+    if min_score <= 0:
+        return ""
+    score_cols = _min_score_scope_columns(view_roles, scope, combos)
+    label = _min_score_mode_label(quantifier, scope)
+    if not score_cols:
+        return f" Min score {min_score:g}+ on {label} (no matching columns in view)."
+    return f" Min score {min_score:g}+ on {label}: {', '.join(score_cols)}."
+
+
+def _passes_min_score(
+    row: dict,
+    view_roles: list[str],
+    min_score: float,
+    quantifier: str,
+    scope: str,
+    combos,
+) -> bool:
+    if min_score <= 0:
+        return True
+    roles = _min_score_scope_columns(view_roles, scope, combos)
+    if not roles:
         return True
     scores = [float(row.get(role) or 0) for role in roles]
-    if mode == "any":
+    if _normalize_min_score_quantifier(quantifier) == "any":
         return any(score >= min_score for score in scores)
     return all(score >= min_score for score in scores)
 
@@ -1996,7 +2137,8 @@ def _depth_panel(
     Input("rs-search", "value"),
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
-    Input("rs-min-score-mode", "value"),
+    Input("rs-min-score-quantifier", "value"),
+    Input("rs-min-score-scope", "value"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-phase", "data"),
@@ -2019,7 +2161,8 @@ def save_page_persist(
     search,
     max_age,
     min_score,
-    min_score_mode,
+    min_score_quantifier,
+    min_score_scope,
     pos_filter,
     foot_filter,
     phase,
@@ -2044,7 +2187,8 @@ def save_page_persist(
         "search": (search or "").strip(),
         "max_age": str(max_age or "99"),
         "min_score": _persist_min_score(min_score, settings),
-        "min_score_mode": min_score_mode or "all",
+        "min_score_quantifier": _normalize_min_score_quantifier(min_score_quantifier),
+        "min_score_scope": _normalize_min_score_scope(min_score_scope),
         "pos_filter": pos_filter or "all",
         "foot_filter": foot_filter or "",
         "phase": phase or "all",
@@ -2095,7 +2239,8 @@ clientside_callback(
     Output("rs-search", "value"),
     Output("rs-age", "value", allow_duplicate=True),
     Output("rs-min-score", "value"),
-    Output("rs-min-score-mode", "value"),
+    Output("rs-min-score-quantifier", "value"),
+    Output("rs-min-score-scope", "value"),
     Output("rs-pos-filter", "data", allow_duplicate=True),
     Output("rs-foot-filter", "data", allow_duplicate=True),
     Output("rs-phase", "data", allow_duplicate=True),
@@ -2109,7 +2254,7 @@ clientside_callback(
     prevent_initial_call=True,
 )
 def hydrate_page_persist(persist, hydrated):
-    _skip = (no_update,) * 25
+    _skip = (no_update,) * 26
     if hydrated:
         return _skip
     raw = persist or {}
@@ -2121,7 +2266,7 @@ def hydrate_page_persist(persist, hydrated):
             True,
             persist.get("role_mode") or "formations",
             no_update,
-            *(no_update,) * 12,
+            *(no_update,) * 13,
         )
     roles = _as_list(persist.get("roles"))
     combos = normalize_combos(persist.get("combos"))
@@ -2144,7 +2289,7 @@ def hydrate_page_persist(persist, hydrated):
         min_score_out = no_update
     else:
         min_score_out = min_score
-    min_score_mode = persist.get("min_score_mode") or "all"
+    min_score_quantifier, min_score_scope = _migrate_min_score_persist(persist)
     pos_filter = persist.get("pos_filter") or "all"
     foot_filter = persist.get("foot_filter") or ""
     page_size = _persist_page_size(persist.get("page_size"), settings)
@@ -2169,7 +2314,8 @@ def hydrate_page_persist(persist, hydrated):
         _changed_or_skip(search, ""),
         _changed_or_skip(max_age, "99"),
         min_score_out,
-        _changed_or_skip(min_score_mode, "all"),
+        _changed_or_skip(min_score_quantifier, "all"),
+        _changed_or_skip(min_score_scope, "all"),
         _changed_or_skip(pos_filter, "all"),
         _changed_or_skip(foot_filter, ""),
         _changed_or_skip(phase, "all"),
@@ -2926,7 +3072,8 @@ def _subset_table_data_by_keys(
     Input("rs-search", "value"),
     Input("rs-age", "value"),
     Input("rs-min-score", "value"),
-    Input("rs-min-score-mode", "value"),
+    Input("rs-min-score-quantifier", "value"),
+    Input("rs-min-score-scope", "value"),
     Input("rs-pos-match", "value"),
     Input("rs-club-filter", "value"),
     Input("rs-hybrids-only", "checked"),
@@ -2951,7 +3098,8 @@ def render_shortlist(
     query,
     max_age,
     min_score,
-    min_score_mode,
+    min_score_quantifier,
+    min_score_scope,
     pos_match,
     club_filter,
     hybrids_only,
@@ -3008,7 +3156,9 @@ def render_shortlist(
             bool(hybrids_only),
         )
         if view_roles:
-            mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
+            quantifier = _normalize_min_score_quantifier(min_score_quantifier)
+            scope = _normalize_min_score_scope(min_score_scope)
+            score_cols = _min_score_scope_columns(view_roles, scope, combos)
             raw_by_key = {
                 key: row
                 for row in payload["rows"]
@@ -3019,8 +3169,8 @@ def render_shortlist(
                 tooltip_data_state,
                 raw_by_key=raw_by_key,
                 sort_by=sort_by,
-                view_roles=view_roles,
-                min_score_mode=mode,
+                score_cols=score_cols,
+                min_score_quantifier=quantifier,
             )
             selected_ids = _marked_selected_ids(new_data, squad_marked)
             return (
@@ -3069,7 +3219,9 @@ def render_shortlist(
             hybrids_only,
         )
         min_score = us.parse_score_floor(min_score)
-        min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
+        quantifier = _normalize_min_score_quantifier(min_score_quantifier)
+        scope = _normalize_min_score_scope(min_score_scope)
+        score_cols = _min_score_scope_columns(view_roles, scope, combos)
         pos_match = _normalize_pos_match(pos_match)
         visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
             settings=settings,
@@ -3109,7 +3261,14 @@ def render_shortlist(
                     continue
                 if to_int(row.get("Age")) > max_age:
                     continue
-                if not _passes_min_score(row, view_roles, min_score, min_score_mode):
+                if not _passes_min_score(
+                    row,
+                    view_roles,
+                    min_score,
+                    quantifier,
+                    scope,
+                    combos,
+                ):
                     continue
                 if set_piece_min > 0 and chosen_pieces:
                     piece_filter_cols = [
@@ -3133,7 +3292,7 @@ def render_shortlist(
                 row["_PosEligible"] = pos_elig
                 filtered.append(row)
 
-            _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
+            _sort_table_rows(filtered, sort_by, score_cols, quantifier)
             ordered_keys = [
                 key
                 for row in filtered
@@ -3159,16 +3318,17 @@ def render_shortlist(
             ]
             focus_note = f" Focused: {', '.join(focused)}." if focused else ""
             hybrid_note = (
-                " Hybrids only."
+                " IP/OOP part columns hidden."
                 if hybrids_only and combo_column_labels(combos)
                 else ""
             )
-            min_note = ""
-            if min_score > 0:
-                min_note = (
-                    f" Min score {min_score:g}+ on "
-                    f"{MIN_SCORE_MODES[min_score_mode]}: {', '.join(view_roles)}."
-                )
+            min_note = _min_score_caption_note(
+                min_score,
+                view_roles,
+                quantifier,
+                scope,
+                combos,
+            )
             caption = (
                 f"{len(filtered)} of {len(rows)} players"
                 f"{focus_note}{hybrid_note}{min_note}"
@@ -3343,7 +3503,9 @@ def render_shortlist(
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = us.parse_score_floor(min_score)
-    min_score_mode = min_score_mode if min_score_mode in MIN_SCORE_MODES else "all"
+    quantifier = _normalize_min_score_quantifier(min_score_quantifier)
+    scope = _normalize_min_score_scope(min_score_scope)
+    score_cols = _min_score_scope_columns(view_roles, scope, combos)
     set_piece_min = us.parse_score_floor(set_piece_min)
     pos_match = _normalize_pos_match(pos_match)
     club_filter = _normalize_club_filter(club_filter)
@@ -3366,7 +3528,14 @@ def render_shortlist(
             continue
         if to_int(row.get("Age")) > max_age:
             continue
-        if not _passes_min_score(row, view_roles, min_score, min_score_mode):
+        if not _passes_min_score(
+            row,
+            view_roles,
+            min_score,
+            quantifier,
+            scope,
+            combos,
+        ):
             continue
         if set_piece_min > 0 and chosen_pieces:
             piece_cols = [
@@ -3387,7 +3556,7 @@ def render_shortlist(
         row["_PosEligible"] = pos_elig
         filtered.append(row)
 
-    _sort_table_rows(filtered, sort_by, view_roles, min_score_mode)
+    _sort_table_rows(filtered, sort_by, score_cols, quantifier)
 
     # Wide row payload (all roles + all set-piece scores) so later focus / set-piece /
     # hybrids toggles can change `columns` without rebuilding markdown cells.
@@ -3466,15 +3635,20 @@ def render_shortlist(
     if chosen_pieces and set_piece_min > 0:
         piece_note = f" Set-piece min {set_piece_min:g}+ on all checked types."
     mark_note = f" {len(marked_keys)} marked for planned squad." if marked_keys else ""
-    min_note = ""
-    if min_score > 0:
-        role_list = ", ".join(view_roles)
-        min_note = (
-            f" Min score {min_score:g}+ on {MIN_SCORE_MODES[min_score_mode]}: {role_list}."
-        )
+    min_note = _min_score_caption_note(
+        min_score,
+        view_roles,
+        quantifier,
+        scope,
+        combos,
+    )
     focused = [role for role in _focus_roles(focus_role) if role in view_roles]
     focus_note = f" Focused: {', '.join(focused)}." if focused else ""
-    hybrid_note = " Hybrids only." if hybrids_only and combo_column_labels(combos) else ""
+    hybrid_note = (
+        " IP/OOP part columns hidden."
+        if hybrids_only and combo_column_labels(combos)
+        else ""
+    )
     caption = (
         f"{len(filtered)} of {len(rows)} players"
         f"{focus_note}{hybrid_note}{min_note}{extra}{piece_note}{mark_note}"
