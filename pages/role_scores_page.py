@@ -1280,71 +1280,112 @@ def layout():
                                                                 _field_label(
                                                                     "Min score",
                                                                     tip=(
-                                                                        "Uses scored roles from section 2, or roles "
-                                                                        "focused in squad depth. Every = all columns in "
-                                                                        "the chosen scope must clear the floor; ≥1 = at "
-                                                                        "least one. IP/OOP scope includes hybrid parts "
-                                                                        "even when part columns are hidden. Leave blank "
-                                                                        "for any."
+                                                                        "Filter the shortlist by role scores from "
+                                                                        "section 2, or roles focused in squad depth."
                                                                     ),
                                                                     help_id="rs-help-min-score",
                                                                 ),
                                                                 html.Div(
                                                                     [
-                                                                        dmc.NumberInput(
-                                                                            id="rs-min-score",
-                                                                            placeholder="Any",
-                                                                            min=0,
-                                                                            max=20,
-                                                                            step=0.1,
-                                                                            decimalScale=1,
-                                                                            value=settings["bands"]["ok"],
-                                                                        ),
-                                                                        dmc.SegmentedControl(
-                                                                            id="rs-min-score-quantifier",
-                                                                            value="all",
-                                                                            data=[
-                                                                                {
-                                                                                    "label": "Every",
-                                                                                    "value": "all",
-                                                                                },
-                                                                                {
-                                                                                    "label": "≥1",
-                                                                                    "value": "any",
-                                                                                },
+                                                                        html.Div(
+                                                                            [
+                                                                                _field_label(
+                                                                                    "Floor",
+                                                                                    tip=(
+                                                                                        "Minimum score required. "
+                                                                                        "Leave blank for any score."
+                                                                                    ),
+                                                                                    help_id="rs-help-min-score-floor",
+                                                                                ),
+                                                                                dmc.NumberInput(
+                                                                                    id="rs-min-score",
+                                                                                    placeholder="Any",
+                                                                                    min=0,
+                                                                                    max=20,
+                                                                                    step=0.1,
+                                                                                    decimalScale=1,
+                                                                                    value=settings["bands"]["ok"],
+                                                                                ),
                                                                             ],
-                                                                            fullWidth=True,
-                                                                            size="xs",
-                                                                            radius="md",
-                                                                            className=(
-                                                                                "rs-min-score-quantifier"
-                                                                            ),
+                                                                            className="rs-min-score-floor",
                                                                         ),
-                                                                        dmc.SegmentedControl(
-                                                                            id="rs-min-score-scope",
-                                                                            value="all",
-                                                                            data=[
-                                                                                {
-                                                                                    "label": "All",
-                                                                                    "value": "all",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Hybrid",
-                                                                                    "value": "hybrid",
-                                                                                },
-                                                                                {
-                                                                                    "label": "IP",
-                                                                                    "value": "ip",
-                                                                                },
-                                                                                {
-                                                                                    "label": "OOP",
-                                                                                    "value": "oop",
-                                                                                },
+                                                                        html.Div(
+                                                                            [
+                                                                                _field_label(
+                                                                                    "Match",
+                                                                                    tip=(
+                                                                                        "Every = all roles in the "
+                                                                                        "chosen scope must meet the "
+                                                                                        "floor. ≥1 = at least one role "
+                                                                                        "in scope must meet it."
+                                                                                    ),
+                                                                                    help_id="rs-help-min-score-match",
+                                                                                ),
+                                                                                dmc.SegmentedControl(
+                                                                                    id="rs-min-score-quantifier",
+                                                                                    value="all",
+                                                                                    data=[
+                                                                                        {
+                                                                                            "label": "Every",
+                                                                                            "value": "all",
+                                                                                        },
+                                                                                        {
+                                                                                            "label": "≥1",
+                                                                                            "value": "any",
+                                                                                        },
+                                                                                    ],
+                                                                                    fullWidth=True,
+                                                                                    size="xs",
+                                                                                    radius="md",
+                                                                                    className=(
+                                                                                        "rs-min-score-quantifier"
+                                                                                    ),
+                                                                                ),
                                                                             ],
-                                                                            fullWidth=True,
-                                                                            size="xs",
-                                                                            radius="md",
-                                                                            className="rs-min-score-scope",
+                                                                            className="rs-min-score-match",
+                                                                        ),
+                                                                        html.Div(
+                                                                            [
+                                                                                _field_label(
+                                                                                    "Scope",
+                                                                                    tip=(
+                                                                                        "Which scored roles count: all "
+                                                                                        "viewed roles, hybrid combos only, "
+                                                                                        "IP roles only, or OOP roles only. "
+                                                                                        "IP/OOP includes hybrid parts even "
+                                                                                        "when those roles are hidden from "
+                                                                                        "the table."
+                                                                                    ),
+                                                                                    help_id="rs-help-min-score-scope",
+                                                                                ),
+                                                                                dmc.SegmentedControl(
+                                                                                    id="rs-min-score-scope",
+                                                                                    value="all",
+                                                                                    data=[
+                                                                                        {
+                                                                                            "label": "All",
+                                                                                            "value": "all",
+                                                                                        },
+                                                                                        {
+                                                                                            "label": "Hybrid",
+                                                                                            "value": "hybrid",
+                                                                                        },
+                                                                                        {
+                                                                                            "label": "IP",
+                                                                                            "value": "ip",
+                                                                                        },
+                                                                                        {
+                                                                                            "label": "OOP",
+                                                                                            "value": "oop",
+                                                                                        },
+                                                                                    ],
+                                                                                    fullWidth=True,
+                                                                                    size="xs",
+                                                                                    radius="md",
+                                                                                    className="rs-min-score-scope",
+                                                                                ),
+                                                                            ],
+                                                                            className="rs-min-score-scope-wrap",
                                                                         ),
                                                                     ],
                                                                     className="rs-min-score-fields",
@@ -1353,12 +1394,23 @@ def layout():
                                                             className="rs-filter-score",
                                                         ),
                                                         html.Div(
-                                                            dmc.Switch(
-                                                                id="rs-hybrids-only",
-                                                                label="Hide IP/OOP part columns",
-                                                                checked=False,
-                                                                className="rs-filter-hybrids",
-                                                            ),
+                                                            [
+                                                                _field_label(
+                                                                    "Columns",
+                                                                    tip=(
+                                                                        "Hide standalone IP and OOP role columns from "
+                                                                        "the table. Hybrid combo scores stay visible. "
+                                                                        "Does not change min-score filtering."
+                                                                    ),
+                                                                    help_id="rs-help-filter-columns",
+                                                                ),
+                                                                dmc.Switch(
+                                                                    id="rs-hybrids-only",
+                                                                    label="Hide IP/OOP roles",
+                                                                    checked=False,
+                                                                    className="rs-filter-hybrids",
+                                                                ),
+                                                            ],
                                                             className="rs-filter-columns",
                                                         ),
                                                     ],
@@ -3350,7 +3402,7 @@ def render_shortlist(
             ]
             focus_note = f" Focused: {', '.join(focused)}." if focused else ""
             hybrid_note = (
-                " IP/OOP part columns hidden."
+                " IP/OOP roles hidden."
                 if hybrids_only and combo_column_labels(combos)
                 else ""
             )
@@ -3677,7 +3729,7 @@ def render_shortlist(
     focused = [role for role in _focus_roles(focus_role) if role in view_roles]
     focus_note = f" Focused: {', '.join(focused)}." if focused else ""
     hybrid_note = (
-        " IP/OOP part columns hidden."
+        " IP/OOP roles hidden."
         if hybrids_only and combo_column_labels(combos)
         else ""
     )

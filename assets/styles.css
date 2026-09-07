@@ -1289,6 +1289,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     flex-direction: column;
     justify-content: flex-end;
     align-self: stretch;
+    gap: 6px;
     min-height: 0;
 }
 
@@ -1303,7 +1304,16 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     display: grid;
     grid-template-columns: 72px minmax(88px, 0.32fr) minmax(220px, 1fr);
     gap: 8px;
-    align-items: center;
+    align-items: end;
+    min-width: 0;
+}
+
+.rs-min-score-floor,
+.rs-min-score-match,
+.rs-min-score-scope-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -1368,6 +1378,12 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
     .rs-filter-score .rs-min-score-fields {
         grid-template-columns: 1fr;
+    }
+
+    .rs-filter-score .rs-min-score-floor,
+    .rs-filter-score .rs-min-score-match,
+    .rs-filter-score .rs-min-score-scope-wrap {
+        width: 100%;
     }
 
     .st-division-fields .mantine-Select-root,
