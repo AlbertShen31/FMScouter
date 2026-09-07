@@ -55,7 +55,6 @@ from scoring.role_scorer import (
     has_bucket_role_refs,
     normalize_combos,
     normalize_eligibility,
-    parse_bucket_column,
     parse_combo_id,
     parse_export,
     player_row_key,
@@ -1527,18 +1526,10 @@ def _column_display_name(col_id: str) -> str:
         ip, _, oop = col_id.partition("+")
         if not ip or not oop:
             return col_id
-        ip_bucket, _ = parse_bucket_column(ip)
-        oop_bucket, _ = parse_bucket_column(oop)
         ip_abbr = _column_header_abbr(ip)
         oop_abbr = _column_header_abbr(oop)
-        left = f"{ip_bucket.upper()}\n{ip_abbr}" if ip_bucket else ip_abbr
-        right = f"{oop_bucket.upper()}\n{oop_abbr}" if oop_bucket else oop_abbr
-        return f"{left}+\n{right}"
-    bucket, _ = parse_bucket_column(col_id)
-    abbr = _column_header_abbr(col_id)
-    if bucket:
-        return f"{bucket.upper()}\n{abbr}"
-    return abbr
+        return f"{ip_abbr}+\n{oop_abbr}"
+    return _column_header_abbr(col_id)
 
 
 _ROLE_COLUMN_FULL_NAMES: dict[str, str] | None = None
