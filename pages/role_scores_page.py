@@ -1180,163 +1180,195 @@ def layout():
                                     [
                                         html.Div(
                                             [
-                                                html.Label("Search", className="rs-field-label"),
-                                                dmc.TextInput(
-                                                    id="rs-search",
-                                                    placeholder="Name, club, position",
-                                                ),
-                                            ],
-                                            className="rs-filter-search",
-                                        ),
-                                        html.Div(
-                                            [
-                                                html.Label("Max age", className="rs-field-label"),
-                                                dmc.Select(
-                                                    id="rs-age",
-                                                    data=us.age_options(settings),
-                                                    value="99",
-                                                    clearable=False,
-                                                    searchable=False,
-                                                ),
-                                            ],
-                                            className="rs-filter-age",
-                                        ),
-                                        html.Div(
-                                            [
-                                                _field_label(
-                                                    "Min score",
-                                                    tip=(
-                                                        "Uses scored roles from section 2, or roles "
-                                                        "focused in squad depth. Every = all columns in "
-                                                        "the chosen scope must clear the floor; ≥1 = at "
-                                                        "least one. IP/OOP scope includes hybrid parts "
-                                                        "even when part columns are hidden. Leave blank "
-                                                        "for any."
-                                                    ),
-                                                    help_id="rs-help-min-score",
+                                                html.Div(
+                                                    "Player",
+                                                    className="rs-filter-group-label",
                                                 ),
                                                 html.Div(
                                                     [
-                                                        dmc.NumberInput(
-                                                            id="rs-min-score",
-                                                            placeholder="Any",
-                                                            min=0,
-                                                            max=20,
-                                                            step=0.1,
-                                                            decimalScale=1,
-                                                            value=settings["bands"]["ok"],
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Search",
+                                                                    className="rs-field-label",
+                                                                ),
+                                                                dmc.TextInput(
+                                                                    id="rs-search",
+                                                                    placeholder="Name, club, position",
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-search",
                                                         ),
                                                         html.Div(
                                                             [
-                                                                dmc.SegmentedControl(
-                                                                    id="rs-min-score-quantifier",
-                                                                    value="all",
-                                                                    data=[
-                                                                        {
-                                                                            "label": "Every",
-                                                                            "value": "all",
-                                                                        },
-                                                                        {
-                                                                            "label": "≥1",
-                                                                            "value": "any",
-                                                                        },
-                                                                    ],
-                                                                    fullWidth=True,
-                                                                    size="xs",
-                                                                    radius="md",
-                                                                    className=(
-                                                                        "rs-min-score-quantifier"
-                                                                    ),
+                                                                html.Label(
+                                                                    "Max age",
+                                                                    className="rs-field-label",
                                                                 ),
-                                                                dmc.SegmentedControl(
-                                                                    id="rs-min-score-scope",
-                                                                    value="all",
-                                                                    data=[
-                                                                        {
-                                                                            "label": "All",
-                                                                            "value": "all",
-                                                                        },
-                                                                        {
-                                                                            "label": "Hybrid",
-                                                                            "value": "hybrid",
-                                                                        },
-                                                                        {
-                                                                            "label": "IP",
-                                                                            "value": "ip",
-                                                                        },
-                                                                        {
-                                                                            "label": "OOP",
-                                                                            "value": "oop",
-                                                                        },
-                                                                    ],
-                                                                    fullWidth=True,
-                                                                    size="xs",
-                                                                    radius="md",
-                                                                    className="rs-min-score-scope",
+                                                                dmc.Select(
+                                                                    id="rs-age",
+                                                                    data=us.age_options(settings),
+                                                                    value="99",
+                                                                    clearable=False,
+                                                                    searchable=False,
                                                                 ),
                                                             ],
-                                                            className="rs-min-score-mode-wrap",
+                                                            className="rs-filter-age",
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                _field_label(
+                                                                    "Club",
+                                                                    tip=(
+                                                                        "Any club includes free agents. "
+                                                                        "Free agents are blank/“-” Club "
+                                                                        "values (and Free Agent / Free "
+                                                                        "Transfer labels). Players with "
+                                                                        "clubs hides those."
+                                                                    ),
+                                                                    help_id="rs-help-club-filter",
+                                                                ),
+                                                                dmc.Select(
+                                                                    id="rs-club-filter",
+                                                                    data=CLUB_FILTER_OPTIONS,
+                                                                    value="any",
+                                                                    clearable=False,
+                                                                    searchable=False,
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-club",
                                                         ),
                                                     ],
-                                                    className="rs-min-score-fields",
+                                                    className="rs-filter-group-fields",
                                                 ),
                                             ],
-                                            className="rs-filter-score",
+                                            className="rs-filter-group rs-filter-group-player",
                                         ),
                                         html.Div(
                                             [
-                                                _field_label(
-                                                    "Position match",
-                                                    tip=(
-                                                        "Same green / yellow / red rules as the "
-                                                        "Position column. Full = green only; "
-                                                        "At least partial = yellow + green; "
-                                                        "Any = includes red. Hybrids need both "
-                                                        "parts for green."
-                                                    ),
-                                                    help_id="rs-help-pos-match",
+                                                html.Div(
+                                                    "Role fit",
+                                                    className="rs-filter-group-label",
                                                 ),
-                                                dmc.Select(
-                                                    id="rs-pos-match",
-                                                    data=POS_MATCH_OPTIONS,
-                                                    value="yes",
-                                                    clearable=False,
-                                                    searchable=False,
+                                                html.Div(
+                                                    [
+                                                        html.Div(
+                                                            [
+                                                                _field_label(
+                                                                    "Position match",
+                                                                    tip=(
+                                                                        "Same green / yellow / red rules as the "
+                                                                        "Position column. Full = green only; "
+                                                                        "At least partial = yellow + green; "
+                                                                        "Any = includes red. Hybrids need both "
+                                                                        "parts for green."
+                                                                    ),
+                                                                    help_id="rs-help-pos-match",
+                                                                ),
+                                                                dmc.Select(
+                                                                    id="rs-pos-match",
+                                                                    data=POS_MATCH_OPTIONS,
+                                                                    value="yes",
+                                                                    clearable=False,
+                                                                    searchable=False,
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-pos-match",
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                _field_label(
+                                                                    "Min score",
+                                                                    tip=(
+                                                                        "Uses scored roles from section 2, or roles "
+                                                                        "focused in squad depth. Every = all columns in "
+                                                                        "the chosen scope must clear the floor; ≥1 = at "
+                                                                        "least one. IP/OOP scope includes hybrid parts "
+                                                                        "even when part columns are hidden. Leave blank "
+                                                                        "for any."
+                                                                    ),
+                                                                    help_id="rs-help-min-score",
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        dmc.NumberInput(
+                                                                            id="rs-min-score",
+                                                                            placeholder="Any",
+                                                                            min=0,
+                                                                            max=20,
+                                                                            step=0.1,
+                                                                            decimalScale=1,
+                                                                            value=settings["bands"]["ok"],
+                                                                        ),
+                                                                        dmc.SegmentedControl(
+                                                                            id="rs-min-score-quantifier",
+                                                                            value="all",
+                                                                            data=[
+                                                                                {
+                                                                                    "label": "Every",
+                                                                                    "value": "all",
+                                                                                },
+                                                                                {
+                                                                                    "label": "≥1",
+                                                                                    "value": "any",
+                                                                                },
+                                                                            ],
+                                                                            fullWidth=True,
+                                                                            size="xs",
+                                                                            radius="md",
+                                                                            className=(
+                                                                                "rs-min-score-quantifier"
+                                                                            ),
+                                                                        ),
+                                                                        dmc.SegmentedControl(
+                                                                            id="rs-min-score-scope",
+                                                                            value="all",
+                                                                            data=[
+                                                                                {
+                                                                                    "label": "All",
+                                                                                    "value": "all",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Hybrid",
+                                                                                    "value": "hybrid",
+                                                                                },
+                                                                                {
+                                                                                    "label": "IP",
+                                                                                    "value": "ip",
+                                                                                },
+                                                                                {
+                                                                                    "label": "OOP",
+                                                                                    "value": "oop",
+                                                                                },
+                                                                            ],
+                                                                            fullWidth=True,
+                                                                            size="xs",
+                                                                            radius="md",
+                                                                            className="rs-min-score-scope",
+                                                                        ),
+                                                                    ],
+                                                                    className="rs-min-score-fields",
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-score",
+                                                        ),
+                                                        html.Div(
+                                                            dmc.Switch(
+                                                                id="rs-hybrids-only",
+                                                                label="Hide IP/OOP part columns",
+                                                                checked=False,
+                                                                className="rs-filter-hybrids",
+                                                            ),
+                                                            className="rs-filter-columns",
+                                                        ),
+                                                    ],
+                                                    className="rs-filter-group-fields",
                                                 ),
                                             ],
-                                            className="rs-filter-pos-match",
-                                        ),
-                                        html.Div(
-                                            [
-                                                _field_label(
-                                                    "Club",
-                                                    tip=(
-                                                        "Any club includes free agents. "
-                                                        "Free agents are blank/“-” Club "
-                                                        "values (and Free Agent / Free "
-                                                        "Transfer labels). Players with "
-                                                        "clubs hides those."
-                                                    ),
-                                                    help_id="rs-help-club-filter",
-                                                ),
-                                                dmc.Select(
-                                                    id="rs-club-filter",
-                                                    data=CLUB_FILTER_OPTIONS,
-                                                    value="any",
-                                                    clearable=False,
-                                                    searchable=False,
-                                                ),
-                                            ],
-                                            className="rs-filter-club",
-                                        ),
-                                        dmc.Switch(
-                                            id="rs-hybrids-only",
-                                            label="Hide IP/OOP part columns",
-                                            checked=False,
-                                            className="rs-filter-hybrids",
+                                            className="rs-filter-group rs-filter-group-role",
                                         ),
                                     ],
-                                    className="rs-shortlist-filters-row",
+                                    className="rs-shortlist-filters-grid",
                                 ),
                             ],
                             className="rs-shortlist-filters mb-2",
