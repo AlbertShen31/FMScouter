@@ -84,6 +84,8 @@ _EXACT: dict[str, DivisionTier] = {
     "USLC Western Conference": "pro",
     # UAE / Kuwait
     "UAE Pro League": "top",
+    "Kuwait Premier League": "top",
+    "Kuwaiti Premier League": "top",
     "First Division League": "pro",
     # England / Scotland / Portugal / others
     "Premier League": "top",
@@ -294,10 +296,12 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
         "3. Liga": "pro",
     },
     "U.A.E.": {
+        "UAE Pro League": "top",
         "First Division League": "pro",
         "Second Division": "pro",
     },
     "Kuwait": {
+        "Premier League": "top",
         "First Division League": "pro",
     },
     "France": {
