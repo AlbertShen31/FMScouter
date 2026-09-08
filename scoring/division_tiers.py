@@ -589,7 +589,7 @@ def division_sort_key(division: str | None, nation: str | None = None) -> tuple[
 def is_romanian_division(division: str | None, nation: str | None = None) -> bool:
     """True when an FM Division belongs to the Romanian pyramid."""
     based_in = str(nation or "").strip()
-    if based_in and _fold(based_in) == _fold(ROMANIA_NATION):
+    if based_in and _fold(based_in) in (_fold(ROMANIA_NATION), "rou", "rom"):
         div = str(division or "").strip()
         return bool(div) and div not in ("-", "—")
     raw = str(division or "").strip()
