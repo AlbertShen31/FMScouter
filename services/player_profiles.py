@@ -464,7 +464,7 @@ def stage_role_export(
     """Queue a Role-scores export for the next Refresh exports on Profiles."""
     pid = str(profile_id or "").strip()
     role = str(role_column or "").strip()
-    if not pid or not role:
+    if not pid or not role or "+" not in role:
         return
     pending = _read_export_staging(library_id)
     pending = [

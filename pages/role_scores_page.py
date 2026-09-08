@@ -171,7 +171,7 @@ PERSIST_DEFAULTS = {
     "formation": None,
     "role_mode": "formations",
     "set_pieces": [],
-    "hybrids_only": False,
+    "hybrids_only": True,
     "pos_match": "yes",
     "club_filter": "any",
     "focus_role": [],
@@ -1394,7 +1394,7 @@ def layout():
                                                                 dmc.Switch(
                                                                     id="rs-hybrids-only",
                                                                     label="Hide IP/OOP roles",
-                                                                    checked=False,
+                                                                    checked=True,
                                                                     className="rs-filter-hybrids",
                                                                 ),
                                                             ],
@@ -2349,7 +2349,7 @@ def hydrate_page_persist(persist, hydrated):
     else:
         pos_match = _normalize_pos_match(persist.get("eligible", True))
     club_filter = _normalize_club_filter(persist.get("club_filter"))
-    hybrids_only = bool(persist.get("hybrids_only", False))
+    hybrids_only = bool(persist.get("hybrids_only", True))
     focus = _as_list(persist.get("focus_role"))
     phase = persist.get("phase") or "all"
     group = persist.get("group") or "all"
