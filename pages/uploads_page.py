@@ -21,6 +21,7 @@ from components.player_filters import help_icon
 from components.scouting_shell import decode_upload, upload_error
 import services.export_library as lib
 import services.upload_cache as upload_cache
+from scoring.stats_availability import limited_tracking_tooltip
 
 register_page(__name__, path="/uploads", name="Uploads")
 
@@ -88,6 +89,71 @@ def _any_computable() -> bool:
     return any(e.get("role_scores") or e.get("stats") for e in lib.list_files())
 
 
+def _limited_nation_counts(entry: dict) -> list[tuple[str, int]] | None:
+    raw = entry.get("limited_tracking_by_nation")
+    if not isinstance(raw, list):
+        return None
+    counts: list[tuple[str, int]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        nation = str(item.get("nation") or "").strip()
+        if not nation:
+            continue
+        try:
+            count = int(item.get("count") or 0)
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            counts.append((nation, count))
+    return counts or None
+
+
+def _limited_tooltip(entry: dict, limited: list[str]) -> str:
+    nation_counts = _limited_nation_counts(entry)
+    players = None
+    if nation_counts is None:
+        cache = upload_cache.load_cache(entry.get("id") or "")
+        stats = (cache or {}).get("stats") or {}
+        players = stats.get("players") or []
+    return limited_tracking_tooltip(
+        limited,
+        nation_counts=nation_counts,
+        players=players,
+    )
+
+
+def _limited_tooltip_label(entry: dict, limited: list[str]):
+    text = _limited_tooltip(entry, limited)
+    if not text:
+        return ""
+    lines = [line for line in text.split("\n") if line]
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return lines[0]
+    children = [html.Div(lines[0], className="up-limited-tip-head")]
+    if len(lines) == 2:
+        children.append(html.Div(lines[1], className="up-limited-tip-leagues"))
+    else:
+        children.append(html.Div(lines[1], className="up-limited-tip-nations"))
+        children.append(html.Div(lines[2], className="up-limited-tip-leagues"))
+    return html.Div(children, className="up-limited-tip")
+
+
+def _limited_count_cell(entry: dict, limited: list[str]) -> dmc.Tooltip:
+    return dmc.Tooltip(
+        html.Span(str(len(limited)), className="up-limited-count"),
+        label=_limited_tooltip_label(entry, limited),
+        withArrow=True,
+        position="top",
+        openDelay=200,
+        multiline=True,
+        maw=420,
+        withinPortal=True,
+    )
+
+
 def _files_table(entries: list[dict] | None = None) -> html.Div:
     entries = entries if entries is not None else lib.list_files()
     if not entries:
@@ -132,11 +198,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         if not note_bits:
             note_bits = [html.Span("—", className="text-muted")]
         if limited:
-            limited_cell = html.Span(
-                f"{len(limited)}",
-                className="up-limited-count",
-                title="Incomplete advanced match stats: " + ", ".join(limited),
-            )
+            limited_cell = _limited_count_cell(entry, limited)
         else:
             limited_cell = html.Span("—", className="text-muted")
         title = original if original and original != label else entry.get("stored_name") or ""

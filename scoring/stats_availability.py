@@ -287,3 +287,70 @@ def division_has_limited_tracking(
     if not raw or raw in ("-", "—") or not limited_divisions:
         return False
     return raw in set(limited_divisions)
+
+
+def nation_counts_for_limited_divisions(
+    limited_divisions: list[str] | None,
+    players: list[dict[str, Any]] | None,
+) -> list[tuple[str, int]]:
+    """Count limited leagues per nation (Based In), highest minutes per division."""
+    limited = [
+        str(name).strip()
+        for name in (limited_divisions or [])
+        if str(name).strip() and str(name).strip() not in ("-", "—")
+    ]
+    if not limited:
+        return []
+
+    limited_set = set(limited)
+    div_nation_minutes: dict[str, dict[str, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
+    for player in players or []:
+        div = str(player.get("division") or "").strip()
+        if div not in limited_set:
+            continue
+        nation = str(player.get("based_in") or player.get("nation") or "").strip()
+        if not nation or nation in ("-", "—"):
+            nation = "Unknown"
+        minutes = float(player.get("minutes") or 0.0)
+        div_nation_minutes[div][nation] += minutes if minutes > 0 else 1.0
+
+    nation_counts: dict[str, int] = defaultdict(int)
+    for div in limited:
+        votes = div_nation_minutes.get(div)
+        if not votes:
+            nation_counts["Unknown"] += 1
+            continue
+        nation_counts[max(votes.items(), key=lambda item: item[1])[0]] += 1
+
+    return sorted(nation_counts.items(), key=lambda item: (-item[1], item[0].lower()))
+
+
+def limited_tracking_tooltip(
+    limited_divisions: list[str],
+    *,
+    nation_counts: list[tuple[str, int]] | None = None,
+    players: list[dict[str, Any]] | None = None,
+) -> str:
+    """Hover text for uploads limited-league count."""
+    divisions = [
+        str(name).strip()
+        for name in limited_divisions
+        if str(name).strip() and str(name).strip() not in ("-", "—")
+    ]
+    if not divisions:
+        return ""
+
+    counts = nation_counts
+    if counts is None:
+        counts = nation_counts_for_limited_divisions(divisions, players)
+
+    n = len(divisions)
+    league_word = "league" if n == 1 else "leagues"
+    lines = [f"Incomplete advanced match stats ({n} {league_word})"]
+    if counts:
+        by_nation = ", ".join(f"{nation} ({count})" for nation, count in counts)
+        lines.append(f"By nation: {by_nation}")
+    lines.append(", ".join(divisions))
+    return "\n".join(lines)

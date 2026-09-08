@@ -119,6 +119,7 @@ def _patch_index_cache(
     cache_meta: dict[str, Any],
     *,
     limited_tracking_divisions: list[str] | None = None,
+    limited_tracking_by_nation: list[dict[str, Any]] | None = None,
 ) -> None:
     index = lib._read_index()
     changed = False
@@ -127,6 +128,8 @@ def _patch_index_cache(
             entry["cache"] = cache_meta
             if limited_tracking_divisions is not None:
                 entry["limited_tracking_divisions"] = list(limited_tracking_divisions)
+            if limited_tracking_by_nation is not None:
+                entry["limited_tracking_by_nation"] = list(limited_tracking_by_nation)
             changed = True
             break
     if changed:
@@ -385,6 +388,8 @@ def compute_file(file_id: str) -> dict[str, Any]:
 
     if entry.get("stats"):
         try:
+            from scoring.stats_availability import nation_counts_for_limited_divisions
+
             players, limited_divisions = parse_stats_export_with_meta(text)
             tree = stp.load_tree(sig.get("stats_pack_id"))
             percentiles = _precompute_stats_percentiles(
@@ -403,11 +408,18 @@ def compute_file(file_id: str) -> dict[str, Any]:
                 "limited_tracking_divisions": limited_divisions,
             }
             payload["limited_tracking_divisions"] = limited_divisions
+            payload["limited_tracking_by_nation"] = [
+                {"nation": nation, "count": count}
+                for nation, count in nation_counts_for_limited_divisions(
+                    limited_divisions, players
+                )
+            ]
         except Exception as exc:
             errors.append(f"stats: {exc}")
             traceback.print_exc()
 
     limited_divisions = list(payload.get("limited_tracking_divisions") or [])
+    limited_by_nation = list(payload.get("limited_tracking_by_nation") or [])
 
     if not payload["role_scores"] and not payload["stats"]:
         meta = {
@@ -418,9 +430,13 @@ def compute_file(file_id: str) -> dict[str, Any]:
             "role_scores": False,
             "stats": False,
             "limited_tracking_divisions": limited_divisions,
+            "limited_tracking_by_nation": limited_by_nation,
         }
         _patch_index_cache(
-            file_id, meta, limited_tracking_divisions=limited_divisions
+            file_id,
+            meta,
+            limited_tracking_divisions=limited_divisions,
+            limited_tracking_by_nation=limited_by_nation,
         )
         raise ValueError(meta["error"])
 
@@ -433,9 +449,13 @@ def compute_file(file_id: str) -> dict[str, Any]:
         "stats": bool(payload["stats"]),
         "error": "; ".join(errors) if errors else "",
         "limited_tracking_divisions": limited_divisions,
+        "limited_tracking_by_nation": limited_by_nation,
     }
     _patch_index_cache(
-        file_id, meta, limited_tracking_divisions=limited_divisions
+        file_id,
+        meta,
+        limited_tracking_divisions=limited_divisions,
+        limited_tracking_by_nation=limited_by_nation,
     )
     return payload
 
