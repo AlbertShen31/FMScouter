@@ -204,7 +204,10 @@ def _missing_metric_label(metric: dict) -> str:
     return "Not tracked" if metric.get("unavailable") else "No data"
 
 
-def _metrics_values(sections: list[dict]) -> list:
+def _metrics_values(sections: list[dict], *, limited_league: bool = False) -> list:
+    row_class = "st-metric-value-row"
+    if limited_league:
+        row_class += " is-limited-metric"
     blocks = []
     for cat in sections:
         items = []
@@ -220,7 +223,7 @@ def _metrics_values(sections: list[dict]) -> list:
                         ),
                         html.Span("—", className="st-metric-pct is-missing"),
                     ],
-                    className="st-metric-value-row",
+                    className=row_class,
                 )
             else:
                 pct = metric["percentile"]
@@ -237,7 +240,7 @@ def _metrics_values(sections: list[dict]) -> list:
                             title=f"~{pct:.0f}th percentile",
                         ),
                     ],
-                    className="st-metric-value-row",
+                    className=row_class,
                 )
             items.append(
                 html.Div(
@@ -709,7 +712,10 @@ def _player_modal_body(
     elif view == "pizzas":
         metrics = _metrics_pizzas(sections, theme)
     else:
-        metrics = _metrics_values(sections)
+        from components.player_table import resolve_division_highlight
+
+        _, limited_league = resolve_division_highlight(player, limited_divisions)
+        metrics = _metrics_values(sections, limited_league=limited_league)
     status = minutes_status(player.get("minutes"), minutes_required)
     return player_detail_body(
         player,
@@ -813,7 +819,10 @@ def stats_charts_bottom_pane(
     elif view == "pizzas":
         metrics = _metrics_pizzas(sections, theme)
     else:
-        metrics = _metrics_values(sections)
+        from components.player_table import resolve_division_highlight
+
+        _, limited_league = resolve_division_highlight(player, None)
+        metrics = _metrics_values(sections, limited_league=limited_league)
 
     from scoring.stats_scorer import pos_group_label
 

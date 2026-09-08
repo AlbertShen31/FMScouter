@@ -1042,6 +1042,48 @@ def division_highlight_styles(theme: str | None = None) -> list[dict]:
     return rules
 
 
+STATS_PERCENTILE_COLUMN_IDS = (
+    "overall",
+    "category_avg",
+    "defending",
+    "final_third",
+    "possession",
+)
+
+
+def stats_metric_column_ids() -> list[str]:
+    """Player-stats table column ids for percentile + metric cells."""
+    from scoring.stats_scorer import metric_defs
+
+    cols = list(STATS_PERCENTILE_COLUMN_IDS)
+    seen = set(cols)
+    for meta in metric_defs().values():
+        abbr = str(meta.get("abbr") or "").strip()
+        if abbr and abbr not in seen:
+            seen.add(abbr)
+            cols.append(abbr)
+    return cols
+
+
+def limited_league_metric_highlight_styles(theme: str | None = None) -> list[dict]:
+    """Stripe stat metric cells when the player's division has limited FM tracking."""
+    dark = is_dark_theme(theme)
+    stripes = _division_stripe_images(theme)
+    return [
+        {
+            "if": {
+                "filter_query": '{DivisionLimited} = "yes"',
+                "column_id": col_id,
+            },
+            "backgroundColor": (
+                "rgba(148, 163, 184, 0.16)" if dark else "#e2e8f0"
+            ),
+            "backgroundImage": stripes["unknown"],
+        }
+        for col_id in stats_metric_column_ids()
+    ]
+
+
 def apply_division_limited_flag(
     row: dict,
     limited_divisions: set[str] | frozenset[str] | list[str] | None,

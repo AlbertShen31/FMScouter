@@ -56,8 +56,10 @@ from components.player_table import (
     identity_header_tooltips,
     injury_cell,
     injury_tooltip_entry,
+    limited_league_metric_highlight_styles,
     player_data_table,
     rec_sort_key,
+    resolve_division_highlight,
     style_cell,
     style_cell_conditional,
     style_header,
@@ -599,7 +601,11 @@ def _table_base_styles(theme: str | None = None, settings=None) -> list[dict]:
     return identity_data_styles(
         theme,
         settings=settings,
-        extra=_stats_metric_styles() + _KEY_COLUMN_HIDE,
+        extra=(
+            _stats_metric_styles()
+            + limited_league_metric_highlight_styles(theme)
+            + _KEY_COLUMN_HIDE
+        ),
     )
 
 
@@ -1109,7 +1115,8 @@ def _player_modal_body(
     elif view == "pizzas":
         metrics = _metrics_pizzas(sections, theme)
     else:
-        metrics = _metrics_values(sections)
+        _, limited_league = resolve_division_highlight(player, limited_divisions)
+        metrics = _metrics_values(sections, limited_league=limited_league)
     status = minutes_status(player.get("minutes"), minutes_required)
     set_piece_section = player_set_piece_metrics_section(player, eval_group=eval_group)
     control_children = [
@@ -1169,9 +1176,10 @@ LIMITED_DATA_LEAGUES_FILTER_TIP = (
     "Some Football Manager leagues do not collect advanced match stats "
     "(e.g. key passes, interceptions, progressive passes, clearances). "
     "Moneyball exports fill those columns with zeros, so this app flags "
-    "those divisions with a striped Division cell and excludes unavailable "
-    "metrics from percentile averages. On includes players from those "
-    "leagues; off hides them."
+    "those divisions with a striped Division cell, stripes stat metric "
+    "cells for the same players, and excludes unavailable metrics from "
+    "percentile averages. On includes players from those leagues; off "
+    "hides them."
 )
 
 

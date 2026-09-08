@@ -5555,6 +5555,27 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     font-weight: 500;
 }
 
+.st-metric-value-row.is-limited-metric {
+    background-color: rgba(148, 163, 184, 0.16);
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(148, 163, 184, 0.18) 0 2px,
+        transparent 2px 9px
+    );
+    border-radius: 6px;
+    padding: 2px 6px;
+}
+
+html[data-theme="light"] .st-metric-value-row.is-limited-metric,
+body[data-theme="light"] .st-metric-value-row.is-limited-metric {
+    background-color: #e2e8f0;
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(100, 116, 139, 0.12) 0 2px,
+        transparent 2px 9px
+    );
+}
+
 .st-filter-stack {
     display: flex;
     flex-direction: column;
