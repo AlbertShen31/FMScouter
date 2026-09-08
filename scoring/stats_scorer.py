@@ -1003,18 +1003,37 @@ def _per90_from_total(total: float, minutes: float) -> float:
     return total / (minutes / 90.0)
 
 
+def _should_prefer_export_per90(derived: float, export_per90: float) -> bool:
+    """Prefer FM's rounded /90 column when season totals are missing or inconsistent."""
+    if export_per90 <= 0:
+        return False
+    if derived <= 0:
+        return True
+    if derived < export_per90 * 0.5:
+        return True
+    if export_per90 - derived > 0.05:
+        return True
+    return False
+
+
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
     meta = metric_defs()[metric_id]
     aliases = list(meta.get("csv") or [])
     if meta.get("unit") == "per90":
         totals, per90_aliases = _split_csv_aliases(aliases)
         minutes = _minutes_for_per90(row)
+        export_per90 = _first_parsed(row, per90_aliases) if per90_aliases else None
         if totals and minutes is not None:
             total = _first_parsed(row, totals)
             if total is not None:
-                return _per90_from_total(total, minutes)
+                derived = _per90_from_total(total, minutes)
+                if export_per90 is not None and _should_prefer_export_per90(
+                    derived, export_per90
+                ):
+                    return export_per90
+                return derived
         if per90_aliases:
-            return _first_parsed(row, per90_aliases)
+            return export_per90
         return None
 
     for alias in aliases:

@@ -100,6 +100,7 @@ Acceptance examples (do not regress without an explicit rule change):
 
 ## Data & uploads
 
+- **National-team / squad Moneyball views** often export season `Goals` and `Assists` totals as `0` while `Goals per 90 minutes` and `Asts/90` stay populated (FM rounds those /90 columns in the file). Per-90 metrics normally use `total ÷ minutes`; when the total is zero or far below the export /90 rate, parsing falls back to the export’s rounded per-90 values (same rule for any metric with both total and /90 columns).
 - Prefer saved exports via upload library / cache over re-parsing huge CSVs in every callback.
 - Precompute on upload / “Compute All” when extending heavy paths; shortlist callbacks should mostly choose columns/filters, not rescore.
 - Historical compare: when a historical export is loaded, comparison is on; don’t leave redundant enable toggles.
