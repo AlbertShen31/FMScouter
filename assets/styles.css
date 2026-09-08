@@ -6928,37 +6928,6 @@ body[data-theme="light"] .up-cache.stale {
     cursor: help;
 }
 
-.up-limited-tip {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    max-width: 24rem;
-    line-height: 1.35;
-}
-
-.up-limited-tip-head {
-    font-weight: 600;
-}
-
-.up-limited-tip-nations {
-    color: var(--mantine-color-gray-4, #ced4da);
-}
-
-.up-limited-tip-leagues {
-    font-size: 0.85em;
-    color: var(--mantine-color-gray-5, #adb5bd);
-}
-
-html[data-theme="light"] .up-limited-tip-nations,
-body[data-theme="light"] .up-limited-tip-nations {
-    color: var(--mantine-color-gray-7, #495057);
-}
-
-html[data-theme="light"] .up-limited-tip-leagues,
-body[data-theme="light"] .up-limited-tip-leagues {
-    color: var(--mantine-color-gray-6, #6c757d);
-}
-
 html[data-theme="light"] .up-limited-count,
 body[data-theme="light"] .up-limited-count {
     color: #b45309;

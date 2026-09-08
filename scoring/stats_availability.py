@@ -293,7 +293,7 @@ def nation_counts_for_limited_divisions(
     limited_divisions: list[str] | None,
     players: list[dict[str, Any]] | None,
 ) -> list[tuple[str, int]]:
-    """Count limited leagues per nation (Based In), highest minutes per division."""
+    """Count players in limited leagues per nation (Based In)."""
     limited = [
         str(name).strip()
         for name in (limited_divisions or [])
@@ -303,9 +303,7 @@ def nation_counts_for_limited_divisions(
         return []
 
     limited_set = set(limited)
-    div_nation_minutes: dict[str, dict[str, float]] = defaultdict(
-        lambda: defaultdict(float)
-    )
+    nation_counts: dict[str, int] = defaultdict(int)
     for player in players or []:
         div = str(player.get("division") or "").strip()
         if div not in limited_set:
@@ -313,16 +311,7 @@ def nation_counts_for_limited_divisions(
         nation = str(player.get("based_in") or player.get("nation") or "").strip()
         if not nation or nation in ("-", "—"):
             nation = "Unknown"
-        minutes = float(player.get("minutes") or 0.0)
-        div_nation_minutes[div][nation] += minutes if minutes > 0 else 1.0
-
-    nation_counts: dict[str, int] = defaultdict(int)
-    for div in limited:
-        votes = div_nation_minutes.get(div)
-        if not votes:
-            nation_counts["Unknown"] += 1
-            continue
-        nation_counts[max(votes.items(), key=lambda item: item[1])[0]] += 1
+        nation_counts[nation] += 1
 
     return sorted(nation_counts.items(), key=lambda item: (-item[1], item[0].lower()))
 
@@ -351,6 +340,5 @@ def limited_tracking_tooltip(
     lines = [f"Incomplete advanced match stats ({n} {league_word})"]
     if counts:
         by_nation = ", ".join(f"{nation} ({count})" for nation, count in counts)
-        lines.append(f"By nation: {by_nation}")
-    lines.append(", ".join(divisions))
+        lines.append(f"Players by nation: {by_nation}")
     return "\n".join(lines)

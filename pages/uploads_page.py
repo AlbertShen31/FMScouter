@@ -89,62 +89,35 @@ def _any_computable() -> bool:
     return any(e.get("role_scores") or e.get("stats") for e in lib.list_files())
 
 
-def _limited_nation_counts(entry: dict) -> list[tuple[str, int]] | None:
-    raw = entry.get("limited_tracking_by_nation")
-    if not isinstance(raw, list):
-        return None
-    counts: list[tuple[str, int]] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        nation = str(item.get("nation") or "").strip()
-        if not nation:
-            continue
-        try:
-            count = int(item.get("count") or 0)
-        except (TypeError, ValueError):
-            continue
-        if count > 0:
-            counts.append((nation, count))
-    return counts or None
-
-
 def _limited_tooltip(entry: dict, limited: list[str]) -> str:
-    nation_counts = _limited_nation_counts(entry)
-    players = None
-    if nation_counts is None:
-        cache = upload_cache.load_cache(entry.get("id") or "")
-        stats = (cache or {}).get("stats") or {}
-        players = stats.get("players") or []
-    return limited_tracking_tooltip(
-        limited,
-        nation_counts=nation_counts,
-        players=players,
-    )
-
-
-def _limited_tooltip_label(entry: dict, limited: list[str]):
-    text = _limited_tooltip(entry, limited)
-    if not text:
-        return ""
-    lines = [line for line in text.split("\n") if line]
-    if not lines:
-        return ""
-    if len(lines) == 1:
-        return lines[0]
-    children = [html.Div(lines[0], className="up-limited-tip-head")]
-    if len(lines) == 2:
-        children.append(html.Div(lines[1], className="up-limited-tip-leagues"))
-    else:
-        children.append(html.Div(lines[1], className="up-limited-tip-nations"))
-        children.append(html.Div(lines[2], className="up-limited-tip-leagues"))
-    return html.Div(children, className="up-limited-tip")
+    cache = upload_cache.load_cache(entry.get("id") or "")
+    stats = (cache or {}).get("stats") or {}
+    players = stats.get("players") or []
+    return limited_tracking_tooltip(limited, players=players)
 
 
 def _limited_count_cell(entry: dict, limited: list[str]) -> dmc.Tooltip:
+    tip_style = {
+        "backgroundColor": "var(--app-elev)",
+        "color": "var(--app-text)",
+        "border": "1px solid var(--app-line)",
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.45",
+        "padding": "0.55rem 0.7rem",
+        "maxWidth": "24rem",
+        "whiteSpace": "pre-line",
+        "boxShadow": "0 10px 28px rgba(0, 0, 0, 0.38)",
+    }
     return dmc.Tooltip(
         html.Span(str(len(limited)), className="up-limited-count"),
-        label=_limited_tooltip_label(entry, limited),
+        label=_limited_tooltip(entry, limited),
+        styles={
+            "tooltip": tip_style,
+            "arrow": {
+                "backgroundColor": "var(--app-elev)",
+                "border": "1px solid var(--app-line)",
+            },
+        },
         withArrow=True,
         position="top",
         openDelay=200,
