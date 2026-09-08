@@ -8,8 +8,10 @@ from scoring.division_tiers import (
     TIER_LABELS,
     _fold,
     classify_division,
+    collapse_picker_divisions,
     division_sort_key,
     is_romanian_division,
+    picker_canonical_division,
     romanian_division_names,
 )
 
@@ -322,7 +324,7 @@ def filter_selectable_full_detail_divisions(
         if is_full_detail_selectable(name, nation or None):
             seen.add(name)
             out.append(name)
-    return out
+    return collapse_picker_divisions(out)
 
 
 def divisions_for_nation(
@@ -364,13 +366,14 @@ def full_detail_division_options(
     seen_in_group: dict[str, set[str]] = defaultdict(set)
     for division, nation in nation_pairs:
         nation_for_tier = nation or None
-        if not is_full_detail_selectable(division, nation_for_tier):
+        canonical = picker_canonical_division(division, nation_for_tier)
+        if not is_full_detail_selectable(canonical, nation_for_tier):
             continue
         nation_label = nation or "Other / unknown nation"
-        if division in seen_in_group[nation_label]:
+        if canonical in seen_in_group[nation_label]:
             continue
-        seen_in_group[nation_label].add(division)
-        by_nation[nation_label].append(division)
+        seen_in_group[nation_label].add(canonical)
+        by_nation[nation_label].append(canonical)
 
     options: list[dict[str, object]] = []
     for nation in sorted(by_nation.keys(), key=str.casefold):
@@ -405,11 +408,15 @@ def division_option_values_for_saved(
     options: list[dict] | None,
 ) -> list[str]:
     """Map stored division names to composite MultiSelect values (all nation groups)."""
-    wanted = {
-        decode_division_option_value(name)
-        for name in (saved or [])
-        if decode_division_option_value(name)
-    }
+    wanted = set(
+        collapse_picker_divisions(
+            [
+                decode_division_option_value(name)
+                for name in (saved or [])
+                if decode_division_option_value(name)
+            ]
+        )
+    )
     if not wanted:
         return []
     out: list[str] = []

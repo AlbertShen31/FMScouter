@@ -19,6 +19,13 @@ from typing import Literal
 
 DivisionTier = Literal["top", "pro", "amateur", ""]
 
+
+def _fold(text: str) -> str:
+    """Casefold and strip combining marks for fuzzy exact lookup."""
+    norm = unicodedata.normalize("NFKD", text or "")
+    return "".join(c for c in norm if not unicodedata.combining(c)).casefold().strip()
+
+
 # Exact FM export titles → tier (checked after nation overrides).
 _EXACT: dict[str, DivisionTier] = {
     # Romania
@@ -100,7 +107,7 @@ _EXACT: dict[str, DivisionTier] = {
     "Eerste Divisie": "pro",
     "Derde Divisie Zondag": "amateur",
     "Super liga Srbije": "top",
-    "Prva liga Srbije": "top",
+    "Prva liga Srbije": "pro",
     "V.League 1": "top",
     "V.League 2": "pro",
     "RPL": "top",
@@ -335,7 +342,162 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
         "Liga V": "amateur",
         "Liga de Tineret": "amateur",
     },
+    "Serbia": {
+        "Super liga Srbije": "top",
+        "Prva liga Srbije": "pro",
+    },
 }
+
+
+class _PickerDivisionGroup:
+    __slots__ = ("label", "members", "pattern")
+
+    def __init__(
+        self,
+        label: str,
+        members: tuple[str, ...] = (),
+        pattern: re.Pattern[str] | None = None,
+    ) -> None:
+        self.label = label
+        self.members = members
+        self.pattern = pattern
+
+
+# Settings picker: one row per logical league when FM splits a tier into groups.
+_PICKER_GROUPS_BY_NATION: dict[str, tuple[_PickerDivisionGroup, ...]] = {
+    "Greece": (
+        _PickerDivisionGroup(
+            "Super League 2",
+            (
+                "Super League 2 Voreios Om.",
+                "Super League 2 Notios Om.",
+            ),
+            re.compile(r"^Super League 2\b", re.I),
+        ),
+    ),
+    "Romania": (
+        _PickerDivisionGroup(
+            "Liga II",
+            ("Liga II Seria I", "Liga II Seria II"),
+        ),
+    ),
+    "Moldova": (
+        _PickerDivisionGroup(
+            "Liga 1",
+            ("Liga 1 Grupa A", "Liga 1 Grupa B"),
+        ),
+    ),
+}
+
+_PICKER_GROUPS_FOLD: dict[str, tuple[_PickerDivisionGroup, ...]] = {
+    _fold(nation): groups for nation, groups in _PICKER_GROUPS_BY_NATION.items()
+}
+_PICKER_MEMBER_TO_LABEL: dict[tuple[str, str], str] = {}
+for _nation, _groups in _PICKER_GROUPS_BY_NATION.items():
+    _nat_fold = _fold(_nation)
+    for _group in _groups:
+        _label_fold = _fold(_group.label)
+        _PICKER_MEMBER_TO_LABEL[(_nat_fold, _label_fold)] = _group.label
+        for _member in _group.members:
+            _PICKER_MEMBER_TO_LABEL[(_nat_fold, _fold(_member))] = _group.label
+
+
+def _picker_groups_for_nation(nation: str | None) -> tuple[_PickerDivisionGroup, ...]:
+    based_in = str(nation or "").strip()
+    if not based_in:
+        return ()
+    return _PICKER_GROUPS_FOLD.get(_fold(based_in), ())
+
+
+def picker_canonical_division(division: str | None, nation: str | None = None) -> str:
+    """Collapse FM subleague export titles to one settings-picker label."""
+    raw = str(division or "").strip()
+    if not raw:
+        return raw
+    groups = _picker_groups_for_nation(nation)
+    if groups:
+        hit = _PICKER_MEMBER_TO_LABEL.get((_fold(nation or ""), _fold(raw)))
+        if hit:
+            return hit
+        for group in groups:
+            if group.pattern and group.pattern.search(raw):
+                return group.label
+    if not nation:
+        for nat_fold, groups in _PICKER_GROUPS_FOLD.items():
+            hit = _PICKER_MEMBER_TO_LABEL.get((nat_fold, _fold(raw)))
+            if hit:
+                return hit
+            for group in groups:
+                if group.pattern and group.pattern.search(raw):
+                    return group.label
+    return raw
+
+
+def picker_group_member_divisions(
+    label: str,
+    nation: str | None = None,
+) -> tuple[str, ...]:
+    """All FM division titles represented by one picker label."""
+    name = str(label or "").strip()
+    if not name:
+        return ()
+    groups = _picker_groups_for_nation(nation)
+    if not groups and not nation:
+        for group_bundle in _PICKER_GROUPS_BY_NATION.values():
+            for group in group_bundle:
+                if _fold(group.label) == _fold(name):
+                    return (group.label, *group.members)
+        return (name,)
+    for group in groups:
+        if _fold(group.label) == _fold(name):
+            return (group.label, *group.members)
+    return (name,)
+
+
+def collapse_picker_divisions(names: list[str] | None) -> list[str]:
+    """Merge subleague export titles into one saved Full Detail entry each."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in names or []:
+        name = str(raw or "").strip()
+        if not name:
+            continue
+        canonical = picker_canonical_division(name)
+        key = canonical.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(canonical)
+    return out
+
+
+def division_matches_full_detail(
+    division: str | None,
+    nation: str | None,
+    selected: set[str] | frozenset[str] | list[str] | None,
+) -> bool:
+    """True when a player division hits a saved Full Detail picker entry."""
+    raw = str(division or "").strip()
+    if not raw:
+        return False
+    picked = {str(x).strip() for x in (selected or []) if str(x).strip()}
+    if not picked:
+        return False
+    if raw in picked:
+        return True
+    canonical = picker_canonical_division(raw, nation)
+    if canonical in picked:
+        return True
+    for choice in picked:
+        members = picker_group_member_divisions(choice, nation)
+        if raw in members:
+            return True
+        if nation and not _picker_groups_for_nation(nation):
+            members = picker_group_member_divisions(choice)
+            if raw in members:
+                return True
+    return False
+
 
 # (compiled regex, tier) — first match wins. Nation-agnostic distinctive titles.
 _PATTERNS: list[tuple[re.Pattern[str], DivisionTier]] = [
@@ -511,12 +673,6 @@ _PATTERNS: list[tuple[re.Pattern[str], DivisionTier]] = [
     (re.compile(r"^Lower Division$", re.I), "amateur"),
     (re.compile(r"^Third Division$", re.I), "amateur"),
 ]
-
-
-def _fold(text: str) -> str:
-    """Casefold and strip combining marks for fuzzy exact lookup."""
-    norm = unicodedata.normalize("NFKD", text or "")
-    return "".join(c for c in norm if not unicodedata.combining(c)).casefold().strip()
 
 
 _EXACT_FOLD = {_fold(k): v for k, v in _EXACT.items()}

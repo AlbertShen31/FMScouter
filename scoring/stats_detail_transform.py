@@ -71,6 +71,7 @@ def normalize_detail_level(raw) -> str:
 def engine_detail_level_for_division(
     division: str | None,
     *,
+    nation: str | None = None,
     full_detail_divisions: set[str] | frozenset[str] | list[str] | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> str:
@@ -78,8 +79,9 @@ def engine_detail_level_for_division(
     div = str(division or "").strip()
     if div in ("-", "—"):
         div = ""
-    full_set = {str(x).strip() for x in (full_detail_divisions or []) if str(x).strip()}
-    if div and div in full_set:
+    from scoring.division_tiers import division_matches_full_detail
+
+    if div and division_matches_full_detail(div, nation, full_detail_divisions):
         return "full_detail"
     from scoring.stats_availability import division_has_limited_tracking
 
@@ -96,8 +98,10 @@ def engine_detail_level_for_player(
 ) -> str:
     if not player:
         return default_export_level()
+    nation = player.get("based_in") or player.get("nation")
     return engine_detail_level_for_division(
         player.get("division"),
+        nation=nation,
         full_detail_divisions=full_detail_divisions,
         limited_divisions=limited_divisions,
     )

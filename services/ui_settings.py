@@ -823,6 +823,7 @@ def normalize_stats_full_detail_divisions(raw=None) -> list[str]:
         decode_division_option_value,
         filter_selectable_full_detail_divisions,
     )
+    from scoring.division_tiers import collapse_picker_divisions
 
     decoded = [decode_division_option_value(name) for name in items]
     seen: set[str] = set()
@@ -831,7 +832,8 @@ def normalize_stats_full_detail_divisions(raw=None) -> list[str]:
         if name and name not in seen:
             seen.add(name)
             out.append(name)
-    return filter_selectable_full_detail_divisions(out, include_library=False)
+    collapsed = collapse_picker_divisions(out)
+    return filter_selectable_full_detail_divisions(collapsed, include_library=False)
 
 
 def normalize_depth_undo_max(value) -> int:
