@@ -666,20 +666,12 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                             className="mt-3",
                         ),
                         html.Div(
-                            [
-                                dmc.Button(
-                                    "Add all Romania",
-                                    id="st-full-detail-add-romania",
-                                    variant="light",
-                                    size="xs",
-                                ),
-                                dmc.Button(
-                                    "Clear",
-                                    id="st-full-detail-clear",
-                                    variant="subtle",
-                                    size="xs",
-                                ),
-                            ],
+                            dmc.Button(
+                                "Clear",
+                                id="st-full-detail-clear",
+                                variant="subtle",
+                                size="xs",
+                            ),
                             className="st-full-detail-actions mt-2",
                         ),
                         _section_save_row("st-save-app-filters", "st-status-app-filters"),
@@ -1751,25 +1743,11 @@ def apply_preferred_theme_select(preferred_values, current):
 
 @callback(
     Output("st-full-detail-divisions", "value", allow_duplicate=True),
-    Input("st-full-detail-add-romania", "n_clicks"),
     Input("st-full-detail-clear", "n_clicks"),
-    State("st-full-detail-divisions", "value"),
     prevent_initial_call=True,
 )
-def quick_full_detail_divisions(add_clicks, clear_clicks, current):
-    triggered = ctx.triggered_id
-    if triggered == "st-full-detail-clear":
-        return []
-    if triggered != "st-full-detail-add-romania":
-        return no_update
-    selected = list(current or [])
-    seen = set(selected)
-    for name in dc.divisions_for_nation(dc.ROMANIA_NATION, selected=selected):
-        if name not in seen:
-            selected.append(name)
-            seen.add(name)
-    return selected
-
+def clear_full_detail_divisions(_n_clicks):
+    return []
 
 @callback(
     Output("ui-settings", "data"),

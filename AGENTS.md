@@ -72,7 +72,7 @@ Source of truth: `config/stats_availability.json` + `scoring/stats_availability.
 - **Probe metrics** (used to detect limited tracking): interceptions, key passes, progressive passes, clearances (and their `/90` columns).
 - **Not probes** (universal when present): includes **xA** — it appears even in limited leagues.
 - **Possession won**: not tracked in limited leagues when the export is zero; kept when > 0.
-- **Engine detail tiers (per division)**: MustermannFM / FM Stag cuts live in **Full Detail** space. Settings → App & filters → **Full Detail divisions** multi-select (grouped by nation, top tier first). **Add all Romania** seeds every Romanian league. Limited-tracking divisions use **Inactive** transforms; all others use **No Detail**. New installs default to all Romanian leagues as Full Detail.
+- **Engine detail tiers (per division)**: MustermannFM / FM Stag cuts live in **Full Detail** space. Settings → App & filters → **Full Detail divisions** multi-select (grouped by nation, top tier first; youth/amateur leagues excluded). Limited-tracking divisions use **Inactive** transforms; all others use **No Detail**. New installs default to Romanian Liga I / II (incl. seria groups).
 - **League limited** when: minutes-weighted averages of probe `/90` rates (players with minutes only) have **max ≤ 0.25**, and division has **≥ 300 total minutes**. Sparse leftovers (transfers / continental) must **not** veto. Zero-minute rows do not affect aggregates.
 - **Player limited**: ≥90 minutes + basics present + all probes zero → show “Not tracked”; exclude unavailable metrics from percentile averages.
 - Limited divisions get striped Division pills via upload-cache `limited_tracking_divisions`.

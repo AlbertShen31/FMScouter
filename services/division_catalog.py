@@ -204,6 +204,33 @@ def collect_division_nations(
     return pairs
 
 
+def is_full_detail_selectable(division: str | None, nation: str | None = None) -> bool:
+    """Full Detail picker excludes youth and amateur leagues."""
+    return classify_division(division, nation) != "amateur"
+
+
+def filter_selectable_full_detail_divisions(
+    names: list[str] | None,
+    *,
+    include_library: bool = True,
+) -> list[str]:
+    """Drop youth/amateur divisions while preserving order."""
+    items = [str(name or "").strip() for name in (names or []) if str(name or "").strip()]
+    if not items:
+        return []
+    pairs = collect_division_nations(selected=items, include_library=include_library)
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in items:
+        if name in seen:
+            continue
+        nation = pairs.get(name, "")
+        if is_full_detail_selectable(name, nation or None):
+            seen.add(name)
+            out.append(name)
+    return out
+
+
 def divisions_for_nation(
     nation: str,
     *,
@@ -230,6 +257,9 @@ def full_detail_division_options(
     pairs = collect_division_nations(selected=selected, include_library=include_library)
     by_nation: dict[str, list[str]] = defaultdict(list)
     for division, nation in pairs.items():
+        nation_for_tier = nation or None
+        if not is_full_detail_selectable(division, nation_for_tier):
+            continue
         nation_label = nation or "Other / unknown nation"
         by_nation[nation_label].append(division)
 
@@ -282,5 +312,8 @@ def division_values_from_options(options: list[dict] | None) -> list[str]:
 
 
 def default_full_detail_divisions() -> list[str]:
-    """Default Full Detail list: all known Romanian leagues."""
-    return romanian_division_names()
+    """Default Full Detail list: Romanian top- and second-tier leagues only."""
+    return filter_selectable_full_detail_divisions(
+        romanian_division_names(),
+        include_library=False,
+    )

@@ -821,7 +821,9 @@ def normalize_stats_full_detail_divisions(raw=None) -> list[str]:
         if name not in seen:
             seen.add(name)
             out.append(name)
-    return out
+    from services.division_catalog import filter_selectable_full_detail_divisions
+
+    return filter_selectable_full_detail_divisions(out)
 
 
 def normalize_depth_undo_max(value) -> int:
