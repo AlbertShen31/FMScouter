@@ -70,7 +70,8 @@ Source of truth: `config/stats_availability.json` + `scoring/stats_availability.
 
 - Some leagues export advanced stats as `0` instead of blank; do not treat those zeros as real rates for percentiles.
 - **Probe metrics** (used to detect limited tracking): interceptions, key passes, progressive passes, clearances (and their `/90` columns).
-- **Not probes** (universal when present): includes **xA** and **possession won** — they appear even in limited leagues.
+- **Not probes** (universal when present): includes **xA** — it appears even in limited leagues.
+- **Possession won**: not tracked in limited leagues when the export is zero; kept when > 0.
 - **League limited** when: minutes-weighted averages of probe `/90` rates (players with minutes only) have **max ≤ 0.25**, and division has **≥ 300 total minutes**. Sparse leftovers (transfers / continental) must **not** veto. Zero-minute rows do not affect aggregates.
 - **Player limited**: ≥90 minutes + basics present + all probes zero → show “Not tracked”; exclude unavailable metrics from percentile averages.
 - Limited divisions get striped Division pills via upload-cache `limited_tracking_divisions`.

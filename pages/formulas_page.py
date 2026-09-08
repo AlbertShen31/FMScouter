@@ -179,7 +179,9 @@ def _faq_panel() -> html.Div:
                 "affected metrics. Those metrics are excluded from category and overall averages.",
             ),
             _para(
-                "Universal metrics like xA and possession won still appear in limited leagues.",
+                "Universal metrics like xA still appear in limited leagues. "
+                "Possession won is not tracked when zero but is shown when the "
+                "export has a value above zero.",
             ),
         ),
         _faq_item(

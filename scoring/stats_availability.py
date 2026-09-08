@@ -6,8 +6,9 @@ must not be banded or averaged as if they were real zeros.
 
 Player-level: limited when basic stats exist and **all** advanced probes are
 zero. Probes are metrics limited leagues do not fill (interceptions, key
-passes, progressive passes, clearances). xA and possession won appear in
-limited leagues too, so they are not probes.
+passes, progressive passes, clearances). xA still appears in limited leagues.
+Possession won is not tracked when zero in limited leagues but is kept when
+the export value is > 0.
 
 League-level (Division stripe): limited when minutes-weighted averages of
 probe /90 rates across the division are near zero. A few leftover non-zeros
@@ -79,6 +80,30 @@ def unavailable_metrics_for_group(group: str | None) -> frozenset[str]:
     if is_gk_group(group):
         return frozenset(cfg["gk"])
     return frozenset(cfg["outfield"])
+
+
+def unavailable_when_zero_metrics() -> frozenset[str]:
+    """Limited-league metrics that stay available when the parsed value is > 0."""
+    cfg = availability_config().get("limited_tracking_unavailable_when_zero") or {}
+    return frozenset(cfg.get("metrics") or [])
+
+
+def _effective_unavailable(
+    pool: frozenset[str],
+    stats: dict[str, Any],
+) -> frozenset[str]:
+    """Drop zero-only metrics from the unavailable set when the player has data."""
+    when_zero = unavailable_when_zero_metrics()
+    if not when_zero:
+        return pool
+    keep = {
+        mid
+        for mid in pool
+        if mid in when_zero and (stats.get(mid) or 0) > 0
+    }
+    if not keep:
+        return pool
+    return frozenset(mid for mid in pool if mid not in keep)
 
 
 def _csv_value(row: dict[str, str], column: str) -> float | None:
@@ -232,9 +257,10 @@ def apply_limited_tracking(
         unavailable = pool
     elif division_unavailable is not None and div:
         unavailable = frozenset(division_unavailable.get(div) or ()) & pool
+    stats = player.get("stats") or {}
+    unavailable = _effective_unavailable(unavailable, stats)
     player["stats_limited_tracking"] = bool(unavailable)
     player["stats_unavailable"] = sorted(unavailable)
-    stats = player.get("stats") or {}
     player["stats"] = {
         mid: val for mid, val in stats.items() if mid not in unavailable
     }
