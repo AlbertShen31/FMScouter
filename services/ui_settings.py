@@ -812,18 +812,26 @@ def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
 
 def normalize_stats_full_detail_divisions(raw=None) -> list[str]:
     if isinstance(raw, list):
-        items = [str(x).strip() for x in raw if str(x).strip()]
+        items = [
+            str(x).strip()
+            for x in raw
+            if str(x).strip()
+        ]
     else:
         items = [s.strip() for s in str(raw or "").split(",") if s.strip()]
+    from services.division_catalog import (
+        decode_division_option_value,
+        filter_selectable_full_detail_divisions,
+    )
+
+    decoded = [decode_division_option_value(name) for name in items]
     seen: set[str] = set()
     out: list[str] = []
-    for name in items:
-        if name not in seen:
+    for name in decoded:
+        if name and name not in seen:
             seen.add(name)
             out.append(name)
-    from services.division_catalog import filter_selectable_full_detail_divisions
-
-    return filter_selectable_full_detail_divisions(out)
+    return filter_selectable_full_detail_divisions(out, include_library=False)
 
 
 def normalize_depth_undo_max(value) -> int:

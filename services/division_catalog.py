@@ -118,6 +118,30 @@ _NATION_ALIASES: dict[str, str] = {
     "netherlands": "Netherlands",
 }
 
+# Nation + division composite keys for grouped MultiSelect (shared FM division titles).
+DIVISION_OPTION_SEP = "\x1f"
+_library_cache: dict[str, str] | None = None
+_library_busy = False
+
+
+def encode_division_option_value(division: str, nation: str | None = None) -> str:
+    """Unique MultiSelect value when the same division name appears in multiple nations."""
+    name = str(division or "").strip()
+    nat = normalize_nation_label(nation) if nation else ""
+    if not name:
+        return ""
+    if not nat:
+        return name
+    return f"{nat}{DIVISION_OPTION_SEP}{name}"
+
+
+def decode_division_option_value(raw: str | None) -> str:
+    """Strip nation prefix from a composite MultiSelect value."""
+    text = str(raw or "").strip()
+    if DIVISION_OPTION_SEP not in text:
+        return text
+    return text.split(DIVISION_OPTION_SEP, 1)[1].strip()
+
 
 def normalize_nation_label(raw: str | None) -> str:
     """Map FM nationality codes / aliases to canonical Based In country names."""
@@ -127,24 +151,84 @@ def normalize_nation_label(raw: str | None) -> str:
     return _NATION_ALIASES.get(_fold(text), text)
 
 
-def _division_nation_catalog() -> dict[str, str]:
-    """Best-effort division → nation map from tier tables."""
-    from scoring.division_tiers import _EXACT, _NATION_EXACT
+def _nation_exact_pairs() -> list[tuple[str, str]]:
+    """All (division, nation) pairs from nation-specific tier overrides."""
+    from scoring.division_tiers import _NATION_EXACT
 
+    return [
+        (division, nation)
+        for nation, divisions in _NATION_EXACT.items()
+        for division in divisions
+    ]
+
+
+def _division_nation_catalog() -> dict[str, str]:
+    """Best-effort division → primary nation map (one nation per division name)."""
     out: dict[str, str] = {}
-    for nation, divisions in _NATION_EXACT.items():
-        for division in divisions:
-            out[division] = nation
-    for division in _EXACT:
-        if division in ("Liga I", "Liga II", "Liga V"):
-            out.setdefault(division, ROMANIA_NATION)
+    for division, nation in _nation_exact_pairs():
+        out.setdefault(division, nation)
     for division in romanian_division_names():
         out.setdefault(division, ROMANIA_NATION)
     return out
 
 
-def divisions_from_library() -> dict[str, str]:
+def collect_division_nation_pairs(
+    *,
+    selected: list[str] | None = None,
+    include_library: bool = True,
+    library: dict[str, str] | None = None,
+) -> list[tuple[str, str]]:
+    """All (division, nation) associations for grouped settings pickers."""
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+
+    def add(division: str, nation: str) -> None:
+        name = str(division or "").strip()
+        if not name:
+            return
+        nat = normalize_nation_label(nation) if nation else ""
+        key = (name, nat)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(key)
+
+    for division, nation in _nation_exact_pairs():
+        add(division, nation)
+    for division in romanian_division_names():
+        add(division, ROMANIA_NATION)
+    if include_library:
+        lib = library if library is not None else divisions_from_library()
+        for division, nation in lib.items():
+            if nation:
+                add(division, nation)
+            else:
+                add(division, "")
+    for division in selected or []:
+        name = decode_division_option_value(division)
+        if not name:
+            continue
+        matched = False
+        for div, nat in _nation_exact_pairs():
+            if div == name:
+                add(name, nat)
+                matched = True
+        if not matched:
+            if is_romanian_division(name):
+                add(name, ROMANIA_NATION)
+            else:
+                add(name, "")
+    return out
+
+
+def divisions_from_library(*, use_cache: bool = True) -> dict[str, str]:
     """Division → nation from cached stats exports in the upload library."""
+    global _library_cache, _library_busy
+    if use_cache and _library_cache is not None:
+        return dict(_library_cache)
+    if _library_busy:
+        return {}
+
     votes: dict[str, Counter[str]] = defaultdict(Counter)
     try:
         import services.export_library as lib
@@ -152,31 +236,38 @@ def divisions_from_library() -> dict[str, str]:
     except ImportError:
         return {}
 
-    for entry in lib.list_files():
-        if not entry.get("stats"):
-            continue
-        file_id = str(entry.get("id") or "").strip()
-        if not file_id:
-            continue
-        cache = load_cache(file_id)
-        stats = (cache or {}).get("stats") if isinstance(cache, dict) else None
-        players = (stats or {}).get("players") if isinstance(stats, dict) else None
-        if not isinstance(players, list):
-            continue
-        for player in players:
-            division = str(player.get("division") or "").strip()
-            if not division or division in ("-", "—"):
+    _library_busy = True
+    try:
+        for entry in lib.list_files():
+            if not entry.get("stats"):
                 continue
-            nation = normalize_nation_label(
-                player.get("based_in") or player.get("nation") or ""
-            )
-            if nation:
-                votes[division][nation] += 1
-    return {
-        division: counter.most_common(1)[0][0]
-        for division, counter in votes.items()
-        if counter
-    }
+            file_id = str(entry.get("id") or "").strip()
+            if not file_id:
+                continue
+            cache = load_cache(file_id)
+            stats = (cache or {}).get("stats") if isinstance(cache, dict) else None
+            players = (stats or {}).get("players") if isinstance(stats, dict) else None
+            if not isinstance(players, list):
+                continue
+            for player in players:
+                division = str(player.get("division") or "").strip()
+                if not division or division in ("-", "—"):
+                    continue
+                nation = normalize_nation_label(
+                    player.get("based_in") or player.get("nation") or ""
+                )
+                if nation:
+                    votes[division][nation] += 1
+        result = {
+            division: counter.most_common(1)[0][0]
+            for division, counter in votes.items()
+            if counter
+        }
+        if use_cache:
+            _library_cache = result
+        return result
+    finally:
+        _library_busy = False
 
 
 def collect_division_nations(
@@ -184,24 +275,27 @@ def collect_division_nations(
     selected: list[str] | None = None,
     include_library: bool = True,
 ) -> dict[str, str]:
-    """Merge catalog + library divisions; ensure saved selections stay visible."""
-    pairs = _division_nation_catalog()
-    if include_library:
-        for division, nation in divisions_from_library().items():
-            if nation:
-                pairs[division] = nation
-            else:
-                pairs.setdefault(division, "")
-    for division in selected or []:
-        name = str(division or "").strip()
-        if name:
-            pairs.setdefault(name, "")
-    for division, nation in list(pairs.items()):
+    """Merge catalog + library divisions; one primary nation per division name."""
+    library = divisions_from_library() if include_library else {}
+    nation_pairs = collect_division_nation_pairs(
+        selected=selected,
+        include_library=include_library,
+        library=library,
+    )
+    out: dict[str, str] = {}
+    for division, nation in nation_pairs:
+        if division in library and library[division]:
+            out[division] = normalize_nation_label(library[division])
+        elif division not in out:
+            out[division] = nation
+        elif not out[division] and nation:
+            out[division] = nation
+    for division, nation in list(out.items()):
         if nation:
-            pairs[division] = normalize_nation_label(nation)
+            out[division] = normalize_nation_label(nation)
         elif is_romanian_division(division):
-            pairs[division] = ROMANIA_NATION
-    return pairs
+            out[division] = ROMANIA_NATION
+    return out
 
 
 def is_full_detail_selectable(division: str | None, nation: str | None = None) -> bool:
@@ -241,11 +335,19 @@ def divisions_for_nation(
     target = normalize_nation_label(nation)
     if not target:
         return []
-    pairs = collect_division_nations(selected=selected, include_library=include_library)
-    names = [
-        div for div, nat in pairs.items() if normalize_nation_label(nat) == target
-    ]
-    return sorted(names, key=lambda div: division_sort_key(div, target))
+    nation_pairs = collect_division_nation_pairs(
+        selected=selected,
+        include_library=include_library,
+    )
+    names = sorted(
+        {
+            div
+            for div, nat in nation_pairs
+            if normalize_nation_label(nat) == target
+        },
+        key=lambda div: division_sort_key(div, target),
+    )
+    return names
 
 
 def full_detail_division_options(
@@ -254,13 +356,20 @@ def full_detail_division_options(
     include_library: bool = True,
 ) -> list[dict[str, object]]:
     """Grouped MultiSelect options for dmc: [{group, items: [{value, label}]}]."""
-    pairs = collect_division_nations(selected=selected, include_library=include_library)
+    nation_pairs = collect_division_nation_pairs(
+        selected=selected,
+        include_library=include_library,
+    )
     by_nation: dict[str, list[str]] = defaultdict(list)
-    for division, nation in pairs.items():
+    seen_in_group: dict[str, set[str]] = defaultdict(set)
+    for division, nation in nation_pairs:
         nation_for_tier = nation or None
         if not is_full_detail_selectable(division, nation_for_tier):
             continue
         nation_label = nation or "Other / unknown nation"
+        if division in seen_in_group[nation_label]:
+            continue
+        seen_in_group[nation_label].add(division)
         by_nation[nation_label].append(division)
 
     options: list[dict[str, object]] = []
@@ -279,14 +388,52 @@ def full_detail_division_options(
             )
             tier_label = TIER_LABELS.get(tier, "")
             label = f"{division} — {tier_label}" if tier_label else division
-            items.append({"value": division, "label": label})
+            nation_key = nation if nation != "Other / unknown nation" else ""
+            items.append(
+                {
+                    "value": encode_division_option_value(division, nation_key),
+                    "label": label,
+                }
+            )
         if items:
             options.append({"group": nation, "items": items})
     return options
 
 
+def division_option_values_for_saved(
+    saved: list[str] | None,
+    options: list[dict] | None,
+) -> list[str]:
+    """Map stored division names to composite MultiSelect values (all nation groups)."""
+    wanted = {
+        decode_division_option_value(name)
+        for name in (saved or [])
+        if decode_division_option_value(name)
+    }
+    if not wanted:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for entry in options or []:
+        if not isinstance(entry, dict):
+            continue
+        for item in entry.get("items") or []:
+            if isinstance(item, str):
+                value = item.strip()
+            elif isinstance(item, dict):
+                value = str(item.get("value") or "").strip()
+            else:
+                value = ""
+            if not value or value in seen:
+                continue
+            if decode_division_option_value(value) in wanted:
+                seen.add(value)
+                out.append(value)
+    return out
+
+
 def division_values_from_options(options: list[dict] | None) -> list[str]:
-    """Flatten grouped or flat MultiSelect data to division value strings."""
+    """Flatten grouped or flat MultiSelect data to division name strings."""
     values: list[str] = []
     seen: set[str] = set()
     for entry in options or []:
@@ -295,16 +442,16 @@ def division_values_from_options(options: list[dict] | None) -> list[str]:
         if "items" in entry:
             for item in entry.get("items") or []:
                 if isinstance(item, str):
-                    value = item.strip()
+                    value = decode_division_option_value(item)
                 elif isinstance(item, dict):
-                    value = str(item.get("value") or "").strip()
+                    value = decode_division_option_value(item.get("value"))
                 else:
                     value = ""
                 if value and value not in seen:
                     seen.add(value)
                     values.append(value)
             continue
-        value = str(entry.get("value") or "").strip()
+        value = decode_division_option_value(entry.get("value"))
         if value and value not in seen:
             seen.add(value)
             values.append(value)

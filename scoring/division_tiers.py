@@ -319,10 +319,12 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
         "National Football League": "top",
     },
     "Norway": {
+        "Eliteserien": "top",
         "1. divisjon": "pro",
         "2. divisjon avd. 2": "amateur",
     },
     "Slovenia": {
+        "1. SNL": "top",
         "3. SNL Vzhod": "amateur",
     },
     "Romania": {

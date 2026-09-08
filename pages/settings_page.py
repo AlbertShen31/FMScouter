@@ -659,7 +659,10 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                                 "all others use No Detail."
                             ),
                             data=full_detail_division_options or [],
-                            value=list(settings.get("stats_full_detail_divisions") or []),
+                            value=dc.division_option_values_for_saved(
+                                settings.get("stats_full_detail_divisions"),
+                                full_detail_division_options,
+                            ),
                             searchable=True,
                             clearable=True,
                             maxDropdownHeight=320,
@@ -1407,6 +1410,13 @@ def _role_form_values(
     page_opts = [
         {"label": opt, "value": opt} for opt in us.page_size_options(settings)
     ]
+    full_detail_options = dc.full_detail_division_options(
+        settings.get("stats_full_detail_divisions")
+    )
+    full_detail_values = dc.division_option_values_for_saved(
+        settings.get("stats_full_detail_divisions"),
+        full_detail_options,
+    )
     return (
         us.format_list(settings["age_tiers"], kind="age"),
         settings["bands"]["elite"],
@@ -1438,7 +1448,7 @@ def _role_form_values(
         settings["default_minutes_required"],
         settings["depth_undo_max"],
         settings["exclude_limited_leagues_adaptive_bounds"],
-        list(settings.get("stats_full_detail_divisions") or []),
+        full_detail_values,
     )
 
 
