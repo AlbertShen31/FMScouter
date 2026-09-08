@@ -279,6 +279,7 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
     "Austria": {
         "Bundesliga": "top",
         "2. Liga": "pro",
+        "Kärntner Liga": "amateur",
     },
     "Germany": {
         "Bundesliga": "top",
@@ -327,6 +328,8 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
     "Romania": {
         "Liga I": "top",
         "Liga II": "pro",
+        "Liga II Seria I": "pro",
+        "Liga II Seria II": "pro",
         "Liga V": "amateur",
         "Liga de Tineret": "amateur",
     },
@@ -353,6 +356,7 @@ _PATTERNS: list[tuple[re.Pattern[str], DivisionTier]] = [
     (re.compile(r"^Preferente\b", re.I), "amateur"),
     (re.compile(r"^Regional Preferente\b", re.I), "amateur"),
     (re.compile(r"^Comunitat Valenciana\b", re.I), "amateur"),
+    (re.compile(r"^División de Honor\b", re.I), "amateur"),
     # Germany
     (re.compile(r"^RL\s", re.I), "amateur"),
     (re.compile(r"^Regionalliga\b", re.I), "amateur"),
