@@ -63,6 +63,8 @@ def delta_html(
     if delta is None or math.isnan(float(delta)):
         return ""
     amount = float(delta)
+    if percent and round(amount) == 0:
+        return ""
     if abs(amount) < min_abs:
         return ""
     arrow = "↑" if amount > 0 else "↓"
