@@ -6447,12 +6447,20 @@ def _build_profile_modal_body(
         ]
     else:
         if stats_player:
+            banding_ctx = None
+            if stats_cohort:
+                banding_ctx = us.build_stats_banding_context(
+                    settings,
+                    stats_cohort,
+                    limited_divisions=limited_divisions or None,
+                )
             stats_content = stats_charts_bottom_pane(
                 stats_player,
                 theme=theme,
                 view="bars",
-                threshold_overrides=settings.get("stats_thresholds"),
+                settings=settings,
                 cohort_players=stats_cohort,
+                banding_ctx=banding_ctx,
             )
             set_piece_metrics = player_set_piece_metrics_section(stats_player)
         else:
@@ -6698,59 +6706,50 @@ def _build_profile_stats_compare_body(
     file_a = str(profile_a.get("file_id") or "").strip()
     file_b = str(profile_b.get("file_id") or "").strip()
     same_file = bool(file_a and file_a == file_b)
-    thresh = settings.get("stats_thresholds")
     mins_req = float(us.default_minutes_required(settings))
     cohort_note = None
     if same_file and cohort_a:
-        bound_opts = adaptive_bound_options(
+        limited = lib.list_limited_tracking_divisions(file_id=file_a or None) or None
+        banding_ctx = us.build_stats_banding_context(
             settings,
+            cohort_a,
+            limited_divisions=limited,
             min_minutes=mins_req,
-            limited_divisions=lib.list_limited_tracking_divisions(file_id=file_a or None)
-            or None,
         )
-        metric_p0, metric_p100 = adaptive_metric_bound_maps(
-            cohort_a, thresh, **bound_opts
+        thresh_a, metric_p0_a, metric_p100_a = us.banding_for_player(
+            banding_ctx, stats_a
         )
-        metric_p0_a = metric_p0_b = metric_p0
-        metric_p100_a = metric_p100_b = metric_p100
+        thresh_b, metric_p0_b, metric_p100_b = us.banding_for_player(
+            banding_ctx, stats_b
+        )
     else:
         if file_a != file_b:
             cohort_note = (
                 "Percentiles are relative to each player's source export; raw values "
                 "are directly comparable."
             )
-        metric_p0_a, metric_p100_a = (
-            adaptive_metric_bound_maps(
+        if cohort_a:
+            limited_a = lib.list_limited_tracking_divisions(file_id=file_a or None) or None
+            ctx_a = us.build_stats_banding_context(
+                settings,
                 cohort_a,
-                thresh,
-                **adaptive_bound_options(
-                    settings,
-                    min_minutes=mins_req,
-                    limited_divisions=lib.list_limited_tracking_divisions(
-                        file_id=file_a or None
-                    )
-                    or None,
-                ),
+                limited_divisions=limited_a,
+                min_minutes=mins_req,
             )
-            if cohort_a
-            else ({}, {})
-        )
-        metric_p0_b, metric_p100_b = (
-            adaptive_metric_bound_maps(
+            thresh_a, metric_p0_a, metric_p100_a = us.banding_for_player(ctx_a, stats_a)
+        else:
+            thresh_a, metric_p0_a, metric_p100_a = {}, {}, {}
+        if cohort_b:
+            limited_b = lib.list_limited_tracking_divisions(file_id=file_b or None) or None
+            ctx_b = us.build_stats_banding_context(
+                settings,
                 cohort_b,
-                thresh,
-                **adaptive_bound_options(
-                    settings,
-                    min_minutes=mins_req,
-                    limited_divisions=lib.list_limited_tracking_divisions(
-                        file_id=file_b or None
-                    )
-                    or None,
-                ),
+                limited_divisions=limited_b,
+                min_minutes=mins_req,
             )
-            if cohort_b
-            else ({}, {})
-        )
+            thresh_b, metric_p0_b, metric_p100_b = us.banding_for_player(ctx_b, stats_b)
+        else:
+            thresh_b, metric_p0_b, metric_p100_b = {}, {}, {}
     eval_group = normalize_compare_eval_group(eval_group, stats_a, stats_b)
 
     return stats_compare_body(
@@ -6761,7 +6760,8 @@ def _build_profile_stats_compare_body(
         view=normalize_compare_view(view),
         eval_group=eval_group,
         theme=theme,
-        threshold_overrides=thresh,
+        threshold_overrides_a=thresh_a,
+        threshold_overrides_b=thresh_b,
         metric_p100_a=metric_p100_a,
         metric_p0_a=metric_p0_a,
         metric_p100_b=metric_p100_b,

@@ -180,7 +180,7 @@ PACK_DATA_KEYS = (
     "set_piece_profiles",
     "default_minutes_required",
     "exclude_limited_leagues_adaptive_bounds",
-    "stats_engine_detail_level",
+    "stats_full_detail_divisions",
     "depth_undo_max",
     "page_size",
     "page_size_options",
@@ -220,7 +220,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "default_minutes_required": 900,
     "exclude_limited_leagues_adaptive_bounds": True,
-    "stats_engine_detail_level": "no_detail",
+    "stats_full_detail_divisions": [],
     "depth_undo_max": 10,
     "page_size": 50,
     "page_size_options": [25, 50, 100],
@@ -810,10 +810,18 @@ def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
     return bool(DEFAULTS["exclude_limited_leagues_adaptive_bounds"])
 
 
-def normalize_stats_engine_detail_level(value) -> str:
-    from scoring.stats_detail_transform import normalize_detail_level
-
-    return normalize_detail_level(value or DEFAULTS["stats_engine_detail_level"])
+def normalize_stats_full_detail_divisions(raw=None) -> list[str]:
+    if isinstance(raw, list):
+        items = [str(x).strip() for x in raw if str(x).strip()]
+    else:
+        items = [s.strip() for s in str(raw or "").split(",") if s.strip()]
+    seen: set[str] = set()
+    out: list[str] = []
+    for name in items:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
 
 def normalize_depth_undo_max(value) -> int:
@@ -857,12 +865,12 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     import copy
 
     import services.stats_threshold_packs as stp
-    from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
+    from scoring.stats_detail_transform import threshold_trees_by_level
 
-    export_detail = normalize_stats_engine_detail_level(raw.get("stats_engine_detail_level"))
-    threshold_tree = apply_detail_level_to_threshold_tree(
-        copy.deepcopy(stp.load_tree()),
-        export_detail_level=export_detail,
+    raw_threshold_tree = copy.deepcopy(stp.load_tree())
+    threshold_trees = threshold_trees_by_level(raw_threshold_tree)
+    full_detail_divisions = normalize_stats_full_detail_divisions(
+        raw.get("stats_full_detail_divisions")
     )
 
     return {
@@ -885,7 +893,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "exclude_limited_leagues_adaptive_bounds": normalize_exclude_limited_leagues_adaptive_bounds(
             raw.get("exclude_limited_leagues_adaptive_bounds")
         ),
-        "stats_engine_detail_level": export_detail,
+        "stats_full_detail_divisions": full_detail_divisions,
         "depth_undo_max": normalize_depth_undo_max(raw.get("depth_undo_max")),
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
         "page_size_options": page_opts,
@@ -895,10 +903,105 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "personality_tier_colors": normalize_personality_tier_colors(
             raw.get("personality_tier_colors")
         ),
-        # Resolved from stats-threshold packs; cuts adjusted for engine detail level.
-        "stats_thresholds": threshold_tree,
+        # Raw pack cuts (full_detail reference) + per-tier trees for banding.
+        "stats_thresholds": raw_threshold_tree,
+        "stats_threshold_trees": threshold_trees,
         "stats_threshold_pack_id": stp.active_id(),
     }
+
+
+def build_stats_banding_context(
+    settings: dict[str, Any] | None,
+    players: list[dict[str, Any]] | None,
+    *,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    min_minutes: float | None = None,
+    exclude_limited_leagues: bool | None = None,
+) -> dict[str, Any]:
+    """Precompute per-tier threshold trees and adaptive p0/p100 maps for a cohort."""
+    from collections import defaultdict
+
+    from scoring.stats_detail_transform import engine_detail_level_for_player
+    from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
+
+    settings = normalize(settings)
+    trees = settings.get("stats_threshold_trees") or {}
+    if not trees:
+        raw = settings.get("stats_thresholds") or {}
+        trees = {"no_detail": raw, "full_detail": raw, "inactive": raw}
+    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    limited = frozenset(limited_divisions or [])
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=min_minutes,
+        limited_divisions=limited,
+    )
+    if exclude_limited_leagues is not None:
+        bound_opts["exclude_limited_leagues"] = bool(exclude_limited_leagues)
+
+    by_level: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for player in players or []:
+        level = engine_detail_level_for_player(
+            player,
+            full_detail_divisions=full_detail,
+            limited_divisions=limited,
+        )
+        by_level[level].append(player)
+
+    bounds_by_level: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
+    fallback_players = list(players or [])
+    for level in ("full_detail", "no_detail", "inactive"):
+        cohort = by_level.get(level) or fallback_players
+        tree = trees.get(level) or trees.get("no_detail") or settings.get("stats_thresholds") or {}
+        bounds_by_level[level] = adaptive_metric_bound_maps(
+            cohort,
+            tree,
+            **bound_opts,
+        )
+
+    return {
+        "trees": trees,
+        "full_detail_divisions": full_detail,
+        "limited_divisions": limited,
+        "bounds_by_level": bounds_by_level,
+    }
+
+
+def banding_for_player(
+    context: dict[str, Any] | None,
+    player: dict[str, Any] | None,
+    *,
+    settings: dict[str, Any] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, float], dict[str, float]]:
+    """Return (threshold_tree, metric_p0, metric_p100) for one player."""
+    from scoring.stats_detail_transform import engine_detail_level_for_player
+
+    settings = normalize(settings) if settings is not None else {}
+    if context:
+        trees = context.get("trees") or {}
+        full_detail = context.get("full_detail_divisions") or frozenset()
+        limited = context.get("limited_divisions") or frozenset()
+        bounds_by_level = context.get("bounds_by_level") or {}
+    else:
+        trees = settings.get("stats_threshold_trees") or {}
+        full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+        limited = frozenset(limited_divisions or [])
+        bounds_by_level = {}
+
+    level = engine_detail_level_for_player(
+        player,
+        full_detail_divisions=full_detail,
+        limited_divisions=limited,
+    )
+    tree = (
+        trees.get(level)
+        or trees.get("no_detail")
+        or settings.get("stats_thresholds")
+        or {}
+    )
+    p0_map, p100_map = bounds_by_level.get(level) or bounds_by_level.get("no_detail") or ({}, {})
+    return tree, p0_map, p100_map
 
 
 def _slug(name: str) -> str:

@@ -1479,6 +1479,7 @@ def percentile_fields_from_stats_player(
     metric_p100: dict[str, float] | None = None,
     metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
+    banding_ctx=None,
 ) -> dict[str, Any]:
     """Subset of ``build_stats_row_snapshot`` used when enriching role saves."""
     if not player:
@@ -1489,6 +1490,7 @@ def percentile_fields_from_stats_player(
         metric_p100=metric_p100,
         metric_p0=metric_p0,
         cohort_players=cohort_players,
+        banding_ctx=banding_ctx,
     )
     keys = (
         "Minutes",
@@ -1516,6 +1518,7 @@ def build_stats_row_snapshot(
     metric_p100: dict[str, float] | None = None,
     metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
+    banding_ctx=None,
 ) -> dict[str, Any]:
     """One shortlist-style row: identity + overall / category percentiles."""
     import services.ui_settings as us
@@ -1577,8 +1580,14 @@ def build_stats_row_snapshot(
     out["percentile_phase_label"] = pos_group_label(group)
     out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
     thresh = settings.get("stats_thresholds")
+    if banding_ctx is not None:
+        thresh, metric_p0, metric_p100 = us.banding_for_player(banding_ctx, player)
     bound_opts = adaptive_bound_options(settings)
-    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+    if (
+        banding_ctx is None
+        and (metric_p100 is None or metric_p0 is None)
+        and cohort_players is not None
+    ):
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
             cohort_players, thresh, **bound_opts
         )
@@ -1693,13 +1702,15 @@ def expand_role_profile_rows(
         for p in (stats_players or [])
         if stats_player_key(p)
     }
-    from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
+    import services.export_library as lib
     import services.ui_settings as us
 
     settings = us.normalize(settings)
-    bound_opts = adaptive_bound_options(settings)
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds"), **bound_opts
+    limited = lib.list_limited_tracking_divisions(file_id=file_id) if file_id else None
+    banding_ctx = us.build_stats_banding_context(
+        settings,
+        stats_players,
+        limited_divisions=limited or None,
     )
 
     out: list[dict[str, Any]] = []
@@ -1712,8 +1723,7 @@ def expand_role_profile_rows(
         pct = percentile_fields_from_stats_player(
             stats_player,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
+            banding_ctx=banding_ctx,
         )
         minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
@@ -1795,14 +1805,9 @@ def refresh_profile_percentiles(settings=None) -> int:
     """
     import services.export_library as lib
     import services.ui_settings as us
-    from scoring.stats_scorer import (
-        adaptive_bound_options,
-        adaptive_metric_bound_maps,
-        resolve_player_pos_group,
-    )
+    from scoring.stats_scorer import resolve_player_pos_group
 
     settings = us.normalize(settings)
-    thresh = settings.get("stats_thresholds")
     index = _read_index()
     if not index:
         return 0
@@ -1819,24 +1824,22 @@ def refresh_profile_percentiles(settings=None) -> int:
             orphan.append(entry)
 
     cohort_cache: dict[str, list[dict[str, Any]]] = {}
-    bounds_cache: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
+    banding_cache: dict[str, dict[str, Any]] = {}
     updated = 0
 
     def _cohort(
         file_id: str,
-    ) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float]]:
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if file_id not in cohort_cache:
             players = load_stats_players_for_file(file_id)
             cohort_cache[file_id] = players
             limited = lib.list_limited_tracking_divisions(file_id=file_id)
-            bound_opts = adaptive_bound_options(
-                settings, limited_divisions=limited or None
+            banding_cache[file_id] = us.build_stats_banding_context(
+                settings,
+                players,
+                limited_divisions=limited or None,
             )
-            bounds_cache[file_id] = adaptive_metric_bound_maps(
-                players, thresh, **bound_opts
-            )
-        p0_map, p100_map = bounds_cache[file_id]
-        return cohort_cache[file_id], p0_map, p100_map
+        return cohort_cache[file_id], banding_cache[file_id]
 
     def _stats_for(
         entry: dict[str, Any],
@@ -1860,8 +1863,7 @@ def refresh_profile_percentiles(settings=None) -> int:
     def _apply(
         entry: dict[str, Any],
         cohort: list[dict[str, Any]],
-        metric_p0: dict[str, float],
-        metric_p100: dict[str, float],
+        banding_ctx: dict[str, Any],
     ) -> bool:
         stats_player = _stats_for(entry, cohort)
         if not isinstance(stats_player, dict):
@@ -1877,8 +1879,7 @@ def refresh_profile_percentiles(settings=None) -> int:
         pct = percentile_fields_from_stats_player(
             band_player,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
+            banding_ctx=banding_ctx,
         )
         if not pct:
             return False
@@ -1900,15 +1901,11 @@ def refresh_profile_percentiles(settings=None) -> int:
         stats_player = entry.get("stats_player")
         if not isinstance(stats_player, dict):
             return False
-        cohort = [stats_player]
-        bound_opts = adaptive_bound_options(settings)
-        metric_p0, metric_p100 = adaptive_metric_bound_maps(
-            cohort, thresh, **bound_opts
-        )
-        return _apply(entry, cohort, metric_p0, metric_p100)
+        banding_ctx = us.build_stats_banding_context(settings, [stats_player])
+        return _apply(entry, [stats_player], banding_ctx)
 
     for file_id, entries in by_file.items():
-        cohort, metric_p0, metric_p100 = _cohort(file_id)
+        cohort, banding_ctx = _cohort(file_id)
         if not cohort:
             for entry in entries:
                 if _apply_embedded_only(entry):
@@ -1916,7 +1913,7 @@ def refresh_profile_percentiles(settings=None) -> int:
             continue
         for entry in entries:
             if _stats_for(entry, cohort) is not None:
-                if _apply(entry, cohort, metric_p0, metric_p100):
+                if _apply(entry, cohort, banding_ctx):
                     updated += 1
             elif _apply_embedded_only(entry):
                 updated += 1
@@ -2060,7 +2057,6 @@ def replace_profiles_from_saved_file(
     exports to add players to slots.
     """
     import services.ui_settings as us
-    from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
 
     file_id = str(file_id or "").strip()
     if not file_id:
@@ -2153,9 +2149,10 @@ def replace_profiles_from_saved_file(
         name_of=lambda player: player.get("name"),
     )
     limited = lib.list_limited_tracking_divisions(file_id=file_id)
-    bound_opts = adaptive_bound_options(settings, limited_divisions=limited or None)
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        stats_players, settings.get("stats_thresholds"), **bound_opts
+    banding_ctx = us.build_stats_banding_context(
+        settings,
+        stats_players,
+        limited_divisions=limited or None,
     )
 
     items: list[dict[str, Any]] = []
@@ -2209,8 +2206,7 @@ def replace_profiles_from_saved_file(
         pct = percentile_fields_from_stats_player(
             stats_player,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
+            banding_ctx=banding_ctx,
             cohort_players=stats_players,
         )
         minutes = stats_player.get("minutes") if stats_player else None

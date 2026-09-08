@@ -19,6 +19,7 @@ from scoring.stats_availability import (
     has_limited_tracking,
     metric_is_unavailable,
 )
+import services.ui_settings as us
 
 EVAL_GROUPS = tuple((key, label) for key, label, _css in POS_GROUPS if key != "all")
 EVAL_GROUPS_GK = tuple((key, label) for key, label in EVAL_GROUPS if key == "gk")
@@ -692,8 +693,13 @@ def _player_modal_body(
     metric_p100=None,
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    banding_ctx=None,
 ) -> html.Div:
     settings = us.normalize(settings)
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player
+        )
     from scoring.stats_scorer import pos_group_label
 
     view = _normalize_player_view(view)
@@ -766,6 +772,7 @@ def stats_charts_bottom_pane(
     metric_p100=None,
     metric_p0=None,
     cohort_players=None,
+    banding_ctx=None,
 ) -> html.Div:
     """Build the charts portion (overall avg + bars/pizzas/values) for a player.
 
@@ -781,17 +788,22 @@ def stats_charts_bottom_pane(
             className="text-muted small",
         )
 
-    # settings is optional; we only use it as a convenience for callers that store
-    # threshold packs there.
-    if threshold_overrides is None and settings is not None:
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player
+        )
+    elif threshold_overrides is None and settings is not None:
         try:
             threshold_overrides = (settings or {}).get("stats_thresholds")
         except AttributeError:
             threshold_overrides = None
 
-    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+    if (
+        banding_ctx is None
+        and (metric_p100 is None or metric_p0 is None)
+        and cohort_players is not None
+    ):
         from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
-        import services.ui_settings as us
 
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
             cohort_players,

@@ -809,6 +809,12 @@ def _header_tooltips(
     return tips
 
 
+def _default_threshold_tree(settings) -> dict:
+    settings = us.normalize(settings)
+    trees = settings.get("stats_threshold_trees") or {}
+    return trees.get("no_detail") or settings.get("stats_thresholds") or {}
+
+
 def _player_percentile_map(
     player,
     *,
@@ -817,8 +823,13 @@ def _player_percentile_map(
     threshold_overrides=None,
     metric_p100=None,
     metric_p0=None,
+    banding_ctx=None,
 ) -> dict[str, float | None]:
     """Percentiles for comparison columns keyed by table column id."""
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player
+        )
     g, cat = _resolve_category(group, category)
     stats = scoring_stats(player)
     out: dict[str, float | None] = {}
@@ -895,6 +906,7 @@ def _build_rows(
     metric_p100=None,
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    banding_ctx=None,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -907,6 +919,10 @@ def _build_rows(
     rows = []
     hist_percentiles = hist_percentiles or {}
     for p in players:
+        if banding_ctx is not None:
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+                banding_ctx, p
+            )
         if not _player_matches_pos_filter(p, group):
             continue
         status = minutes_status(p.get("minutes"), minutes_required)
@@ -1097,8 +1113,13 @@ def _player_modal_body(
     metric_p100=None,
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    banding_ctx=None,
 ) -> html.Div:
     settings = us.normalize(settings)
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player
+        )
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
@@ -1600,25 +1621,23 @@ def refresh_table(
         else us.default_minutes_required(settings)
     )
     g, category = _resolve_category(pos, category or "")
-    thresh = settings.get("stats_thresholds")
-    bound_opts = adaptive_bound_options(
+    thresh = _default_threshold_tree(settings)
+    banding_ctx = us.build_stats_banding_context(
         settings,
-        min_minutes=minutes_required,
+        players,
         limited_divisions=limited_divisions,
+        min_minutes=minutes_required,
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     compare = bool(parsed_historical_players(hist_parsed))
     hist_percentiles: dict[str, dict[str, float | None]] = {}
     if compare:
         hist_players = parsed_historical_players(hist_parsed)
         hist_limited = _limited_divisions_for_parsed(hist_parsed, hist_players)
-        hist_bound_opts = adaptive_bound_options(
+        hist_banding_ctx = us.build_stats_banding_context(
             settings,
-            min_minutes=minutes_required,
+            hist_players,
             limited_divisions=hist_limited,
-        )
-        hist_p0, hist_p100 = adaptive_metric_bound_maps(
-            hist_players, thresh, **hist_bound_opts
+            min_minutes=minutes_required,
         )
         for hp in hist_players:
             pkey = compare_name_key(hp)
@@ -1627,9 +1646,7 @@ def refresh_table(
                     hp,
                     group=pos,
                     category=category,
-                    threshold_overrides=thresh,
-                    metric_p100=hist_p100,
-                    metric_p0=hist_p0,
+                    banding_ctx=hist_banding_ctx,
                 )
 
     filtered = _filter_players(
@@ -1654,9 +1671,8 @@ def refresh_table(
         settings=settings,
         compare=compare,
         hist_percentiles=hist_percentiles,
-        metric_p100=metric_p100,
-        metric_p0=metric_p0,
         limited_divisions=limited_divisions,
+        banding_ctx=banding_ctx,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
@@ -1802,14 +1818,13 @@ def open_player(
         else us.default_minutes_required(settings)
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
-    thresh = settings.get("stats_thresholds")
     limited_divisions = _limited_divisions_for_parsed(parsed, players)
-    bound_opts = adaptive_bound_options(
+    banding_ctx = us.build_stats_banding_context(
         settings,
-        min_minutes=minutes_required,
+        players,
         limited_divisions=limited_divisions,
+        min_minutes=minutes_required,
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         True,
         player.get("name"),
@@ -1819,11 +1834,9 @@ def open_player(
             view=view,
             eval_group=eval_group,
             theme=theme,
-            threshold_overrides=thresh,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
             limited_divisions=limited_divisions,
+            banding_ctx=banding_ctx,
         ),
         key,
         eval_group,
@@ -1870,7 +1883,6 @@ def switch_player_view(
     if not player:
         return view, html.Div("Player not found.")
     settings = us.normalize(settings)
-    thresh = settings.get("stats_thresholds")
     players = _parsed_players(parsed)
     mins_req = float(
         minutes_required
@@ -1878,12 +1890,12 @@ def switch_player_view(
         else us.default_minutes_required(settings)
     )
     limited = _limited_divisions_for_parsed(parsed, players)
-    bound_opts = adaptive_bound_options(
+    banding_ctx = us.build_stats_banding_context(
         settings,
-        min_minutes=mins_req,
+        players,
         limited_divisions=limited,
+        min_minutes=mins_req,
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         view,
         _player_modal_body(
@@ -1892,11 +1904,9 @@ def switch_player_view(
             view=view,
             eval_group=eval_group,
             theme=theme,
-            threshold_overrides=thresh,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
             limited_divisions=limited,
+            banding_ctx=banding_ctx,
         ),
     )
 
@@ -1929,7 +1939,6 @@ def switch_player_group(
     if group == current:
         return no_update, no_update
     settings = us.normalize(settings)
-    thresh = settings.get("stats_thresholds")
     players = _parsed_players(parsed)
     mins_req = float(
         minutes_required
@@ -1937,12 +1946,12 @@ def switch_player_group(
         else us.default_minutes_required(settings)
     )
     limited = _limited_divisions_for_parsed(parsed, players)
-    bound_opts = adaptive_bound_options(
+    banding_ctx = us.build_stats_banding_context(
         settings,
-        min_minutes=mins_req,
+        players,
         limited_divisions=limited,
+        min_minutes=mins_req,
     )
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
     return (
         group,
         _player_modal_body(
@@ -1951,11 +1960,9 @@ def switch_player_group(
             view=normalize_compare_view(view),
             eval_group=group,
             theme=theme,
-            threshold_overrides=thresh,
             settings=settings,
-            metric_p100=metric_p100,
-            metric_p0=metric_p0,
             limited_divisions=limited,
+            banding_ctx=banding_ctx,
         ),
     )
 
@@ -1971,7 +1978,6 @@ def _build_stats_compare_body(
     players: list[dict],
 ) -> html.Div:
     settings = us.normalize(settings)
-    thresh = settings.get("stats_thresholds")
     limited = sorted(
         {
             str(p.get("division") or "").strip()
@@ -1980,8 +1986,11 @@ def _build_stats_compare_body(
             and str(p.get("division") or "").strip() not in ("", "-", "—")
         }
     )
-    bound_opts = adaptive_bound_options(settings, limited_divisions=limited or None)
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(players, thresh, **bound_opts)
+    banding_ctx = us.build_stats_banding_context(
+        settings, players, limited_divisions=limited or None
+    )
+    thresh_a, metric_p0_a, metric_p100_a = us.banding_for_player(banding_ctx, player_a)
+    thresh_b, metric_p0_b, metric_p100_b = us.banding_for_player(banding_ctx, player_b)
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
     label_a = str(player_a.get("name") or "Player A")
     label_b = str(player_b.get("name") or "Player B")
@@ -1993,11 +2002,12 @@ def _build_stats_compare_body(
         view=view,
         eval_group=eval_group,
         theme=theme,
-        threshold_overrides=thresh,
-        metric_p100_a=metric_p100,
-        metric_p0_a=metric_p0,
-        metric_p100_b=metric_p100,
-        metric_p0_b=metric_p0,
+        threshold_overrides_a=thresh_a,
+        threshold_overrides_b=thresh_b,
+        metric_p100_a=metric_p100_a,
+        metric_p0_a=metric_p0_a,
+        metric_p100_b=metric_p100_b,
+        metric_p0_b=metric_p0_b,
         prefix="st",
     )
 

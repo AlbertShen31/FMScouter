@@ -18,7 +18,6 @@ from scoring.stats_scorer import (
     percentile_marks,
 )
 import services.stats_threshold_packs as stp
-from scoring.stats_detail_transform import detail_level_options
 import services.ui_settings as us
 
 register_page(__name__, path="/settings", name="Settings")
@@ -68,7 +67,7 @@ SECTION_SAVE_KEYS: dict[str, tuple[str, ...]] = {
         "foot_thresholds",
         "default_minutes_required",
         "exclude_limited_leagues_adaptive_bounds",
-        "stats_engine_detail_level",
+        "stats_full_detail_divisions",
     ),
     "st-save-display": (
         "bands",
@@ -649,18 +648,16 @@ def _app_filters_panel(settings: dict) -> list:
                             ),
                             className="mt-3",
                         ),
-                        dmc.Select(
-                            id="st-engine-detail-level",
-                            label="FM engine detail level (stats exports)",
+                        dmc.TextInput(
+                            id="st-full-detail-divisions",
+                            label="Full Detail divisions (stats percentiles)",
                             description=(
-                                "MustermannFM / FM Stag cuts assume Full Detail exports. "
-                                "Choose your save's match detail so percentile thresholds are "
-                                "adjusted per metric (No Detail and Inactive are separate tiers)."
+                                "Comma-separated division names that use unadjusted Mustermann / "
+                                "FM Stag cuts (Full Detail engine). Limited-tracking divisions "
+                                "use Inactive transforms automatically. All others use No Detail."
                             ),
-                            data=detail_level_options(),
-                            value=settings.get("stats_engine_detail_level", "no_detail"),
-                            clearable=False,
-                            searchable=False,
+                            value=us.format_list(settings.get("stats_full_detail_divisions")),
+                            debounce=500,
                             className="mt-3",
                         ),
                         _section_save_row("st-save-app-filters", "st-status-app-filters"),
@@ -1420,7 +1417,7 @@ def _role_form_values(
         settings["default_minutes_required"],
         settings["depth_undo_max"],
         settings["exclude_limited_leagues_adaptive_bounds"],
-        settings.get("stats_engine_detail_level", "no_detail"),
+        us.format_list(settings.get("stats_full_detail_divisions")),
     )
 
 
@@ -1663,7 +1660,7 @@ def _ui_draft_from_state(
     default_minutes,
     depth_undo_max,
     exclude_limited_adaptive,
-    engine_detail_level,
+    full_detail_divisions,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
     pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
@@ -1698,8 +1695,8 @@ def _ui_draft_from_state(
         "default_minutes_required": default_minutes,
         "depth_undo_max": depth_undo_max,
         "exclude_limited_leagues_adaptive_bounds": bool(exclude_limited_adaptive),
-        "stats_engine_detail_level": us.normalize_stats_engine_detail_level(
-            engine_detail_level
+        "stats_full_detail_divisions": us.normalize_stats_full_detail_divisions(
+            full_detail_divisions
         ),
     }
 
@@ -1757,7 +1754,7 @@ def apply_preferred_theme_select(preferred_values, current):
     Output("st-default-minutes", "value"),
     Output("st-depth-undo-max", "value"),
     Output("st-exclude-limited-adaptive", "checked"),
-    Output("st-engine-detail-level", "value"),
+    Output("st-full-detail-divisions", "value"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
@@ -1801,7 +1798,7 @@ def apply_preferred_theme_select(preferred_values, current):
     State("st-default-minutes", "value"),
     State("st-depth-undo-max", "value"),
     State("st-exclude-limited-adaptive", "checked"),
-    State("st-engine-detail-level", "value"),
+    State("st-full-detail-divisions", "value"),
     State("st-role-weights-pack", "value"),
     prevent_initial_call=True,
 )
@@ -1842,7 +1839,7 @@ def handle_ui_settings(
     default_minutes,
     depth_undo_max,
     exclude_limited_adaptive,
-    engine_detail_level,
+    full_detail_divisions,
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
@@ -1897,7 +1894,7 @@ def handle_ui_settings(
         default_minutes,
         depth_undo_max,
         exclude_limited_adaptive,
-        engine_detail_level,
+        full_detail_divisions,
     )
     status_app_filters = no_update
     status_display = no_update

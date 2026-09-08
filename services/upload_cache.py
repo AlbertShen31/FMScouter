@@ -10,7 +10,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import copy
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +21,7 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v22"
+FORMULA_VERSION = "v23"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -57,14 +56,9 @@ def current_signature() -> dict[str, Any]:
     rc.load_pack(pack_id, persist=False)
     role_snap = rc.snapshot()
     stats_id = stp.active_id()
-    from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
-
-    stats_tree = apply_detail_level_to_threshold_tree(
-        copy.deepcopy(stp.load_tree(stats_id)),
-        export_detail_level=settings.get("stats_engine_detail_level"),
-    )
-    bench_hash = (
-        _sha(_BENCHMARKS_PATH.read_bytes()) if _BENCHMARKS_PATH.is_file() else ""
+    raw_tree = stp.load_tree(stats_id)
+    full_detail_divisions = us.normalize_stats_full_detail_divisions(
+        settings.get("stats_full_detail_divisions")
     )
     return {
         "formula_version": FORMULA_VERSION,
@@ -74,11 +68,11 @@ def current_signature() -> dict[str, Any]:
         "set_piece_profiles": us.set_piece_profiles(settings),
         "partial_eligibility_rules": rs.default_partial_eligibility_rules(),
         "stats_pack_id": stats_id,
-        "stats_tree_sha": _sha(stats_tree),
-        "stats_engine_detail_level": us.normalize_stats_engine_detail_level(
-            settings.get("stats_engine_detail_level")
+        "stats_tree_sha": _sha(raw_tree),
+        "stats_full_detail_divisions": full_detail_divisions,
+        "stats_benchmarks_sha": (
+            _sha(_BENCHMARKS_PATH.read_bytes()) if _BENCHMARKS_PATH.is_file() else ""
         ),
-        "stats_benchmarks_sha": bench_hash,
         "default_minutes_required": us.default_minutes_required(settings),
         "exclude_limited_leagues_adaptive_bounds": us.exclude_limited_leagues_adaptive_bounds(
             settings
@@ -292,10 +286,11 @@ def _precompute_stats_percentiles(
     min_minutes: float | None = None,
     limited_divisions: list[str] | None = None,
     exclude_limited_leagues: bool = True,
+    settings: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """player_key → group → metric_id → percentile."""
+    import services.ui_settings as us
     from scoring.stats_scorer import (
-        adaptive_metric_bound_maps,
         band_metric,
         benchmarks,
         metrics_for,
@@ -303,33 +298,51 @@ def _precompute_stats_percentiles(
         scoring_stats,
     )
 
+    settings = us.normalize(settings or {})
+    if settings.get("stats_threshold_trees"):
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            players,
+            limited_divisions=limited_divisions,
+            min_minutes=min_minutes,
+            exclude_limited_leagues=exclude_limited_leagues,
+        )
+    else:
+        from scoring.stats_scorer import adaptive_metric_bound_maps
+
+        metric_p0, metric_p100 = adaptive_metric_bound_maps(
+            players,
+            threshold_tree,
+            min_minutes=min_minutes,
+            limited_divisions=limited_divisions,
+            exclude_limited_leagues=exclude_limited_leagues,
+        )
+        banding_ctx = None
+
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = ["defending", "final_third", "possession", "all"]
-    metric_p0, metric_p100 = adaptive_metric_bound_maps(
-        players,
-        threshold_tree,
-        min_minutes=min_minutes,
-        limited_divisions=limited_divisions,
-        exclude_limited_leagues=exclude_limited_leagues,
-    )
     out: dict[str, dict[str, dict[str, float]]] = {}
     for player in players:
         key = player_key(player)
         if not key:
             continue
+        if banding_ctx:
+            tree, metric_p0, metric_p100 = us.banding_for_player(banding_ctx, player)
+        else:
+            tree = threshold_tree
         stats = scoring_stats(player)
         by_group: dict[str, dict[str, float]] = {}
         for group in groups:
             metric_ids: list[str] = []
             for cat in categories:
-                for mid in metrics_for(group, cat, threshold_tree):
+                for mid in metrics_for(group, cat, tree):
                     if mid not in metric_ids:
                         metric_ids.append(mid)
             band_map: dict[str, float] = {}
             for mid in metric_ids:
                 chosen_cat = "all"
                 for cat in categories:
-                    if mid in metrics_for(group, cat, threshold_tree):
+                    if mid in metrics_for(group, cat, tree):
                         chosen_cat = cat
                         break
                 band = band_metric(
@@ -337,7 +350,7 @@ def _precompute_stats_percentiles(
                     chosen_cat,
                     mid,
                     stats.get(mid),
-                    threshold_overrides=threshold_tree,
+                    threshold_overrides=tree,
                     metric_p100=metric_p100,
                     metric_p0=metric_p0,
                 )
@@ -400,20 +413,15 @@ def compute_file(file_id: str) -> dict[str, Any]:
             from scoring.stats_availability import nation_counts_for_limited_divisions
 
             players, limited_divisions = parse_stats_export_with_meta(text)
-            from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
-
-            tree = apply_detail_level_to_threshold_tree(
-                copy.deepcopy(stp.load_tree(sig.get("stats_pack_id"))),
-                export_detail_level=settings.get("stats_engine_detail_level"),
-            )
             percentiles = _precompute_stats_percentiles(
                 players,
-                tree,
+                stp.load_tree(sig.get("stats_pack_id")),
                 min_minutes=float(us.default_minutes_required(settings)),
                 limited_divisions=limited_divisions,
                 exclude_limited_leagues=us.exclude_limited_leagues_adaptive_bounds(
                     settings
                 ),
+                settings=settings,
             )
             payload["stats"] = {
                 "players": players,

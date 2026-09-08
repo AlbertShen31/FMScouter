@@ -484,13 +484,20 @@ def scout_player_modal_body(
         field_formatters = None
     else:
         if stats_player:
+            banding_ctx = None
+            if stats_cohort:
+                banding_ctx = us.build_stats_banding_context(
+                    settings,
+                    stats_cohort,
+                    limited_divisions=limited_divisions,
+                )
             stats_content = stats_charts_bottom_pane(
                 stats_player,
                 theme=theme,
                 view="bars",
-                threshold_overrides=settings.get("stats_thresholds"),
                 settings=settings,
                 cohort_players=stats_cohort,
+                banding_ctx=banding_ctx,
             )
             set_piece_metrics = player_set_piece_metrics_section(stats_player)
         else:
@@ -677,6 +684,7 @@ def stats_player_detail_card(
     metric_p0=None,
     cohort_players=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    banding_ctx=None,
 ) -> html.Div:
     settings = us.normalize(settings)
     minutes_required = (
@@ -684,7 +692,11 @@ def stats_player_detail_card(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    if (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player
+        )
+    elif (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
         from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
 
         auto_p0, auto_p100 = adaptive_metric_bound_maps(
@@ -903,13 +915,21 @@ def profile_detail_body(
         cohort = resolved.get("stats_cohort") or None
         metric_p0 = None
         metric_p100 = None
+        threshold_overrides = settings.get("stats_thresholds")
         if cohort:
-            from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
+            import services.export_library as lib
 
-            metric_p0, metric_p100 = adaptive_metric_bound_maps(
+            file_id = str(profile.get("file_id") or "").strip()
+            limited = (
+                lib.list_limited_tracking_divisions(file_id=file_id or None) or None
+            )
+            banding_ctx = us.build_stats_banding_context(
+                settings,
                 cohort,
-                settings.get("stats_thresholds"),
-                **adaptive_bound_options(settings),
+                limited_divisions=limited,
+            )
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+                banding_ctx, stats_player
             )
         from scoring.stats_scorer import pos_group_label, resolve_player_pos_group
 
@@ -920,6 +940,7 @@ def profile_detail_body(
         sections = _player_metric_sections(
             stats_player,
             eval_group=phase,
+            threshold_overrides=threshold_overrides,
             metric_p100=metric_p100,
             metric_p0=metric_p0,
         )

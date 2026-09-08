@@ -1,12 +1,11 @@
 """Engine detail-level transforms for stats percentile benchmarks.
 
 MustermannFM / FM Stag cut-points are stored in ``full_detail`` space
-(``config/stats_detail_levels.json``). When the user's export comes from a
-save at ``no_detail`` or ``inactive`` match detail, thresholds are mapped per
-metric and position group before percentiles are estimated.
+(``config/stats_detail_levels.json``). Per-division detail tiers:
 
-Transforms are power-law (``y = a * x^b``) or affine (``y = scale * x + offset``),
-fitted on p20–p80 bands from paired exports (900+ minutes).
+- User-designated divisions → ``full_detail`` (no transform)
+- Limited-tracking divisions → ``inactive``
+- All other divisions → ``no_detail`` (default)
 """
 from __future__ import annotations
 
@@ -67,6 +66,58 @@ def normalize_detail_level(raw) -> str:
         "full": "full_detail",
     }
     return aliases.get(text, default_export_level())
+
+
+def engine_detail_level_for_division(
+    division: str | None,
+    *,
+    full_detail_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> str:
+    """Map a division to full_detail, inactive (limited tracking), or no_detail."""
+    div = str(division or "").strip()
+    if div in ("-", "—"):
+        div = ""
+    full_set = {str(x).strip() for x in (full_detail_divisions or []) if str(x).strip()}
+    if div and div in full_set:
+        return "full_detail"
+    from scoring.stats_availability import division_has_limited_tracking
+
+    if division_has_limited_tracking(div, limited_divisions):
+        return "inactive"
+    return default_export_level()
+
+
+def engine_detail_level_for_player(
+    player: dict[str, Any] | None,
+    *,
+    full_detail_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> str:
+    if not player:
+        return default_export_level()
+    return engine_detail_level_for_division(
+        player.get("division"),
+        full_detail_divisions=full_detail_divisions,
+        limited_divisions=limited_divisions,
+    )
+
+
+def threshold_trees_by_level(
+    raw_tree: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Precompute full_detail / no_detail / inactive threshold trees from pack cuts."""
+    if not isinstance(raw_tree, dict) or not raw_tree:
+        return {}
+    return {
+        "full_detail": copy.deepcopy(raw_tree),
+        "no_detail": apply_detail_level_to_threshold_tree(
+            copy.deepcopy(raw_tree), export_detail_level="no_detail"
+        ),
+        "inactive": apply_detail_level_to_threshold_tree(
+            copy.deepcopy(raw_tree), export_detail_level="inactive"
+        ),
+    }
 
 
 def _transform_spec(metric_id: str, pos_group: str, export_level: str) -> dict[str, Any] | None:

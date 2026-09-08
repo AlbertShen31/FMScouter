@@ -767,6 +767,8 @@ def stats_compare_body(
     eval_group: str,
     theme: str | None,
     threshold_overrides=None,
+    threshold_overrides_a=None,
+    threshold_overrides_b=None,
     metric_p100_a=None,
     metric_p0_a=None,
     metric_p100_b=None,
@@ -776,17 +778,19 @@ def stats_compare_body(
 ) -> html.Div:
     view = normalize_compare_view(view)
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
+    thresh_a = threshold_overrides_a if threshold_overrides_a is not None else threshold_overrides
+    thresh_b = threshold_overrides_b if threshold_overrides_b is not None else threshold_overrides
     sections_a = player_metric_sections(
         player_a,
         eval_group,
-        threshold_overrides=threshold_overrides,
+        threshold_overrides=thresh_a,
         metric_p100=metric_p100_a,
         metric_p0=metric_p0_a,
     )
     sections_b = player_metric_sections(
         player_b,
         eval_group,
-        threshold_overrides=threshold_overrides,
+        threshold_overrides=thresh_b,
         metric_p100=metric_p100_b,
         metric_p0=metric_p0_b,
     )
