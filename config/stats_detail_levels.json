@@ -1,0 +1,652 @@
+{
+  "id": "engine-detail-transforms-2026-03",
+  "benchmark_reference": "full_detail",
+  "default_export": "no_detail",
+  "source": "Does Detail Matter \u2014 Metrics.csv (paired exports, 900+ min, p20\u2013p80 band fits)",
+  "notes": "MustermannFM / FM Stag cuts live in full_detail space. no_detail and inactive are separate tiers (inactive is lower).",
+  "levels": {
+    "no_detail": {
+      "label": "No Detail"
+    },
+    "inactive": {
+      "label": "Inactive"
+    },
+    "full_detail": {
+      "label": "Full Detail"
+    }
+  },
+  "metrics": {
+    "assists": {
+      "def": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.6006,
+          "offset": 0.0143
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.6318,
+          "offset": 0.0133
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.5761,
+          "b": 0.707
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8558,
+          "b": 0.8727
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.7049,
+          "offset": -0.0487
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.7447,
+          "offset": -0.0546
+        }
+      }
+    },
+    "blocks": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.9303,
+          "b": 1.0135
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.9002,
+          "b": 0.9517
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.3277,
+          "b": 1.8974
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.3204,
+          "b": 1.9049
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.822,
+          "b": 0.9867
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7576,
+          "b": 0.9465
+        }
+      }
+    },
+    "clearances": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8839,
+          "b": 0.7578
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8634,
+          "b": 0.7562
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8848,
+          "b": 1.9119
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8867,
+          "b": 1.9719
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7259,
+          "b": 0.9479
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7617,
+          "b": 1.0103
+        }
+      }
+    },
+    "dribbles": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7343,
+          "b": 1.0128
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.6418,
+          "b": 1.0749
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.5155,
+          "b": 1.384
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5817,
+          "b": 1.4812
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.885,
+          "b": 0.9862
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8672,
+          "b": 0.9784
+        }
+      }
+    },
+    "goals": {
+      "def": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.4922,
+          "offset": -0.003
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.5706,
+          "offset": -0.0035
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.7671,
+          "offset": -0.0223
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.8411,
+          "offset": -0.0248
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8292,
+          "b": 0.8872
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.1046,
+          "b": 1.0667
+        }
+      }
+    },
+    "goals_conceded": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8242,
+          "b": 0.9683
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.835,
+          "b": 1.0315
+        }
+      }
+    },
+    "headers_attempted": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.885,
+          "b": 1.0905
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8748,
+          "b": 1.0998
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3706,
+          "b": 1.7073
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.4835,
+          "b": 1.4869
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.9991,
+          "b": 0.9733
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.008,
+          "b": 0.9587
+        }
+      }
+    },
+    "interceptions": {
+      "gk": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.0,
+          "offset": 0.0
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.0,
+          "offset": 0.0
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.2953,
+          "b": 0.6849
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.2301,
+          "b": 0.7285
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.1269,
+          "b": 2.723
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.2117,
+          "b": 2.2482
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7224,
+          "b": 1.19
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7483,
+          "b": 1.1594
+        }
+      }
+    },
+    "key_passes": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8971,
+          "b": 1.0251
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8169,
+          "b": 1.0294
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.5797,
+          "b": 1.5192
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5751,
+          "b": 1.6099
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8997,
+          "b": 0.9985
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8938,
+          "b": 1.0263
+        }
+      }
+    },
+    "passes_attempted": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 11.6676,
+          "b": 0.2288
+        },
+        "inactive": {
+          "type": "power",
+          "a": 11.2889,
+          "b": 0.2404
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 2.5887,
+          "b": 0.7392
+        },
+        "inactive": {
+          "type": "power",
+          "a": 2.1638,
+          "b": 0.7854
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.003,
+          "b": 2.3594
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.0119,
+          "b": 2.0332
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7822,
+          "b": 1.0454
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7857,
+          "b": 1.0469
+        }
+      }
+    },
+    "possession_lost": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 6.6064,
+          "b": 0.1902
+        },
+        "inactive": {
+          "type": "power",
+          "a": 6.8444,
+          "b": 0.2028
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.365,
+          "b": 1.4883
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3692,
+          "b": 1.4728
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.1507,
+          "b": 2.0169
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.1605,
+          "b": 1.9964
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 8.2779,
+          "b": 0.3693
+        },
+        "inactive": {
+          "type": "power",
+          "a": 7.1884,
+          "b": 0.442
+        }
+      }
+    },
+    "possession_won": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.1404,
+          "b": 1.5102
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.0679,
+          "b": 1.8403
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.4947,
+          "b": 1.409
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5317,
+          "b": 1.3838
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 2.8479,
+          "b": 0.7085
+        },
+        "inactive": {
+          "type": "power",
+          "a": 2.8504,
+          "b": 0.7076
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.6843,
+          "b": 0.9678
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.6728,
+          "b": 0.9853
+        }
+      }
+    },
+    "progressive_passes": {
+      "gk": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.0,
+          "offset": 0.0
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.0,
+          "offset": 0.0
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3168,
+          "b": 1.5064
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3175,
+          "b": 1.4758
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.1211,
+          "b": 1.9784
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.1529,
+          "b": 1.8694
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.637,
+          "b": 1.2293
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.6253,
+          "b": 1.2552
+        }
+      }
+    },
+    "shots": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.6513,
+          "b": 0.8837
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.6857,
+          "b": 0.927
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3762,
+          "b": 1.9462
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3816,
+          "b": 2.0215
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7513,
+          "b": 1.5741
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8426,
+          "b": 1.4761
+        }
+      }
+    },
+    "tackles_attempted": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7569,
+          "b": 0.8004
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.9804,
+          "b": 0.8781
+        }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8029,
+          "b": 0.9613
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7379,
+          "b": 0.9966
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3727,
+          "b": 1.7165
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3465,
+          "b": 1.847
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.6095,
+          "b": 1.2138
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5651,
+          "b": 1.2749
+        }
+      }
+    },
+    "xg_prevented": {
+      "gk": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.949,
+          "offset": 0.2179
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.9899,
+          "offset": 0.1763
+        }
+      }
+    }
+  }
+}

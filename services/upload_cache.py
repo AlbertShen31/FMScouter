@@ -10,6 +10,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import copy
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +22,7 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v20"
+FORMULA_VERSION = "v22"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 
 
@@ -56,7 +57,12 @@ def current_signature() -> dict[str, Any]:
     rc.load_pack(pack_id, persist=False)
     role_snap = rc.snapshot()
     stats_id = stp.active_id()
-    stats_tree = stp.load_tree(stats_id)
+    from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
+
+    stats_tree = apply_detail_level_to_threshold_tree(
+        copy.deepcopy(stp.load_tree(stats_id)),
+        export_detail_level=settings.get("stats_engine_detail_level"),
+    )
     bench_hash = (
         _sha(_BENCHMARKS_PATH.read_bytes()) if _BENCHMARKS_PATH.is_file() else ""
     )
@@ -69,6 +75,9 @@ def current_signature() -> dict[str, Any]:
         "partial_eligibility_rules": rs.default_partial_eligibility_rules(),
         "stats_pack_id": stats_id,
         "stats_tree_sha": _sha(stats_tree),
+        "stats_engine_detail_level": us.normalize_stats_engine_detail_level(
+            settings.get("stats_engine_detail_level")
+        ),
         "stats_benchmarks_sha": bench_hash,
         "default_minutes_required": us.default_minutes_required(settings),
         "exclude_limited_leagues_adaptive_bounds": us.exclude_limited_leagues_adaptive_bounds(
@@ -391,7 +400,12 @@ def compute_file(file_id: str) -> dict[str, Any]:
             from scoring.stats_availability import nation_counts_for_limited_divisions
 
             players, limited_divisions = parse_stats_export_with_meta(text)
-            tree = stp.load_tree(sig.get("stats_pack_id"))
+            from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
+
+            tree = apply_detail_level_to_threshold_tree(
+                copy.deepcopy(stp.load_tree(sig.get("stats_pack_id"))),
+                export_detail_level=settings.get("stats_engine_detail_level"),
+            )
             percentiles = _precompute_stats_percentiles(
                 players,
                 tree,

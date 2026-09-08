@@ -88,6 +88,7 @@ Uploads classifies files and precomputes role scores + stats percentiles.
 | `Squad` | `squad` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Style` | `style` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `Time Missed` | `time_missed` | Player stats, Profiles, Role scores, Uploads | Injury tooltip (shortlist / depth chart) |
+| `Unique ID`, `UID` | `unique_i_d` | Player stats, Profiles, Role scores, Uploads | Parsed into player dict; shortlist / modal when configured |
 | `World Reputation` | `world_reputation` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `World Reputation Gold` | `world_reputation_gold` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
 | `World Reputation Silver` | `world_reputation_silver` | Player stats, Profiles, Role scores, Uploads | Parsed but hidden in UI (unreliable FM26 star ratings) |
@@ -399,7 +400,7 @@ Extra CSV header aliases the parsers accept (older exports / custom views):
 - `Recurring Injury`
 - `Red Cards`
 - `Rushing Out`
-- … and 19 more
+- … and 21 more
 
 ## Maintenance
 

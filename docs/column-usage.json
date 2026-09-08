@@ -2,7 +2,7 @@
   "generated_by": "scripts/audit_column_usage.py",
   "source_snapshot": "config/export_formats/fm26_moneyball_combined_columns.json",
   "column_count_snapshot": 248,
-  "mapped_entry_count": 281,
+  "mapped_entry_count": 282,
   "snapshot_columns_covered": 248,
   "undocumented_in_snapshot": [],
   "aliases_not_in_snapshot": [
@@ -63,6 +63,8 @@
     "Time Missed",
     "Top Division Promotion Salary Raise",
     "Transfer Status",
+    "UID",
+    "Unique ID",
     "Youth Apps",
     "Youth Goals"
   ],
@@ -2288,6 +2290,23 @@
         "Uploads"
       ],
       "usage": "Injury tooltip (shortlist / depth chart)",
+      "notes": ""
+    },
+    {
+      "primary_csv": "Unique ID",
+      "csv_aliases": [
+        "Unique ID",
+        "UID"
+      ],
+      "category": "identity",
+      "internal_key": "unique_i_d",
+      "pages": [
+        "Player stats",
+        "Profiles",
+        "Role scores",
+        "Uploads"
+      ],
+      "usage": "Parsed into player dict; shortlist / modal when configured",
       "notes": ""
     },
     {

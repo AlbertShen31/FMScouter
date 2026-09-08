@@ -1,0 +1,2062 @@
+{
+  "m_viewName": {
+    "GameID": 0
+  },
+  "m_requirements": [],
+  "m_optionalConfigCondition": {
+    "m_path": ""
+  },
+  "m_tableConfig": [
+    {
+      "m_columnID": "inf",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": -1,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "portrait-name",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 22.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": -1,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "unique-id",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "age",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "based",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "club",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "club-division",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "height",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "left-foot",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "right-foot",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "second-nationality",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 12.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "position",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-attempted-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-lost-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-won",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-won-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-minutes-since-last-conceded",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-interceptions",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-progressive-passes",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 5.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-fouls-against",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "expected-goals-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "average-rating",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "club-form",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "expected-goals-overperformance",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "expected-assists-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "expected-assists",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-conceded-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-clean-sheets-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-clean-sheets",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "average-club-rating",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "yellow-cards",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-fouls-made",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-total-saves-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "expected-goals",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "goals",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-red-cards",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-conceded",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-starting-appearances",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-goals-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-player-of-the-match",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties-scored-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties-scored",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties-saved-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties-saved",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties-faced",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-penalties",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-passes-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-pass-completion-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-key-passes-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-key-passes-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-key-passes",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-clear-cut-chances-created",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-chances-created-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-assists-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-passes-attempted-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-passes-completed",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-passes-completed-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-possession-lost-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-converstion-rate",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-progressive-passes-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-offsides",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-sprints-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-dribbles-made-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-saves-tipped",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-saves-parried",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-saves-held",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-save-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-expected-save-percentage",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-expected-goals-prevented-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-expected-goals-prevented",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-dribbles-made",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "non-penalty-expected-goals-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-distance-covered-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-distance-covered",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-mistakes-leading-to-goal",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "non-penalty-expected-goals",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-minutes-since-last-goal",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-crosses-completed-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-outside-box-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-goals-outside-box",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-free-kick-shots",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-expected-goals-per-shot",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-clearances-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-clearances",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-blocks",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-blocks-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-interceptions-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-key-tackles",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-on-target",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-key-tackles-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-possession-won-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-on-target-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-pressures-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-pressures-attempted-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-pressures-completed",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-pressures-completed-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-blocked-defending",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-blocked-defending-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-tackle-completion-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-tackles-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-tackles-completed",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-shots-on-target-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-tackles-completed-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-overall-appearances",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-overall-assists",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-minutes-per-goal",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "form",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-last-match-rating",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-minutes",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "stats-minutes-per-game",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "last-five-club-matches-rating",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-crosses-completion-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-crosses-attempted-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-crosses-completed",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-crosses-attempted-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-crosses-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-open-play-crosses-completion-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-crosses-completed-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-crosses-completed",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-crosses-attempted",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-headers-won-ratio",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "chalkboard-stats-key-headers-per90",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 6.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "nation",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 8.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "personality",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 8.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    },
+    {
+      "m_columnID": "media-handling",
+      "m_columnMetadata": {
+        "m_required": false,
+        "m_sortingDisabled": false,
+        "m_widthOverride": 8.0,
+        "m_minWidthOverride": 44.0,
+        "m_titleTranslationIdOverride": {
+          "GameID": 0
+        },
+        "m_applicableBreakpoints": 2147483647,
+        "m_optionalConfigCondition": {
+          "m_path": ""
+        }
+      }
+    }
+  ],
+  "m_overwriteFooterSettings": false,
+  "m_footerParameters": [],
+  "m_footerColumns": []
+}

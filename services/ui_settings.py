@@ -180,6 +180,7 @@ PACK_DATA_KEYS = (
     "set_piece_profiles",
     "default_minutes_required",
     "exclude_limited_leagues_adaptive_bounds",
+    "stats_engine_detail_level",
     "depth_undo_max",
     "page_size",
     "page_size_options",
@@ -219,6 +220,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "default_minutes_required": 900,
     "exclude_limited_leagues_adaptive_bounds": True,
+    "stats_engine_detail_level": "no_detail",
     "depth_undo_max": 10,
     "page_size": 50,
     "page_size_options": [25, 50, 100],
@@ -808,6 +810,12 @@ def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
     return bool(DEFAULTS["exclude_limited_leagues_adaptive_bounds"])
 
 
+def normalize_stats_engine_detail_level(value) -> str:
+    from scoring.stats_detail_transform import normalize_detail_level
+
+    return normalize_detail_level(value or DEFAULTS["stats_engine_detail_level"])
+
+
 def normalize_depth_undo_max(value) -> int:
     try:
         number = int(float(value))
@@ -846,7 +854,16 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     label = name if name is not None else raw.get("name") or (
         "Default" if pack_id == BUILTIN else pack_id
     )
+    import copy
+
     import services.stats_threshold_packs as stp
+    from scoring.stats_detail_transform import apply_detail_level_to_threshold_tree
+
+    export_detail = normalize_stats_engine_detail_level(raw.get("stats_engine_detail_level"))
+    threshold_tree = apply_detail_level_to_threshold_tree(
+        copy.deepcopy(stp.load_tree()),
+        export_detail_level=export_detail,
+    )
 
     return {
         "id": pack_id,
@@ -868,6 +885,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "exclude_limited_leagues_adaptive_bounds": normalize_exclude_limited_leagues_adaptive_bounds(
             raw.get("exclude_limited_leagues_adaptive_bounds")
         ),
+        "stats_engine_detail_level": export_detail,
         "depth_undo_max": normalize_depth_undo_max(raw.get("depth_undo_max")),
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
         "page_size_options": page_opts,
@@ -877,8 +895,8 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "personality_tier_colors": normalize_personality_tier_colors(
             raw.get("personality_tier_colors")
         ),
-        # Resolved from the separate stats-threshold pack domain (not stored here).
-        "stats_thresholds": stp.load_tree(),
+        # Resolved from stats-threshold packs; cuts adjusted for engine detail level.
+        "stats_thresholds": threshold_tree,
         "stats_threshold_pack_id": stp.active_id(),
     }
 
