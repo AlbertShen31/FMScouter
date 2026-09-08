@@ -3858,6 +3858,16 @@ body:has(.rc-page) .navbar {
     display: none !important;
 }
 
+.st-full-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.st-full-detail-actions .mantine-Button-root {
+    flex: 0 0 auto;
+}
+
 .st-shortlist-table {
     width: 100%;
     border-collapse: collapse;

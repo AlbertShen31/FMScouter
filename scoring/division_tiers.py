@@ -324,6 +324,12 @@ _NATION_EXACT: dict[str, dict[str, DivisionTier]] = {
     "Slovenia": {
         "3. SNL Vzhod": "amateur",
     },
+    "Romania": {
+        "Liga I": "top",
+        "Liga II": "pro",
+        "Liga V": "amateur",
+        "Liga de Tineret": "amateur",
+    },
 }
 
 # (compiled regex, tier) — first match wins. Nation-agnostic distinctive titles.
@@ -537,6 +543,71 @@ def classify_division(division: str | None, nation: str | None = None) -> Divisi
             return tier
 
     return ""
+
+
+TIER_SORT_ORDER: dict[str, int] = {"top": 0, "pro": 1, "amateur": 2, "": 3}
+
+TIER_LABELS: dict[str, str] = {
+    "top": "Top flight",
+    "pro": "Professional",
+    "amateur": "Amateur / youth",
+    "": "Unknown tier",
+}
+
+ROMANIA_NATION = "Romania"
+
+# Seed names for Romania — library exports add regional Liga IV titles dynamically.
+_ROMANIA_SEED_DIVISIONS: tuple[str, ...] = (
+    "Liga I",
+    "Liga II",
+    "Liga V",
+    "Liga de Tineret",
+    *(f"Liga II Seria {seria}" for seria in ("I", "II")),
+    *(f"Liga III Seria {seria}" for seria in ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")),
+    *(f"Național U{age}" for age in (19, 18, 17, 16)),
+    *(f"National U{age}" for age in (19, 18, 17, 16)),
+)
+
+_ROMANIA_DIVISION_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^Liga III(\s|$)", re.I),
+    re.compile(r"^Liga IV(\s|$)", re.I),
+    re.compile(r"^Liga V(\s|$)", re.I),
+    re.compile(r"^Na[țt]ional U\d+", re.I),
+    re.compile(r"^Liga de Tineret", re.I),
+)
+
+
+def tier_sort_key(tier: DivisionTier) -> int:
+    return TIER_SORT_ORDER.get(tier or "", 3)
+
+
+def division_sort_key(division: str | None, nation: str | None = None) -> tuple[int, str]:
+    tier = classify_division(division, nation)
+    return (tier_sort_key(tier), str(division or "").casefold())
+
+
+def is_romanian_division(division: str | None, nation: str | None = None) -> bool:
+    """True when an FM Division belongs to the Romanian pyramid."""
+    based_in = str(nation or "").strip()
+    if based_in and _fold(based_in) == _fold(ROMANIA_NATION):
+        div = str(division or "").strip()
+        return bool(div) and div not in ("-", "—")
+    raw = str(division or "").strip()
+    if not raw or raw in ("-", "—"):
+        return False
+    if raw in _ROMANIA_SEED_DIVISIONS:
+        return True
+    if _EXACT_FOLD.get(_fold(raw)) and raw in ("Liga I", "Liga II", "Liga V"):
+        return True
+    for pattern in _ROMANIA_DIVISION_PATTERNS:
+        if pattern.search(raw):
+            return True
+    return False
+
+
+def romanian_division_names() -> list[str]:
+    """Canonical Romanian league names for Full Detail defaults."""
+    return sorted(set(_ROMANIA_SEED_DIVISIONS), key=lambda name: division_sort_key(name, ROMANIA_NATION))
 
 
 def division_tier_colors(theme: str | None = None) -> dict[str, tuple[str, str]]:

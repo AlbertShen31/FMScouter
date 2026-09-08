@@ -69,8 +69,8 @@ def _yes_no(ok: bool) -> html.Span:
     )
 
 
-def _cache_status_cell(entry: dict) -> html.Span:
-    status = upload_cache.cache_status(entry.get("id") or "", entry)
+def _cache_status_cell(entry: dict, *, sig_key: str | None = None) -> html.Span:
+    status = upload_cache.cache_status_light(entry, sig_key=sig_key)
     tone = {
         "ready": "up-cache ready",
         "stale": "up-cache stale",
@@ -90,10 +90,15 @@ def _any_computable() -> bool:
 
 
 def _limited_tooltip(entry: dict, limited: list[str]) -> str:
-    cache = upload_cache.load_cache(entry.get("id") or "")
-    stats = (cache or {}).get("stats") or {}
-    players = stats.get("players") or []
-    return limited_tracking_tooltip(limited, players=players)
+    raw = entry.get("limited_tracking_by_nation") or []
+    nation_counts = None
+    if isinstance(raw, list) and raw:
+        nation_counts = [
+            (str(item.get("nation") or "").strip(), int(item.get("count") or 0))
+            for item in raw
+            if isinstance(item, dict) and str(item.get("nation") or "").strip()
+        ] or None
+    return limited_tracking_tooltip(limited, nation_counts=nation_counts)
 
 
 def _limited_count_cell(entry: dict, limited: list[str]) -> dmc.Tooltip:
@@ -148,6 +153,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         ]
     )
     rows = []
+    sig_key = upload_cache.signature_key() if entries else None
     for entry in entries:
         file_id = entry["id"]
         label = lib.display_label(entry)
@@ -194,7 +200,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
                     html.Td(_yes_no(bool(entry.get("role_scores")))),
                     html.Td(_yes_no(bool(entry.get("stats")))),
                     html.Td(_yes_no(bool(entry.get("squad_finance")))),
-                    html.Td(_cache_status_cell(entry)),
+                    html.Td(_cache_status_cell(entry, sig_key=sig_key)),
                     html.Td(limited_cell),
                     html.Td(note_bits, className="up-notes"),
                     html.Td(

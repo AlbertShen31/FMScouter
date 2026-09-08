@@ -19,6 +19,7 @@ from scoring.stats_scorer import (
 )
 import services.stats_threshold_packs as stp
 import services.ui_settings as us
+import services.division_catalog as dc
 
 register_page(__name__, path="/settings", name="Settings")
 
@@ -473,7 +474,7 @@ def _panel(section_id: str, children: list, *, active: bool) -> html.Div:
     )
 
 
-def _app_filters_panel(settings: dict) -> list:
+def _app_filters_panel(settings: dict, *, full_detail_division_options: list) -> list:
     return [
         _section_heading(
             "App & filters",
@@ -648,17 +649,38 @@ def _app_filters_panel(settings: dict) -> list:
                             ),
                             className="mt-3",
                         ),
-                        dmc.TextInput(
+                        dmc.MultiSelect(
                             id="st-full-detail-divisions",
                             label="Full Detail divisions (stats percentiles)",
                             description=(
-                                "Comma-separated division names that use unadjusted Mustermann / "
-                                "FM Stag cuts (Full Detail engine). Limited-tracking divisions "
-                                "use Inactive transforms automatically. All others use No Detail."
+                                "Leagues that use unadjusted Mustermann / FM Stag cuts "
+                                "(Full Detail engine). Grouped by nation, highest tier first. "
+                                "Limited-tracking divisions use Inactive transforms automatically; "
+                                "all others use No Detail."
                             ),
-                            value=us.format_list(settings.get("stats_full_detail_divisions")),
-                            debounce=500,
+                            data=full_detail_division_options or [],
+                            value=list(settings.get("stats_full_detail_divisions") or []),
+                            searchable=True,
+                            clearable=True,
+                            maxDropdownHeight=320,
                             className="mt-3",
+                        ),
+                        html.Div(
+                            [
+                                dmc.Button(
+                                    "Add all Romania",
+                                    id="st-full-detail-add-romania",
+                                    variant="light",
+                                    size="xs",
+                                ),
+                                dmc.Button(
+                                    "Clear",
+                                    id="st-full-detail-clear",
+                                    variant="subtle",
+                                    size="xs",
+                                ),
+                            ],
+                            className="st-full-detail-actions mt-2",
                         ),
                         _section_save_row("st-save-app-filters", "st-status-app-filters"),
                     ]
@@ -1205,6 +1227,9 @@ def _player_panel(thresh_pack: dict, settings: dict | None = None) -> list:
 def layout(section: str | None = None, **_kwargs):
     settings = us.load()
     thresh_pack = stp.load()
+    full_detail_options = dc.full_detail_division_options(
+        settings.get("stats_full_detail_divisions")
+    )
     allowed = {sid for sid, _label in SETTINGS_SECTIONS}
     active = section if section in allowed else _LEGACY_SECTION_MAP.get(section or "", "app-filters")
     if active not in allowed:
@@ -1227,6 +1252,7 @@ def layout(section: str | None = None, **_kwargs):
             dcc.Store(id="st-settings-section", data=active),
             dcc.Store(id="st-thresh-data", data=thresh_pack["thresholds"]),
             dcc.Store(id="st-thresh-revision", data=0),
+            dcc.Store(id="st-full-detail-division-options", data=full_detail_options),
             _settings_pack_bar(settings),
             html.Div(
                 [
@@ -1241,7 +1267,10 @@ def layout(section: str | None = None, **_kwargs):
                         [
                             _panel(
                                 "app-filters",
-                                _app_filters_panel(settings),
+                                _app_filters_panel(
+                                    settings,
+                                    full_detail_division_options=full_detail_options,
+                                ),
                                 active=active == "app-filters",
                             ),
                             _panel(
@@ -1417,7 +1446,7 @@ def _role_form_values(
         settings["default_minutes_required"],
         settings["depth_undo_max"],
         settings["exclude_limited_leagues_adaptive_bounds"],
-        us.format_list(settings.get("stats_full_detail_divisions")),
+        list(settings.get("stats_full_detail_divisions") or []),
     )
 
 
@@ -1718,6 +1747,28 @@ def apply_preferred_theme_select(preferred_values, current):
         return no_update, no_update
     settings = us.set_preferred_theme(theme)
     return theme, settings
+
+
+@callback(
+    Output("st-full-detail-divisions", "value", allow_duplicate=True),
+    Input("st-full-detail-add-romania", "n_clicks"),
+    Input("st-full-detail-clear", "n_clicks"),
+    State("st-full-detail-divisions", "value"),
+    prevent_initial_call=True,
+)
+def quick_full_detail_divisions(add_clicks, clear_clicks, current):
+    triggered = ctx.triggered_id
+    if triggered == "st-full-detail-clear":
+        return []
+    if triggered != "st-full-detail-add-romania":
+        return no_update
+    selected = list(current or [])
+    seen = set(selected)
+    for name in dc.divisions_for_nation(dc.ROMANIA_NATION, selected=selected):
+        if name not in seen:
+            selected.append(name)
+            seen.add(name)
+    return selected
 
 
 @callback(

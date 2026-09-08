@@ -872,6 +872,14 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     full_detail_divisions = normalize_stats_full_detail_divisions(
         raw.get("stats_full_detail_divisions")
     )
+    if (
+        "stats_full_detail_divisions" not in raw
+        and not full_detail_divisions
+        and (pack_id == BUILTIN or str(raw.get("id") or "").strip() in ("", BUILTIN))
+    ):
+        from services.division_catalog import default_full_detail_divisions
+
+        full_detail_divisions = default_full_detail_divisions()
 
     return {
         "id": pack_id,
