@@ -1253,6 +1253,15 @@ def resolve_thresholds(
         return None
 
 
+def format_metric_display(value: float, unit: str | None = None) -> str:
+    """Format a metric number for table / modal cells."""
+    if unit == "percent":
+        return f"{value:.1f}%"
+    if abs(value) >= 10:
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    return f"{value:.2f}"
+
+
 def band_metric(
     group: str,
     category: str,
@@ -1285,20 +1294,54 @@ def band_metric(
         p100=p100,
         p0=p0,
     )
-    unit = meta.get("unit")
-    if unit == "percent":
-        display = f"{value:.1f}%"
-    elif abs(value) >= 10:
-        display = f"{value:.2f}".rstrip("0").rstrip(".")
-    else:
-        display = f"{value:.2f}"
     return {
         "value": value,
-        "display": display,
+        "display": format_metric_display(float(value), meta.get("unit")),
         "percentile": pct,
         "color": percentile_color(pct),
         "higher_is_better": hib,
         "thresholds": thresholds,
+    }
+
+
+def apply_stats_value_mode(
+    band: dict[str, Any],
+    metric_id: str,
+    pos_group: str,
+    *,
+    export_level: str,
+    value_mode: str = "raw",
+) -> dict[str, Any]:
+    """Rewrite band value/display for Raw vs Adjusted; keep percentile/color."""
+    from scoring.stats_detail_transform import (
+        metric_value_for_display,
+        normalize_value_mode,
+    )
+
+    if normalize_value_mode(value_mode) != "adjusted":
+        return band
+    raw = band.get("value")
+    if raw is None:
+        return band
+    try:
+        raw_f = float(raw)
+    except (TypeError, ValueError):
+        return band
+    adj = metric_value_for_display(
+        raw_f,
+        metric_id,
+        pos_group,
+        export_level=export_level,
+        value_mode="adjusted",
+    )
+    if adj is None:
+        return band
+    meta = metric_defs().get(metric_id) or {}
+    return {
+        **band,
+        "value": adj,
+        "display": format_metric_display(adj, meta.get("unit")),
+        "raw_value": raw_f,
     }
 
 

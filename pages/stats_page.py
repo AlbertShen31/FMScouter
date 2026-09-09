@@ -92,6 +92,7 @@ from scoring.stats_scorer import (
     adaptive_bound_options,
     adaptive_metric_bound_maps,
     adaptive_metric_p100_map,
+    apply_stats_value_mode,
     band_metric,
     benchmarks,
     canonical_category,
@@ -117,6 +118,10 @@ from scoring.stats_availability import (
     LIMITED_TRACKING_HINT,
     division_has_limited_tracking,
     metric_is_unavailable,
+)
+from scoring.stats_detail_transform import (
+    engine_detail_level_for_player,
+    normalize_value_mode,
 )
 import services.ui_settings as us
 import services.stats_threshold_packs as stp
@@ -180,9 +185,16 @@ ST_PERSIST_DEFAULTS = {
     "minutes_required": None,
     "division_tier": "all",
     "include_incomplete": True,
+    "value_mode": "raw",
     "page_size": None,
     "sort_by": None,
 }
+
+VALUE_MODE_TIP = (
+    "Raw shows Moneyball export values. Adjusted converts No Detail / Inactive "
+    "league rates into Full Detail equivalents so numbers sit on the same scale "
+    "as Mustermann / FM Stag cuts. Percentile colours stay the same either way."
+)
 
 
 def _st_persist_has_state(persist: dict | None) -> bool:
@@ -204,6 +216,8 @@ def _st_persist_has_state(persist: dict | None) -> bool:
     if (p.get("division_tier") or "all") != "all":
         return True
     if _persist_include_incomplete(p) is False:
+        return True
+    if normalize_value_mode(p.get("value_mode")) != "raw":
         return True
     if p.get("page_size") is not None:
         return True
@@ -907,6 +921,7 @@ def _build_rows(
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
+    value_mode: str = "raw",
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -916,6 +931,8 @@ def _build_rows(
     )
     avg_cats = _avg_category_columns(g) if cat == "all" else []
     limited = set(limited_divisions or [])
+    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    mode = normalize_value_mode(value_mode)
     rows = []
     hist_percentiles = hist_percentiles or {}
     for p in players:
@@ -934,6 +951,11 @@ def _build_rows(
         row["_key"] = pkey
         hist_map = hist_percentiles.get(compare_name_key(p)) or {}
         stats = scoring_stats(p)
+        export_level = engine_detail_level_for_player(
+            p,
+            full_detail_divisions=full_detail,
+            limited_divisions=limited,
+        )
         bg, bc = _band_group_cat(p, group, cat)
         if cat == "all":
             if bg is None or bc is None:
@@ -1021,6 +1043,13 @@ def _build_rows(
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
                 metric_p0=metric_p0,
+            )
+            band = apply_stats_value_mode(
+                band,
+                mid,
+                use_g,
+                export_level=export_level,
+                value_mode=mode,
             )
             row[abbr] = _metric_cell(
                 band,
@@ -1114,6 +1143,7 @@ def _player_modal_body(
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
+    value_mode: str = "raw",
 ) -> html.Div:
     settings = us.normalize(settings)
     if banding_ctx is not None:
@@ -1130,6 +1160,9 @@ def _player_modal_body(
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
         metric_p0=metric_p0,
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited_divisions,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -1444,6 +1477,39 @@ def layout(**_kwargs):
                                                 ],
                                                 className="st-filter-minutes",
                                             ),
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Values",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            *_help_icon(
+                                                                VALUE_MODE_TIP,
+                                                                "st-help-value-mode",
+                                                            ),
+                                                        ],
+                                                        className="rs-field-label-row",
+                                                    ),
+                                                    dmc.SegmentedControl(
+                                                        id="st-value-mode",
+                                                        data=[
+                                                            {
+                                                                "label": "Raw",
+                                                                "value": "raw",
+                                                            },
+                                                            {
+                                                                "label": "Adjusted",
+                                                                "value": "adjusted",
+                                                            },
+                                                        ],
+                                                        value="raw",
+                                                        className="st-value-mode-control",
+                                                    ),
+                                                ],
+                                                className="st-filter-value-mode",
+                                            ),
                                         ],
                                         className="rs-shortlist-filters-row",
                                     ),
@@ -1583,6 +1649,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("st-foot", "data"),
     Input("st-division-tier", "value"),
     Input("st-include-incomplete", "checked"),
+    Input("st-value-mode", "value"),
     Input("st-page-size", "value"),
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
@@ -1603,6 +1670,7 @@ def refresh_table(
     foot,
     division_tier,
     include_incomplete,
+    value_mode,
     page_size,
     marked,
     sort_by,
@@ -1673,6 +1741,7 @@ def refresh_table(
         hist_percentiles=hist_percentiles,
         limited_divisions=limited_divisions,
         banding_ctx=banding_ctx,
+        value_mode=value_mode,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
@@ -1778,6 +1847,7 @@ def refresh_table(
     State("theme", "data"),
     State("st-player-view", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def open_player(
@@ -1790,6 +1860,7 @@ def open_player(
     theme,
     view,
     settings,
+    value_mode,
 ):
     triggered = ctx.triggered_id
     if triggered == "st-player-modal":
@@ -1837,6 +1908,7 @@ def open_player(
             settings=settings,
             limited_divisions=limited_divisions,
             banding_ctx=banding_ctx,
+            value_mode=value_mode,
         ),
         key,
         eval_group,
@@ -1860,6 +1932,7 @@ def _lookup_modal_player(parsed, player_key_value):
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def switch_player_view(
@@ -1871,6 +1944,7 @@ def switch_player_view(
     minutes_required,
     theme,
     settings,
+    value_mode,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -1907,6 +1981,7 @@ def switch_player_view(
             settings=settings,
             limited_divisions=limited,
             banding_ctx=banding_ctx,
+            value_mode=value_mode,
         ),
     )
 
@@ -1922,10 +1997,19 @@ def switch_player_view(
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def switch_player_group(
-    n_clicks, current, view, player_key_value, parsed, minutes_required, theme, settings
+    n_clicks,
+    current,
+    view,
+    player_key_value,
+    parsed,
+    minutes_required,
+    theme,
+    settings,
+    value_mode,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -1957,13 +2041,70 @@ def switch_player_group(
         _player_modal_body(
             player,
             mins_req,
-            view=normalize_compare_view(view),
+            view=_normalize_player_view(view),
             eval_group=group,
             theme=theme,
             settings=settings,
             limited_divisions=limited,
             banding_ctx=banding_ctx,
+            value_mode=value_mode,
         ),
+    )
+
+
+@callback(
+    Output("st-player-modal-body", "children", allow_duplicate=True),
+    Input("st-value-mode", "value"),
+    State("st-player-modal", "is_open"),
+    State("st-player-key", "data"),
+    State("st-player-view", "data"),
+    State("st-player-group", "data"),
+    State("st-parsed", "data"),
+    State("st-minutes-required", "value"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def refresh_player_modal_value_mode(
+    value_mode,
+    is_open,
+    player_key_value,
+    view,
+    eval_group,
+    parsed,
+    minutes_required,
+    theme,
+    settings,
+):
+    if not is_open or not player_key_value:
+        return no_update
+    player = _lookup_modal_player(parsed, player_key_value)
+    if not player:
+        return no_update
+    settings = us.normalize(settings)
+    players = _parsed_players(parsed)
+    mins_req = float(
+        minutes_required
+        if minutes_required is not None
+        else us.default_minutes_required(settings)
+    )
+    limited = _limited_divisions_for_parsed(parsed, players)
+    banding_ctx = us.build_stats_banding_context(
+        settings,
+        players,
+        limited_divisions=limited,
+        min_minutes=mins_req,
+    )
+    return _player_modal_body(
+        player,
+        mins_req,
+        view=_normalize_player_view(view),
+        eval_group=eval_group,
+        theme=theme,
+        settings=settings,
+        limited_divisions=limited,
+        banding_ctx=banding_ctx,
+        value_mode=value_mode,
     )
 
 
@@ -1976,6 +2117,7 @@ def _build_stats_compare_body(
     theme: str | None,
     settings: dict,
     players: list[dict],
+    value_mode: str = "raw",
 ) -> html.Div:
     settings = us.normalize(settings)
     limited = sorted(
@@ -2009,6 +2151,9 @@ def _build_stats_compare_body(
         metric_p100_b=metric_p100_b,
         metric_p0_b=metric_p0_b,
         prefix="st",
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited or None,
     )
 
 
@@ -2027,6 +2172,7 @@ def _build_stats_compare_body(
     State("st-compare-group", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def open_stats_compare(
@@ -2039,6 +2185,7 @@ def open_stats_compare(
     eval_group,
     theme,
     settings,
+    value_mode,
 ):
     triggered = ctx.triggered_id
     if triggered == "st-compare-modal":
@@ -2079,6 +2226,7 @@ def open_stats_compare(
             theme=theme,
             settings=settings,
             players=players,
+            value_mode=value_mode,
         ),
         keys,
         eval_group,
@@ -2105,6 +2253,7 @@ def _lookup_compare_players(parsed, compare_keys):
     State("st-parsed", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def switch_compare_view(
@@ -2115,6 +2264,7 @@ def switch_compare_view(
     parsed,
     theme,
     settings,
+    value_mode,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2137,6 +2287,7 @@ def switch_compare_view(
             theme=theme,
             settings=settings,
             players=_parsed_players(parsed),
+            value_mode=value_mode,
         ),
     )
 
@@ -2151,6 +2302,7 @@ def switch_compare_view(
     State("st-parsed", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
+    State("st-value-mode", "value"),
     prevent_initial_call=True,
 )
 def switch_compare_group(
@@ -2161,6 +2313,7 @@ def switch_compare_group(
     parsed,
     theme,
     settings,
+    value_mode,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2188,7 +2341,48 @@ def switch_compare_group(
             theme=theme,
             settings=settings,
             players=_parsed_players(parsed),
+            value_mode=value_mode,
         ),
+    )
+
+
+@callback(
+    Output("st-compare-modal-body", "children", allow_duplicate=True),
+    Input("st-value-mode", "value"),
+    State("st-compare-modal", "is_open"),
+    State("st-compare-keys", "data"),
+    State("st-compare-view", "data"),
+    State("st-compare-group", "data"),
+    State("st-parsed", "data"),
+    State("theme", "data"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def refresh_compare_modal_value_mode(
+    value_mode,
+    is_open,
+    compare_keys,
+    view,
+    eval_group,
+    parsed,
+    theme,
+    settings,
+):
+    if not is_open:
+        return no_update
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    if not player_a or not player_b:
+        return no_update
+    settings = us.normalize(settings)
+    return _build_stats_compare_body(
+        player_a,
+        player_b,
+        view=normalize_compare_view(view),
+        eval_group=eval_group,
+        theme=theme,
+        settings=settings,
+        players=_parsed_players(parsed),
+        value_mode=value_mode,
     )
 
 
@@ -2228,6 +2422,7 @@ def update_stats_compare_controls(marked, parsed):
     Input("st-minutes-required", "value"),
     Input("st-division-tier", "value"),
     Input("st-include-incomplete", "checked"),
+    Input("st-value-mode", "value"),
     Input("st-page-size", "value"),
     Input("st-table", "sort_by"),
     State("st-hydrated", "data"),
@@ -2243,6 +2438,7 @@ def save_st_page_persist(
     minutes_required,
     division_tier,
     include_incomplete,
+    value_mode,
     page_size,
     sort_by,
     hydrated,
@@ -2259,6 +2455,7 @@ def save_st_page_persist(
         "minutes_required": minutes_required,
         "division_tier": division_tier or "all",
         "include_incomplete": include_incomplete is not False,
+        "value_mode": normalize_value_mode(value_mode),
         "page_size": page_size,
         "sort_by": sort_by or None,
     }
@@ -2297,6 +2494,7 @@ clientside_callback(
     Output("st-minutes-required", "value", allow_duplicate=True),
     Output("st-division-tier", "value"),
     Output("st-include-incomplete", "checked"),
+    Output("st-value-mode", "value"),
     Output("st-page-size", "value", allow_duplicate=True),
     Output("st-table", "sort_by", allow_duplicate=True),
     Output("st-sort-memory", "data", allow_duplicate=True),
@@ -2307,10 +2505,10 @@ clientside_callback(
 )
 def hydrate_st_page_persist(persist, hydrated):
     if hydrated or persist is None:
-        return (no_update,) * 13
+        return (no_update,) * 14
     raw = persist or {}
     if not _st_persist_has_state(raw):
-        return (*((no_update,) * 12), True)
+        return (*((no_update,) * 13), True)
     p = {**ST_PERSIST_DEFAULTS, **raw}
     sort_by = p.get("sort_by") or None
     page_size = p.get("page_size")
@@ -2325,6 +2523,7 @@ def hydrate_st_page_persist(persist, hydrated):
         minutes_required if minutes_required is not None else no_update,
         p.get("division_tier") or "all",
         _persist_include_incomplete(p),
+        normalize_value_mode(p.get("value_mode")),
         page_size if page_size is not None else no_update,
         sort_by if sort_by else no_update,
         sort_by if sort_by else no_update,

@@ -775,6 +775,9 @@ def stats_compare_body(
     metric_p0_b=None,
     cohort_note: str | None = None,
     prefix: str = "st",
+    value_mode: str = "raw",
+    settings=None,
+    limited_divisions=None,
 ) -> html.Div:
     view = normalize_compare_view(view)
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
@@ -786,6 +789,9 @@ def stats_compare_body(
         threshold_overrides=thresh_a,
         metric_p100=metric_p100_a,
         metric_p0=metric_p0_a,
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited_divisions,
     )
     sections_b = player_metric_sections(
         player_b,
@@ -793,6 +799,9 @@ def stats_compare_body(
         threshold_overrides=thresh_b,
         metric_p100=metric_p100_b,
         metric_p0=metric_p0_b,
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited_divisions,
     )
     if view == "bars":
         metrics = _metrics_compare_bars(

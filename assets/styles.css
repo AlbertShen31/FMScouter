@@ -1200,7 +1200,8 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-shortlist-filters-row .rs-filter-search,
 .rs-shortlist-filters-row .rs-filter-age,
 .rs-shortlist-filters-row .st-filter-division,
-.rs-shortlist-filters-row .st-filter-minutes {
+.rs-shortlist-filters-row .st-filter-minutes,
+.rs-shortlist-filters-row .st-filter-value-mode {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -5728,6 +5729,33 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
 .st-minutes-fields .mantine-Select-root {
     flex: 0 0 auto;
     width: 11.75rem;
+}
+
+.st-filter-value-mode {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 0;
+}
+
+.st-filter-value-mode .rs-field-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 1.25rem;
+}
+
+.st-filter-value-mode .rs-field-label-row .rs-field-label {
+    margin-bottom: 0;
+}
+
+.st-value-mode-control.mantine-SegmentedControl-root {
+    width: max-content;
+}
+
+.st-page .rs-shortlist-filters-row > .st-filter-value-mode {
+    flex: 0 0 auto;
 }
 
 .st-page .rs-hist-toggle {

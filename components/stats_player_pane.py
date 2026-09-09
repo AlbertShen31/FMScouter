@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 
 from scoring.stats_scorer import (
     POS_GROUPS,
+    apply_stats_value_mode,
     band_metric,
     categories_for_group,
     is_gk_group,
@@ -18,6 +19,10 @@ from scoring.stats_availability import (
     LIMITED_TRACKING_NOTE,
     has_limited_tracking,
     metric_is_unavailable,
+)
+from scoring.stats_detail_transform import (
+    engine_detail_level_for_player,
+    normalize_value_mode,
 )
 import services.ui_settings as us
 
@@ -55,6 +60,8 @@ def _metric_entry(
     threshold_overrides=None,
     metric_p100=None,
     metric_p0=None,
+    value_mode: str = "raw",
+    export_level: str | None = None,
 ) -> dict:
     meta = metric_defs()[mid]
     if metric_is_unavailable(player, mid):
@@ -78,6 +85,14 @@ def _metric_entry(
         metric_p100=metric_p100,
         metric_p0=metric_p0,
     )
+    if export_level is not None:
+        band = apply_stats_value_mode(
+            band,
+            mid,
+            eval_group,
+            export_level=export_level,
+            value_mode=value_mode,
+        )
     return {
         "id": mid,
         "label": meta["label"],
@@ -97,6 +112,9 @@ def _player_metric_sections(
     threshold_overrides=None,
     metric_p100=None,
     metric_p0=None,
+    value_mode: str = "raw",
+    settings=None,
+    limited_divisions=None,
 ) -> list[dict]:
     # Present in some threshold packs but unused by Mustermann scoring — omit from
     # modal bars / pizzas / values so charts match the metrics that drive averages.
@@ -104,6 +122,13 @@ def _player_metric_sections(
     g = _normalize_eval_group(
         eval_group, player.get("pos_group") or "mid", player=player
     )
+    settings = us.normalize(settings) if settings is not None else {}
+    export_level = engine_detail_level_for_player(
+        player,
+        full_detail_divisions=settings.get("stats_full_detail_divisions"),
+        limited_divisions=limited_divisions,
+    )
+    mode = normalize_value_mode(value_mode)
     sections = []
     for cat in categories_for_group(g):
         metrics = []
@@ -119,6 +144,8 @@ def _player_metric_sections(
                     threshold_overrides=threshold_overrides,
                     metric_p100=metric_p100,
                     metric_p0=metric_p0,
+                    value_mode=mode,
+                    export_level=export_level,
                 )
             )
         pcts = [
@@ -694,6 +721,7 @@ def _player_modal_body(
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
+    value_mode: str = "raw",
 ) -> html.Div:
     settings = us.normalize(settings)
     if banding_ctx is not None:
@@ -712,6 +740,9 @@ def _player_modal_body(
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
         metric_p0=metric_p0,
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited_divisions,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)
@@ -773,6 +804,8 @@ def stats_charts_bottom_pane(
     metric_p0=None,
     cohort_players=None,
     banding_ctx=None,
+    value_mode: str = "raw",
+    limited_divisions=None,
 ) -> html.Div:
     """Build the charts portion (overall avg + bars/pizzas/values) for a player.
 
@@ -825,6 +858,9 @@ def stats_charts_bottom_pane(
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
         metric_p0=metric_p0,
+        value_mode=value_mode,
+        settings=settings,
+        limited_divisions=limited_divisions,
     )
     if view == "bars":
         metrics = _metrics_bars(sections, theme)

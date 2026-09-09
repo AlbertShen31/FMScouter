@@ -210,6 +210,36 @@ def transform_value(
     return apply_transform(current, spec)
 
 
+def normalize_value_mode(raw) -> str:
+    """``raw`` (export values) or ``adjusted`` (Full Detail equivalent)."""
+    text = str(raw or "raw").strip().lower().replace(" ", "_")
+    if text in ("adjusted", "adj", "full_detail", "full"):
+        return "adjusted"
+    return "raw"
+
+
+def metric_value_for_display(
+    value: float | None,
+    metric_id: str,
+    pos_group: str,
+    *,
+    export_level: str,
+    value_mode: str = "raw",
+) -> float | None:
+    """Map an export metric to the active display mode (raw or Full Detail)."""
+    if value is None:
+        return None
+    if normalize_value_mode(value_mode) != "adjusted":
+        return float(value)
+    return transform_value(
+        float(value),
+        metric_id,
+        pos_group,
+        from_level=export_level,
+        to_level=benchmark_reference_level(),
+    )
+
+
 def apply_detail_level_to_threshold_tree(
     tree: dict[str, Any] | None,
     *,
