@@ -327,6 +327,19 @@ def _export_league_meta(players: list[dict]) -> dict[str, dict]:
     return out
 
 
+def _detail_league_sort_key(row: dict) -> tuple:
+    """Most players first; then top tier, nation name, league name."""
+    nation = row.get("nation")
+    nation_arg = None if nation in (None, "", "Unknown") else nation
+    tier_key, _div_key = division_sort_key(row.get("division"), nation_arg)
+    return (
+        -int(row.get("players") or 0),
+        tier_key,
+        str(nation or "").casefold(),
+        str(row.get("division") or "").casefold(),
+    )
+
+
 def _export_leagues_by_detail_level(
     players: list[dict],
     *,
@@ -353,16 +366,7 @@ def _export_leagues_by_detail_level(
         by_level[level].append(dict(row))
 
     for rows in by_level.values():
-        rows.sort(
-            key=lambda row: (
-                str(row.get("nation") or "").casefold(),
-                division_sort_key(
-                    row.get("division"),
-                    None if row.get("nation") in (None, "", "Unknown") else row.get("nation"),
-                ),
-                str(row.get("division") or "").casefold(),
-            )
-        )
+        rows.sort(key=_detail_league_sort_key)
     return by_level
 
 
@@ -519,16 +523,7 @@ def _group_rows_by_assignments(
             level = "no_detail"
         by_level[level].append(dict(row))
     for rows in by_level.values():
-        rows.sort(
-            key=lambda row: (
-                str(row.get("nation") or "").casefold(),
-                division_sort_key(
-                    row.get("division"),
-                    None if row.get("nation") in (None, "", "Unknown") else row.get("nation"),
-                ),
-                str(row.get("division") or "").casefold(),
-            )
-        )
+        rows.sort(key=_detail_league_sort_key)
     return by_level
 
 
