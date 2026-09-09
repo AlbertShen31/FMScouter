@@ -270,9 +270,9 @@ def _limited_divisions_for_parsed(parsed, players: list[dict]) -> list[str]:
 DETAIL_LEVEL_ORDER = ("full_detail", "no_detail", "inactive")
 
 DETAIL_LEVEL_HINTS = {
-    "full_detail": "Settings → Full Detail divisions (unadjusted Mustermann / FM Stag cuts)",
-    "no_detail": "Default for other leagues (thresholds transformed to No Detail)",
-    "inactive": "Limited advanced match stats in this export (Inactive transforms)",
+    "full_detail": "Unadjusted Mustermann / FM Stag cuts",
+    "no_detail": "Default transform for most leagues",
+    "inactive": "Limited advanced match stats",
 }
 
 
@@ -287,18 +287,23 @@ def _detail_level_labels() -> dict[str, str]:
     return labels
 
 
-def _export_leagues_by_detail_level(
-    players: list[dict],
-    *,
-    settings=None,
-    limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
-) -> dict[str, list[dict]]:
-    """Unique export divisions grouped by engine detail level."""
+def _settings_full_detail_sig(settings) -> str:
     settings = us.normalize(settings)
-    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
-    limited = frozenset(limited_divisions or [])
+    divs = [
+        str(name).strip()
+        for name in (settings.get("stats_full_detail_divisions") or [])
+        if str(name).strip()
+    ]
+    return "|".join(sorted(divs, key=str.casefold))
 
-    # division → nation votes (Based In) + player count
+
+def _parsed_file_id(parsed) -> str:
+    store = _unpack_parsed(parsed) or {}
+    return str(store.get("file_id") or "").strip()
+
+
+def _export_league_meta(players: list[dict]) -> dict[str, dict]:
+    """division → {nation, players, tier} for leagues in the export."""
     nation_votes: dict[str, Counter] = defaultdict(Counter)
     player_counts: Counter = Counter()
     for player in players or []:
@@ -310,30 +315,44 @@ def _export_leagues_by_detail_level(
             nation = ""
         nation_votes[div][nation] += 1
         player_counts[div] += 1
-
-    by_level: dict[str, list[dict]] = {level: [] for level in DETAIL_LEVEL_ORDER}
+    out: dict[str, dict] = {}
     for div, counts in nation_votes.items():
-        nation = ""
-        if counts:
-            nation = counts.most_common(1)[0][0]
+        nation = counts.most_common(1)[0][0] if counts else ""
+        out[div] = {
+            "division": div,
+            "nation": nation or "Unknown",
+            "players": int(player_counts.get(div) or 0),
+            "tier": classify_division(div, nation or None),
+        }
+    return out
+
+
+def _export_leagues_by_detail_level(
+    players: list[dict],
+    *,
+    settings=None,
+    limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
+) -> dict[str, list[dict]]:
+    """Unique export divisions grouped by engine detail level (settings defaults)."""
+    settings = us.normalize(settings)
+    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    limited = frozenset(limited_divisions or [])
+    meta = _export_league_meta(players)
+    by_level: dict[str, list[dict]] = {level: [] for level in DETAIL_LEVEL_ORDER}
+    for div, row in meta.items():
+        nation = row.get("nation")
+        nation_arg = None if nation in (None, "", "Unknown") else nation
         level = engine_detail_level_for_division(
             div,
-            nation=nation or None,
+            nation=nation_arg,
             full_detail_divisions=full_detail,
             limited_divisions=limited,
         )
         if level not in by_level:
             by_level[level] = []
-        by_level[level].append(
-            {
-                "division": div,
-                "nation": nation or "Unknown",
-                "players": int(player_counts.get(div) or 0),
-                "tier": classify_division(div, nation or None),
-            }
-        )
+        by_level[level].append(dict(row))
 
-    for level, rows in by_level.items():
+    for rows in by_level.values():
         rows.sort(
             key=lambda row: (
                 str(row.get("nation") or "").casefold(),
@@ -347,62 +366,227 @@ def _export_leagues_by_detail_level(
     return by_level
 
 
-def _detail_levels_section(
+def _default_detail_assignments(
     players: list[dict],
     *,
     settings=None,
     limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
-):
-    """Collapsible list of export leagues by Full / No / Inactive detail."""
-    if not players:
-        return None
-
+) -> dict[str, str]:
     by_level = _export_leagues_by_detail_level(
         players,
         settings=settings,
         limited_divisions=limited_divisions,
     )
+    out: dict[str, str] = {}
+    for level, rows in by_level.items():
+        for row in rows:
+            out[str(row["division"])] = level
+    return out
+
+
+def _normalize_detail_assignments(raw) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        div = str(key or "").strip()
+        level = str(value or "").strip().lower().replace(" ", "_")
+        if not div or level not in DETAIL_LEVEL_ORDER:
+            continue
+        out[div] = level
+    return out
+
+
+def _sync_detail_level_map(
+    store,
+    *,
+    file_id: str,
+    settings,
+    players: list[dict],
+    limited_divisions,
+) -> dict:
+    """Page-local assignments; reset when export file or Full Detail settings change."""
+    settings = us.normalize(settings)
+    settings_sig = _settings_full_detail_sig(settings)
+    defaults = _default_detail_assignments(
+        players,
+        settings=settings,
+        limited_divisions=limited_divisions,
+    )
+    file_id = str(file_id or "").strip()
+    prev = store if isinstance(store, dict) else {}
+    reset = (
+        not prev
+        or str(prev.get("file_id") or "").strip() != file_id
+        or str(prev.get("settings_sig") or "") != settings_sig
+    )
+    if reset:
+        return {
+            "file_id": file_id,
+            "settings_sig": settings_sig,
+            "assignments": defaults,
+        }
+    kept = _normalize_detail_assignments(prev.get("assignments"))
+    merged: dict[str, str] = {}
+    for div, default_level in defaults.items():
+        merged[div] = kept.get(div) if kept.get(div) in DETAIL_LEVEL_ORDER else default_level
+    return {
+        "file_id": file_id,
+        "settings_sig": settings_sig,
+        "assignments": merged,
+    }
+
+
+def _apply_detail_level_drop(store: dict | None, drop: dict | None) -> dict | None:
+    if not isinstance(store, dict):
+        return store
+    if not isinstance(drop, dict):
+        return store
+    division = str(drop.get("division") or "").strip()
+    to_level = str(drop.get("to_level") or "").strip().lower().replace(" ", "_")
+    if not division or to_level not in DETAIL_LEVEL_ORDER:
+        return store
+    assignments = _normalize_detail_assignments(store.get("assignments"))
+    if division not in assignments:
+        return store
+    if assignments.get(division) == to_level:
+        return store
+    assignments[division] = to_level
+    return {**store, "assignments": assignments}
+
+
+def _detail_sets_from_map(
+    detail_map,
+) -> tuple[frozenset[str], frozenset[str]] | None:
+    assignments = _normalize_detail_assignments((detail_map or {}).get("assignments"))
+    if not assignments:
+        return None
+    full = frozenset(div for div, level in assignments.items() if level == "full_detail")
+    inactive = frozenset(div for div, level in assignments.items() if level == "inactive")
+    return full, inactive
+
+
+def _banding_settings_and_limited(
+    settings,
+    limited_divisions,
+    detail_map=None,
+) -> tuple[dict, list[str] | set[str] | frozenset[str] | None]:
+    """Patch settings + limited set from page detail-level map when present."""
+    settings = us.normalize(settings)
+    sets = _detail_sets_from_map(detail_map)
+    if sets is None:
+        return settings, limited_divisions
+    full, inactive = sets
+    patched = {
+        **settings,
+        "stats_full_detail_divisions": sorted(full, key=str.casefold),
+    }
+    return patched, sorted(inactive, key=str.casefold)
+
+
+def _page_banding_bundle(
+    parsed,
+    players: list[dict],
+    settings,
+    detail_map,
+    minutes_required: float,
+) -> tuple[dict, list[str], list[str], dict]:
+    """Return (band_settings, band_limited, export_limited, banding_ctx)."""
+    settings = us.normalize(settings)
+    export_limited = _limited_divisions_for_parsed(parsed, players)
+    band_settings, band_limited = _banding_settings_and_limited(
+        settings, export_limited, detail_map
+    )
+    band_limited_list = list(band_limited or [])
+    banding_ctx = us.build_stats_banding_context(
+        band_settings,
+        players,
+        limited_divisions=band_limited_list,
+        min_minutes=minutes_required,
+    )
+    return band_settings, band_limited_list, list(export_limited or []), banding_ctx
+
+
+def _group_rows_by_assignments(
+    players: list[dict],
+    assignments: dict[str, str],
+) -> dict[str, list[dict]]:
+    meta = _export_league_meta(players)
+    by_level: dict[str, list[dict]] = {level: [] for level in DETAIL_LEVEL_ORDER}
+    for div, row in meta.items():
+        level = assignments.get(div) or "no_detail"
+        if level not in by_level:
+            level = "no_detail"
+        by_level[level].append(dict(row))
+    for rows in by_level.values():
+        rows.sort(
+            key=lambda row: (
+                str(row.get("nation") or "").casefold(),
+                division_sort_key(
+                    row.get("division"),
+                    None if row.get("nation") in (None, "", "Unknown") else row.get("nation"),
+                ),
+                str(row.get("division") or "").casefold(),
+            )
+        )
+    return by_level
+
+
+def _detail_level_chip(row: dict, *, level: str) -> html.Span:
+    division = row["division"]
+    nation = row.get("nation") or "Unknown"
+    players = int(row.get("players") or 0)
+    return html.Span(
+        [
+            html.Span(division, className="st-detail-level-league"),
+            html.Span(
+                f" ({players})",
+                className="st-detail-level-count",
+                title=f"{players} players in export",
+            ),
+        ],
+        className="st-detail-level-chip",
+        title=f"{division} · {nation} — drag to another detail level",
+        draggable="true",
+        **{
+            "data-division": division,
+            "data-level": level,
+            "data-nation": nation,
+        },
+    )
+
+
+def _detail_levels_section(
+    players: list[dict],
+    *,
+    assignments: dict[str, str] | None = None,
+    settings=None,
+    limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
+):
+    """Three horizontal drop columns for Full / No / Inactive detail."""
+    if not players:
+        return None
+
+    if assignments is None:
+        assignments = _default_detail_assignments(
+            players,
+            settings=settings,
+            limited_divisions=limited_divisions,
+        )
+    else:
+        assignments = _normalize_detail_assignments(assignments)
+
+    by_level = _group_rows_by_assignments(players, assignments)
     labels = _detail_level_labels()
     total = sum(len(rows) for rows in by_level.values())
     if total == 0:
         return html.Span("No divisions found in this export.", className="text-muted small")
 
-    body_sections: list = []
+    columns = []
     for level in DETAIL_LEVEL_ORDER:
         rows = by_level.get(level) or []
-        if not rows:
-            continue
-        # Group rows by nation for readable lists.
-        by_nation: dict[str, list[dict]] = defaultdict(list)
-        for row in rows:
-            by_nation[str(row.get("nation") or "Unknown")].append(row)
-        nation_blocks = []
-        for nation in sorted(by_nation.keys(), key=str.casefold):
-            league_bits = []
-            for row in by_nation[nation]:
-                league_bits.append(
-                    html.Span(
-                        [
-                            html.Span(row["division"], className="st-detail-level-league"),
-                            html.Span(
-                                f" ({row['players']})",
-                                className="st-detail-level-count",
-                                title=f"{row['players']} players in export",
-                            ),
-                        ],
-                        className="st-detail-level-chip",
-                    )
-                )
-            nation_blocks.append(
-                html.Div(
-                    [
-                        html.Div(nation, className="st-detail-level-nation"),
-                        html.Div(league_bits, className="st-detail-level-leagues"),
-                    ],
-                    className="st-detail-level-nation-block",
-                )
-            )
-        body_sections.append(
+        chips = [_detail_level_chip(row, level=level) for row in rows]
+        columns.append(
             html.Div(
                 [
                     html.Div(
@@ -418,9 +602,19 @@ def _detail_levels_section(
                         ],
                         className=f"st-detail-level-heading is-{level}",
                     ),
-                    html.Div(nation_blocks, className="st-detail-level-nations"),
+                    html.Div(
+                        chips
+                        or [
+                            html.Span(
+                                "Drop leagues here",
+                                className="st-detail-level-empty",
+                            )
+                        ],
+                        className="st-detail-level-dropzone",
+                    ),
                 ],
-                className=f"st-detail-level-group is-{level}",
+                className=f"st-detail-level-column is-{level}",
+                **{"data-level": level},
             )
         )
 
@@ -433,15 +627,16 @@ def _detail_levels_section(
                         className="rs-metrics-summary-text",
                     ),
                     html.Span(
-                        "From Settings Full Detail leagues + limited-tracking detection",
+                        "Drag leagues between columns · page-only · resets when Full Detail settings change",
                         className="rs-metrics-summary-hint",
                     ),
                 ],
                 className="rs-metrics-summary-row",
             ),
-            html.Div(body_sections, className="st-detail-levels-body rs-metrics-body"),
+            html.Div(columns, className="st-detail-levels-body st-detail-levels-columns"),
         ],
         className="st-detail-levels rs-metrics-details",
+        open=True,
     )
 
 
@@ -1103,6 +1298,8 @@ def _build_rows(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
     value_mode: str = "raw",
+    banding_full_detail: set[str] | frozenset[str] | list[str] | None = None,
+    banding_limited: set[str] | frozenset[str] | list[str] | None = None,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
@@ -1111,8 +1308,15 @@ def _build_rows(
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
     )
     avg_cats = _avg_category_columns(g) if cat == "all" else []
-    limited = set(limited_divisions or [])
-    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    stripe_limited = set(limited_divisions or [])
+    full_detail = frozenset(
+        banding_full_detail
+        if banding_full_detail is not None
+        else (settings.get("stats_full_detail_divisions") or [])
+    )
+    limited = frozenset(
+        banding_limited if banding_limited is not None else stripe_limited
+    )
     mode = normalize_value_mode(value_mode)
     rows = []
     hist_percentiles = hist_percentiles or {}
@@ -1126,7 +1330,7 @@ def _build_rows(
         status = minutes_status(p.get("minutes"), minutes_required)
         mins = p.get("minutes")
         mins_text = "—" if mins is None else f"{mins:.0f}"
-        row = _identity_cells(p, identity_cols, limited_divisions=limited)
+        row = _identity_cells(p, identity_cols, limited_divisions=stripe_limited)
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
         row["_key"] = pkey
@@ -1323,6 +1527,7 @@ def _player_modal_body(
     metric_p100=None,
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    stripe_limited: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
     value_mode: str = "raw",
 ) -> html.Div:
@@ -1350,7 +1555,10 @@ def _player_modal_body(
     elif view == "pizzas":
         metrics = _metrics_pizzas(sections, theme)
     else:
-        _, limited_league = resolve_division_highlight(player, limited_divisions)
+        _, limited_league = resolve_division_highlight(
+            player,
+            stripe_limited if stripe_limited is not None else limited_divisions,
+        )
         metrics = _metrics_values(sections, limited_league=limited_league)
     status = minutes_status(player.get("minutes"), minutes_required)
     set_piece_section = player_set_piece_metrics_section(player, eval_group=eval_group)
@@ -1397,7 +1605,9 @@ def _player_modal_body(
         ),
         settings=settings,
         theme=theme,
-        limited_divisions=limited_divisions,
+        limited_divisions=(
+            stripe_limited if stripe_limited is not None else limited_divisions
+        ),
     )
 
 
@@ -1500,6 +1710,8 @@ def layout(**_kwargs):
             dcc.Store(id="st-compare-keys", data=None),
             dcc.Store(id="st-compare-view", data="bars", storage_type="local"),
             dcc.Store(id="st-compare-group", data="mid"),
+            dcc.Store(id="st-detail-level-map", data=None, storage_type="session"),
+            dcc.Store(id="st-detail-level-drop", data=None),
             pattern_matching_stubs(
                 "st",
                 [
@@ -1752,22 +1964,47 @@ def layout(**_kwargs):
 
 
 @callback(
-    Output("st-detail-levels", "children"),
+    Output("st-detail-level-map", "data"),
     Input("st-parsed", "data"),
     Input("st-data-rev", "data"),
     Input("ui-settings", "data"),
+    Input("st-detail-level-drop", "data"),
+    State("st-detail-level-map", "data"),
 )
-def refresh_detail_levels(parsed, _data_rev, settings):
+def sync_detail_level_map(parsed, _data_rev, settings, drop, current_map):
+    players = _parsed_players(parsed)
+    settings = us.normalize(settings)
+    if not players:
+        return None
+    limited = _limited_divisions_for_parsed(parsed, players)
+    file_id = _parsed_file_id(parsed)
+    triggered = ctx.triggered_id
+    if triggered == "st-detail-level-drop" and isinstance(current_map, dict):
+        updated = _apply_detail_level_drop(current_map, drop)
+        return updated if updated is not None else no_update
+    return _sync_detail_level_map(
+        current_map,
+        file_id=file_id,
+        settings=settings,
+        players=players,
+        limited_divisions=limited,
+    )
+
+
+@callback(
+    Output("st-detail-levels", "children"),
+    Input("st-detail-level-map", "data"),
+    Input("st-parsed", "data"),
+    Input("st-data-rev", "data"),
+)
+def refresh_detail_levels(detail_map, parsed, _data_rev):
     players = _parsed_players(parsed)
     if not players:
         return None
-    settings = us.normalize(settings)
-    limited = _limited_divisions_for_parsed(parsed, players)
-    return _detail_levels_section(
-        players,
-        settings=settings,
-        limited_divisions=limited,
-    )
+    assignments = _normalize_detail_assignments((detail_map or {}).get("assignments"))
+    if not assignments:
+        return None
+    return _detail_levels_section(players, assignments=assignments)
 
 
 @callback(
@@ -1860,6 +2097,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("st-parsed-historical", "data"),
+    Input("st-detail-level-map", "data"),
     State("st-sort-memory", "data"),
 )
 def refresh_table(
@@ -1881,23 +2119,27 @@ def refresh_table(
     settings,
     theme,
     hist_parsed,
+    detail_map,
     sort_memory,
 ):
     players = _parsed_players(parsed)
     limited_divisions = _limited_divisions_for_parsed(parsed, players)
     pos = pos or "all"
     settings = us.normalize(settings)
+    band_settings, band_limited = _banding_settings_and_limited(
+        settings, limited_divisions, detail_map
+    )
     minutes_required = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
     g, category = _resolve_category(pos, category or "")
-    thresh = _default_threshold_tree(settings)
+    thresh = _default_threshold_tree(band_settings)
     banding_ctx = us.build_stats_banding_context(
-        settings,
+        band_settings,
         players,
-        limited_divisions=limited_divisions,
+        limited_divisions=band_limited,
         min_minutes=minutes_required,
     )
     compare = bool(parsed_historical_players(hist_parsed))
@@ -1905,10 +2147,13 @@ def refresh_table(
     if compare:
         hist_players = parsed_historical_players(hist_parsed)
         hist_limited = _limited_divisions_for_parsed(hist_parsed, hist_players)
+        hist_band_settings, hist_band_limited = _banding_settings_and_limited(
+            settings, hist_limited, detail_map
+        )
         hist_banding_ctx = us.build_stats_banding_context(
-            settings,
+            hist_band_settings,
             hist_players,
-            limited_divisions=hist_limited,
+            limited_divisions=hist_band_limited,
             min_minutes=minutes_required,
         )
         for hp in hist_players:
@@ -1940,12 +2185,14 @@ def refresh_table(
         category=category,
         minutes_required=minutes_required,
         threshold_overrides=thresh,
-        settings=settings,
+        settings=band_settings,
         compare=compare,
         hist_percentiles=hist_percentiles,
         limited_divisions=limited_divisions,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
+        banding_full_detail=band_settings.get("stats_full_detail_divisions"),
+        banding_limited=band_limited,
     )
     cols = _table_columns(pos, category, thresh, settings=settings)
     col_ids = {c["id"] for c in cols}
@@ -2052,6 +2299,7 @@ def refresh_table(
     State("st-player-view", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def open_player(
@@ -2065,6 +2313,7 @@ def open_player(
     view,
     settings,
     value_mode,
+    detail_map,
 ):
     triggered = ctx.triggered_id
     if triggered == "st-player-modal":
@@ -2093,12 +2342,8 @@ def open_player(
         else us.default_minutes_required(settings)
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
-    limited_divisions = _limited_divisions_for_parsed(parsed, players)
-    banding_ctx = us.build_stats_banding_context(
-        settings,
-        players,
-        limited_divisions=limited_divisions,
-        min_minutes=minutes_required,
+    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+        parsed, players, settings, detail_map, minutes_required
     )
     return (
         True,
@@ -2109,8 +2354,9 @@ def open_player(
             view=view,
             eval_group=eval_group,
             theme=theme,
-            settings=settings,
-            limited_divisions=limited_divisions,
+            settings=band_settings,
+            limited_divisions=band_limited,
+            stripe_limited=export_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2137,6 +2383,7 @@ def _lookup_modal_player(parsed, player_key_value):
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def switch_player_view(
@@ -2149,6 +2396,7 @@ def switch_player_view(
     theme,
     settings,
     value_mode,
+    detail_map,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2167,12 +2415,8 @@ def switch_player_view(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    limited = _limited_divisions_for_parsed(parsed, players)
-    banding_ctx = us.build_stats_banding_context(
-        settings,
-        players,
-        limited_divisions=limited,
-        min_minutes=mins_req,
+    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+        parsed, players, settings, detail_map, mins_req
     )
     return (
         view,
@@ -2182,8 +2426,9 @@ def switch_player_view(
             view=view,
             eval_group=eval_group,
             theme=theme,
-            settings=settings,
-            limited_divisions=limited,
+            settings=band_settings,
+            limited_divisions=band_limited,
+            stripe_limited=export_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2202,6 +2447,7 @@ def switch_player_view(
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def switch_player_group(
@@ -2214,6 +2460,7 @@ def switch_player_group(
     theme,
     settings,
     value_mode,
+    detail_map,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2233,12 +2480,8 @@ def switch_player_group(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    limited = _limited_divisions_for_parsed(parsed, players)
-    banding_ctx = us.build_stats_banding_context(
-        settings,
-        players,
-        limited_divisions=limited,
-        min_minutes=mins_req,
+    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+        parsed, players, settings, detail_map, mins_req
     )
     return (
         group,
@@ -2248,8 +2491,9 @@ def switch_player_group(
             view=_normalize_player_view(view),
             eval_group=group,
             theme=theme,
-            settings=settings,
-            limited_divisions=limited,
+            settings=band_settings,
+            limited_divisions=band_limited,
+            stripe_limited=export_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2259,6 +2503,7 @@ def switch_player_group(
 @callback(
     Output("st-player-modal-body", "children", allow_duplicate=True),
     Input("st-value-mode", "value"),
+    Input("st-detail-level-map", "data"),
     State("st-player-modal", "is_open"),
     State("st-player-key", "data"),
     State("st-player-view", "data"),
@@ -2271,6 +2516,7 @@ def switch_player_group(
 )
 def refresh_player_modal_value_mode(
     value_mode,
+    detail_map,
     is_open,
     player_key_value,
     view,
@@ -2292,12 +2538,8 @@ def refresh_player_modal_value_mode(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    limited = _limited_divisions_for_parsed(parsed, players)
-    banding_ctx = us.build_stats_banding_context(
-        settings,
-        players,
-        limited_divisions=limited,
-        min_minutes=mins_req,
+    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+        parsed, players, settings, detail_map, mins_req
     )
     return _player_modal_body(
         player,
@@ -2305,8 +2547,9 @@ def refresh_player_modal_value_mode(
         view=_normalize_player_view(view),
         eval_group=eval_group,
         theme=theme,
-        settings=settings,
-        limited_divisions=limited,
+        settings=band_settings,
+        limited_divisions=band_limited,
+        stripe_limited=export_limited,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
     )
@@ -2322,19 +2565,30 @@ def _build_stats_compare_body(
     settings: dict,
     players: list[dict],
     value_mode: str = "raw",
+    detail_map=None,
+    parsed=None,
 ) -> html.Div:
     settings = us.normalize(settings)
-    limited = sorted(
-        {
-            str(p.get("division") or "").strip()
-            for p in players
-            if p.get("limited_division_tracking")
-            and str(p.get("division") or "").strip() not in ("", "-", "—")
-        }
-    )
-    banding_ctx = us.build_stats_banding_context(
-        settings, players, limited_divisions=limited or None
-    )
+    mins_req = float(us.default_minutes_required(settings))
+    if parsed is not None:
+        band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
+            parsed, players, settings, detail_map, mins_req
+        )
+    else:
+        export_limited = sorted(
+            {
+                str(p.get("division") or "").strip()
+                for p in players
+                if p.get("limited_division_tracking")
+                and str(p.get("division") or "").strip() not in ("", "-", "—")
+            }
+        )
+        band_settings, band_limited = _banding_settings_and_limited(
+            settings, export_limited, detail_map
+        )
+        banding_ctx = us.build_stats_banding_context(
+            band_settings, players, limited_divisions=band_limited
+        )
     thresh_a, metric_p0_a, metric_p100_a = us.banding_for_player(banding_ctx, player_a)
     thresh_b, metric_p0_b, metric_p100_b = us.banding_for_player(banding_ctx, player_b)
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
@@ -2356,8 +2610,8 @@ def _build_stats_compare_body(
         metric_p0_b=metric_p0_b,
         prefix="st",
         value_mode=value_mode,
-        settings=settings,
-        limited_divisions=limited or None,
+        settings=band_settings,
+        limited_divisions=band_limited,
     )
 
 
@@ -2377,6 +2631,7 @@ def _build_stats_compare_body(
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def open_stats_compare(
@@ -2390,6 +2645,7 @@ def open_stats_compare(
     theme,
     settings,
     value_mode,
+    detail_map,
 ):
     triggered = ctx.triggered_id
     if triggered == "st-compare-modal":
@@ -2431,6 +2687,8 @@ def open_stats_compare(
             settings=settings,
             players=players,
             value_mode=value_mode,
+            detail_map=detail_map,
+            parsed=parsed,
         ),
         keys,
         eval_group,
@@ -2458,6 +2716,7 @@ def _lookup_compare_players(parsed, compare_keys):
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def switch_compare_view(
@@ -2469,6 +2728,7 @@ def switch_compare_view(
     theme,
     settings,
     value_mode,
+    detail_map,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2492,6 +2752,8 @@ def switch_compare_view(
             settings=settings,
             players=_parsed_players(parsed),
             value_mode=value_mode,
+            detail_map=detail_map,
+            parsed=parsed,
         ),
     )
 
@@ -2507,6 +2769,7 @@ def switch_compare_view(
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
+    State("st-detail-level-map", "data"),
     prevent_initial_call=True,
 )
 def switch_compare_group(
@@ -2518,6 +2781,7 @@ def switch_compare_group(
     theme,
     settings,
     value_mode,
+    detail_map,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2546,6 +2810,8 @@ def switch_compare_group(
             settings=settings,
             players=_parsed_players(parsed),
             value_mode=value_mode,
+            detail_map=detail_map,
+            parsed=parsed,
         ),
     )
 
@@ -2553,6 +2819,7 @@ def switch_compare_group(
 @callback(
     Output("st-compare-modal-body", "children", allow_duplicate=True),
     Input("st-value-mode", "value"),
+    Input("st-detail-level-map", "data"),
     State("st-compare-modal", "is_open"),
     State("st-compare-keys", "data"),
     State("st-compare-view", "data"),
@@ -2564,6 +2831,7 @@ def switch_compare_group(
 )
 def refresh_compare_modal_value_mode(
     value_mode,
+    detail_map,
     is_open,
     compare_keys,
     view,
@@ -2587,6 +2855,8 @@ def refresh_compare_modal_value_mode(
         settings=settings,
         players=_parsed_players(parsed),
         value_mode=value_mode,
+        detail_map=detail_map,
+        parsed=parsed,
     )
 
 
