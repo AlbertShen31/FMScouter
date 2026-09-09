@@ -5758,6 +5758,111 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
     flex: 0 0 auto;
 }
 
+.st-detail-levels-wrap {
+    margin: 10px 0 4px;
+}
+
+.st-detail-levels.rs-metrics-details {
+    margin: 0;
+}
+
+.st-detail-levels-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.st-detail-level-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.st-detail-level-heading-text {
+    font-weight: 650;
+    color: var(--app-text);
+    font-size: 0.95rem;
+}
+
+.st-detail-level-heading-hint {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.st-detail-level-heading.is-full_detail .st-detail-level-heading-text {
+    color: #3dff88;
+}
+
+.st-detail-level-heading.is-inactive .st-detail-level-heading-text {
+    color: #fbbf24;
+}
+
+html[data-theme="light"] .st-detail-level-heading.is-full_detail .st-detail-level-heading-text,
+body[data-theme="light"] .st-detail-level-heading.is-full_detail .st-detail-level-heading-text {
+    color: #0f7a3a;
+}
+
+html[data-theme="light"] .st-detail-level-heading.is-inactive .st-detail-level-heading-text,
+body[data-theme="light"] .st-detail-level-heading.is-inactive .st-detail-level-heading-text {
+    color: #a16207;
+}
+
+.st-detail-level-nations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.st-detail-level-nation-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.st-detail-level-nation {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--app-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.st-detail-level-leagues {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+}
+
+.st-detail-level-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--app-line);
+    background: var(--app-card);
+    color: var(--app-text);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.st-detail-level-group.is-inactive .st-detail-level-chip {
+    background: repeating-linear-gradient(
+        -45deg,
+        var(--app-card),
+        var(--app-card) 4px,
+        rgba(251, 191, 36, 0.12) 4px,
+        rgba(251, 191, 36, 0.12) 8px
+    );
+}
+
+.st-detail-level-count {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+}
+
 .st-page .rs-hist-toggle {
     min-width: 14rem;
 }

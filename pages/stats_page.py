@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter, defaultdict
 
 from dash import (
     ALL,
@@ -21,7 +22,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.pack_picker import section_card_header
-from scoring.division_tiers import classify_division
+from scoring.division_tiers import classify_division, division_sort_key
 import services.export_library as lib
 from components.player_filters import help_icon, player_filters, player_filters_host
 from components.player_detail import player_set_piece_metrics_section, player_stats_modal_section
@@ -120,6 +121,8 @@ from scoring.stats_availability import (
     metric_is_unavailable,
 )
 from scoring.stats_detail_transform import (
+    detail_level_options,
+    engine_detail_level_for_division,
     engine_detail_level_for_player,
     normalize_value_mode,
 )
@@ -262,6 +265,184 @@ def _limited_divisions_for_parsed(parsed, players: list[dict]) -> list[str]:
             }
         )
     return limited
+
+
+DETAIL_LEVEL_ORDER = ("full_detail", "no_detail", "inactive")
+
+DETAIL_LEVEL_HINTS = {
+    "full_detail": "Settings → Full Detail divisions (unadjusted Mustermann / FM Stag cuts)",
+    "no_detail": "Default for other leagues (thresholds transformed to No Detail)",
+    "inactive": "Limited advanced match stats in this export (Inactive transforms)",
+}
+
+
+def _detail_level_labels() -> dict[str, str]:
+    labels = {opt["value"]: opt["label"] for opt in detail_level_options()}
+    for level_id, fallback in (
+        ("full_detail", "Full Detail"),
+        ("no_detail", "No Detail"),
+        ("inactive", "Inactive"),
+    ):
+        labels.setdefault(level_id, fallback)
+    return labels
+
+
+def _export_leagues_by_detail_level(
+    players: list[dict],
+    *,
+    settings=None,
+    limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
+) -> dict[str, list[dict]]:
+    """Unique export divisions grouped by engine detail level."""
+    settings = us.normalize(settings)
+    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    limited = frozenset(limited_divisions or [])
+
+    # division → nation votes (Based In) + player count
+    nation_votes: dict[str, Counter] = defaultdict(Counter)
+    player_counts: Counter = Counter()
+    for player in players or []:
+        div = str(player.get("division") or "").strip()
+        if not div or div in ("-", "—"):
+            continue
+        nation = str(player.get("based_in") or player.get("nation") or "").strip()
+        if not nation or nation in ("-", "—"):
+            nation = ""
+        nation_votes[div][nation] += 1
+        player_counts[div] += 1
+
+    by_level: dict[str, list[dict]] = {level: [] for level in DETAIL_LEVEL_ORDER}
+    for div, counts in nation_votes.items():
+        nation = ""
+        if counts:
+            nation = counts.most_common(1)[0][0]
+        level = engine_detail_level_for_division(
+            div,
+            nation=nation or None,
+            full_detail_divisions=full_detail,
+            limited_divisions=limited,
+        )
+        if level not in by_level:
+            by_level[level] = []
+        by_level[level].append(
+            {
+                "division": div,
+                "nation": nation or "Unknown",
+                "players": int(player_counts.get(div) or 0),
+                "tier": classify_division(div, nation or None),
+            }
+        )
+
+    for level, rows in by_level.items():
+        rows.sort(
+            key=lambda row: (
+                str(row.get("nation") or "").casefold(),
+                division_sort_key(
+                    row.get("division"),
+                    None if row.get("nation") in (None, "", "Unknown") else row.get("nation"),
+                ),
+                str(row.get("division") or "").casefold(),
+            )
+        )
+    return by_level
+
+
+def _detail_levels_section(
+    players: list[dict],
+    *,
+    settings=None,
+    limited_divisions: list[str] | set[str] | frozenset[str] | None = None,
+):
+    """Collapsible list of export leagues by Full / No / Inactive detail."""
+    if not players:
+        return None
+
+    by_level = _export_leagues_by_detail_level(
+        players,
+        settings=settings,
+        limited_divisions=limited_divisions,
+    )
+    labels = _detail_level_labels()
+    total = sum(len(rows) for rows in by_level.values())
+    if total == 0:
+        return html.Span("No divisions found in this export.", className="text-muted small")
+
+    body_sections: list = []
+    for level in DETAIL_LEVEL_ORDER:
+        rows = by_level.get(level) or []
+        if not rows:
+            continue
+        # Group rows by nation for readable lists.
+        by_nation: dict[str, list[dict]] = defaultdict(list)
+        for row in rows:
+            by_nation[str(row.get("nation") or "Unknown")].append(row)
+        nation_blocks = []
+        for nation in sorted(by_nation.keys(), key=str.casefold):
+            league_bits = []
+            for row in by_nation[nation]:
+                league_bits.append(
+                    html.Span(
+                        [
+                            html.Span(row["division"], className="st-detail-level-league"),
+                            html.Span(
+                                f" ({row['players']})",
+                                className="st-detail-level-count",
+                                title=f"{row['players']} players in export",
+                            ),
+                        ],
+                        className="st-detail-level-chip",
+                    )
+                )
+            nation_blocks.append(
+                html.Div(
+                    [
+                        html.Div(nation, className="st-detail-level-nation"),
+                        html.Div(league_bits, className="st-detail-level-leagues"),
+                    ],
+                    className="st-detail-level-nation-block",
+                )
+            )
+        body_sections.append(
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                f"{labels.get(level, level)} ({len(rows)})",
+                                className="st-detail-level-heading-text",
+                            ),
+                            html.Span(
+                                DETAIL_LEVEL_HINTS.get(level, ""),
+                                className="st-detail-level-heading-hint",
+                            ),
+                        ],
+                        className=f"st-detail-level-heading is-{level}",
+                    ),
+                    html.Div(nation_blocks, className="st-detail-level-nations"),
+                ],
+                className=f"st-detail-level-group is-{level}",
+            )
+        )
+
+    return html.Details(
+        [
+            html.Summary(
+                [
+                    html.Span(
+                        f"League detail levels ({total})",
+                        className="rs-metrics-summary-text",
+                    ),
+                    html.Span(
+                        "From Settings Full Detail leagues + limited-tracking detection",
+                        className="rs-metrics-summary-hint",
+                    ),
+                ],
+                className="rs-metrics-summary-row",
+            ),
+            html.Div(body_sections, className="st-detail-levels-body rs-metrics-body"),
+        ],
+        className="st-detail-levels rs-metrics-details",
+    )
 
 
 def _colored_cell(text: str, color: str | None) -> str:
@@ -1513,6 +1694,10 @@ def layout(**_kwargs):
                                         ],
                                         className="rs-shortlist-filters-row",
                                     ),
+                                    html.Div(
+                                        id="st-detail-levels",
+                                        className="st-detail-levels-wrap",
+                                    ),
                                     player_data_table(
                                         prefix="st",
                                         columns=_table_columns("all", "all", settings=settings),
@@ -1563,6 +1748,25 @@ def layout(**_kwargs):
             stats_compare_modal(prefix="st"),
         ],
         className="rs-page st-page",
+    )
+
+
+@callback(
+    Output("st-detail-levels", "children"),
+    Input("st-parsed", "data"),
+    Input("st-data-rev", "data"),
+    Input("ui-settings", "data"),
+)
+def refresh_detail_levels(parsed, _data_rev, settings):
+    players = _parsed_players(parsed)
+    if not players:
+        return None
+    settings = us.normalize(settings)
+    limited = _limited_divisions_for_parsed(parsed, players)
+    return _detail_levels_section(
+        players,
+        settings=settings,
+        limited_divisions=limited,
     )
 
 
