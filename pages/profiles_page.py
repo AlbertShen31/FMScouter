@@ -106,6 +106,7 @@ from scoring.stats_scorer import (
     band_metric,
     category_abbr,
     category_average_band,
+    category_label,
     metric_defs,
     metrics_for,
     minutes_color,
@@ -146,8 +147,8 @@ PF_SQUAD_DEPTH_TIP = (
 )
 PF_DEPTH_CHART_TIP = (
     "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only). "
-    "Switch Percentiles / Defending / Final third / Possession to see category averages or the "
-    "underlying per-90 stats (same categories as Player stats)."
+    "Switch Percentiles / Defending / Final third (Goalkeeping for GK) / Possession to see "
+    "category averages or the underlying per-90 stats."
 )
 PF_SET_PIECES_TIP = (
     "Top set-piece takers among players on formation squad depth. COR / DFK / IFK split into "
@@ -217,12 +218,6 @@ def _ensure_profile_percentiles(settings) -> None:
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
 DEPTH_STATS_VIEWS = ("percentiles", "defending", "final_third", "possession")
-DEPTH_STATS_VIEW_LABELS = (
-    ("percentiles", "Percentiles", "Overall and category average percentiles"),
-    ("defending", "Defending", "Defending category metrics"),
-    ("final_third", "Final third", "Final third / goalkeeping category metrics"),
-    ("possession", "Possession", "Possession category metrics"),
-)
 _ROLE_GROUP_TO_STATS = {
     "gk": "gk",
     "cb": "def",
@@ -747,10 +742,29 @@ def _normalize_depth_stats_view(value) -> str:
     return "percentiles"
 
 
-def _depth_stats_view_switcher(active=None) -> html.Div:
+def _depth_stats_view_options(group: str | None = None) -> tuple[tuple[str, str, str], ...]:
+    """Percentiles + three category tabs; GK uses Goalkeeping instead of Final third."""
+    from scoring.stats_scorer import is_gk_group
+
+    gk = is_gk_group(group)
+    f3_label = "Goalkeeping" if gk else "Final third"
+    f3_tip = (
+        "Goalkeeping category metrics"
+        if gk
+        else "Final third category metrics"
+    )
+    return (
+        ("percentiles", "Percentiles", "Overall and category average percentiles"),
+        ("defending", "Defending", "Defending category metrics"),
+        ("final_third", f3_label, f3_tip),
+        ("possession", "Possession", "Possession category metrics"),
+    )
+
+
+def _depth_stats_view_switcher(active=None, *, group: str | None = None) -> html.Div:
     current = _normalize_depth_stats_view(active)
     buttons = []
-    for value, label, title in DEPTH_STATS_VIEW_LABELS:
+    for value, label, title in _depth_stats_view_options(group):
         buttons.append(
             html.Button(
                 label,
@@ -772,26 +786,76 @@ def _depth_stats_view_switcher(active=None) -> html.Div:
 
 def _stats_group_for_role_column(column: str) -> str:
     """Map a role column to gk/def/mid/fwd for metric column selection."""
+    from scoring.stats_scorer import is_gk_group
+
     meta = _role_column_meta(column)
     if str(meta.get("is_gk") or "").lower() in ("yes", "true", "1"):
         return "gk"
     group = str(meta.get("group") or "").strip().lower()
+    if is_gk_group(group) or group == "gk":
+        return "gk"
     if group in _ROLE_GROUP_TO_STATS:
         return _ROLE_GROUP_TO_STATS[group]
     for token in str(meta.get("groups") or "").split(","):
         token = token.strip().lower()
+        if token == "gk" or is_gk_group(token):
+            return "gk"
         if token in _ROLE_GROUP_TO_STATS:
             return _ROLE_GROUP_TO_STATS[token]
+    # Formation / display labels sometimes carry GK without role meta.
+    blob = " ".join(
+        str(meta.get(key) or "")
+        for key in ("column", "name", "short_label", "compact", "id")
+    ).upper()
+    if re.search(r"\bGK\b", blob) or "GOALKEEP" in blob:
+        return "gk"
     return "mid"
 
 
-def _depth_metric_ids(stats_view: str, role_column: str, settings=None) -> list[str]:
+def _stats_group_for_slot(
+    role_column: str,
+    *,
+    formation_slot: dict | None = None,
+    slot_label: str = "",
+) -> str:
+    """Prefer GK when the formation slot / label is the goalkeeper position."""
+    if formation_slot and _slot_pitch_line(formation_slot) == "gk":
+        return "gk"
+    label = str(
+        slot_label
+        or (formation_slot or {}).get("display_label")
+        or (formation_slot or {}).get("label")
+        or ""
+    ).strip().upper()
+    if label in ("GK", "GOALKEEPER") or re.match(r"^GK\b", label):
+        return "gk"
+    return _stats_group_for_role_column(role_column)
+
+
+def _stats_group_for_focus(focus_role) -> str | None:
+    """Stats group for the focused depth slot, or None when nothing is focused."""
+    focus = _focus_slot(focus_role)
+    if not focus:
+        return None
+    return _stats_group_for_slot(
+        focus.get("role") or "",
+        slot_label=str(focus.get("label") or ""),
+    )
+
+
+def _depth_metric_ids(
+    stats_view: str,
+    role_column: str,
+    settings=None,
+    *,
+    stats_group: str | None = None,
+) -> list[str]:
     """Metric ids for one depth-chart category view (empty for percentiles)."""
     view = _normalize_depth_stats_view(stats_view)
     if view == "percentiles":
         return []
     settings = us.normalize(settings)
-    group = _stats_group_for_role_column(role_column)
+    group = stats_group or _stats_group_for_role_column(role_column)
     return list(metrics_for(group, view, settings.get("stats_thresholds")))
 
 
@@ -2078,9 +2142,11 @@ def _depth_category_cells(
     minutes_required=None,
     file_cache: dict | None = None,
     banding_cache: dict | None = None,
+    stats_group: str | None = None,
 ) -> list:
     """% AVG + metric cells for one depth row in a category view."""
     from scoring.stats_availability import metric_is_unavailable
+    from scoring.stats_scorer import is_gk_group
 
     blank = [
         html.Div(
@@ -2100,7 +2166,12 @@ def _depth_category_cells(
     stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
     if not isinstance(stats_player, dict):
         return blank
-    group = resolve_player_pos_group(stats_player)
+    player_group = resolve_player_pos_group(stats_player)
+    # GK slots always score against GK benchmarks / metric set.
+    if is_gk_group(stats_group):
+        group = "gk"
+    else:
+        group = player_group
     stats = scoring_stats(stats_player)
     thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
         entry,
@@ -2306,6 +2377,7 @@ def _depth_chart_player_row(
     name_src: str = "depth",
     stats_view: str = "percentiles",
     metric_ids: list[str] | None = None,
+    stats_group: str | None = None,
     file_cache: dict | None = None,
     banding_cache: dict | None = None,
     grid_style: dict | None = None,
@@ -2418,6 +2490,7 @@ def _depth_chart_player_row(
                     metric_ids=metric_ids,
                     settings=settings,
                     minutes_required=mins_limit,
+                    stats_group=stats_group,
                 )
             )
         cells.append(remove_cell)
@@ -2576,6 +2649,7 @@ def _depth_chart_player_row(
                 minutes_required=mins_limit,
                 file_cache=file_cache,
                 banding_cache=banding_cache,
+                stats_group=stats_group,
             )
         )
     cells.append(remove_cell)
@@ -2594,6 +2668,7 @@ def _depth_chart_col_headers(
     stats_view: str = "percentiles",
     metric_ids: list[str] | None = None,
     role_column: str = "",
+    stats_group: str | None = None,
     grid_style: dict | None = None,
 ) -> html.Div:
     """Mirror Profiles table order; slot/role live in the section header."""
@@ -2605,6 +2680,9 @@ def _depth_chart_col_headers(
     )
     stats_view = _normalize_depth_stats_view(stats_view)
     metric_ids = list(metric_ids or [])
+    group = stats_group or (
+        _stats_group_for_role_column(role_column) if role_column else None
+    )
     if selectable and slot_index is not None:
         rank_head = html.Div(
             [
@@ -2637,16 +2715,17 @@ def _depth_chart_col_headers(
         html.Span("Mins", className="pf-depth-chart-mins"),
     ]
     if stats_view == "percentiles":
+        f3_abbr = category_abbr("final_third", group=group) or "F3"
+        f3_title = category_label("final_third", group=group) or "Final third"
         heads.extend(
             [
                 html.Span("Ovr", className="pf-depth-chart-ovr"),
                 html.Span("Def", className="pf-depth-chart-def"),
-                html.Span("F3", className="pf-depth-chart-f3", title="Final third"),
+                html.Span(f3_abbr, className="pf-depth-chart-f3", title=f3_title),
                 html.Span("Poss", className="pf-depth-chart-poss"),
             ]
         )
     else:
-        group = _stats_group_for_role_column(role_column) if role_column else "mid"
         heads.append(
             html.Span(
                 "Avg",
@@ -3428,7 +3507,12 @@ def _build_depth_chart(
     label = _role_display_label(column)
     if label == "—":
         label = meta.get("short_label") or meta.get("name") or column
-    metric_ids = _depth_metric_ids(stats_view, column, settings)
+    stats_group = _stats_group_for_slot(
+        column, formation_slot=match, slot_label=slot_label
+    )
+    metric_ids = _depth_metric_ids(
+        stats_view, column, settings, stats_group=stats_group
+    )
     n_metric_cols = 4 if stats_view == "percentiles" else 1 + len(metric_ids)
     grid_style = _depth_chart_grid_style(n_metric_cols=n_metric_cols)
     file_cache, banding_cache = _depth_stats_file_caches()
@@ -3457,6 +3541,7 @@ def _build_depth_chart(
             name_src="depth",
             stats_view=stats_view,
             metric_ids=metric_ids,
+            stats_group=stats_group,
             file_cache=file_cache,
             banding_cache=banding_cache,
             grid_style=grid_style,
@@ -3538,6 +3623,7 @@ def _build_depth_chart(
                         stats_view=stats_view,
                         metric_ids=metric_ids,
                         role_column=column,
+                        stats_group=stats_group,
                         grid_style=grid_style,
                     ),
                     html.Div(
@@ -5211,9 +5297,12 @@ def set_depth_stats_view(n_clicks):
 @callback(
     Output("pf-depth-stats-view-switch", "children"),
     Input("pf-depth-stats-view", "data"),
+    Input("pf-focus-role", "data"),
 )
-def sync_depth_stats_view_switch(view):
-    return _depth_stats_view_switcher(view)
+def sync_depth_stats_view_switch(view, focus_role):
+    return _depth_stats_view_switcher(
+        view, group=_stats_group_for_focus(focus_role)
+    )
 
 
 @callback(
