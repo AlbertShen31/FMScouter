@@ -8469,6 +8469,22 @@ body[data-theme="light"] .pf-depth-undo-row {
     min-width: 11.5rem;
 }
 
+.pf-depth-stats-view-field {
+    min-width: 22rem;
+}
+
+.pf-depth-stats-view-seg {
+    width: auto;
+    min-width: 21rem;
+}
+
+.pf-depth-stats-view-seg .st-player-seg-btn {
+    flex: 1 1 0;
+    padding: 7px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
 .pf-xi-view-seg {
     width: auto;
     min-width: 11rem;
@@ -8936,10 +8952,7 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
         2.5rem
         3.35rem
         2.95rem
-        2.95rem
-        2.95rem
-        2.95rem
-        2.95rem
+        var(--pf-depth-metric-cols, 2.95rem 2.95rem 2.95rem 2.95rem)
         2rem;
     gap: 0.3rem 0.4rem;
     align-items: center;
@@ -8976,7 +8989,8 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 .pf-depth-chart-cols .pf-depth-chart-ovr,
 .pf-depth-chart-cols .pf-depth-chart-def,
 .pf-depth-chart-cols .pf-depth-chart-f3,
-.pf-depth-chart-cols .pf-depth-chart-poss {
+.pf-depth-chart-cols .pf-depth-chart-poss,
+.pf-depth-chart-cols .pf-depth-chart-stat {
     color: var(--app-muted);
     font-size: 0.72rem;
     font-weight: 700;
@@ -8997,8 +9011,17 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 .pf-depth-chart-cols .pf-depth-chart-ovr,
 .pf-depth-chart-cols .pf-depth-chart-def,
 .pf-depth-chart-cols .pf-depth-chart-f3,
-.pf-depth-chart-cols .pf-depth-chart-poss {
+.pf-depth-chart-cols .pf-depth-chart-poss,
+.pf-depth-chart-cols .pf-depth-chart-stat {
     text-align: center;
+}
+
+.pf-depth-chart-cols .pf-depth-chart-stat {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.15;
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
 }
 
 .pf-depth-chart-cols .pf-depth-chart-name-label,
@@ -9470,6 +9493,7 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
 .pf-depth-chart-def,
 .pf-depth-chart-f3,
 .pf-depth-chart-poss,
+.pf-depth-chart-stat,
 .pf-depth-chart-age,
 .pf-depth-chart-height,
 .pf-depth-chart-mins,
@@ -9479,6 +9503,42 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
     justify-self: center;
     font-variant-numeric: tabular-nums;
     font-size: 0.92rem;
+}
+
+.pf-depth-chart-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.05rem;
+    line-height: 1.1;
+    min-width: 0;
+}
+
+.pf-depth-chart-metric-val {
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    line-height: 1.1;
+}
+
+.pf-depth-chart-metric-pct {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--app-muted);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+html[data-theme="light"] .pf-depth-chart-metric-pct,
+body[data-theme="light"] .pf-depth-chart-metric-pct {
+    color: var(--app-muted);
+}
+
+.pf-depth-chart-metric.is-unavailable {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
 }
 
 /* Injury icon uses fill="currentColor"; table shells set color, depth chart must too. */

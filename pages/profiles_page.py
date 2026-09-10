@@ -103,7 +103,11 @@ from scoring.role_scorer import (
 from scoring.stats_scorer import (
     adaptive_bound_options,
     adaptive_metric_bound_maps,
+    band_metric,
     category_abbr,
+    category_average_band,
+    metric_defs,
+    metrics_for,
     minutes_color,
     minutes_status,
     percentile_color,
@@ -141,7 +145,9 @@ PF_SQUAD_DEPTH_TIP = (
     "Recently removed restore or a new Role-scores export."
 )
 PF_DEPTH_CHART_TIP = (
-    "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only)."
+    "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only). "
+    "Switch Percentiles / Defending / Final third / Possession to see category averages or the "
+    "underlying per-90 stats (same categories as Player stats)."
 )
 PF_SET_PIECES_TIP = (
     "Top set-piece takers among players on formation squad depth. COR / DFK / IFK split into "
@@ -210,6 +216,25 @@ def _ensure_profile_percentiles(settings) -> None:
 
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
+DEPTH_STATS_VIEWS = ("percentiles", "defending", "final_third", "possession")
+DEPTH_STATS_VIEW_LABELS = (
+    ("percentiles", "Percentiles", "Overall and category average percentiles"),
+    ("defending", "Defending", "Defending category metrics"),
+    ("final_third", "Final third", "Final third / goalkeeping category metrics"),
+    ("possession", "Possession", "Possession category metrics"),
+)
+_ROLE_GROUP_TO_STATS = {
+    "gk": "gk",
+    "cb": "def",
+    "fb": "def",
+    "wb": "def",
+    "dm": "mid",
+    "cm": "mid",
+    "am": "mid",
+    "wm": "mid",
+    "w": "fwd",
+    "st": "fwd",
+}
 
 
 def _pct_header_name(col_id: str) -> str:
@@ -705,6 +730,87 @@ def _xi_view_switcher(active=None) -> html.Div:
         role="group",
         **{"aria-label": "Starting XI view"},
     )
+
+
+def _normalize_depth_stats_view(value) -> str:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in ("all", "percentile", "pct"):
+        return "percentiles"
+    if raw in DEPTH_STATS_VIEWS:
+        return raw
+    if raw in ("f3", "finalthird", "gk", "goalkeeping"):
+        return "final_third"
+    if raw in ("def", "defence", "defense"):
+        return "defending"
+    if raw in ("poss",):
+        return "possession"
+    return "percentiles"
+
+
+def _depth_stats_view_switcher(active=None) -> html.Div:
+    current = _normalize_depth_stats_view(active)
+    buttons = []
+    for value, label, title in DEPTH_STATS_VIEW_LABELS:
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": "pf-depth-stats-view", "view": value},
+                n_clicks=0,
+                type="button",
+                title=title,
+                className="st-player-seg-btn"
+                + (" active" if value == current else ""),
+            )
+        )
+    return html.Div(
+        buttons,
+        className="st-player-seg pf-depth-stats-view-seg",
+        role="group",
+        **{"aria-label": "Depth chart stats view"},
+    )
+
+
+def _stats_group_for_role_column(column: str) -> str:
+    """Map a role column to gk/def/mid/fwd for metric column selection."""
+    meta = _role_column_meta(column)
+    if str(meta.get("is_gk") or "").lower() in ("yes", "true", "1"):
+        return "gk"
+    group = str(meta.get("group") or "").strip().lower()
+    if group in _ROLE_GROUP_TO_STATS:
+        return _ROLE_GROUP_TO_STATS[group]
+    for token in str(meta.get("groups") or "").split(","):
+        token = token.strip().lower()
+        if token in _ROLE_GROUP_TO_STATS:
+            return _ROLE_GROUP_TO_STATS[token]
+    return "mid"
+
+
+def _depth_metric_ids(stats_view: str, role_column: str, settings=None) -> list[str]:
+    """Metric ids for one depth-chart category view (empty for percentiles)."""
+    view = _normalize_depth_stats_view(stats_view)
+    if view == "percentiles":
+        return []
+    settings = us.normalize(settings)
+    group = _stats_group_for_role_column(role_column)
+    return list(metrics_for(group, view, settings.get("stats_thresholds")))
+
+
+def _depth_chart_metric_track(n_metric_cols: int) -> str:
+    """CSS track list for percentile or category metric columns."""
+    n = max(0, int(n_metric_cols))
+    width = "3.35rem" if n > 5 else "2.95rem"
+    return " ".join([width] * n) if n else "2.95rem 2.95rem 2.95rem 2.95rem"
+
+
+def _depth_chart_grid_style(*, n_metric_cols: int) -> dict:
+    """Override metric column tracks (identity + score/mins stay in CSS)."""
+    tracks = _depth_chart_metric_track(n_metric_cols)
+    # Base identity/score/mins width ≈ 52rem; metrics + remove grow the min width.
+    min_w = 52.0 + max(4, int(n_metric_cols)) * 3.25
+    return {
+        "--pf-depth-metric-cols": tracks,
+        "minWidth": f"{min_w:.0f}rem",
+    }
 
 
 SET_PIECE_TOP_N = 10
@@ -1823,6 +1929,242 @@ def _apply_profile_division(
     item["PersonalityTier"] = pers_row.get("PersonalityTier") or ""
 
 
+def _depth_stats_file_caches():
+    """Per-build caches for file cohorts and banding contexts."""
+    return {}, {}
+
+
+def _resolve_depth_stats_player(
+    entry: dict | None,
+    *,
+    file_cache: dict | None = None,
+) -> dict | None:
+    """Best-effort Moneyball/stats player for a depth-chart profile row."""
+    if not isinstance(entry, dict):
+        return None
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    embedded = entry.get("stats_player")
+    if isinstance(embedded, dict) and (
+        embedded.get("stats") is not None or embedded.get("pos_group")
+    ):
+        return _enrich_stats_player(embedded, player or {})
+
+    file_id = str(entry.get("file_id") or "").strip()
+    if not file_id:
+        return None
+    cache = file_cache if file_cache is not None else {}
+    if file_id not in cache:
+        cache[file_id] = profiles.load_stats_players_for_file(file_id)
+    cohort = cache.get(file_id) or []
+    if not cohort:
+        return None
+    from scoring.stats_scorer import player_key as stats_player_key
+
+    row = entry.get("row") or {}
+    name = (player.get("name") or row.get("Name") or "").strip()
+    unique_id = str(
+        player.get("unique_id") or row.get("Unique ID") or ""
+    ).strip()
+    club = (player.get("club") or row.get("Club") or "").strip()
+    target = (
+        stats_player_key({"name": name, "unique_id": unique_id, "club": club})
+        if name
+        else ""
+    )
+    if not target:
+        target = str(entry.get("player_key") or "").strip()
+    if not target:
+        return None
+    for sp in cohort:
+        if stats_player_key(sp) == target:
+            return _enrich_stats_player(sp, player or {})
+    return None
+
+
+def _depth_banding_for_entry(
+    entry: dict | None,
+    stats_player: dict | None,
+    *,
+    settings,
+    minutes_required=None,
+    file_cache: dict | None = None,
+    banding_cache: dict | None = None,
+):
+    """Return (threshold_tree, metric_p0, metric_p100) for one depth row."""
+    settings = us.normalize(settings)
+    if not isinstance(stats_player, dict):
+        return settings.get("stats_thresholds") or {}, None, None
+    file_id = str((entry or {}).get("file_id") or "").strip()
+    cache_key = file_id or f"embedded:{id(stats_player)}"
+    bcache = banding_cache if banding_cache is not None else {}
+    if cache_key not in bcache:
+        fcache = file_cache if file_cache is not None else {}
+        if file_id:
+            if file_id not in fcache:
+                fcache[file_id] = profiles.load_stats_players_for_file(file_id)
+            cohort = list(fcache.get(file_id) or [])
+        else:
+            cohort = [stats_player]
+        if stats_player not in cohort:
+            cohort = [stats_player, *cohort]
+        limited = _limited_tracking_divisions()
+        bcache[cache_key] = us.build_stats_banding_context(
+            settings,
+            cohort,
+            limited_divisions=limited,
+            min_minutes=_resolve_minutes_required(minutes_required, settings),
+        )
+    return us.banding_for_player(bcache[cache_key], stats_player, settings=settings)
+
+
+def _depth_stat_metric_cell(
+    band: dict | None,
+    *,
+    unavailable: bool = False,
+    title: str | None = None,
+) -> html.Div:
+    """Compact value + percentile cell for category metric columns."""
+    tip = title or None
+    if unavailable:
+        return html.Div(
+            html.Span(
+                "N/A",
+                className="pf-depth-chart-metric is-unavailable",
+                title="Not tracked in this league",
+            ),
+            className="pf-depth-chart-stat",
+            title=tip,
+        )
+    if not isinstance(band, dict):
+        return html.Div(
+            html.Span("—", className="pf-depth-chart-metric"),
+            className="pf-depth-chart-stat",
+            title=tip,
+        )
+    display = band.get("display") or "—"
+    pct = band.get("percentile")
+    color = band.get("color")
+    if display in ("—", "-", "") and pct is None:
+        return html.Div(
+            html.Span("—", className="pf-depth-chart-metric"),
+            className="pf-depth-chart-stat",
+            title=tip,
+        )
+    val_style = {"color": color, "fontWeight": "650"} if color else {"fontWeight": "650"}
+    children = [
+        html.Span(
+            str(display),
+            className="pf-depth-chart-metric-val",
+            style=val_style,
+        )
+    ]
+    if pct is not None:
+        children.append(
+            html.Span(
+                f"~{float(pct):.0f}th",
+                className="pf-depth-chart-metric-pct",
+                title=f"~{float(pct):.0f}th percentile",
+            )
+        )
+    return html.Div(children, className="pf-depth-chart-stat", title=tip)
+
+
+def _depth_category_cells(
+    entry: dict | None,
+    *,
+    stats_view: str,
+    metric_ids: list[str],
+    settings,
+    minutes_required=None,
+    file_cache: dict | None = None,
+    banding_cache: dict | None = None,
+) -> list:
+    """% AVG + metric cells for one depth row in a category view."""
+    from scoring.stats_availability import metric_is_unavailable
+
+    blank = [
+        html.Div(
+            html.Span("—", className="pf-depth-chart-metric"),
+            className="pf-depth-chart-stat pf-depth-chart-cat-avg",
+        ),
+        *[
+            html.Div(
+                html.Span("—", className="pf-depth-chart-metric"),
+                className="pf-depth-chart-stat",
+            )
+            for _ in metric_ids
+        ],
+    ]
+    if entry is None:
+        return blank
+    stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
+    if not isinstance(stats_player, dict):
+        return blank
+    group = resolve_player_pos_group(stats_player)
+    stats = scoring_stats(stats_player)
+    thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
+        entry,
+        stats_player,
+        settings=settings,
+        minutes_required=minutes_required,
+        file_cache=file_cache,
+        banding_cache=banding_cache,
+    )
+    cat = _normalize_depth_stats_view(stats_view)
+    cat_band = category_average_band(
+        group,
+        cat,
+        stats,
+        threshold_overrides=thresh,
+        metric_p100=metric_p100,
+        metric_p0=metric_p0,
+    )
+    cells = [
+        html.Div(
+            _depth_ovr_cell(cat_band.get("percentile"), cat_band.get("color")),
+            className="pf-depth-chart-stat pf-depth-chart-cat-avg",
+            title=f"{category_abbr(cat, group=group) or cat} average",
+        )
+    ]
+    player_metrics = set(metrics_for(group, cat, thresh))
+    for mid in metric_ids:
+        abbr = (metric_defs().get(mid) or {}).get("abbr") or mid
+        if mid not in player_metrics:
+            cells.append(
+                html.Div(
+                    html.Span("—", className="pf-depth-chart-metric"),
+                    className="pf-depth-chart-stat",
+                    title=abbr,
+                )
+            )
+            continue
+        if metric_is_unavailable(stats_player, mid):
+            cells.append(
+                _depth_stat_metric_cell(
+                    None,
+                    unavailable=True,
+                    title=(metric_defs().get(mid) or {}).get("label") or abbr,
+                )
+            )
+            continue
+        band = band_metric(
+            group,
+            cat,
+            mid,
+            stats.get(mid),
+            threshold_overrides=thresh,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
+        )
+        cells.append(
+            _depth_stat_metric_cell(
+                band,
+                title=(metric_defs().get(mid) or {}).get("label") or abbr,
+            )
+        )
+    return cells
+
+
 def _depth_score_cell(score, settings, theme=None):
     """Score pill using the same band colors as the Profiles table."""
     if score is None or score in ("", "-", "—"):
@@ -1962,6 +2304,11 @@ def _depth_chart_player_row(
     selectable: bool = False,
     minutes_required=None,
     name_src: str = "depth",
+    stats_view: str = "percentiles",
+    metric_ids: list[str] | None = None,
+    file_cache: dict | None = None,
+    banding_cache: dict | None = None,
+    grid_style: dict | None = None,
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
@@ -1969,6 +2316,9 @@ def _depth_chart_player_row(
     remove_cell = html.Span("", className="pf-depth-chart-remove")
     role_col = str(role_column or "").strip()
     name_src = str(name_src or "depth").strip() or "depth"
+    stats_view = _normalize_depth_stats_view(stats_view)
+    metric_ids = list(metric_ids or [])
+    row_style = dict(grid_style or {})
 
     def check_cell(profile_id: str = "") -> html.Span | dmc.Checkbox:
         if not selectable:
@@ -2022,7 +2372,7 @@ def _depth_chart_player_row(
         )
 
     def empty_row_cells() -> list:
-        return [
+        cells = [
             rank_cell(str(index + 1)),
             html.Span("—", className="pf-depth-chart-name is-empty"),
             html.Span("—", className="pf-depth-chart-age"),
@@ -2038,29 +2388,46 @@ def _depth_chart_player_row(
                 className="pf-depth-chart-score",
             ),
             html.Span("—", className="pf-depth-chart-mins"),
-            html.Div(
-                html.Span("—", className="pf-depth-chart-metric"),
-                className="pf-depth-chart-ovr",
-            ),
-            html.Div(
-                html.Span("—", className="pf-depth-chart-metric"),
-                className="pf-depth-chart-def",
-            ),
-            html.Div(
-                html.Span("—", className="pf-depth-chart-metric"),
-                className="pf-depth-chart-f3",
-            ),
-            html.Div(
-                html.Span("—", className="pf-depth-chart-metric"),
-                className="pf-depth-chart-poss",
-            ),
-            remove_cell,
         ]
+        if stats_view == "percentiles":
+            cells.extend(
+                [
+                    html.Div(
+                        html.Span("—", className="pf-depth-chart-metric"),
+                        className="pf-depth-chart-ovr",
+                    ),
+                    html.Div(
+                        html.Span("—", className="pf-depth-chart-metric"),
+                        className="pf-depth-chart-def",
+                    ),
+                    html.Div(
+                        html.Span("—", className="pf-depth-chart-metric"),
+                        className="pf-depth-chart-f3",
+                    ),
+                    html.Div(
+                        html.Span("—", className="pf-depth-chart-metric"),
+                        className="pf-depth-chart-poss",
+                    ),
+                ]
+            )
+        else:
+            cells.extend(
+                _depth_category_cells(
+                    None,
+                    stats_view=stats_view,
+                    metric_ids=metric_ids,
+                    settings=settings,
+                    minutes_required=mins_limit,
+                )
+            )
+        cells.append(remove_cell)
+        return cells
 
     if entry is None:
         return html.Div(
             empty_row_cells(),
             className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
+            style=row_style or None,
         )
     row = entry.get("row") or {}
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
@@ -2124,79 +2491,110 @@ def _depth_chart_player_row(
         ),
         **({"data-profile-id": profile_id} if profile_id else {}),
     }
-    return html.Div(
-        [
-            rank_cell(str(display_rank), profile_id),
-            (
-                html.Button(
-                    name or "Player",
-                    id={
-                        "type": "pf-depth-name",
-                        "id": profile_id,
-                        "src": name_src,
-                        "slot": (
-                            str(slot_index)
-                            if slot_index is not None
-                            else "0"
-                        ),
-                    },
-                    n_clicks=0,
-                    className="pf-depth-chart-name",
-                    title="Open player details",
-                    draggable="false",
-                    type="button",
-                )
-                if profile_id
-                else html.Span("—", className="pf-depth-chart-name is-empty")
-            ),
-            _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
-            _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
-            _depth_pos_cell(position, row, role_col),
-            dcc.Markdown(
-                feet_cell(row),
-                dangerously_allow_html=True,
-                className="pf-depth-chart-feet",
-            ),
-            html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
-            html.Span(division, className=div_class, title=div_title),
-            _depth_rec_cell(row.get("Rec"), theme=theme),
-            _depth_injury_cell(row, player),
-            html.Div(
-                _depth_score_cell(row.get("Score"), settings, theme=theme),
-                className="pf-depth-chart-score",
-            ),
-            _depth_mins_cell(
-                _profile_minutes_raw(entry, row),
-                settings,
-                minutes_required=mins_limit,
-            ),
-            html.Div(
-                _depth_ovr_cell(
-                    row.get("overall"), row.get("overall_color"), pill=True
+    if row_style:
+        props["style"] = row_style
+    cells = [
+        rank_cell(str(display_rank), profile_id),
+        (
+            html.Button(
+                name or "Player",
+                id={
+                    "type": "pf-depth-name",
+                    "id": profile_id,
+                    "src": name_src,
+                    "slot": (
+                        str(slot_index)
+                        if slot_index is not None
+                        else "0"
+                    ),
+                },
+                n_clicks=0,
+                className="pf-depth-chart-name",
+                title="Open player details",
+                draggable="false",
+                type="button",
+            )
+            if profile_id
+            else html.Span("—", className="pf-depth-chart-name is-empty")
+        ),
+        _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
+        _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
+        _depth_pos_cell(position, row, role_col),
+        dcc.Markdown(
+            feet_cell(row),
+            dangerously_allow_html=True,
+            className="pf-depth-chart-feet",
+        ),
+        html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
+        html.Span(division, className=div_class, title=div_title),
+        _depth_rec_cell(row.get("Rec"), theme=theme),
+        _depth_injury_cell(row, player),
+        html.Div(
+            _depth_score_cell(row.get("Score"), settings, theme=theme),
+            className="pf-depth-chart-score",
+        ),
+        _depth_mins_cell(
+            _profile_minutes_raw(entry, row),
+            settings,
+            minutes_required=mins_limit,
+        ),
+    ]
+    if stats_view == "percentiles":
+        cells.extend(
+            [
+                html.Div(
+                    _depth_ovr_cell(
+                        row.get("overall"), row.get("overall_color"), pill=True
+                    ),
+                    className="pf-depth-chart-ovr",
                 ),
-                className="pf-depth-chart-ovr",
-            ),
-            html.Div(
-                _depth_ovr_cell(row.get("defending"), row.get("defending_color")),
-                className="pf-depth-chart-def",
-            ),
-            html.Div(
-                _depth_ovr_cell(row.get("final_third"), row.get("final_third_color")),
-                className="pf-depth-chart-f3",
-            ),
-            html.Div(
-                _depth_ovr_cell(row.get("possession"), row.get("possession_color")),
-                className="pf-depth-chart-poss",
-            ),
-            remove_cell,
-        ],
+                html.Div(
+                    _depth_ovr_cell(row.get("defending"), row.get("defending_color")),
+                    className="pf-depth-chart-def",
+                ),
+                html.Div(
+                    _depth_ovr_cell(
+                        row.get("final_third"), row.get("final_third_color")
+                    ),
+                    className="pf-depth-chart-f3",
+                ),
+                html.Div(
+                    _depth_ovr_cell(
+                        row.get("possession"), row.get("possession_color")
+                    ),
+                    className="pf-depth-chart-poss",
+                ),
+            ]
+        )
+    else:
+        cells.extend(
+            _depth_category_cells(
+                entry,
+                stats_view=stats_view,
+                metric_ids=metric_ids,
+                settings=settings,
+                minutes_required=mins_limit,
+                file_cache=file_cache,
+                banding_cache=banding_cache,
+            )
+        )
+    cells.append(remove_cell)
+    return html.Div(
+        cells,
         key=f"pf-drow-{index}-{profile_id or 'x'}",
         **props,
     )
 
 
 def _depth_chart_col_headers(
-    *, selectable: bool = False, slot_index=None, first_label: str = "#"
+    *,
+    selectable: bool = False,
+    slot_index=None,
+    first_label: str = "#",
+    stats_view: str = "percentiles",
+    metric_ids: list[str] | None = None,
+    role_column: str = "",
+    grid_style: dict | None = None,
 ) -> html.Div:
     """Mirror Profiles table order; slot/role live in the section header."""
     first = str(first_label or "#").strip() or "#"
@@ -2205,6 +2603,8 @@ def _depth_chart_col_headers(
         if first.casefold() == "slot"
         else "pf-depth-chart-rank"
     )
+    stats_view = _normalize_depth_stats_view(stats_view)
+    metric_ids = list(metric_ids or [])
     if selectable and slot_index is not None:
         rank_head = html.Div(
             [
@@ -2222,27 +2622,55 @@ def _depth_chart_col_headers(
         )
     else:
         rank_head = html.Span(first, className=first_class)
+    heads = [
+        rank_head,
+        html.Span("Name", className="pf-depth-chart-name-label"),
+        html.Span("Age", className="pf-depth-chart-age"),
+        html.Span("Ht", className="pf-depth-chart-height", title="Height"),
+        html.Span("Pos", className="pf-depth-chart-pos"),
+        html.Span("Feet", className="pf-depth-chart-feet"),
+        html.Span("Club", className="pf-depth-chart-club"),
+        html.Span("Division", className="pf-depth-chart-div"),
+        html.Span("Rec", className="pf-depth-chart-rec"),
+        html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
+        html.Span("Score", className="pf-depth-chart-score"),
+        html.Span("Mins", className="pf-depth-chart-mins"),
+    ]
+    if stats_view == "percentiles":
+        heads.extend(
+            [
+                html.Span("Ovr", className="pf-depth-chart-ovr"),
+                html.Span("Def", className="pf-depth-chart-def"),
+                html.Span("F3", className="pf-depth-chart-f3", title="Final third"),
+                html.Span("Poss", className="pf-depth-chart-poss"),
+            ]
+        )
+    else:
+        group = _stats_group_for_role_column(role_column) if role_column else "mid"
+        heads.append(
+            html.Span(
+                "Avg",
+                className="pf-depth-chart-stat pf-depth-chart-cat-avg",
+                title=f"{category_abbr(stats_view, group=group) or stats_view} average",
+            )
+        )
+        for mid in metric_ids:
+            meta = metric_defs().get(mid) or {}
+            abbr = meta.get("abbr") or mid
+            heads.append(
+                html.Span(
+                    abbr,
+                    className="pf-depth-chart-stat",
+                    title=meta.get("label") or abbr,
+                )
+            )
+    heads.append(
+        html.Span("", className="pf-depth-chart-remove", **{"aria-hidden": "true"})
+    )
     return html.Div(
-        [
-            rank_head,
-            html.Span("Name", className="pf-depth-chart-name-label"),
-            html.Span("Age", className="pf-depth-chart-age"),
-            html.Span("Ht", className="pf-depth-chart-height", title="Height"),
-            html.Span("Pos", className="pf-depth-chart-pos"),
-            html.Span("Feet", className="pf-depth-chart-feet"),
-            html.Span("Club", className="pf-depth-chart-club"),
-            html.Span("Division", className="pf-depth-chart-div"),
-            html.Span("Rec", className="pf-depth-chart-rec"),
-            html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
-            html.Span("Score", className="pf-depth-chart-score"),
-            html.Span("Mins", className="pf-depth-chart-mins"),
-            html.Span("Ovr", className="pf-depth-chart-ovr"),
-            html.Span("Def", className="pf-depth-chart-def"),
-            html.Span("F3", className="pf-depth-chart-f3", title="Final third"),
-            html.Span("Poss", className="pf-depth-chart-poss"),
-            html.Span("", className="pf-depth-chart-remove", **{"aria-hidden": "true"}),
-        ],
+        heads,
         className="pf-depth-chart-cols",
+        style=grid_style or None,
     )
 
 
@@ -2897,12 +3325,14 @@ def _build_depth_chart(
     minutes_required=None,
     xi_view=None,
     cache: _PfProfileCache | None = None,
+    stats_view: str = "percentiles",
 ) -> html.Div:
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
     focus = _focus_slot(focus_roles)
     slots = list(formation_slots or [])
     xi_view = _normalize_xi_view(xi_view)
+    stats_view = _normalize_depth_stats_view(stats_view)
 
     if not focus:
         if slots:
@@ -2998,6 +3428,10 @@ def _build_depth_chart(
     label = _role_display_label(column)
     if label == "—":
         label = meta.get("short_label") or meta.get("name") or column
+    metric_ids = _depth_metric_ids(stats_view, column, settings)
+    n_metric_cols = 4 if stats_view == "percentiles" else 1 + len(metric_ids)
+    grid_style = _depth_chart_grid_style(n_metric_cols=n_metric_cols)
+    file_cache, banding_cache = _depth_stats_file_caches()
     rows = [
         _depth_chart_player_row(
             entry,
@@ -3021,6 +3455,11 @@ def _build_depth_chart(
             selectable=True,
             minutes_required=mins_limit,
             name_src="depth",
+            stats_view=stats_view,
+            metric_ids=metric_ids,
+            file_cache=file_cache,
+            banding_cache=banding_cache,
+            grid_style=grid_style,
         )
         for idx, entry in enumerate(ordered)
     ]
@@ -3094,7 +3533,12 @@ def _build_depth_chart(
                     ),
                     _depth_compare_status(visible=True),
                     _depth_chart_col_headers(
-                        selectable=True, slot_index=slot_index
+                        selectable=True,
+                        slot_index=slot_index,
+                        stats_view=stats_view,
+                        metric_ids=metric_ids,
+                        role_column=column,
+                        grid_style=grid_style,
                     ),
                     html.Div(
                         [
@@ -3826,6 +4270,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-depth-undo", data=[]),
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
+            dcc.Store(id="pf-depth-stats-view", storage_type="local", data="percentiles"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
             dcc.Store(id="pf-setpiece-show-gk", storage_type="local", data=True),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
@@ -4183,6 +4628,24 @@ def layout(**_kwargs):
                                                         className=(
                                                             "pf-squad-depth-field "
                                                             "pf-depth-minutes-field"
+                                                        ),
+                                                    ),
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Stats",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            html.Div(
+                                                                _depth_stats_view_switcher(
+                                                                    "percentiles"
+                                                                ),
+                                                                id="pf-depth-stats-view-switch",
+                                                            ),
+                                                        ],
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-depth-stats-view-field"
                                                         ),
                                                     ),
                                                 ],
@@ -4732,6 +5195,28 @@ def sync_xi_view_switch(view):
 
 
 @callback(
+    Output("pf-depth-stats-view", "data"),
+    Input({"type": "pf-depth-stats-view", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_depth_stats_view(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
+        return no_update
+    view = _normalize_depth_stats_view((ctx.triggered_id or {}).get("view"))
+    if view not in DEPTH_STATS_VIEWS:
+        return no_update
+    return view
+
+
+@callback(
+    Output("pf-depth-stats-view-switch", "children"),
+    Input("pf-depth-stats-view", "data"),
+)
+def sync_depth_stats_view_switch(view):
+    return _depth_stats_view_switcher(view)
+
+
+@callback(
     Output("pf-setpiece-show-gk", "data"),
     Input({"type": "pf-setpiece-gk", "view": ALL, "panel": ALL}, "n_clicks"),
     prevent_initial_call=True,
@@ -4805,11 +5290,11 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Depth chart: spinner while focus / formation / rev / minutes / refresh rebuilds
+# Depth chart: spinner while focus / formation / rev / minutes / stats view / refresh rebuilds
 # (not XI toggle). Refresh also bumps pf-rev after syncing exports.
 clientside_callback(
     """
-    function(focus, formation, rev, minutes, refreshClicks) {
+    function(focus, formation, rev, minutes, statsView, refreshClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -4822,6 +5307,7 @@ clientside_callback(
     Input("pf-formation-select", "value"),
     Input("pf-rev", "data"),
     Input("pf-depth-minutes-required", "value"),
+    Input("pf-depth-stats-view", "data"),
     Input("pf-squad-depth-refresh", "n_clicks"),
     prevent_initial_call=True,
 )
@@ -5338,6 +5824,7 @@ def refresh_profiles_squad_depth(
     Input("pf-focus-role", "data"),
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
+    Input("pf-depth-stats-view", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("pf-hydrated", "data"),
@@ -5348,6 +5835,7 @@ def refresh_profiles_depth_chart(
     focus_role,
     formation_id,
     depth_minutes_required,
+    stats_view,
     settings,
     theme,
     hydrated,
@@ -5360,6 +5848,7 @@ def refresh_profiles_depth_chart(
     settings = us.normalize(settings)
     _ensure_profile_percentiles(settings)
     xi_view = _normalize_xi_view(xi_view)
+    stats_view = _normalize_depth_stats_view(stats_view)
     depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
@@ -5376,6 +5865,7 @@ def refresh_profiles_depth_chart(
             minutes_required=depth_minutes_f,
             xi_view=xi_view,
             cache=profile_cache,
+            stats_view=stats_view,
         ),
         epoch=f"r{int(_rev or 0)}",
     )
@@ -5855,12 +6345,13 @@ def apply_depth_chart_drag(
     State("pf-focus-role", "data"),
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
+    State("pf-depth-stats-view", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_role(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
 ):
     if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update
@@ -5889,6 +6380,7 @@ def auto_rank_depth_role(
             minutes_required=depth_minutes,
             xi_view=xi_view,
             cache=profile_cache,
+            stats_view=stats_view,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -5930,12 +6422,13 @@ def refresh_export_staging_notice(
     State("pf-focus-role", "data"),
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
+    State("pf-depth-stats-view", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def refresh_depth_from_role_exports(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
 ):
     """Load staged Role-score exports into formation slots, then rebuild charts."""
     if not n_clicks:
@@ -5954,6 +6447,7 @@ def refresh_depth_from_role_exports(
             minutes_required=depth_minutes,
             xi_view=xi_view,
             cache=_PfProfileCache(),
+            stats_view=stats_view,
         ),
         epoch=f"sync-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -5970,12 +6464,13 @@ def refresh_depth_from_role_exports(
     State("pf-focus-role", "data"),
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
+    State("pf-depth-stats-view", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_all(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, settings, theme
+    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
 ):
     if not n_clicks:
         return no_update, no_update, no_update
@@ -5998,6 +6493,7 @@ def auto_rank_depth_all(
             minutes_required=depth_minutes,
             xi_view=xi_view,
             cache=_PfProfileCache(),
+            stats_view=stats_view,
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
