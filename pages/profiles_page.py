@@ -1963,7 +1963,7 @@ def _depth_chart_player_row(
     minutes_required=None,
     name_src: str = "depth",
 ) -> html.Div:
-    del total, slot_conflicted, slot_unique  # kept for call-site compatibility
+    del total  # kept for call-site compatibility
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
     remove_cell = html.Span("", className="pf-depth-chart-remove")
@@ -1987,16 +1987,43 @@ def _depth_chart_player_row(
             **{"aria-label": "Select player for compare or bulk remove"},
         )
 
+    def rank_cell(rank_text: str, profile_id: str = "") -> html.Div | html.Span:
+        # Starting XI: show formation slot (not depth #) — no select/drag chrome.
+        if not selectable and not draggable:
+            label = str(slot_label or "").strip() or "—"
+            status = _slot_status_class(
+                conflicted=slot_conflicted, unique=slot_unique
+            )
+            title = (
+                "Same XI player as another formation slot"
+                if slot_conflicted
+                else (
+                    "Unique XI player for this formation slot"
+                    if slot_unique
+                    else (label if label != "—" else "Formation slot")
+                )
+            )
+            return html.Span(
+                label,
+                className="pf-depth-chart-slot" + status,
+                title=title,
+            )
+        return html.Div(
+            [
+                check_cell(profile_id),
+                html.Span(
+                    "⋮⋮" if draggable else "",
+                    className="pf-depth-chart-grip",
+                    **{"aria-hidden": "true"},
+                ),
+                html.Span(rank_text, className="pf-depth-chart-rank"),
+            ],
+            className="pf-depth-chart-rank-cell",
+        )
+
     def empty_row_cells() -> list:
         return [
-            html.Div(
-                [
-                    check_cell(""),
-                    html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
-                    html.Span(str(index + 1), className="pf-depth-chart-rank"),
-                ],
-                className="pf-depth-chart-rank-cell",
-            ),
+            rank_cell(str(index + 1)),
             html.Span("—", className="pf-depth-chart-name is-empty"),
             html.Span("—", className="pf-depth-chart-age"),
             html.Span("—", className="pf-depth-chart-height"),
@@ -2099,18 +2126,7 @@ def _depth_chart_player_row(
     }
     return html.Div(
         [
-            html.Div(
-                [
-                    check_cell(profile_id),
-                    html.Span(
-                        "⋮⋮" if draggable else "",
-                        className="pf-depth-chart-grip",
-                        **{"aria-hidden": "true"},
-                    ),
-                    html.Span(str(display_rank), className="pf-depth-chart-rank"),
-                ],
-                className="pf-depth-chart-rank-cell",
-            ),
+            rank_cell(str(display_rank), profile_id),
             (
                 html.Button(
                     name or "Player",
@@ -2179,8 +2195,16 @@ def _depth_chart_player_row(
     )
 
 
-def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> html.Div:
+def _depth_chart_col_headers(
+    *, selectable: bool = False, slot_index=None, first_label: str = "#"
+) -> html.Div:
     """Mirror Profiles table order; slot/role live in the section header."""
+    first = str(first_label or "#").strip() or "#"
+    first_class = (
+        "pf-depth-chart-slot"
+        if first.casefold() == "slot"
+        else "pf-depth-chart-rank"
+    )
     if selectable and slot_index is not None:
         rank_head = html.Div(
             [
@@ -2192,12 +2216,12 @@ def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> ht
                     **{"aria-label": "Select all players in this slot"},
                 ),
                 html.Span("", className="pf-depth-chart-grip", **{"aria-hidden": "true"}),
-                html.Span("#", className="pf-depth-chart-rank"),
+                html.Span(first, className=first_class),
             ],
             className="pf-depth-chart-rank-cell",
         )
     else:
-        rank_head = html.Span("#", className="pf-depth-chart-rank")
+        rank_head = html.Span(first, className=first_class)
     return html.Div(
         [
             rank_head,
@@ -2360,7 +2384,7 @@ def _build_formation_xi_chart(
                 ],
                 className="pf-depth-chart-role-head",
             ),
-            _depth_chart_col_headers(),
+            _depth_chart_col_headers(first_label="Slot"),
             html.Div(rows, className="pf-depth-chart-list pf-depth-chart-xi"),
         ],
         className="pf-depth-chart-section",
