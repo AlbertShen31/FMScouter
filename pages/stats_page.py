@@ -24,6 +24,7 @@ import dash_mantine_components as dmc
 from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division, division_sort_key
 import services.export_library as lib
+from services.division_catalog import nation_abbreviation
 from components.player_filters import help_icon, player_filters, player_filters_host
 from components.player_detail import player_set_piece_metrics_section, player_stats_modal_section
 from components.player_modal import player_detail_body, player_modal
@@ -530,10 +531,19 @@ def _group_rows_by_assignments(
 def _detail_level_chip(row: dict, *, level: str) -> html.Span:
     division = row["division"]
     nation = row.get("nation") or "Unknown"
+    abbr = nation_abbreviation(nation)
     players = int(row.get("players") or 0)
+    league_children: list = []
+    if abbr:
+        league_children.append(
+            html.Span(abbr, className="st-detail-level-nation")
+        )
+        league_children.append(" ")
+    league_children.append(division)
+    title_nation = f"{abbr} · {nation}" if abbr else nation
     return html.Span(
         [
-            html.Span(division, className="st-detail-level-league"),
+            html.Span(league_children, className="st-detail-level-league"),
             html.Span(
                 f" ({players})",
                 className="st-detail-level-count",
@@ -541,12 +551,13 @@ def _detail_level_chip(row: dict, *, level: str) -> html.Span:
             ),
         ],
         className="st-detail-level-chip",
-        title=f"{division} · {nation} — drag to another detail level",
+        title=f"{division} · {title_nation} — drag to another detail level",
         draggable="true",
         **{
             "data-division": division,
             "data-level": level,
             "data-nation": nation,
+            "data-nation-abbr": abbr,
         },
     )
 

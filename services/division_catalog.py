@@ -153,6 +153,55 @@ def normalize_nation_label(raw: str | None) -> str:
     return _NATION_ALIASES.get(_fold(text), text)
 
 
+# Prefer standard FM / FIFA-style codes when a nation has multiple aliases.
+_PREFERRED_NATION_ABBR: dict[str, str] = {
+    "romania": "ROU",
+    "saudi arabia": "KSA",
+    "u.s.a.": "USA",
+    "u.a.e.": "UAE",
+    "netherlands": "NED",
+    "switzerland": "SUI",
+    "türkiye": "TUR",
+    "turkiye": "TUR",
+}
+
+
+def _nation_abbr_lookup() -> dict[str, str]:
+    """Canonical nation label (folded) → uppercase abbreviation."""
+    candidates: dict[str, set[str]] = defaultdict(set)
+    for code, label in _NATION_ALIASES.items():
+        code_text = str(code or "").strip()
+        if not code_text.isalpha() or not (2 <= len(code_text) <= 3):
+            continue
+        candidates[_fold(label)].add(code_text.upper())
+    out: dict[str, str] = {}
+    for fold_lab, codes in candidates.items():
+        preferred = _PREFERRED_NATION_ABBR.get(fold_lab)
+        if preferred and preferred in codes:
+            out[fold_lab] = preferred
+            continue
+        three = sorted(c for c in codes if len(c) == 3)
+        out[fold_lab] = three[0] if three else sorted(codes)[0]
+    return out
+
+
+_NATION_ABBR_BY_LABEL = _nation_abbr_lookup()
+
+
+def nation_abbreviation(raw: str | None) -> str:
+    """FM-style nation abbreviation (e.g. ROU, ENG) from Based In / code."""
+    text = str(raw or "").strip()
+    if not text or text in ("-", "—", "Unknown"):
+        return ""
+    folded = _fold(text)
+    if folded in _NATION_ALIASES and folded.isalpha() and 2 <= len(folded) <= 3:
+        return folded.upper()
+    label = normalize_nation_label(text)
+    if not label:
+        return ""
+    return _NATION_ABBR_BY_LABEL.get(_fold(label), "")
+
+
 def _nation_exact_pairs() -> list[tuple[str, str]]:
     """All (division, nation) pairs from nation-specific tier overrides."""
     from scoring.division_tiers import _NATION_EXACT
