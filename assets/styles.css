@@ -5529,7 +5529,8 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 }
 
 #st-table .dash-spreadsheet-inner td .st-pct-cell .cmp-cell,
-#st-table .dash-spreadsheet-inner td .cmp-cell {
+#st-table .dash-spreadsheet-inner td .cmp-cell,
+#st-table .dash-spreadsheet-inner td .st-metric-cell {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -5542,12 +5543,31 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     text-align: center;
 }
 
-#st-table .dash-spreadsheet-inner td .cmp-cell-val {
+#st-table .dash-spreadsheet-inner td .cmp-cell-val,
+#st-table .dash-spreadsheet-inner td .st-metric-cell-val {
     display: block;
     width: 100%;
     text-align: center;
     font-variant-numeric: tabular-nums;
     line-height: 1.15;
+}
+
+#st-table .dash-spreadsheet-inner td .st-metric-cell-pct {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.68em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-top: 1px;
+    color: var(--app-muted);
+    white-space: nowrap;
+}
+
+html[data-theme="light"] #st-table .dash-spreadsheet-inner td .st-metric-cell-pct,
+body[data-theme="light"] #st-table .dash-spreadsheet-inner td .st-metric-cell-pct {
+    color: #64748b;
 }
 
 #st-table .dash-spreadsheet-inner td .cmp-delta-block {

@@ -676,16 +676,27 @@ def _metric_cell(
 ) -> str:
     text = band.get("display") or "—"
     color = band.get("color")
+    pct = band.get("percentile")
+    val_style = "font-weight:650;font-variant-numeric:tabular-nums;line-height:1.15"
+    if color:
+        val_style = f"color:{color};{val_style}"
+    value_html = f'<span class="st-metric-cell-val" style="{val_style}">{text}</span>'
+    pct_html = ""
+    if pct is not None:
+        pct_f = float(pct)
+        pct_html = (
+            f'<span class="st-metric-cell-pct" title="~{pct_f:.0f}th percentile">'
+            f"~{pct_f:.0f}th</span>"
+        )
     delta = ""
-    if compare and hist_pct is not None and band.get("percentile") is not None:
-        delta = delta_html(float(band["percentile"]) - float(hist_pct), percent=True)
-    if delta:
-        style = "font-weight:650;font-variant-numeric:tabular-nums"
-        if color:
-            style = f"color:{color};{style}"
-        val = f'<span style="{style}">{text}</span>'
-        return wrap_cell_with_delta(val, delta)
-    return _colored_cell(text, color)
+    if compare and hist_pct is not None and pct is not None:
+        delta = delta_html(float(pct) - float(hist_pct), percent=True)
+    if pct_html or delta:
+        return (
+            f'<span class="st-metric-cell">'
+            f"{value_html}{pct_html}{delta}</span>"
+        )
+    return value_html
 
 
 def _strip_cell(value) -> str:
