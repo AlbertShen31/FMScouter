@@ -1,6 +1,10 @@
 """Documentation & FAQ — how FMScouter works and how numbers are calculated."""
 from __future__ import annotations
 
+import json
+from functools import lru_cache
+from pathlib import Path
+
 from dash import ALL, Input, Output, callback, dcc, html, register_page
 import dash_bootstrap_components as dbc
 
@@ -12,6 +16,15 @@ register_page(__name__, path="/formulas", name="Docs")
 _DEFAULT_KEY = pc.KEY_WEIGHT
 _DEFAULT_PREF = pc.PREFERRED_WEIGHT
 _DEFAULT_USEFUL = pc.USEFUL_WEIGHT
+
+_DETAIL_LEVELS_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "stats_detail_levels.json"
+)
+_POS_GROUP_LABELS = {"gk": "GK", "def": "DEF", "mid": "MID", "fwd": "FWD"}
+_EXPORT_LEVEL_LABELS = {
+    "no_detail": "No Detail",
+    "inactive": "Inactive",
+}
 
 _SECTION_IDS = (
     "overview",
@@ -76,6 +89,76 @@ def _faq_item(question: str, *children) -> html.Details:
         ],
         className="fx-faq-item",
     )
+
+
+@lru_cache(maxsize=1)
+def _detail_levels_config() -> dict:
+    try:
+        return json.loads(_DETAIL_LEVELS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _fmt_coeff(value: float) -> str:
+    text = f"{float(value):.4f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _adjusted_formula_line(spec: dict) -> str:
+    """Human-readable raw → Full Detail (Adjusted) formula for one transform spec."""
+    kind = spec.get("type")
+    if kind == "linear":
+        scale = float(spec.get("scale") or 0)
+        offset = float(spec.get("offset") or 0)
+        if scale == 0 and offset == 0:
+            return "adj = 0  (not tracked / forced zero)"
+        if scale == 0:
+            return "adj undefined (scale = 0)"
+        off = _fmt_coeff(offset)
+        sc = _fmt_coeff(scale)
+        if offset == 0:
+            return f"adj = raw / {sc}"
+        if offset > 0:
+            return f"adj = (raw − {off}) / {sc}"
+        return f"adj = (raw + {_fmt_coeff(abs(offset))}) / {sc}"
+    if kind == "power":
+        a = float(spec.get("a") or 0)
+        b = float(spec.get("b") or 0)
+        if a <= 0 or b == 0:
+            return "adj undefined (invalid power coeffs)"
+        return f"adj = (raw / {_fmt_coeff(a)}) ^ (1/{_fmt_coeff(b)})"
+    return "adj = raw  (identity)"
+
+
+def _detail_transform_coeff_block() -> str:
+    """Monospace listing of per-metric Adjusted formulas from config."""
+    from scoring.stats_scorer import metric_defs
+
+    metrics = (_detail_levels_config().get("metrics") or {})
+    if not isinstance(metrics, dict) or not metrics:
+        return "(no transform coefficients loaded)"
+    defs = metric_defs()
+    lines: list[str] = []
+    for mid in sorted(metrics.keys(), key=lambda m: str((defs.get(m) or {}).get("abbr") or m)):
+        by_group = metrics.get(mid) or {}
+        if not isinstance(by_group, dict):
+            continue
+        meta = defs.get(mid) or {}
+        abbr = str(meta.get("abbr") or mid)
+        lines.append(abbr)
+        for pg in ("gk", "def", "mid", "fwd"):
+            levels = by_group.get(pg)
+            if not isinstance(levels, dict):
+                continue
+            pg_lab = _POS_GROUP_LABELS.get(pg, pg.upper())
+            for level in ("no_detail", "inactive"):
+                spec = levels.get(level)
+                if not isinstance(spec, dict):
+                    continue
+                lvl = _EXPORT_LEVEL_LABELS.get(level, level)
+                lines.append(f"  {pg_lab} · {lvl}:  {_adjusted_formula_line(spec)}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def _nav_link(section_id: str, label: str) -> html.Li:
@@ -348,6 +431,39 @@ overall_avg = mean(category averages with data)
             ),
         ),
         _accordion(
+            "League detail levels (Raw → Adjusted)",
+            _para(
+                "Mustermann / FM Stag percentile cuts live in Full Detail space. ",
+                "Each division is assigned a detail tier on Player stats (and in Settings): ",
+                "Full Detail (user-picked leagues), Inactive (limited-tracking leagues), ",
+                "or No Detail (default for everyone else).",
+            ),
+            _para(
+                "Calibration fits map Full Detail rates onto each export tier. ",
+                "The Values → Adjusted control inverts those maps so rates (and "
+                "percentiles) sit on the Full Detail scale.",
+            ),
+            _formula(
+                """
+Forward (Full Detail → export tier; used to remap benchmark cuts):
+  linear:  export = scale × full + offset
+  power:   export = a × full ^ b
+
+Inverse (export Raw → Adjusted Full Detail equivalent):
+  linear:  adj = (raw − offset) / scale
+  power:   adj = (raw / a) ^ (1/b)
+
+Full Detail leagues: adj = raw (identity).
+                """
+            ),
+            _para(
+                "Coefficients below come from config/stats_detail_levels.json "
+                "(paired No Detail / Inactive / Full Detail calibration). "
+                "Metrics or groups with no entry stay unchanged."
+            ),
+            _formula(_detail_transform_coeff_block()),
+        ),
+        _accordion(
             "Minutes filter",
             _formula(
                 """
@@ -523,6 +639,12 @@ tier weights: key / preferred / useful (defaults 5 / 3 / 1)
                 "Override Mustermann 20/40/60/80 benchmark values per ",
                 "position group and metric. Percentile interpolation uses ",
                 "the active pack’s thresholds.",
+            ),
+            _para(
+                "Full Detail divisions (Settings → App & filters) score against ",
+                "unadjusted pack cuts. Other leagues use No Detail or Inactive ",
+                "transforms; see Player stats → League detail levels for the "
+                "Raw → Adjusted formulas.",
             ),
         ),
         _accordion(
