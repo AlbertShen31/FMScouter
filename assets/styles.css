@@ -8929,8 +8929,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
         2.35rem
         2.85rem
         minmax(7.25rem, 1.15fr)
-        minmax(3.5rem, 0.5fr)
-        minmax(3.85rem, 0.58fr)
         3.5rem
         minmax(4.75rem, 0.78fr)
         minmax(9.25rem, 1.05fr)
@@ -8946,7 +8944,7 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 79rem;
+    min-width: 71rem;
     box-sizing: border-box;
 }
 
@@ -8964,11 +8962,9 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 /* Keep every header label muted + same size — cell rules set body colors/sizes. */
 .pf-depth-chart-cols .pf-depth-chart-rank,
 .pf-depth-chart-cols .pf-depth-chart-feet,
-.pf-depth-chart-cols .pf-depth-chart-slot,
 .pf-depth-chart-cols .pf-depth-chart-div,
 .pf-depth-chart-cols .pf-depth-chart-pos,
 .pf-depth-chart-cols .pf-depth-chart-name-label,
-.pf-depth-chart-cols .pf-depth-chart-role,
 .pf-depth-chart-cols .pf-depth-chart-club,
 .pf-depth-chart-cols .pf-depth-chart-age,
 .pf-depth-chart-cols .pf-depth-chart-height,
@@ -9005,8 +9001,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 
 .pf-depth-chart-cols .pf-depth-chart-name-label,
 .pf-depth-chart-cols .pf-depth-chart-pos,
-.pf-depth-chart-cols .pf-depth-chart-slot,
-.pf-depth-chart-cols .pf-depth-chart-role,
 .pf-depth-chart-cols .pf-depth-chart-club,
 .pf-depth-chart-cols .pf-depth-chart-div {
     text-align: left;

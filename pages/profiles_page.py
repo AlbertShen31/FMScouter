@@ -1945,29 +1945,6 @@ def _depth_injury_cell(row: dict, player: dict | None = None):
     )
 
 
-def _depth_role_cell(column: str, theme=None) -> html.Span:
-    label = _role_display_label(column)
-    if label == "—":
-        return html.Span("—", className="pf-depth-chart-role is-empty")
-    meta = _role_column_meta(column)
-    tone = str(meta.get("tone") or "").strip().lower()
-    if tone.startswith("ip"):
-        tone = "ip"
-    elif tone.startswith("oop"):
-        tone = "oop"
-    elif tone in ("combo", "hybrid"):
-        tone = "combo"
-    elif tone != "gk":
-        tone = "gk" if not tone else tone
-    color = _role_phase_colors(theme).get(tone) or _role_phase_colors(theme)["gk"]
-    return html.Span(
-        label,
-        className=f"pf-depth-chart-role pf-role-{tone}",
-        style={"color": color, "fontWeight": 700},
-        title=meta.get("compact") or meta.get("name") or label,
-    )
-
-
 def _depth_chart_player_row(
     entry: dict | None,
     *,
@@ -1986,22 +1963,10 @@ def _depth_chart_player_row(
     minutes_required=None,
     name_src: str = "depth",
 ) -> html.Div:
-    del total  # kept for call-site compatibility
+    del total, slot_conflicted, slot_unique  # kept for call-site compatibility
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
     remove_cell = html.Span("", className="pf-depth-chart-remove")
-    slot_class = "pf-depth-chart-slot" + _slot_status_class(
-        conflicted=slot_conflicted, unique=slot_unique
-    )
-    slot_title = (
-        "Same XI player as another formation slot"
-        if slot_conflicted
-        else (
-            "Unique XI player for this formation slot"
-            if slot_unique
-            else slot_label
-        )
-    )
     role_col = str(role_column or "").strip()
     name_src = str(name_src or "depth").strip() or "depth"
 
@@ -2036,10 +2001,6 @@ def _depth_chart_player_row(
             html.Span("—", className="pf-depth-chart-age"),
             html.Span("—", className="pf-depth-chart-height"),
             html.Span("—", className="pf-depth-chart-pos"),
-            html.Span(slot_label or "—", className=slot_class, title=slot_title),
-            _depth_role_cell(role_col, theme=theme)
-            if role_col
-            else html.Span("—", className="pf-depth-chart-role is-empty"),
             html.Span("—", className="pf-depth-chart-feet"),
             html.Span("—", className="pf-depth-chart-club"),
             html.Span("—", className="pf-depth-chart-div"),
@@ -2175,8 +2136,6 @@ def _depth_chart_player_row(
             _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
             _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
             _depth_pos_cell(position, row, role_col),
-            html.Span(slot_label or "—", className=slot_class, title=slot_title),
-            _depth_role_cell(role_col, theme=theme),
             dcc.Markdown(
                 feet_cell(row),
                 dangerously_allow_html=True,
@@ -2221,7 +2180,7 @@ def _depth_chart_player_row(
 
 
 def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> html.Div:
-    """Mirror Profiles table order; keep Position / Slot / Role grouped."""
+    """Mirror Profiles table order; slot/role live in the section header."""
     if selectable and slot_index is not None:
         rank_head = html.Div(
             [
@@ -2246,8 +2205,6 @@ def _depth_chart_col_headers(*, selectable: bool = False, slot_index=None) -> ht
             html.Span("Age", className="pf-depth-chart-age"),
             html.Span("Ht", className="pf-depth-chart-height", title="Height"),
             html.Span("Pos", className="pf-depth-chart-pos"),
-            html.Span("Slot", className="pf-depth-chart-slot"),
-            html.Span("Role", className="pf-depth-chart-role"),
             html.Span("Feet", className="pf-depth-chart-feet"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
