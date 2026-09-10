@@ -93,7 +93,6 @@ from scoring.stats_scorer import (
     adaptive_bound_options,
     adaptive_metric_bound_maps,
     adaptive_metric_p100_map,
-    apply_stats_value_mode,
     band_metric,
     benchmarks,
     canonical_category,
@@ -113,6 +112,7 @@ from scoring.stats_scorer import (
     percentile_color,
     player_key,
     scoring_stats,
+    stats_for_value_mode,
     view_categories,
 )
 from scoring.stats_availability import (
@@ -194,9 +194,9 @@ ST_PERSIST_DEFAULTS = {
 }
 
 VALUE_MODE_TIP = (
-    "Raw shows Moneyball export values. Adjusted converts No Detail / Inactive "
-    "league rates into Full Detail equivalents so numbers sit on the same scale "
-    "as Mustermann / FM Stag cuts. Percentile colours stay the same either way."
+    "Raw shows Moneyball export values scored on that league's detail tier. "
+    "Adjusted converts No Detail / Inactive rates into Full Detail equivalents "
+    "and rescores percentiles against Mustermann / FM Stag Full Detail cuts."
 )
 
 
@@ -1209,20 +1209,49 @@ def _player_percentile_map(
     metric_p100=None,
     metric_p0=None,
     banding_ctx=None,
+    value_mode: str = "raw",
+    settings=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
 ) -> dict[str, float | None]:
     """Percentiles for comparison columns keyed by table column id."""
+    mode = normalize_value_mode(value_mode)
+    settings = us.normalize(settings) if settings is not None else {}
+    full_detail = frozenset(
+        (banding_ctx or {}).get("full_detail_divisions")
+        or settings.get("stats_full_detail_divisions")
+        or []
+    )
+    limited = frozenset(
+        (banding_ctx or {}).get("limited_divisions")
+        if banding_ctx is not None
+        else (limited_divisions or [])
+    )
+    export_level = engine_detail_level_for_player(
+        player,
+        full_detail_divisions=full_detail,
+        limited_divisions=limited,
+    )
     if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+            banding_ctx, player, mode
+        )
+    elif mode == "adjusted":
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+            None, player, mode, settings=settings, limited_divisions=limited
         )
     g, cat = _resolve_category(group, category)
-    stats = scoring_stats(player)
     out: dict[str, float | None] = {}
     if cat == "all":
         bg, bc = _band_group_cat(player, group, cat)
         if bg is None or bc is None:
             return out
         use_g = g if _bench_group_for_filter(group) else bg
+        stats = stats_for_value_mode(
+            scoring_stats(player),
+            use_g,
+            export_level=export_level,
+            value_mode=mode,
+        )
         out[OVERALL_COL["id"]] = overall_average_band(
             use_g,
             stats,
@@ -1245,6 +1274,12 @@ def _player_percentile_map(
     if bg is None or bc is None:
         return out
     use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
+    stats = stats_for_value_mode(
+        scoring_stats(player),
+        use_g,
+        export_level=export_level,
+        value_mode=mode,
+    )
     out[CATEGORY_AVG_COL["id"]] = category_average_band(
         use_g,
         use_c,
@@ -1317,8 +1352,16 @@ def _build_rows(
     hist_percentiles = hist_percentiles or {}
     for p in players:
         if banding_ctx is not None:
-            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-                banding_ctx, p
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+                banding_ctx, p, mode
+            )
+        elif mode == "adjusted":
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+                None,
+                p,
+                mode,
+                settings=settings,
+                limited_divisions=limited,
             )
         if not _player_matches_pos_filter(p, group):
             continue
@@ -1330,7 +1373,6 @@ def _build_rows(
         pkey = player_key(p)
         row["_key"] = pkey
         hist_map = hist_percentiles.get(compare_name_key(p)) or {}
-        stats = scoring_stats(p)
         export_level = engine_detail_level_for_player(
             p,
             full_detail_divisions=full_detail,
@@ -1342,27 +1384,34 @@ def _build_rows(
                 row[OVERALL_COL["id"]] = _percentile_cell(
                     {"percentile": None, "color": None}
                 )
-            else:
-                use_g = g if _bench_group_for_filter(group) else bg
-                overall_band = overall_average_band(
-                    use_g,
-                    stats,
-                    threshold_overrides=threshold_overrides,
-                    metric_p100=metric_p100,
-                    metric_p0=metric_p0,
-                )
-                row[OVERALL_COL["id"]] = _percentile_cell(
-                    overall_band,
-                    hist_pct=hist_map.get(OVERALL_COL["id"]),
-                    compare=compare,
-                )
-                _set_sort_value(row, OVERALL_COL["id"], overall_band.get("percentile"))
+                for section in avg_cats:
+                    row[section["id"]] = _percentile_cell(
+                        {"percentile": None, "color": None}
+                    )
+                rows.append(row)
+                continue
+            use_g = g if _bench_group_for_filter(group) else bg
+            stats = stats_for_value_mode(
+                scoring_stats(p),
+                use_g,
+                export_level=export_level,
+                value_mode=mode,
+            )
+            overall_band = overall_average_band(
+                use_g,
+                stats,
+                threshold_overrides=threshold_overrides,
+                metric_p100=metric_p100,
+                metric_p0=metric_p0,
+            )
+            row[OVERALL_COL["id"]] = _percentile_cell(
+                overall_band,
+                hist_pct=hist_map.get(OVERALL_COL["id"]),
+                compare=compare,
+            )
+            _set_sort_value(row, OVERALL_COL["id"], overall_band.get("percentile"))
             for section in avg_cats:
                 col_id = section["id"]
-                if bg is None or bc is None:
-                    row[col_id] = _percentile_cell({"percentile": None, "color": None})
-                    continue
-                use_g = g if _bench_group_for_filter(group) else bg
                 band = category_average_band(
                     use_g,
                     section["id"],
@@ -1384,28 +1433,34 @@ def _build_rows(
             row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
                 {"percentile": None, "color": None}
             )
-        else:
-            use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
-            cat_band = category_average_band(
-                use_g,
-                use_c,
-                stats,
-                threshold_overrides=threshold_overrides,
-                metric_p100=metric_p100,
-                metric_p0=metric_p0,
-            )
-            row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
-                cat_band,
-                hist_pct=hist_map.get(CATEGORY_AVG_COL["id"]),
-                compare=compare,
-            )
-            _set_sort_value(row, CATEGORY_AVG_COL["id"], cat_band.get("percentile"))
+            for mid in metric_ids:
+                abbr = metric_defs()[mid]["abbr"]
+                row[abbr] = "—"
+            rows.append(row)
+            continue
+        use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
+        stats = stats_for_value_mode(
+            scoring_stats(p),
+            use_g,
+            export_level=export_level,
+            value_mode=mode,
+        )
+        cat_band = category_average_band(
+            use_g,
+            use_c,
+            stats,
+            threshold_overrides=threshold_overrides,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
+        )
+        row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
+            cat_band,
+            hist_pct=hist_map.get(CATEGORY_AVG_COL["id"]),
+            compare=compare,
+        )
+        _set_sort_value(row, CATEGORY_AVG_COL["id"], cat_band.get("percentile"))
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
-            if bg is None or bc is None:
-                row[abbr] = "—"
-                continue
-            use_g, use_c = (g, cat) if _bench_group_for_filter(group) else (bg, bc)
             if mid not in metrics_for(use_g, use_c, threshold_overrides):
                 row[abbr] = "—"
                 continue
@@ -1423,13 +1478,6 @@ def _build_rows(
                 threshold_overrides=threshold_overrides,
                 metric_p100=metric_p100,
                 metric_p0=metric_p0,
-            )
-            band = apply_stats_value_mode(
-                band,
-                mid,
-                use_g,
-                export_level=export_level,
-                value_mode=mode,
             )
             row[abbr] = _metric_cell(
                 band,
@@ -1528,8 +1576,8 @@ def _player_modal_body(
 ) -> html.Div:
     settings = us.normalize(settings)
     if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+            banding_ctx, player, value_mode
         )
     view = _normalize_player_view(view)
     eval_group = _normalize_eval_group(
@@ -2159,6 +2207,9 @@ def refresh_table(
                     group=pos,
                     category=category,
                     banding_ctx=hist_banding_ctx,
+                    value_mode=value_mode,
+                    settings=hist_band_settings,
+                    limited_divisions=hist_band_limited,
                 )
 
     filtered = _filter_players(
@@ -2584,8 +2635,12 @@ def _build_stats_compare_body(
         banding_ctx = us.build_stats_banding_context(
             band_settings, players, limited_divisions=band_limited
         )
-    thresh_a, metric_p0_a, metric_p100_a = us.banding_for_player(banding_ctx, player_a)
-    thresh_b, metric_p0_b, metric_p100_b = us.banding_for_player(banding_ctx, player_b)
+    thresh_a, metric_p0_a, metric_p100_a = us.banding_for_value_mode(
+        banding_ctx, player_a, value_mode
+    )
+    thresh_b, metric_p0_b, metric_p100_b = us.banding_for_value_mode(
+        banding_ctx, player_b, value_mode
+    )
     eval_group = normalize_compare_eval_group(eval_group, player_a, player_b)
     label_a = str(player_a.get("name") or "Player A")
     label_b = str(player_b.get("name") or "Player B")

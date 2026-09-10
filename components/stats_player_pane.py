@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 
 from scoring.stats_scorer import (
     POS_GROUPS,
-    apply_stats_value_mode,
     band_metric,
     categories_for_group,
     is_gk_group,
@@ -14,6 +13,7 @@ from scoring.stats_scorer import (
     metrics_for,
     percentile_color,
     scoring_stats,
+    stats_for_value_mode,
 )
 from scoring.stats_availability import (
     LIMITED_TRACKING_NOTE,
@@ -60,8 +60,7 @@ def _metric_entry(
     threshold_overrides=None,
     metric_p100=None,
     metric_p0=None,
-    value_mode: str = "raw",
-    export_level: str | None = None,
+    stats: dict | None = None,
 ) -> dict:
     meta = metric_defs()[mid]
     if metric_is_unavailable(player, mid):
@@ -75,24 +74,16 @@ def _metric_entry(
             "missing": True,
             "unavailable": True,
         }
-    stats = scoring_stats(player)
+    values = stats if stats is not None else scoring_stats(player)
     band = band_metric(
         eval_group,
         cat_id,
         mid,
-        stats.get(mid),
+        values.get(mid),
         threshold_overrides=threshold_overrides,
         metric_p100=metric_p100,
         metric_p0=metric_p0,
     )
-    if export_level is not None:
-        band = apply_stats_value_mode(
-            band,
-            mid,
-            eval_group,
-            export_level=export_level,
-            value_mode=value_mode,
-        )
     return {
         "id": mid,
         "label": meta["label"],
@@ -129,6 +120,12 @@ def _player_metric_sections(
         limited_divisions=limited_divisions,
     )
     mode = normalize_value_mode(value_mode)
+    stats = stats_for_value_mode(
+        scoring_stats(player),
+        g,
+        export_level=export_level,
+        value_mode=mode,
+    )
     sections = []
     for cat in categories_for_group(g):
         metrics = []
@@ -144,8 +141,7 @@ def _player_metric_sections(
                     threshold_overrides=threshold_overrides,
                     metric_p100=metric_p100,
                     metric_p0=metric_p0,
-                    value_mode=mode,
-                    export_level=export_level,
+                    stats=stats,
                 )
             )
         pcts = [
@@ -725,8 +721,8 @@ def _player_modal_body(
 ) -> html.Div:
     settings = us.normalize(settings)
     if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+            banding_ctx, player, value_mode
         )
     from scoring.stats_scorer import pos_group_label
 
@@ -822,14 +818,23 @@ def stats_charts_bottom_pane(
         )
 
     if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+            banding_ctx, player, value_mode
         )
     elif threshold_overrides is None and settings is not None:
-        try:
-            threshold_overrides = (settings or {}).get("stats_thresholds")
-        except AttributeError:
-            threshold_overrides = None
+        if normalize_value_mode(value_mode) == "adjusted":
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+                None,
+                player,
+                value_mode,
+                settings=settings,
+                limited_divisions=limited_divisions,
+            )
+        else:
+            try:
+                threshold_overrides = (settings or {}).get("stats_thresholds")
+            except AttributeError:
+                threshold_overrides = None
 
     if (
         banding_ctx is None

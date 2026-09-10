@@ -1304,6 +1304,44 @@ def band_metric(
     }
 
 
+def stats_for_value_mode(
+    stats: dict[str, Any] | None,
+    pos_group: str,
+    *,
+    export_level: str,
+    value_mode: str = "raw",
+) -> dict[str, Any]:
+    """Copy scoring stats; in Adjusted mode map rates into Full Detail space."""
+    from scoring.stats_detail_transform import (
+        metric_value_for_display,
+        normalize_value_mode,
+    )
+
+    if not stats:
+        return {}
+    if normalize_value_mode(value_mode) != "adjusted":
+        return dict(stats)
+    out: dict[str, Any] = {}
+    for mid, val in stats.items():
+        if val is None:
+            out[mid] = None
+            continue
+        try:
+            raw_f = float(val)
+        except (TypeError, ValueError):
+            out[mid] = val
+            continue
+        adj = metric_value_for_display(
+            raw_f,
+            mid,
+            pos_group,
+            export_level=export_level,
+            value_mode="adjusted",
+        )
+        out[mid] = raw_f if adj is None else adj
+    return out
+
+
 def apply_stats_value_mode(
     band: dict[str, Any],
     metric_id: str,
@@ -1311,8 +1349,17 @@ def apply_stats_value_mode(
     *,
     export_level: str,
     value_mode: str = "raw",
+    group: str | None = None,
+    category: str | None = None,
+    adjusted_threshold_overrides: dict[str, Any] | None = None,
+    adjusted_metric_p100: dict[str, float] | None = None,
+    adjusted_metric_p0: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """Rewrite band value/display for Raw vs Adjusted; keep percentile/color."""
+    """Rewrite band for Adjusted: Full Detail value and recomputed percentile.
+
+    Prefer transforming stats + Full Detail banding before ``band_metric`` when
+    possible. This helper remains for call sites that band first, then convert.
+    """
     from scoring.stats_detail_transform import (
         metric_value_for_display,
         normalize_value_mode,
@@ -1337,12 +1384,35 @@ def apply_stats_value_mode(
     if adj is None:
         return band
     meta = metric_defs().get(metric_id) or {}
-    return {
+    result: dict[str, Any] = {
         **band,
         "value": adj,
         "display": format_metric_display(adj, meta.get("unit")),
         "raw_value": raw_f,
     }
+    score_group = group or pos_group
+    if adjusted_threshold_overrides is not None and score_group and category:
+        thresholds = resolve_thresholds(
+            score_group,
+            category,
+            metric_id,
+            threshold_overrides=adjusted_threshold_overrides,
+        )
+        if thresholds:
+            hib = bool(meta.get("higher_is_better", True))
+            p100 = _metric_bound_lookup(adjusted_metric_p100, score_group, metric_id)
+            p0 = _metric_bound_lookup(adjusted_metric_p0, score_group, metric_id)
+            pct = estimate_percentile(
+                float(adj),
+                list(thresholds),
+                higher_is_better=hib,
+                p100=p100,
+                p0=p0,
+            )
+            result["percentile"] = pct
+            result["color"] = percentile_color(pct)
+            result["thresholds"] = thresholds
+    return result
 
 
 def category_average_band(

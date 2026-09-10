@@ -987,6 +987,33 @@ def build_stats_banding_context(
     }
 
 
+def banding_for_level(
+    context: dict[str, Any] | None,
+    level: str,
+    *,
+    settings: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, float], dict[str, float]]:
+    """Return (threshold_tree, metric_p0, metric_p100) for a fixed detail level."""
+    from scoring.stats_detail_transform import normalize_detail_level
+
+    settings = normalize(settings) if settings is not None else {}
+    level = normalize_detail_level(level)
+    if context:
+        trees = context.get("trees") or {}
+        bounds_by_level = context.get("bounds_by_level") or {}
+    else:
+        trees = settings.get("stats_threshold_trees") or {}
+        bounds_by_level = {}
+    tree = (
+        trees.get(level)
+        or trees.get("no_detail")
+        or settings.get("stats_thresholds")
+        or {}
+    )
+    p0_map, p100_map = bounds_by_level.get(level) or bounds_by_level.get("no_detail") or ({}, {})
+    return tree, p0_map, p100_map
+
+
 def banding_for_player(
     context: dict[str, Any] | None,
     player: dict[str, Any] | None,
@@ -999,29 +1026,44 @@ def banding_for_player(
 
     settings = normalize(settings) if settings is not None else {}
     if context:
-        trees = context.get("trees") or {}
         full_detail = context.get("full_detail_divisions") or frozenset()
         limited = context.get("limited_divisions") or frozenset()
-        bounds_by_level = context.get("bounds_by_level") or {}
     else:
-        trees = settings.get("stats_threshold_trees") or {}
         full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
         limited = frozenset(limited_divisions or [])
-        bounds_by_level = {}
 
     level = engine_detail_level_for_player(
         player,
         full_detail_divisions=full_detail,
         limited_divisions=limited,
     )
-    tree = (
-        trees.get(level)
-        or trees.get("no_detail")
-        or settings.get("stats_thresholds")
-        or {}
+    return banding_for_level(context, level, settings=settings)
+
+
+def banding_for_value_mode(
+    context: dict[str, Any] | None,
+    player: dict[str, Any] | None,
+    value_mode: str = "raw",
+    *,
+    settings: dict[str, Any] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, float], dict[str, float]]:
+    """Banding for Raw (export tier) or Adjusted (Full Detail reference)."""
+    from scoring.stats_detail_transform import (
+        benchmark_reference_level,
+        normalize_value_mode,
     )
-    p0_map, p100_map = bounds_by_level.get(level) or bounds_by_level.get("no_detail") or ({}, {})
-    return tree, p0_map, p100_map
+
+    if normalize_value_mode(value_mode) == "adjusted":
+        return banding_for_level(
+            context, benchmark_reference_level(), settings=settings
+        )
+    return banding_for_player(
+        context,
+        player,
+        settings=settings,
+        limited_divisions=limited_divisions,
+    )
 
 
 def _slug(name: str) -> str:
