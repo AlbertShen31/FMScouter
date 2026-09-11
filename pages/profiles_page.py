@@ -196,6 +196,8 @@ def _percentile_settings_fingerprint(settings) -> str:
         "stats_thresholds": settings.get("stats_thresholds"),
         # Band cuts tint stored *_color fields on profile rows.
         "bands": settings.get("bands"),
+        # Role-slot percentiles (not Best Pos); bump to recompute stored Ovr/cats.
+        "pct_phase": "role_slot_v1",
     }
     return json.dumps(payload, sort_keys=True, default=str)
 
@@ -218,18 +220,6 @@ def _ensure_profile_percentiles(settings) -> None:
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
 DEPTH_STATS_VIEWS = ("percentiles", "defending", "final_third", "possession")
-_ROLE_GROUP_TO_STATS = {
-    "gk": "gk",
-    "cb": "def",
-    "fb": "def",
-    "wb": "def",
-    "dm": "mid",
-    "cm": "mid",
-    "am": "mid",
-    "wm": "mid",
-    "w": "fwd",
-    "st": "fwd",
-}
 
 
 def _pct_header_name(col_id: str) -> str:
@@ -786,30 +776,9 @@ def _depth_stats_view_switcher(active=None, *, group: str | None = None) -> html
 
 def _stats_group_for_role_column(column: str) -> str:
     """Map a role column to gk/def/mid/fwd for metric column selection."""
-    from scoring.stats_scorer import is_gk_group
+    from scoring.stats_scorer import stats_group_for_role_column
 
-    meta = _role_column_meta(column)
-    if str(meta.get("is_gk") or "").lower() in ("yes", "true", "1"):
-        return "gk"
-    group = str(meta.get("group") or "").strip().lower()
-    if is_gk_group(group) or group == "gk":
-        return "gk"
-    if group in _ROLE_GROUP_TO_STATS:
-        return _ROLE_GROUP_TO_STATS[group]
-    for token in str(meta.get("groups") or "").split(","):
-        token = token.strip().lower()
-        if token == "gk" or is_gk_group(token):
-            return "gk"
-        if token in _ROLE_GROUP_TO_STATS:
-            return _ROLE_GROUP_TO_STATS[token]
-    # Formation / display labels sometimes carry GK without role meta.
-    blob = " ".join(
-        str(meta.get(key) or "")
-        for key in ("column", "name", "short_label", "compact", "id")
-    ).upper()
-    if re.search(r"\bGK\b", blob) or "GOALKEEP" in blob:
-        return "gk"
-    return "mid"
+    return stats_group_for_role_column(column)
 
 
 def _stats_group_for_slot(
@@ -2158,6 +2127,113 @@ def _depth_stat_metric_cell(
     return html.Div(children, className="pf-depth-chart-stat", title=tip)
 
 
+def _depth_percentile_cells(
+    entry: dict | None,
+    *,
+    settings,
+    minutes_required=None,
+    file_cache: dict | None = None,
+    banding_cache: dict | None = None,
+    stats_group: str | None = None,
+    row: dict | None = None,
+) -> list:
+    """Ovr / Def / F3 / Poss cells banded against the slot role when possible."""
+    from scoring.stats_scorer import (
+        category_average_band,
+        coerce_stats_pos_group,
+        overall_average_band,
+        scoring_stats,
+    )
+
+    def _from_row(src: dict | None) -> list:
+        src = src or {}
+        return [
+            html.Div(
+                _depth_ovr_cell(
+                    src.get("overall"), src.get("overall_color"), pill=True
+                ),
+                className="pf-depth-chart-ovr",
+            ),
+            html.Div(
+                _depth_ovr_cell(src.get("defending"), src.get("defending_color")),
+                className="pf-depth-chart-def",
+            ),
+            html.Div(
+                _depth_ovr_cell(
+                    src.get("final_third"), src.get("final_third_color")
+                ),
+                className="pf-depth-chart-f3",
+            ),
+            html.Div(
+                _depth_ovr_cell(
+                    src.get("possession"), src.get("possession_color")
+                ),
+                className="pf-depth-chart-poss",
+            ),
+        ]
+
+    if entry is None:
+        return _from_row(None)
+    group = coerce_stats_pos_group(stats_group)
+    if not group:
+        # Fall back to role column on the entry when slot group wasn't passed
+        # (e.g. Starting XI rows).
+        role_col = str(
+            entry.get("role_column")
+            or (row or entry.get("row") or {}).get("Role")
+            or ""
+        ).strip()
+        if role_col:
+            group = _stats_group_for_role_column(role_col)
+    if not group:
+        return _from_row(row if isinstance(row, dict) else entry.get("row"))
+    stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
+    if not isinstance(stats_player, dict):
+        return _from_row(row if isinstance(row, dict) else entry.get("row"))
+    thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
+        entry,
+        stats_player,
+        settings=settings,
+        minutes_required=minutes_required,
+        file_cache=file_cache,
+        banding_cache=banding_cache,
+    )
+    stats = scoring_stats(stats_player)
+    overall = overall_average_band(
+        group,
+        stats,
+        threshold_overrides=thresh,
+        metric_p100=metric_p100,
+        metric_p0=metric_p0,
+    )
+    cells = [
+        html.Div(
+            _depth_ovr_cell(overall.get("percentile"), overall.get("color"), pill=True),
+            className="pf-depth-chart-ovr",
+        )
+    ]
+    for cat_id, css in (
+        ("defending", "pf-depth-chart-def"),
+        ("final_third", "pf-depth-chart-f3"),
+        ("possession", "pf-depth-chart-poss"),
+    ):
+        band = category_average_band(
+            group,
+            cat_id,
+            stats,
+            threshold_overrides=thresh,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
+        )
+        cells.append(
+            html.Div(
+                _depth_ovr_cell(band.get("percentile"), band.get("color")),
+                className=css,
+            )
+        )
+    return cells
+
+
 def _depth_category_cells(
     entry: dict | None,
     *,
@@ -2191,12 +2267,12 @@ def _depth_category_cells(
     stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
     if not isinstance(stats_player, dict):
         return blank
-    player_group = resolve_player_pos_group(stats_player)
-    # GK slots always score against GK benchmarks / metric set.
-    if is_gk_group(stats_group):
-        group = "gk"
-    else:
-        group = player_group
+    # Prefer the formation slot / role's phase so a winger in a CM slot is
+    # banded as a midfielder (same rule as Percentiles view refresh).
+    from scoring.stats_scorer import coerce_stats_pos_group
+
+    forced = coerce_stats_pos_group(stats_group)
+    group = forced or resolve_player_pos_group(stats_player)
     stats = scoring_stats(stats_player)
     thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
         entry,
@@ -2672,30 +2748,15 @@ def _depth_chart_player_row(
     ]
     if stats_view == "percentiles":
         cells.extend(
-            [
-                html.Div(
-                    _depth_ovr_cell(
-                        row.get("overall"), row.get("overall_color"), pill=True
-                    ),
-                    className="pf-depth-chart-ovr",
-                ),
-                html.Div(
-                    _depth_ovr_cell(row.get("defending"), row.get("defending_color")),
-                    className="pf-depth-chart-def",
-                ),
-                html.Div(
-                    _depth_ovr_cell(
-                        row.get("final_third"), row.get("final_third_color")
-                    ),
-                    className="pf-depth-chart-f3",
-                ),
-                html.Div(
-                    _depth_ovr_cell(
-                        row.get("possession"), row.get("possession_color")
-                    ),
-                    className="pf-depth-chart-poss",
-                ),
-            ]
+            _depth_percentile_cells(
+                entry,
+                settings=settings,
+                minutes_required=mins_limit,
+                file_cache=file_cache,
+                banding_cache=banding_cache,
+                stats_group=stats_group,
+                row=row,
+            )
         )
     else:
         cells.extend(
@@ -2894,12 +2955,14 @@ def _build_formation_xi_chart(
         )
         is not None
     )
+    file_cache, banding_cache = _depth_stats_file_caches()
     rows = []
     for index, slot in enumerate(slots):
         entry = _formation_xi_entry(
             formation_id, slot, xi_view=xi_view, cache=cache
         )
         slot_index = int(slot["index"])
+        role_column = slot.get("column") or ""
         rows.append(
             _depth_chart_player_row(
                 entry,
@@ -2909,13 +2972,20 @@ def _build_formation_xi_chart(
                 theme=theme,
                 slot_label=slot.get("display_label") or slot.get("label") or "",
                 slot_index=slot["index"],
-                role_column=slot.get("column") or "",
+                role_column=role_column,
                 slot_conflicted=slot_index in conflicted_slots,
                 slot_unique=slot_index in unique_slots,
                 draggable=False,
                 removable=True,
                 minutes_required=mins_limit,
                 name_src="xi",
+                stats_group=_stats_group_for_slot(
+                    role_column,
+                    formation_slot=slot,
+                    slot_label=slot.get("display_label") or slot.get("label") or "",
+                ),
+                file_cache=file_cache,
+                banding_cache=banding_cache,
             )
         )
     hint = (

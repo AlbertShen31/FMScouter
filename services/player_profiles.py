@@ -1480,6 +1480,7 @@ def percentile_fields_from_stats_player(
     metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
     banding_ctx=None,
+    pos_group: str | None = None,
 ) -> dict[str, Any]:
     """Subset of ``build_stats_row_snapshot`` used when enriching role saves."""
     if not player:
@@ -1491,6 +1492,7 @@ def percentile_fields_from_stats_player(
         metric_p0=metric_p0,
         cohort_players=cohort_players,
         banding_ctx=banding_ctx,
+        pos_group=pos_group,
     )
     keys = (
         "Minutes",
@@ -1519,13 +1521,19 @@ def build_stats_row_snapshot(
     metric_p0: dict[str, float] | None = None,
     cohort_players: list[dict[str, Any]] | None = None,
     banding_ctx=None,
+    pos_group: str | None = None,
 ) -> dict[str, Any]:
-    """One shortlist-style row: identity + overall / category percentiles."""
+    """One shortlist-style row: identity + overall / category percentiles.
+
+    Optional ``pos_group`` forces banding phase (gk/def/mid/fwd) — used when a
+    role-profile row should be scored against the *role* slot, not Best Pos.
+    """
     import services.ui_settings as us
     from scoring.stats_scorer import (
         adaptive_bound_options,
         adaptive_metric_bound_maps,
         category_average_band,
+        coerce_stats_pos_group,
         labeled_view_categories,
         overall_average_band,
         pos_group_label,
@@ -1575,7 +1583,8 @@ def build_stats_row_snapshot(
     }
 
     stats = scoring_stats(player)
-    group = resolve_player_pos_group(player)
+    forced = coerce_stats_pos_group(pos_group)
+    group = forced or resolve_player_pos_group(player)
     out["percentile_phase"] = group
     out["percentile_phase_label"] = pos_group_label(group)
     out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
@@ -1645,6 +1654,7 @@ def expand_role_profile_rows(
         is_fully_eligible,
         normalize_combos,
     )
+    from scoring.stats_scorer import stats_group_for_role_column
 
     if not player_keys:
         return []
@@ -1720,15 +1730,16 @@ def expand_role_profile_rows(
             continue
         player = role_by_key.get(key)
         stats_player = stats_by_key.get(key)
-        pct = percentile_fields_from_stats_player(
-            stats_player,
-            settings=settings,
-            banding_ctx=banding_ctx,
-        )
         minutes = stats_player.get("minutes") if stats_player else None
         for role_col in role_columns:
             if eligible_only and not is_fully_eligible(scored.get(f"{role_col} eligible")):
                 continue
+            pct = percentile_fields_from_stats_player(
+                stats_player,
+                settings=settings,
+                banding_ctx=banding_ctx,
+                pos_group=stats_group_for_role_column(role_col),
+            )
             out.append(
                 {
                     "player_key": key,
@@ -1805,7 +1816,7 @@ def refresh_profile_percentiles(settings=None) -> int:
     """
     import services.export_library as lib
     import services.ui_settings as us
-    from scoring.stats_scorer import resolve_player_pos_group
+    from scoring.stats_scorer import resolve_player_pos_group, stats_group_for_role_column
 
     settings = us.normalize(settings)
     index = _read_index()
@@ -1875,11 +1886,20 @@ def refresh_profile_percentiles(settings=None) -> int:
             band_player["best_pos"] = row.get("Best Pos")
         if not band_player.get("position") and row.get("Position"):
             band_player["position"] = row.get("Position")
+        # Keep natural Best Pos group on the embedded stats player; band against
+        # the profile's role column when this is a role save.
         band_player["pos_group"] = resolve_player_pos_group(band_player)
+        role_col = str(
+            entry.get("role_column") or row.get("Role") or ""
+        ).strip()
+        eval_group = (
+            stats_group_for_role_column(role_col) if role_col else None
+        )
         pct = percentile_fields_from_stats_player(
             band_player,
             settings=settings,
             banding_ctx=banding_ctx,
+            pos_group=eval_group,
         )
         if not pct:
             return False
@@ -2154,6 +2174,7 @@ def replace_profiles_from_saved_file(
         stats_players,
         limited_divisions=limited or None,
     )
+    from scoring.stats_scorer import stats_group_for_role_column
 
     items: list[dict[str, Any]] = []
     missing: list[str] = []
@@ -2208,6 +2229,7 @@ def replace_profiles_from_saved_file(
             settings=settings,
             banding_ctx=banding_ctx,
             cohort_players=stats_players,
+            pos_group=stats_group_for_role_column(role_col),
         )
         minutes = stats_player.get("minutes") if stats_player else None
         items.append(

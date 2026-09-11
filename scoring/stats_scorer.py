@@ -400,6 +400,89 @@ def resolve_player_pos_group(player: dict[str, Any] | None) -> str:
     )
 
 
+# Role-scorer position buckets → stats banding phase (gk/def/mid/fwd).
+ROLE_POS_TO_STATS_GROUP = {
+    "gk": "gk",
+    "cb": "def",
+    "fb": "def",
+    "wb": "def",
+    "dm": "mid",
+    "cm": "mid",
+    "am": "mid",
+    "wm": "mid",
+    "w": "fwd",
+    "st": "fwd",
+}
+
+
+def coerce_stats_pos_group(group: str | None) -> str | None:
+    """Normalize a role or stats group token to gk/def/mid/fwd, else None."""
+    key = str(group or "").strip().lower()
+    if key in {"gk", "def", "mid", "fwd"}:
+        return key
+    return ROLE_POS_TO_STATS_GROUP.get(key)
+
+
+def _role_column_meta_for_stats(column: str) -> dict[str, Any]:
+    """Best-effort role/combo meta for a Profiles role column label."""
+    text = str(column or "").strip()
+    if not text:
+        return {}
+    from scoring.role_scorer import combo_meta_for_column, role_meta
+
+    if "+" in text:
+        return dict(combo_meta_for_column(text) or {})
+    import config.role_weights.fm26_role_weight_config as pc
+
+    for role_id in pc.all_positions:
+        cand = role_meta(role_id)
+        if cand.get("column") == text:
+            return dict(cand)
+    # Cross-bucket refs encode as distinct columns — scan variants.
+    from scoring.role_scorer import role_ref_variants
+
+    for role_id in pc.all_positions:
+        for ref in role_ref_variants(role_id):
+            cand = role_meta(ref)
+            if cand.get("column") == text:
+                return dict(cand)
+    return {}
+
+
+def stats_group_for_role_column(column: str) -> str:
+    """Map a role column (or combo) to gk/def/mid/fwd for percentile banding.
+
+    Profiles / depth charts evaluate percentiles against the *slot role's*
+    phase, not the player's Best Pos — a winger saved into a CM slot should
+    use midfielder benchmarks.
+    """
+    meta = _role_column_meta_for_stats(column)
+    if str(meta.get("is_gk") or "").lower() in ("yes", "true", "1"):
+        return "gk"
+    mapped = coerce_stats_pos_group(str(meta.get("group") or ""))
+    if mapped:
+        return mapped
+    for token in str(meta.get("groups") or "").split(","):
+        mapped = coerce_stats_pos_group(token)
+        if mapped == "gk":
+            return "gk"
+        if mapped:
+            return mapped
+    # Combo meta only carries group_abbr tokens (CM, W, ST, …).
+    for token in str(meta.get("group_abbr") or "").replace("/", " ").split():
+        # group_abbr uses uppercase role-group codes (CB, CM, …).
+        mapped = coerce_stats_pos_group(token.lower())
+        if mapped:
+            return mapped
+    blob = " ".join(
+        str(meta.get(key) or "")
+        for key in ("column", "name", "short_label", "compact", "id")
+    ).upper()
+    if re.search(r"\bGK\b", blob) or "GOALKEEP" in blob:
+        return "gk"
+    return "mid"
+
+
 def players_in_pos_group(
     players: list[dict[str, Any]] | None,
     group: str,
