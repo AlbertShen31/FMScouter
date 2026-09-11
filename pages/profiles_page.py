@@ -1390,19 +1390,44 @@ def _position_eligibility_for_role(row: dict, role_column: str) -> str | None:
     return "no"
 
 
+def _depth_hover_title(*parts: str) -> str | None:
+    """Join non-empty hover tip parts; None when there is nothing useful to show."""
+    chunks = [str(p).strip() for p in parts if str(p or "").strip() and str(p).strip() != "—"]
+    if not chunks:
+        return None
+    # Deduplicate while preserving order (e.g. position listed twice).
+    seen: set[str] = set()
+    unique: list[str] = []
+    for chunk in chunks:
+        if chunk in seen:
+            continue
+        seen.add(chunk)
+        unique.append(chunk)
+    return " — ".join(unique)
+
+
+def _depth_tip_attrs(tip: str | None) -> dict:
+    """Custom delayed tip attrs — native title fights depth-chart drag/hover."""
+    text = str(tip or "").strip()
+    if not text or text == "—":
+        return {}
+    return {"data-pf-tip": text}
+
+
 def _depth_pos_cell(position: str, row: dict, role_column: str) -> html.Span:
     """Position text with Role-scores-style eligibility coloring."""
     pos_elig = _position_eligibility_for_role(row, role_column)
     pos_class = "pf-depth-chart-pos"
-    tip = position if position != "—" else ""
+    elig_tip = ""
     if pos_elig in _POS_ELIG_TIPS:
         pos_class += {
             "yes": " is-eligible",
             "partial": " is-partial",
             "no": " is-ineligible",
         }[pos_elig]
-        tip = _POS_ELIG_TIPS[pos_elig]
-    return html.Span(position, className=pos_class, title=tip or None)
+        elig_tip = _POS_ELIG_TIPS[pos_elig]
+    tip = _depth_hover_title(position, elig_tip)
+    return html.Span(position, className=pos_class, **_depth_tip_attrs(tip))
 
 
 def _role_column_meta(column: str) -> dict:
@@ -2284,12 +2309,34 @@ def _depth_ovr_cell(percentile, color=None, *, pill: bool = False):
     return html.Span(f"{pct_f:.0f}%", className="pf-depth-chart-metric", style=style)
 
 
+def _depth_division_cell(
+    division: str,
+    *,
+    tier: str | None = None,
+    limited: bool = False,
+    limited_title: str = "",
+) -> html.Span:
+    """Narrow 2-line Division cell; full name available on hover when truncated."""
+    text = division if division not in (None, "", "-", "—") else "—"
+    classes = "pf-depth-chart-div"
+    if tier:
+        classes = f"{classes} pf-div-{tier}"
+    if limited and text != "—":
+        classes = f"{classes} pf-div-limited"
+    tip = None
+    if text != "—":
+        tip = (
+            f"{text} — {limited_title}" if limited and limited_title else text
+        )
+    return html.Span(text, className=classes, **_depth_tip_attrs(tip))
+
+
 def _depth_plain_cell(value, class_name: str) -> html.Span:
     text = _blank(value)
     return html.Span(
         text,
         className=class_name,
-        title="" if text == "—" else text,
+        **_depth_tip_attrs(_depth_hover_title(text)),
     )
 
 
@@ -2326,7 +2373,7 @@ def _depth_rec_cell(value, theme=None) -> html.Span:
     style = rec_grade_style(text, theme) if text != "—" else None
     props = {
         "className": "pf-depth-chart-rec" + (" is-graded" if style else ""),
-        "title": "" if text == "—" else text,
+        **_depth_tip_attrs(text if text != "—" else None),
     }
     if style:
         props["style"] = style
@@ -2524,14 +2571,6 @@ def _depth_chart_player_row(
     limited = division_has_limited_tracking(
         row.get("Division"), _limited_tracking_divisions()
     )
-    div_class = "pf-depth-chart-div"
-    if tier:
-        div_class = f"{div_class} pf-div-{tier}"
-    if limited:
-        div_class = f"{div_class} pf-div-limited"
-    div_title = (
-        f"{division} — {LIMITED_DIVISION_TITLE}" if limited and division != "—" else division
-    )
     if removable and profile_id and slot_index is not None:
         remove_cell = html.Button(
             "×",
@@ -2566,6 +2605,10 @@ def _depth_chart_player_row(
     }
     if row_style:
         props["style"] = row_style
+    feet_tip = _depth_hover_title(
+        str(row.get("Left Foot") or "").strip(),
+        str(row.get("Right Foot") or "").strip(),
+    )
     cells = [
         rank_cell(str(display_rank), profile_id),
         (
@@ -2583,7 +2626,10 @@ def _depth_chart_player_row(
                 },
                 n_clicks=0,
                 className="pf-depth-chart-name",
-                title="Open player details",
+                **_depth_tip_attrs(
+                    _depth_hover_title(name, "Open player details")
+                    or "Open player details"
+                ),
                 draggable="false",
                 type="button",
             )
@@ -2593,13 +2639,25 @@ def _depth_chart_player_row(
         _depth_plain_cell(row.get("Age"), "pf-depth-chart-age"),
         _depth_plain_cell(row.get("Height"), "pf-depth-chart-height"),
         _depth_pos_cell(position, row, role_col),
-        dcc.Markdown(
-            feet_cell(row),
-            dangerously_allow_html=True,
+        html.Div(
+            dcc.Markdown(
+                feet_cell(row),
+                dangerously_allow_html=True,
+            ),
             className="pf-depth-chart-feet",
+            **_depth_tip_attrs(feet_tip),
         ),
-        html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
-        html.Span(division, className=div_class, title=div_title),
+        html.Span(
+            club or "—",
+            className="pf-depth-chart-club",
+            **_depth_tip_attrs(club if (club or "").strip() else None),
+        ),
+        _depth_division_cell(
+            division,
+            tier=tier,
+            limited=limited,
+            limited_title=LIMITED_DIVISION_TITLE,
+        ),
         _depth_rec_cell(row.get("Rec"), theme=theme),
         _depth_injury_cell(row, player),
         html.Div(
@@ -2891,8 +2949,13 @@ def _build_formation_xi_chart(
                 ],
                 className="pf-depth-chart-role-head",
             ),
-            _depth_chart_col_headers(first_label="Slot"),
-            html.Div(rows, className="pf-depth-chart-list pf-depth-chart-xi"),
+            html.Div(
+                [
+                    _depth_chart_col_headers(first_label="Slot"),
+                    html.Div(rows, className="pf-depth-chart-list pf-depth-chart-xi"),
+                ],
+                className="pf-depth-chart-scroll",
+            ),
         ],
         className="pf-depth-chart-section",
     )
@@ -3007,14 +3070,6 @@ def _setpiece_chart_player_row(
     limited = division_has_limited_tracking(
         row.get("Division"), _limited_tracking_divisions()
     )
-    div_class = "pf-depth-chart-div"
-    if tier:
-        div_class = f"{div_class} pf-div-{tier}"
-    if limited:
-        div_class = f"{div_class} pf-div-limited"
-    div_title = (
-        f"{division} — {LIMITED_DIVISION_TITLE}" if limited and division != "—" else division
-    )
     cells = [
         html.Span(str(index + 1), className="pf-depth-chart-rank"),
         (
@@ -3028,7 +3083,10 @@ def _setpiece_chart_player_row(
                 },
                 n_clicks=0,
                 className="pf-setpiece-chart-name",
-                title="Open player details",
+                **_depth_tip_attrs(
+                    _depth_hover_title(name, "Open player details")
+                    or "Open player details"
+                ),
                 type="button",
             )
             if profile_id
@@ -3038,16 +3096,36 @@ def _setpiece_chart_player_row(
     ]
     if show_height:
         cells.append(_depth_plain_cell(row.get("Height"), "pf-depth-chart-height"))
+    feet_tip = _depth_hover_title(
+        str(feet_row.get("Left Foot") or "").strip(),
+        str(feet_row.get("Right Foot") or "").strip(),
+    )
     cells.extend(
         [
-            html.Span(position, className="pf-depth-chart-pos", title=position),
-            dcc.Markdown(
-                feet_cell(feet_row),
-                dangerously_allow_html=True,
-                className="pf-depth-chart-feet",
+            html.Span(
+                position,
+                className="pf-depth-chart-pos",
+                **_depth_tip_attrs(position if position not in ("", "—") else None),
             ),
-            html.Span(club or "—", className="pf-depth-chart-club", title=club or ""),
-            html.Span(division, className=div_class, title=div_title),
+            html.Div(
+                dcc.Markdown(
+                    feet_cell(feet_row),
+                    dangerously_allow_html=True,
+                ),
+                className="pf-depth-chart-feet",
+                **_depth_tip_attrs(feet_tip),
+            ),
+            html.Span(
+                club or "—",
+                className="pf-depth-chart-club",
+                **_depth_tip_attrs(club if (club or "").strip() else None),
+            ),
+            _depth_division_cell(
+                division,
+                tier=tier,
+                limited=limited,
+                limited_title=LIMITED_DIVISION_TITLE,
+            ),
             _depth_rec_cell(row.get("Rec"), theme=theme),
             _depth_injury_cell(row, player),
             html.Div(
@@ -3057,12 +3135,16 @@ def _setpiece_chart_player_row(
             html.Span(
                 slot_text,
                 className="pf-setpiece-chart-slot",
-                title=slot_text if slot_text != "—" else "Not in any formation slot",
+                **_depth_tip_attrs(
+                    slot_text
+                    if slot_text != "—"
+                    else "Not in any formation slot"
+                ),
             ),
             html.Span(
                 rank_text,
                 className="pf-setpiece-chart-slot-rank",
-                title=(
+                **_depth_tip_attrs(
                     f"Depth rank #{rank_text} in {slot_text}"
                     if rank_text != "—"
                     else "Not in any formation slot"
@@ -3617,37 +3699,42 @@ def _build_depth_chart(
                         className="pf-depth-chart-role-head",
                     ),
                     _depth_compare_status(visible=True),
-                    _depth_chart_col_headers(
-                        selectable=True,
-                        slot_index=slot_index,
-                        stats_view=stats_view,
-                        metric_ids=metric_ids,
-                        role_column=column,
-                        stats_group=stats_group,
-                        grid_style=grid_style,
-                    ),
                     html.Div(
                         [
-                            html.Div(
-                                className="pf-depth-chart-drop-line",
-                                **{"aria-hidden": "true"},
+                            _depth_chart_col_headers(
+                                selectable=True,
+                                slot_index=slot_index,
+                                stats_view=stats_view,
+                                metric_ids=metric_ids,
+                                role_column=column,
+                                stats_group=stats_group,
+                                grid_style=grid_style,
                             ),
-                            *rows,
                             html.Div(
-                                className="pf-depth-chart-drop-end",
-                                **{"aria-hidden": "true"},
+                                [
+                                    html.Div(
+                                        className="pf-depth-chart-drop-line",
+                                        **{"aria-hidden": "true"},
+                                    ),
+                                    *rows,
+                                    html.Div(
+                                        className="pf-depth-chart-drop-end",
+                                        **{"aria-hidden": "true"},
+                                    ),
+                                ],
+                                # Fingerprint in the id forces a clean remount when order
+                                # changes (auto-rank / remove). Avoids React/DOM desync
+                                # after pointer-drag mutates the list in place.
+                                id=f"pf-depth-list-{slot_index}-{order_fp}",
+                                className="pf-depth-chart-list",
+                                **{
+                                    "data-role": column,
+                                    "data-slot": str(slot_index),
+                                    "data-formation": str(formation_id or ""),
+                                },
                             ),
                         ],
-                        # Fingerprint in the id forces a clean remount when order
-                        # changes (auto-rank / remove). Avoids React/DOM desync
-                        # after pointer-drag mutates the list in place.
-                        id=f"pf-depth-list-{slot_index}-{order_fp}",
-                        className="pf-depth-chart-list",
-                        **{
-                            "data-role": column,
-                            "data-slot": str(slot_index),
-                            "data-formation": str(formation_id or ""),
-                        },
+                        className="pf-depth-chart-scroll",
                     ),
                 ],
                 className="pf-depth-chart-section",

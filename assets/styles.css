@@ -8595,7 +8595,7 @@ body[data-theme="light"] .pf-depth-undo-row {
         minmax(7.25rem, 1.15fr)
         3.5rem
         minmax(4.75rem, 0.78fr)
-        minmax(9.25rem, 1.05fr)
+        minmax(5.5rem, 0.55fr)
         2.85rem
         2.5rem
         3.35rem
@@ -8604,7 +8604,7 @@ body[data-theme="light"] .pf-depth-undo-row {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 58rem;
+    min-width: 54rem;
     width: 100%;
     box-sizing: border-box;
 }
@@ -8619,13 +8619,13 @@ body[data-theme="light"] .pf-depth-undo-row {
         minmax(7.25rem, 1.15fr)
         3.5rem
         minmax(4.75rem, 0.78fr)
-        minmax(9.25rem, 1.05fr)
+        minmax(5.5rem, 0.55fr)
         2.85rem
         2.5rem
         3.35rem
         4.25rem
         2rem;
-    min-width: 61rem;
+    min-width: 57rem;
 }
 
 .pf-setpiece-chart-cols {
@@ -8890,13 +8890,21 @@ body[data-theme="light"] .pf-depth-role-btn-rank.mantine-Button-root:hover {
     margin-left: 0.15rem;
 }
 
+.pf-depth-chart-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
 .pf-depth-chart-list {
     display: flex;
     flex-direction: column;
     gap: 0;
-    overflow-x: auto;
     padding-bottom: 0.35rem;
     position: relative;
+    /* Horizontal scroll lives on .pf-depth-chart-scroll so headers move with rows. */
+    overflow-x: visible;
 }
 
 .pf-depth-chart-drop-end {
@@ -8947,7 +8955,7 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
         minmax(7.25rem, 1.15fr)
         3.5rem
         minmax(4.75rem, 0.78fr)
-        minmax(9.25rem, 1.05fr)
+        minmax(5.5rem, 0.55fr)
         2.85rem
         2.5rem
         3.35rem
@@ -8957,7 +8965,7 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 71rem;
+    min-width: 67rem;
     box-sizing: border-box;
 }
 
@@ -8969,7 +8977,11 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
     letter-spacing: 0.03em;
     text-transform: uppercase;
     border-bottom: 1px solid var(--app-line);
-    min-height: 38px;
+    min-height: 2.75rem;
+    align-items: end;
+    position: sticky;
+    top: 0;
+    z-index: 3;
 }
 
 /* Keep every header label muted + same size — cell rules set body colors/sizes. */
@@ -9026,9 +9038,13 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 
 .pf-depth-chart-cols .pf-depth-chart-name-label,
 .pf-depth-chart-cols .pf-depth-chart-pos,
-.pf-depth-chart-cols .pf-depth-chart-club,
-.pf-depth-chart-cols .pf-depth-chart-div {
+.pf-depth-chart-cols .pf-depth-chart-club {
     text-align: left;
+}
+
+.pf-depth-chart-cols .pf-depth-chart-div {
+    text-align: center;
+    justify-self: center;
 }
 
 .pf-depth-chart-row {
@@ -9128,9 +9144,39 @@ body[data-theme="light"] .pf-depth-chart-row.is-odd {
     box-shadow: inset 0 0 0 1px var(--app-accent);
 }
 
+/* Delayed custom tips — native title attrs don't fire reliably on drag rows. */
 body.pf-depth-dragging {
     cursor: grabbing !important;
     user-select: none !important;
+}
+
+.pf-depth-tip {
+    position: fixed;
+    z-index: 10050;
+    max-width: min(22rem, calc(100vw - 1rem));
+    padding: 0.4rem 0.55rem;
+    border-radius: 8px;
+    border: 1px solid var(--app-line);
+    background: var(--app-elev);
+    color: var(--app-text);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.35;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+html[data-theme="light"] .pf-depth-tip,
+body[data-theme="light"] .pf-depth-tip {
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+}
+
+[data-pf-tip] {
+    cursor: inherit;
 }
 
 body.pf-depth-dragging .pf-depth-chart-row.is-sortable {
@@ -9159,8 +9205,14 @@ body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
     line-height: 1.3;
     cursor: pointer;
     white-space: normal;
-    overflow: visible;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     word-break: break-word;
+    max-width: 100%;
+    min-width: 0;
     text-decoration: underline;
     text-underline-offset: 3px;
 }
@@ -9176,8 +9228,14 @@ body.pf-depth-dragging .pf-depth-chart-row.is-sortable:not(.is-dragging) {
     font-size: 0.9rem;
     line-height: 1.3;
     white-space: normal;
-    overflow: visible;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     word-break: break-word;
+    max-width: 100%;
+    min-width: 0;
     color: var(--app-text);
     text-align: left;
 }
@@ -9362,30 +9420,40 @@ body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
 }
 
 .pf-depth-chart-div {
-    font-size: 0.9rem;
-    line-height: 1.25;
-    white-space: nowrap;
+    font-size: 0.86rem;
+    line-height: 1.2;
+    white-space: normal;
     overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     text-overflow: ellipsis;
-    overflow-wrap: normal;
-    word-break: normal;
-    hyphens: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
     font-weight: 600;
+    width: fit-content;
     max-width: 100%;
+    min-width: 0;
     text-align: center;
     justify-self: center;
     color: var(--app-text);
+    cursor: default;
 }
 
 .pf-depth-chart-div.pf-div-top,
 .pf-depth-chart-div.pf-div-pro,
 .pf-depth-chart-div.pf-div-amateur {
-    display: inline-block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     box-sizing: border-box;
-    padding: 0.12rem 0.45rem;
+    padding: 0.12rem 0.4rem;
     border-radius: 6px;
     font-weight: 700;
-    width: max-content;
+    width: fit-content;
     max-width: 100%;
     vertical-align: middle;
 }
@@ -9738,6 +9806,7 @@ body[data-theme="light"] .pf-depth-chart-section {
 }
 
 @media (max-width: 720px) {
+    .pf-depth-chart-scroll,
     .pf-depth-chart-list,
     .pf-depth-chart-cols,
     .pf-depth-chart-row {

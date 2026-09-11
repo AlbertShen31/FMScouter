@@ -216,6 +216,7 @@
     "pointerdown",
     function (event) {
       if (event.button != null && event.button !== 0) return;
+      hideTip();
       if (event.target.closest("button, a, input, textarea, select, label, .pf-depth-chart-check")) {
         return;
       }
@@ -256,6 +257,7 @@
           return;
         }
         state.active = true;
+        hideTip();
         state.row.classList.add("is-dragging");
         document.body.classList.add("pf-depth-dragging");
       }
@@ -322,6 +324,99 @@
       if (typeof event.stopImmediatePropagation === "function") {
         event.stopImmediatePropagation();
       }
+    },
+    true
+  );
+
+  /* Delayed custom tips — native title attrs don't fire reliably on drag rows. */
+  var tipEl = null;
+  var tipTimer = null;
+  var tipHost = null;
+  var TIP_DELAY_MS = 350;
+
+  function ensureTipEl() {
+    if (tipEl && tipEl.isConnected) return tipEl;
+    tipEl = document.createElement("div");
+    tipEl.className = "pf-depth-tip";
+    tipEl.setAttribute("role", "tooltip");
+    tipEl.hidden = true;
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+
+  function hideTip() {
+    if (tipTimer) {
+      clearTimeout(tipTimer);
+      tipTimer = null;
+    }
+    tipHost = null;
+    if (tipEl) {
+      tipEl.hidden = true;
+      tipEl.textContent = "";
+    }
+  }
+
+  function placeTip(host) {
+    var el = ensureTipEl();
+    var text = host && host.getAttribute("data-pf-tip");
+    if (!text) {
+      hideTip();
+      return;
+    }
+    el.textContent = text;
+    el.hidden = false;
+    var rect = host.getBoundingClientRect();
+    var tipRect = el.getBoundingClientRect();
+    var left = rect.left + rect.width / 2 - tipRect.width / 2;
+    var top = rect.top - tipRect.height - 8;
+    if (top < 8) {
+      top = rect.bottom + 8;
+    }
+    left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+    el.style.left = Math.round(left) + "px";
+    el.style.top = Math.round(top) + "px";
+  }
+
+  function tipTargetFrom(node) {
+    return node && node.closest ? node.closest("[data-pf-tip]") : null;
+  }
+
+  document.addEventListener(
+    "pointerover",
+    function (event) {
+      if (state) return;
+      if (document.body.classList.contains("pf-depth-dragging")) return;
+      var host = tipTargetFrom(event.target);
+      if (!host || host === tipHost) return;
+      hideTip();
+      tipHost = host;
+      tipTimer = setTimeout(function () {
+        tipTimer = null;
+        if (tipHost === host && !state) {
+          placeTip(host);
+        }
+      }, TIP_DELAY_MS);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "pointerout",
+    function (event) {
+      var host = tipHost;
+      if (!host) return;
+      var next = event.relatedTarget;
+      if (next && host.contains(next)) return;
+      if (next === tipEl || (tipEl && tipEl.contains(next))) return;
+      hideTip();
+    },
+    true
+  );
+
+  document.addEventListener(
+    "scroll",
+    function () {
+      hideTip();
     },
     true
   );
