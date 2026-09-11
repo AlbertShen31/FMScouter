@@ -5901,7 +5901,7 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
 
 .st-page .rs-shortlist-filters-row {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: end;
     gap: 10px 12px;
 }
@@ -5912,15 +5912,15 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
 }
 
 .st-page .rs-shortlist-filters-row > .rs-filter-age,
-.st-page .rs-shortlist-filters-row > .rs-filter-archetypes,
 .st-page .rs-shortlist-filters-row > .st-filter-division,
 .st-page .rs-shortlist-filters-row > .st-filter-minutes {
     flex: 0 0 auto;
 }
 
 .st-page .rs-shortlist-filters-row > .rs-filter-archetypes {
-    flex: 1 1 100%;
-    min-width: 12rem;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 100%;
     max-width: none;
     order: 20;
 }
