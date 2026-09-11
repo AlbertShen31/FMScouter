@@ -719,75 +719,28 @@ def _player_modal_body(
     banding_ctx=None,
     value_mode: str = "raw",
 ) -> html.Div:
-    settings = us.normalize(settings)
-    if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
-            banding_ctx, player, value_mode
-        )
-    from scoring.stats_scorer import pos_group_label
+    """Legacy alias — prefer ``build_player_modal_body``."""
+    from components.player_detail import build_player_modal_body
 
-    view = _normalize_player_view(view)
-    eval_group = _normalize_eval_group(
-        eval_group, player.get("pos_group") or "mid", player=player
-    )
-    sections = _player_metric_sections(
+    return build_player_modal_body(
         player,
-        eval_group,
-        threshold_overrides=threshold_overrides,
-        metric_p100=metric_p100,
-        metric_p0=metric_p0,
-        value_mode=value_mode,
-        settings=settings,
-        limited_divisions=limited_divisions,
-    )
-    if view == "bars":
-        metrics = _metrics_bars(sections, theme)
-    elif view == "pizzas":
-        metrics = _metrics_pizzas(sections, theme)
-    else:
-        from components.player_table import resolve_division_highlight
-
-        _, limited_league = resolve_division_highlight(player, limited_divisions)
-        metrics = _metrics_values(sections, limited_league=limited_league)
-    status = minutes_status(player.get("minutes"), minutes_required)
-    return player_detail_body(
-        player,
+        settings,
         id_prefix="st",
-        modal_fields=us.modal_identity_fields_for("player_stats", settings) if settings else None,
-        field_styles={
-            "minutes": {"color": minutes_color(status)},
-            "injury": {"color": "#fbbf24", "fontWeight": "600"},
-        },
-        field_formatters={"minutes": _format_minutes_identity},
-        after_identity=[
-            html.Div(
-                [
-                    html.Div("Evaluate as", className="st-player-switch-label"),
-                    _group_switcher(eval_group, player),
-                ],
-                className="st-player-switch-block",
-            ),
-            html.Div(
-                [
-                    html.Div("Display", className="st-player-switch-label"),
-                    _view_switcher(view),
-                ],
-                className="st-player-switch-block",
-            ),
-            _overall_avg_banner(sections, phase_label=pos_group_label(eval_group)),
-            *(
-                [note]
-                if (note := _limited_tracking_note(player)) is not None
-                else []
-            ),
-        ],
-        bottom=html.Div(metrics, className="st-player-metrics"),
-        settings=settings,
         theme=theme,
+        mode="stats",
+        show_stats_controls=True,
+        stats_view=view,
+        eval_group=eval_group,
+        stats_player=player,
         limited_divisions=limited_divisions,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
+        minutes_required=minutes_required,
+        always_minutes_styles=True,
+        identity_fields_page="player_stats",
+        upload_has_stats=True,
     )
+
 
 
 def stats_charts_bottom_pane(

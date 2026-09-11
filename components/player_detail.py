@@ -369,16 +369,23 @@ def resolve_stats_player_for_file(
     return None, stat_players
 
 
-def _enrich_stats_player(stats_player: dict | None, player: dict) -> dict | None:
+def _enrich_stats_player(
+    stats_player: dict | None,
+    player: dict,
+    *,
+    pos_group: str | None = None,
+) -> dict | None:
+    """Copy identity onto a stats row and set pos_group (optional force)."""
+    from scoring.stats_scorer import coerce_stats_pos_group, resolve_player_pos_group
+
     if not isinstance(stats_player, dict):
         return None
-    from scoring.stats_scorer import resolve_player_pos_group
-
     stats_player = dict(stats_player)
     for key in ("best_pos", "position", "position_role", "name", "club", "positions"):
         if not stats_player.get(key) and player.get(key):
             stats_player[key] = player.get(key)
-    stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+    forced = coerce_stats_pos_group(pos_group)
+    stats_player["pos_group"] = forced or resolve_player_pos_group(stats_player)
     return stats_player
 
 
@@ -416,6 +423,273 @@ def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
     return display_player
 
 
+_DEFAULT_STATS_MISSING = (
+    "Player stats not available for this player. The export includes "
+    "stats columns, but this row could not be matched. Try "
+    "recomputing the library cache on the Uploads page."
+)
+
+
+def build_player_modal_body(
+    player: dict,
+    settings=None,
+    *,
+    id_prefix: str = "rs",
+    theme: str | None = None,
+    position_eligible: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    stripe_limited: set[str] | frozenset[str] | list[str] | None = None,
+    mode: str = "roles",
+    show_mode_toggle: bool = False,
+    modal_mode_id: str | None = None,
+    stats_player: dict | None = None,
+    stats_cohort: list[dict] | None = None,
+    file_id: str = "",
+    force_pos_group: str | None = None,
+    eval_group: str | None = None,
+    upload_has_stats: bool | None = None,
+    show_stats_controls: bool = False,
+    stats_view: str = "bars",
+    value_mode: str = "raw",
+    banding_ctx=None,
+    minutes_required: float | None = None,
+    identity_fields_page: str | None = None,
+    always_minutes_styles: bool = False,
+    stats_missing_message: str | None = None,
+) -> html.Div:
+    """Shared player modal body for Role scores, Player stats, and Profiles.
+
+    Pages resolve their own player/cohort/flags, then pass them here.
+    """
+    settings = us.normalize(settings)
+    mode = mode or "roles"
+    if stats_player is None and file_id:
+        stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
+    stats_player = _enrich_stats_player(
+        stats_player, player, pos_group=force_pos_group or eval_group
+    )
+
+    has_stats_payload = bool(stats_player and stats_player.get("stats"))
+    if upload_has_stats is None:
+        upload_has_stats = has_stats_payload or show_mode_toggle
+    upload_has_stats = bool(upload_has_stats)
+
+    # Role-scores attribute-only export: roles bottom, no toggle / archetypes.
+    if not upload_has_stats and not has_stats_payload and mode == "roles" and not show_stats_controls:
+        bottom_sections = [
+            player_role_fit_section(player, settings),
+            player_set_piece_scores_section(player, settings),
+            player_attributes(player, settings),
+        ]
+        return player_detail_body(
+            player,
+            id_prefix=id_prefix,
+            position_eligible=position_eligible,
+            modal_fields=us.modal_identity_fields_for(
+                identity_fields_page or "role_scores", settings
+            ),
+            bottom=[section for section in bottom_sections if section is not None],
+            settings=settings,
+            theme=theme,
+            limited_divisions=limited_divisions,
+            show_archetypes=False,
+        )
+
+    display_player = (
+        _merge_stats_identity(player, stats_player) if stats_player else dict(player)
+    )
+    if force_pos_group:
+        from scoring.stats_scorer import coerce_stats_pos_group
+
+        forced = coerce_stats_pos_group(force_pos_group)
+        if forced:
+            display_player["pos_group"] = forced
+
+    minutes_req = (
+        float(minutes_required)
+        if minutes_required is not None
+        else float(us.default_minutes_required(settings))
+    )
+    field_status = minutes_status(display_player.get("minutes"), minutes_req)
+    field_styles = {
+        "minutes": {"color": minutes_color(field_status)},
+        "injury": {"color": "#fbbf24", "fontWeight": "600"},
+    }
+    use_minutes_styles = always_minutes_styles or mode == "stats" or show_stats_controls
+
+    if banding_ctx is None and stats_cohort:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            stats_cohort,
+            limited_divisions=limited_divisions,
+        )
+
+    after_identity: list = []
+    if show_mode_toggle:
+        after_identity.append(
+            dmc.SegmentedControl(
+                id=modal_mode_id or f"{id_prefix}-modal-bottom-mode",
+                size="sm",
+                value=mode,
+                data=[
+                    {"label": "Role scores", "value": "roles"},
+                    {"label": "Player stats", "value": "stats"},
+                ],
+            )
+        )
+
+    chart_player = stats_player or display_player
+    resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")
+
+    if mode == "roles" and not show_stats_controls:
+        bottom = [
+            section
+            for section in (
+                player_role_fit_section(display_player, settings),
+                player_set_piece_scores_section(display_player, settings),
+                player_attributes(display_player, settings),
+            )
+            if section is not None
+        ]
+        fields_page = identity_fields_page or "role_scores"
+        field_formatters = (
+            {"minutes": _format_minutes_identity} if always_minutes_styles else None
+        )
+    elif show_stats_controls:
+        # Player Stats page: evaluate-as / view switchers + metric charts.
+        from components.player_table import resolve_division_highlight
+        from components.stats_player_pane import (
+            _group_switcher,
+            _limited_tracking_note,
+            _metrics_bars,
+            _metrics_pizzas,
+            _metrics_values,
+            _normalize_eval_group,
+            _normalize_player_view,
+            _overall_avg_banner,
+            _player_metric_sections,
+            _view_switcher,
+        )
+
+        view = _normalize_player_view(stats_view)
+        eg = _normalize_eval_group(
+            resolved_eval, chart_player.get("pos_group") or "mid", player=chart_player
+        )
+        threshold_overrides = None
+        metric_p0 = None
+        metric_p100 = None
+        if banding_ctx is not None:
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+                banding_ctx, chart_player, value_mode
+            )
+        sections = _player_metric_sections(
+            chart_player,
+            eg,
+            threshold_overrides=threshold_overrides,
+            metric_p100=metric_p100,
+            metric_p0=metric_p0,
+            value_mode=value_mode,
+            settings=settings,
+            limited_divisions=limited_divisions,
+        )
+        if view == "bars":
+            metrics = _metrics_bars(sections, theme)
+        elif view == "pizzas":
+            metrics = _metrics_pizzas(sections, theme)
+        else:
+            _, limited_league = resolve_division_highlight(
+                chart_player,
+                stripe_limited if stripe_limited is not None else limited_divisions,
+            )
+            metrics = _metrics_values(sections, limited_league=limited_league)
+
+        set_piece_section = player_set_piece_metrics_section(
+            chart_player, eval_group=eg
+        )
+        if set_piece_section is not None:
+            after_identity.append(set_piece_section)
+
+        control_children = [
+            html.Div(
+                [
+                    html.Div("Evaluate as", className="st-player-switch-label"),
+                    _group_switcher(eg, chart_player),
+                ],
+                className="st-player-switch-block",
+            ),
+            html.Div(
+                [
+                    html.Div("Display", className="st-player-switch-label"),
+                    _view_switcher(view),
+                ],
+                className="st-player-switch-block",
+            ),
+            _overall_avg_banner(sections),
+            *(
+                [note]
+                if (note := _limited_tracking_note(chart_player)) is not None
+                else []
+            ),
+        ]
+        bottom = player_stats_modal_section(
+            [
+                html.Div(control_children, className="st-player-controls"),
+                html.Div(metrics, className="st-player-metrics"),
+            ]
+        )
+        fields_page = identity_fields_page or "player_stats"
+        field_formatters = {"minutes": _format_minutes_identity}
+    else:
+        # Role scores / Profiles stats pane (charts without page switchers).
+        if has_stats_payload:
+            stats_content = stats_charts_bottom_pane(
+                chart_player,
+                theme=theme,
+                view=stats_view or "bars",
+                eval_group=resolved_eval,
+                settings=settings,
+                cohort_players=stats_cohort,
+                banding_ctx=banding_ctx,
+                value_mode=value_mode,
+                limited_divisions=limited_divisions,
+            )
+            set_piece_metrics = player_set_piece_metrics_section(
+                chart_player, eval_group=resolved_eval
+            )
+        else:
+            stats_content = html.P(
+                stats_missing_message or _DEFAULT_STATS_MISSING,
+                className="text-muted small",
+            )
+            set_piece_metrics = None
+        bottom = []
+        if set_piece_metrics:
+            bottom.append(set_piece_metrics)
+        bottom.append(player_stats_modal_section(stats_content))
+        fields_page = identity_fields_page or "player_stats"
+        field_formatters = {"minutes": _format_minutes_identity}
+
+    return player_detail_body(
+        display_player,
+        id_prefix=id_prefix,
+        position_eligible=position_eligible,
+        modal_fields=us.modal_identity_fields_for(fields_page, settings),
+        field_styles=field_styles if use_minutes_styles else None,
+        field_formatters=field_formatters,
+        after_identity=after_identity or None,
+        bottom=bottom,
+        settings=settings,
+        theme=theme,
+        limited_divisions=(
+            stripe_limited if stripe_limited is not None else limited_divisions
+        ),
+        cohort_players=stats_cohort,
+        banding_ctx=banding_ctx,
+        value_mode=value_mode,
+        show_archetypes=has_stats_payload,
+    )
+
+
 def scout_player_modal_body(
     player: dict,
     settings=None,
@@ -431,114 +705,21 @@ def scout_player_modal_body(
     stats_cohort: list[dict] | None = None,
     upload_has_stats: bool = False,
 ) -> html.Div:
-    """Role-scores modal body with optional stats pane (Profiles-style toggle)."""
-    settings = us.normalize(settings)
-    upload_has_stats = bool(upload_has_stats)
-    if stats_player is None and file_id:
-        stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
-    stats_player = _enrich_stats_player(stats_player, player)
-    if not upload_has_stats and not stats_player:
-        bottom_sections = [
-            player_role_fit_section(player, settings),
-            player_set_piece_scores_section(player, settings),
-            player_attributes(player, settings),
-        ]
-        return player_detail_body(
-            player,
-            id_prefix=id_prefix,
-            position_eligible=position_eligible,
-            modal_fields=us.modal_identity_fields_for("role_scores", settings),
-            bottom=[section for section in bottom_sections if section is not None],
-            settings=settings,
-            theme=theme,
-            limited_divisions=limited_divisions,
-            show_archetypes=False,
-        )
-
-    display_player = _merge_stats_identity(player, stats_player) if stats_player else dict(player)
-    field_status = minutes_status(
-        display_player.get("minutes"), us.default_minutes_required(settings)
-    )
-    field_styles = {
-        "minutes": {"color": minutes_color(field_status)},
-        "injury": {"color": "#fbbf24", "fontWeight": "600"},
-    }
-    after_identity: list = []
-    if upload_has_stats:
-        after_identity.append(
-            dmc.SegmentedControl(
-                id=modal_mode_id or f"{id_prefix}-modal-bottom-mode",
-                size="sm",
-                value=mode or "roles",
-                data=[
-                    {"label": "Role scores", "value": "roles"},
-                    {"label": "Player stats", "value": "stats"},
-                ],
-            )
-        )
-
-    banding_ctx = None
-    if stats_cohort:
-        banding_ctx = us.build_stats_banding_context(
-            settings,
-            stats_cohort,
-            limited_divisions=limited_divisions,
-        )
-
-    if (mode or "roles") == "roles":
-        bottom = [
-            section
-            for section in (
-                player_role_fit_section(display_player, settings),
-                player_set_piece_scores_section(display_player, settings),
-                player_attributes(display_player, settings),
-            )
-            if section is not None
-        ]
-        modal_fields = us.modal_identity_fields_for("role_scores", settings)
-        field_formatters = None
-    else:
-        if stats_player:
-            stats_content = stats_charts_bottom_pane(
-                stats_player,
-                theme=theme,
-                view="bars",
-                settings=settings,
-                cohort_players=stats_cohort,
-                banding_ctx=banding_ctx,
-            )
-            set_piece_metrics = player_set_piece_metrics_section(stats_player)
-        else:
-            stats_content = html.P(
-                "Player stats not available for this player. The export includes "
-                "stats columns, but this row could not be matched. Try "
-                "recomputing the library cache on the Uploads page.",
-                className="text-muted small",
-            )
-            set_piece_metrics = None
-        bottom = []
-        if set_piece_metrics:
-            bottom.append(set_piece_metrics)
-        bottom.append(player_stats_modal_section(stats_content))
-        modal_fields = us.modal_identity_fields_for("player_stats", settings)
-        field_formatters = {"minutes": _format_minutes_identity}
-
-    archetype_player = stats_player or display_player
-    return player_detail_body(
-        display_player,
-        id_prefix=id_prefix,
+    """Role-scores modal body (thin wrapper around ``build_player_modal_body``)."""
+    return build_player_modal_body(
+        player,
+        settings,
+        mode=mode,
+        file_id=file_id,
         position_eligible=position_eligible,
-        modal_fields=modal_fields,
-        field_styles=field_styles if (mode or "roles") != "roles" else None,
-        field_formatters=field_formatters,
-        after_identity=after_identity or None,
-        bottom=bottom,
-        settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
-        cohort_players=stats_cohort,
-        banding_ctx=banding_ctx,
-        show_archetypes=bool(archetype_player and archetype_player.get("stats")),
+        id_prefix=id_prefix,
+        modal_mode_id=modal_mode_id,
+        stats_player=stats_player,
+        stats_cohort=stats_cohort,
+        show_mode_toggle=bool(upload_has_stats),
+        upload_has_stats=upload_has_stats,
     )
 
 
@@ -698,86 +879,20 @@ def stats_player_detail_card(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
 ) -> html.Div:
-    settings = us.normalize(settings)
-    minutes_required = (
-        float(minutes_required)
-        if minutes_required is not None
-        else us.default_minutes_required(settings)
-    )
-    if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player
-        )
-    elif (metric_p100 is None or metric_p0 is None) and cohort_players is not None:
-        from scoring.stats_scorer import adaptive_bound_options, adaptive_metric_bound_maps
-
-        auto_p0, auto_p100 = adaptive_metric_bound_maps(
-            cohort_players,
-            threshold_overrides
-            if threshold_overrides is not None
-            else settings.get("stats_thresholds"),
-            **adaptive_bound_options(settings, min_minutes=minutes_required),
-        )
-        if metric_p0 is None:
-            metric_p0 = auto_p0
-        if metric_p100 is None:
-            metric_p100 = auto_p100
-    sections = _player_metric_sections(
+    """Stats-only detail card (shared modal builder, no page switchers)."""
+    return build_player_modal_body(
         player,
-        threshold_overrides=threshold_overrides,
-        metric_p100=metric_p100,
-        metric_p0=metric_p0,
-    )
-    status = minutes_status(player.get("minutes"), minutes_required)
-    pcts = [
-        float(m["percentile"])
-        for cat in sections
-        for m in cat["metrics"]
-        if m.get("percentile") is not None
-    ]
-    overall_avg = sum(pcts) / len(pcts) if pcts else None
-    after_identity: list = []
-    set_piece_section = player_set_piece_metrics_section(player)
-    if set_piece_section is not None:
-        after_identity.append(set_piece_section)
-    return player_detail_body(
-        player,
+        settings,
         id_prefix="st",
-        modal_fields=us.modal_identity_fields_for("player_stats", settings),
-        field_styles={
-            "minutes": {"color": minutes_color(status)},
-            "injury": {"color": "#fbbf24", "fontWeight": "600"},
-        },
-        field_formatters={"minutes": _format_minutes_identity},
-        after_identity=after_identity or None,
-        bottom=player_stats_modal_section(
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Div("Overall average", className="st-player-switch-label"),
-                            html.Span(
-                                f"~{overall_avg:.0f}th percentile"
-                                if overall_avg is not None
-                                else "—",
-                                className="st-overall-avg-val",
-                                style=(
-                                    {"color": percentile_color(overall_avg)}
-                                    if overall_avg is not None
-                                    else None
-                                ),
-                            ),
-                        ],
-                        className="st-overall-avg pf-stats-overall",
-                    ),
-                    html.Div(_metrics_values(sections), className="st-player-metrics"),
-                ]
-            )
-        ),
-        settings=settings,
+        mode="stats",
+        stats_player=player,
+        stats_cohort=cohort_players,
         limited_divisions=limited_divisions,
-        cohort_players=cohort_players,
         banding_ctx=banding_ctx,
+        minutes_required=minutes_required,
+        always_minutes_styles=True,
+        identity_fields_page="player_stats",
+        upload_has_stats=True,
     )
 
 

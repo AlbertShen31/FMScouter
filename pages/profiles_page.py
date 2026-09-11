@@ -12,14 +12,10 @@ import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
 from components.player_detail import (
-    player_attributes,
-    player_role_fit_section,
-    player_set_piece_metrics_section,
-    player_set_piece_scores_section,
-    player_stats_modal_section,
-    role_player_detail_card,
+    build_player_modal_body,
+    resolve_stats_player_for_file,
 )
-from components.player_modal import player_detail_body, player_modal
+from components.player_modal import player_modal
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     default_page_size_value,
@@ -60,7 +56,6 @@ from components.stats_compare import (
     stats_compare_body,
     stats_compare_modal,
 )
-from components.stats_player_pane import stats_charts_bottom_pane
 
 
 def _pattern_click_triggered() -> bool:
@@ -537,15 +532,6 @@ def _resolve_minutes_required(value, settings=None) -> float:
             pass
     return float(us.default_minutes_required(settings))
 
-
-def _format_profile_minutes(value) -> str:
-    if value in (None, "", "-"):
-        return "—"
-    try:
-        num = float(value)
-    except (TypeError, ValueError):
-        return str(value)
-    return str(int(num)) if num == int(num) else str(num)
 
 
 def _minutes_cell(mins_raw, settings, *, minutes_required=None) -> str:
@@ -7097,30 +7083,14 @@ def _resolve_stats_player_for_profile(
     profile: dict, player: dict
 ) -> tuple[dict | None, list[dict] | None]:
     """Return (stats player, cohort) for the Profiles modal if available."""
-    from scoring.stats_scorer import player_key as stats_player_key
-
     file_id = str(profile.get("file_id") or "").strip()
-    stat_players = profiles.load_stats_players_for_file(file_id) if file_id else None
-
-    name = (player.get("name") or "").strip()
-    unique_id = str(player.get("unique_id") or "").strip()
-    club = (player.get("club") or "").strip()
-    target_key = (
-        stats_player_key({"name": name, "unique_id": unique_id, "club": club})
-        if name
-        else ""
-    )
-
-    if stat_players and target_key:
-        for sp in stat_players:
-            if stats_player_key(sp) == target_key:
-                return sp, stat_players
-
+    stats_player, cohort = resolve_stats_player_for_file(file_id, player)
+    if stats_player:
+        return stats_player, cohort
     embedded = profile.get("stats_player")
     if isinstance(embedded, dict) and embedded.get("stats"):
-        return embedded, stat_players
-
-    return None, stat_players
+        return embedded, cohort
+    return None, cohort
 
 
 def _build_profile_modal_body(
@@ -7132,132 +7102,34 @@ def _build_profile_modal_body(
     mode: str = "roles",
     pos_group: str | None = None,
 ) -> html.Div:
-    """Shared body builder for open and switch callbacks.
-
-    ``pos_group`` forces Player-stats percentiles to the slot/role phase
-    (gk/def/mid/fwd) instead of Best Pos.
-    """
+    """Profiles modal: resolve slot phase + stats cohort, then shared body."""
     eval_group = pos_group or _profile_stats_group(profile)
     stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
-    if isinstance(stats_player, dict):
-        stats_player = _enrich_stats_player(
-            stats_player, player, pos_group=eval_group
-        )
-    display_player = dict(player)
-    if isinstance(stats_player, dict):
-        for key in (
-            "minutes",
-            "age",
-            "club",
-            "division",
-            "nation",
-            "position",
-            "best_pos",
-            "height",
-            "left_foot",
-            "right_foot",
-            "rec",
-            "injury",
-            "recurring_injury",
-            "injured_on",
-            "time_missed",
-            "transfer_status",
-            "loan_status",
-            "pos_group",
-            "limited_division_tracking",
-            "stats",
-            "stats_unavailable",
-        ):
-            if key in ("stats", "stats_unavailable"):
-                if stats_player.get(key) not in (None, "", [], {}):
-                    display_player[key] = stats_player.get(key)
-                continue
-            if display_player.get(key) in (None, "", [], {}):
-                display_player[key] = stats_player.get(key)
-        if eval_group:
-            display_player["pos_group"] = eval_group
-
     file_id = str(profile.get("file_id") or "").strip()
     import services.export_library as lib
 
     limited_divisions = lib.list_limited_tracking_divisions(file_id=file_id or None)
-
-    banding_ctx = None
-    if stats_cohort:
-        banding_ctx = us.build_stats_banding_context(
-            settings,
-            stats_cohort,
-            limited_divisions=limited_divisions or None,
-        )
-
-    field_status = minutes_status(
-        display_player.get("minutes"), us.default_minutes_required(settings)
-    )
-    field_styles = {
-        "minutes": {"color": minutes_color(field_status)},
-        "injury": {"color": "#fbbf24", "fontWeight": "600"},
-    }
-    segmented = dmc.SegmentedControl(
-        id="pf-modal-bottom-mode",
-        size="sm",
-        value=mode,
-        data=[
-            {"label": "Role scores", "value": "roles"},
-            {"label": "Player stats", "value": "stats"},
-        ],
-    )
-
-    if (mode or "roles") == "roles":
-        bottom = [
-            section
-            for section in (
-                player_role_fit_section(display_player, settings),
-                player_set_piece_scores_section(display_player, settings),
-                player_attributes(display_player, settings),
-            )
-            if section is not None
-        ]
-    else:
-        if stats_player:
-            stats_content = stats_charts_bottom_pane(
-                stats_player,
-                theme=theme,
-                view="bars",
-                eval_group=eval_group,
-                settings=settings,
-                cohort_players=stats_cohort,
-                banding_ctx=banding_ctx,
-            )
-            set_piece_metrics = player_set_piece_metrics_section(stats_player)
-        else:
-            stats_content = html.P(
-                "Player stats not available. This profile was saved from an "
-                "attribute-only export. To see charts, re-save from a combined "
-                "export that includes Moneyball stats, or compute the library "
-                "cache on the Uploads page.",
-                className="text-muted small",
-            )
-            set_piece_metrics = None
-        bottom = []
-        if set_piece_metrics:
-            bottom.append(set_piece_metrics)
-        bottom.append(player_stats_modal_section(stats_content))
-
-    return player_detail_body(
-        display_player,
+    return build_player_modal_body(
+        player,
+        settings,
         id_prefix="pf",
-        modal_fields=us.modal_identity_fields_for("player_stats", settings),
-        field_styles=field_styles,
-        field_formatters={"minutes": _format_profile_minutes},
-        after_identity=segmented,
-        bottom=bottom,
-        settings=settings,
         theme=theme,
-        limited_divisions=limited_divisions,
-        cohort_players=stats_cohort,
-        banding_ctx=banding_ctx,
-        show_archetypes=bool(
-            isinstance(stats_player, dict) and stats_player.get("stats")
+        mode=mode or "roles",
+        show_mode_toggle=True,
+        modal_mode_id="pf-modal-bottom-mode",
+        stats_player=stats_player,
+        stats_cohort=stats_cohort,
+        force_pos_group=eval_group,
+        eval_group=eval_group,
+        limited_divisions=limited_divisions or None,
+        identity_fields_page="player_stats",
+        always_minutes_styles=True,
+        upload_has_stats=True,
+        stats_missing_message=(
+            "Player stats not available. This profile was saved from an "
+            "attribute-only export. To see charts, re-save from a combined "
+            "export that includes Moneyball stats, or compute the library "
+            "cache on the Uploads page."
         ),
     )
 

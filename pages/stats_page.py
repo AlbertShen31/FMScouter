@@ -26,8 +26,7 @@ from scoring.division_tiers import classify_division, division_sort_key
 import services.export_library as lib
 from services.division_catalog import nation_abbreviation
 from components.player_filters import help_icon, player_filters, player_filters_host
-from components.player_detail import player_set_piece_metrics_section, player_stats_modal_section
-from components.player_modal import player_detail_body, player_modal
+from components.player_modal import player_modal
 from components.stats_compare import (
     compare_title,
     compare_control_state,
@@ -39,16 +38,7 @@ from components.stats_compare import (
     stats_compare_body,
     stats_compare_modal,
 )
-from components.stats_player_pane import (
-    _group_switcher,
-    _limited_tracking_note,
-    _metrics_bars,
-    _metrics_pizzas,
-    _metrics_values,
-    _normalize_player_view,
-    _player_metric_sections,
-    _view_switcher,
-)
+from components.stats_player_pane import _normalize_player_view
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     feet_cell,
@@ -1536,50 +1526,6 @@ def _normalize_eval_group(
     return g if g in allowed else default
 
 
-def _format_minutes_identity(value) -> str:
-    if value in (None, "", "-"):
-        return "—"
-    try:
-        num = float(value)
-    except (TypeError, ValueError):
-        return str(value)
-    return str(int(num)) if num == int(num) else str(num)
-
-
-def _overall_avg_banner(sections: list[dict]) -> html.Div:
-    """Modal summary: mean of the three category average percentiles."""
-    pcts = [
-        float(cat["avg_percentile"])
-        for cat in sections
-        if cat.get("avg_percentile") is not None
-    ]
-    if not pcts:
-        return html.Div(
-            [
-                html.Span("Overall", className="st-overall-label"),
-                html.Span("Avg —", className="st-section-avg is-missing"),
-            ],
-            className="st-overall-avg",
-        )
-    avg = sum(pcts) / len(pcts)
-    color = percentile_color(avg)
-    return html.Div(
-        [
-            html.Span("Overall", className="st-overall-label"),
-            html.Span(
-                f"Avg ~{avg:.0f}th",
-                className="st-section-avg",
-                style={"color": color} if color else None,
-                title=(
-                    "Average of Defending, Final third / Goalkeeping, "
-                    "and Possession category averages"
-                ),
-            ),
-        ],
-        className="st-overall-avg",
-    )
-
-
 def _player_modal_body(
     player: dict,
     minutes_required: float,
@@ -1596,83 +1542,27 @@ def _player_modal_body(
     banding_ctx=None,
     value_mode: str = "raw",
 ) -> html.Div:
-    settings = us.normalize(settings)
-    if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
-            banding_ctx, player, value_mode
-        )
-    view = _normalize_player_view(view)
-    eval_group = _normalize_eval_group(
-        eval_group, player.get("pos_group") or "mid", player=player
-    )
-    sections = _player_metric_sections(
+    """Player Stats modal — thin wrapper around the shared builder."""
+    from components.player_detail import build_player_modal_body
+
+    return build_player_modal_body(
         player,
-        eval_group,
-        threshold_overrides=threshold_overrides,
-        metric_p100=metric_p100,
-        metric_p0=metric_p0,
-        value_mode=value_mode,
-        settings=settings,
-        limited_divisions=limited_divisions,
-    )
-    if view == "bars":
-        metrics = _metrics_bars(sections, theme)
-    elif view == "pizzas":
-        metrics = _metrics_pizzas(sections, theme)
-    else:
-        _, limited_league = resolve_division_highlight(
-            player,
-            stripe_limited if stripe_limited is not None else limited_divisions,
-        )
-        metrics = _metrics_values(sections, limited_league=limited_league)
-    status = minutes_status(player.get("minutes"), minutes_required)
-    set_piece_section = player_set_piece_metrics_section(player, eval_group=eval_group)
-    control_children = [
-        html.Div(
-            [
-                html.Div("Evaluate as", className="st-player-switch-label"),
-                _group_switcher(eval_group, player),
-            ],
-            className="st-player-switch-block",
-        ),
-        html.Div(
-            [
-                html.Div("Display", className="st-player-switch-label"),
-                _view_switcher(view),
-            ],
-            className="st-player-switch-block",
-        ),
-        _overall_avg_banner(sections),
-        *(
-            [note]
-            if (note := _limited_tracking_note(player)) is not None
-            else []
-        ),
-    ]
-    after_identity: list = []
-    if set_piece_section is not None:
-        after_identity.append(set_piece_section)
-    return player_detail_body(
-        player,
+        settings,
         id_prefix="st",
-        modal_fields=us.modal_identity_fields_for("player_stats", settings) if settings else None,
-        field_styles={
-            "minutes": {"color": minutes_color(status)},
-            "injury": {"color": "#fbbf24", "fontWeight": "600"},
-        },
-        field_formatters={"minutes": _format_minutes_identity},
-        after_identity=after_identity or None,
-        bottom=player_stats_modal_section(
-            [
-                html.Div(control_children, className="st-player-controls"),
-                html.Div(metrics, className="st-player-metrics"),
-            ]
-        ),
-        settings=settings,
         theme=theme,
-        limited_divisions=(
-            stripe_limited if stripe_limited is not None else limited_divisions
-        ),
+        mode="stats",
+        show_stats_controls=True,
+        stats_view=view,
+        eval_group=eval_group,
+        stats_player=player,
+        limited_divisions=limited_divisions,
+        stripe_limited=stripe_limited,
+        banding_ctx=banding_ctx,
+        value_mode=value_mode,
+        minutes_required=minutes_required,
+        always_minutes_styles=True,
+        identity_fields_page="player_stats",
+        upload_has_stats=True,
     )
 
 
