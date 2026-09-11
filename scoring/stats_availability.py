@@ -4,16 +4,18 @@ Some leagues only supply basic counting stats in Moneyball exports; advanced
 columns (key passes, interceptions, etc.) are written as ``0``. Those values
 must not be banded or averaged as if they were real zeros.
 
-Player-level: limited when basic stats exist and **all** advanced probes are
-zero. Probes are metrics limited leagues do not fill (interceptions, key
-passes, progressive passes, clearances). xA still appears in limited leagues.
-Possession won is not tracked when zero in limited leagues but is kept when
-the export value is > 0.
+Player-level: limited when basic stats exist and **almost all** advanced probe
+families are zero (default ≥90% zero; a single leftover family is allowed so
+one filled column like Key Passes cannot veto). Probes are metrics limited
+leagues do not fill (interceptions, key passes, progressive passes,
+clearances). xA still appears in limited leagues. Possession won is not
+tracked when zero in limited leagues but is kept when the export value is > 0.
 
 League-level (Division stripe): limited when minutes-weighted averages of
-probe /90 rates across the division are near zero. A few leftover non-zeros
-(transfers, continental comps) are treated as sparse noise and do not veto
-the league. Players with no minutes do not affect the average.
+almost all probe /90 rates across the division are near zero. A few leftover
+non-zeros (transfers, continental comps, or one partially filled probe) are
+treated as sparse noise and do not veto the league. Players with no minutes
+do not affect the average.
 
 See ``config/stats_availability.json`` for the canonical metric lists.
 """
@@ -21,6 +23,8 @@ See ``config/stats_availability.json`` for the canonical metric lists.
 from __future__ import annotations
 
 import json
+import math
+import re
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
@@ -39,9 +43,9 @@ LIMITED_TRACKING_NOTE = (
 
 LIMITED_TRACKING_HINT = (
     "Some leagues do not collect all advanced stats in FM exports. When "
-    "league-wide advanced probes are near zero (sparse leftovers allowed), "
-    "those metrics are excluded from percentile averages. Division cells for "
-    "those leagues use a striped highlight."
+    "almost all league-wide advanced probes are near zero (sparse leftovers "
+    "allowed), those metrics are excluded from percentile averages. Division "
+    "cells for those leagues use a striped highlight."
 )
 
 LIMITED_DIVISION_TITLE = (
@@ -56,9 +60,13 @@ _MIN_MINUTES = 90.0
 # spell (e.g. 180 mins in Eredivisie) does not stripe a tracked league.
 _MIN_MINUTES_FOR_LEAGUE_MEMBER = 1.0
 _MIN_TOTAL_MINUTES_FOR_LEAGUE = 300.0
-# Max minutes-weighted avg across probe /90 columns. Fully tracked leagues
-# sit well above this; limited leagues are ~0 with sparse transfer noise.
-_LEAGUE_PROBE_MAX_AVG = 0.25
+# Near-zero ceiling for a single probe /90 minutes-weighted average.
+_LEAGUE_PROBE_NEAR_ZERO_AVG = 0.25
+# Fraction of probe families that must be zero (player) or near-zero (league).
+# On small probe sets, ceil(fraction * n) can equal n; allow one leftover so
+# e.g. 3/4 or 9/10 still qualifies (see ``_meets_almost_all``).
+_MIN_ZERO_PROBE_FRACTION = 0.9
+_RATE_SUFFIX_RE = re.compile(r"(?:\s+per\s+90|/90)\s*$", re.I)
 
 
 @lru_cache(maxsize=1)
@@ -130,11 +138,69 @@ def _probe_has_nonzero(row: dict[str, str], column: str) -> bool:
     return val is not None and val != 0
 
 
-def _any_advanced_probe_nonzero(row: dict[str, str]) -> bool:
+def _min_zero_probe_fraction() -> float:
+    raw = (availability_config().get("detection") or {}).get("min_zero_probe_fraction")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return _MIN_ZERO_PROBE_FRACTION
+    if value <= 0 or value > 1:
+        return _MIN_ZERO_PROBE_FRACTION
+    return value
+
+
+def _meets_almost_all(zero_count: int, total: int, *, min_fraction: float | None = None) -> bool:
+    """True when almost every probe is zero/near-zero (e.g. 9/10 or 3/4).
+
+    Uses ``min_zero_probe_fraction`` (default 0.9). When the probe set is
+    small, ``ceil(fraction * n)`` can equal ``n`` and would disallow any
+    leftover; cap the requirement at ``n - 1`` for ``n >= 2`` so one filled
+    probe cannot veto limited-tracking detection.
+    """
+    if total <= 0:
+        return False
+    fraction = _min_zero_probe_fraction() if min_fraction is None else min_fraction
+    required = math.ceil(total * fraction)
+    if total >= 2:
+        required = min(required, total - 1)
+    return zero_count >= required
+
+
+def _probe_family_key(column: str) -> str:
+    """Group total + /90 columns for the same metric into one family."""
+    return _RATE_SUFFIX_RE.sub("", str(column or "").strip()).strip().lower()
+
+
+def _probe_families() -> list[tuple[str, ...]]:
+    """Ordered unique probe families (each family is one or more CSV columns)."""
+    ordered: list[str] = []
+    buckets: dict[str, list[str]] = {}
     for column in availability_config()["detection"]["probe_csv_columns"]:
-        if _probe_has_nonzero(row, column):
-            return True
-    return False
+        key = _probe_family_key(column)
+        if not key:
+            continue
+        if key not in buckets:
+            buckets[key] = []
+            ordered.append(key)
+        buckets[key].append(column)
+    return [tuple(buckets[key]) for key in ordered]
+
+
+def _probe_family_is_nonzero(row: dict[str, str], columns: tuple[str, ...]) -> bool:
+    return any(_probe_has_nonzero(row, column) for column in columns)
+
+
+def _zero_probe_family_count(row: dict[str, str]) -> tuple[int, int]:
+    families = _probe_families()
+    if not families:
+        return 0, 0
+    zero = sum(1 for cols in families if not _probe_family_is_nonzero(row, cols))
+    return zero, len(families)
+
+
+def _probes_almost_all_zero(row: dict[str, str]) -> bool:
+    zero, total = _zero_probe_family_count(row)
+    return _meets_almost_all(zero, total)
 
 
 def _probe_rate_columns() -> list[str]:
@@ -151,10 +217,10 @@ def detect_limited_tracking(
     *,
     min_minutes: float = _MIN_MINUTES,
 ) -> bool:
-    """True when basic stats exist but every advanced probe column is zero/missing."""
+    """True when basic stats exist but almost all advanced probe families are zero."""
     if not _has_basic_tracking(row, min_minutes=min_minutes):
         return False
-    return not _any_advanced_probe_nonzero(row)
+    return _probes_almost_all_zero(row)
 
 
 def _division_key(row: dict[str, str]) -> str:
@@ -164,11 +230,11 @@ def _division_key(row: dict[str, str]) -> str:
     return raw
 
 
-def _league_probe_max_avg(members: list[dict[str, str]]) -> float:
-    """Minutes-weighted max average across probe /90 columns."""
+def _league_probe_avgs(members: list[dict[str, str]]) -> dict[str, float]:
+    """Minutes-weighted average per probe /90 column."""
     rate_cols = _probe_rate_columns()
     if not members or not rate_cols:
-        return 0.0
+        return {}
     total_minutes = 0.0
     weighted: dict[str, float] = {col: 0.0 for col in rate_cols}
     for row in members:
@@ -179,12 +245,29 @@ def _league_probe_max_avg(members: list[dict[str, str]]) -> float:
         for col in rate_cols:
             weighted[col] += minutes * (_csv_value(row, col) or 0.0)
     if total_minutes <= 0:
+        return {col: 0.0 for col in rate_cols}
+    return {col: val / total_minutes for col, val in weighted.items()}
+
+
+def _league_probe_max_avg(members: list[dict[str, str]]) -> float:
+    """Minutes-weighted max average across probe /90 columns."""
+    avgs = _league_probe_avgs(members)
+    if not avgs:
         return 0.0
-    return max(val / total_minutes for val in weighted.values())
+    return max(avgs.values())
+
+
+def _league_probes_almost_all_near_zero(members: list[dict[str, str]]) -> bool:
+    """True when almost every probe /90 average is ≤ the near-zero ceiling."""
+    avgs = _league_probe_avgs(members)
+    if not avgs:
+        return False
+    near_zero = sum(1 for val in avgs.values() if val <= _LEAGUE_PROBE_NEAR_ZERO_AVG)
+    return _meets_almost_all(near_zero, len(avgs))
 
 
 def _division_is_limited_tracking(members: list[dict[str, str]]) -> bool:
-    """True when league-wide probe rates are near zero (sparse noise allowed)."""
+    """True when almost all league-wide probe rates are near zero."""
     if len(members) < _MIN_ACTIVE_FOR_LEAGUE:
         return False
     total_minutes = sum((_csv_value(r, "Minutes") or 0.0) for r in members)
@@ -194,7 +277,7 @@ def _division_is_limited_tracking(members: list[dict[str, str]]) -> bool:
     # cannot classify a division.
     if not any(_has_basic_tracking(r, min_minutes=_MIN_MINUTES_FOR_LEAGUE_MEMBER) for r in members):
         return False
-    return _league_probe_max_avg(members) <= _LEAGUE_PROBE_MAX_AVG
+    return _league_probes_almost_all_near_zero(members)
 
 
 def analyze_division_availability(
@@ -202,9 +285,10 @@ def analyze_division_availability(
 ) -> dict[str, frozenset[str]]:
     """Map division name → unavailable metric ids for this export.
 
-    A division is limited when minutes-weighted averages of advanced probe
-    /90 rates are near zero across everyone with minutes. Sparse non-zeros
-    (e.g. one transfer with leftover clearances) do not veto the league.
+    A division is limited when almost all minutes-weighted advanced probe
+    /90 averages are near zero across everyone with minutes. Sparse non-zeros
+    (e.g. one transfer with leftover clearances, or one partially filled
+    probe) do not veto the league.
     """
     by_div: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
@@ -245,8 +329,8 @@ def apply_limited_tracking(
 ) -> None:
     """Set availability flags and strip unavailable metrics from ``player["stats"]``.
 
-    Only full limited-tracking players (all advanced probes zero) lose the
-    advanced metric pool. Players in a limited division inherit that pool
+    Only full limited-tracking players (almost all advanced probes zero) lose
+    the advanced metric pool. Players in a limited division inherit that pool
     even if a few leftover probe values remain (transfer/continental noise).
     """
     group = player.get("pos_group") or "mid"

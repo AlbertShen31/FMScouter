@@ -9419,43 +9419,40 @@ body[data-theme="light"] .pf-depth-chart-remove-btn:hover {
     opacity: 0.85;
 }
 
+/* Outer cell: column placement + 2-line clip. Inner pill is inline so
+   multi-line names don't stretch the highlight to the full track width. */
+.pf-depth-chart-div-cell {
+    justify-self: center;
+    max-width: 100%;
+    min-width: 0;
+    max-height: calc(2 * 1.2em + 0.28rem);
+    overflow: hidden;
+    text-align: center;
+    line-height: 1.2;
+    cursor: default;
+}
+
 .pf-depth-chart-div {
     font-size: 0.86rem;
     line-height: 1.2;
     white-space: normal;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    text-overflow: ellipsis;
     overflow-wrap: anywhere;
     word-break: break-word;
     hyphens: auto;
     font-weight: 600;
-    width: fit-content;
-    max-width: 100%;
-    min-width: 0;
-    text-align: center;
-    justify-self: center;
     color: var(--app-text);
-    cursor: default;
 }
 
 .pf-depth-chart-div.pf-div-top,
 .pf-depth-chart-div.pf-div-pro,
 .pf-depth-chart-div.pf-div-amateur {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    display: inline;
     box-sizing: border-box;
-    padding: 0.12rem 0.4rem;
+    padding: 0.1rem 0.35rem;
     border-radius: 6px;
     font-weight: 700;
-    width: fit-content;
-    max-width: 100%;
-    vertical-align: middle;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
 .pf-depth-chart-div.pf-div-top {

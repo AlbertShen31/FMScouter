@@ -2392,7 +2392,7 @@ def _depth_division_cell(
     limited: bool = False,
     limited_title: str = "",
 ) -> html.Span:
-    """Narrow 2-line Division cell; full name available on hover when truncated."""
+    """Narrow 2-line Division cell; pill hugs each text line; full name on hover."""
     text = division if division not in (None, "", "-", "—") else "—"
     classes = "pf-depth-chart-div"
     if tier:
@@ -2404,7 +2404,11 @@ def _depth_division_cell(
         tip = (
             f"{text} — {limited_title}" if limited and limited_title else text
         )
-    return html.Span(text, className=classes, **_depth_tip_attrs(tip))
+    return html.Span(
+        html.Span(text, className=classes),
+        className="pf-depth-chart-div-cell",
+        **_depth_tip_attrs(tip),
+    )
 
 
 def _depth_plain_cell(value, class_name: str) -> html.Span:

@@ -1,8 +1,9 @@
 {
-  "id": "fm-stats-availability-v2",
+  "id": "fm-stats-availability-v3",
   "description": "FM Moneyball exports omit advanced metrics for some leagues. Those columns export as 0 rather than blank. FMScouter detects this pattern and excludes the affected metrics from percentile averages.",
   "detection": {
-    "summary": "A division is limited-tracking when minutes-weighted averages of advanced probe /90 rates across all players with minutes are near zero (max avg ≤ 0.25) and the division has ≥300 total minutes. Sparse leftovers (transfers, continental) do not veto the league; zero-minute rows do not affect aggregates. Probes are metrics absent in limited leagues (interceptions, key passes, progressive passes, clearances) — not xA. Recorded as limited_tracking_divisions on the upload index for striped Division highlights.",
+    "summary": "A division is limited-tracking when almost all (≥ min_zero_probe_fraction, default 0.9; one leftover probe family allowed) minutes-weighted advanced probe /90 averages across players with minutes are near zero (≤ 0.25) and the division has ≥300 total minutes. Sparse leftovers (transfers, continental, or one partially filled probe like Key Passes) do not veto the league; zero-minute rows do not affect aggregates. Player-level uses the same almost-all rule on probe families (total + /90 count as one). Probes are metrics absent in limited leagues (interceptions, key passes, progressive passes, clearances) — not xA. Recorded as limited_tracking_divisions on the upload index for striped Division highlights.",
+    "min_zero_probe_fraction": 0.9,
     "basic_csv_columns": [
       "Passes Attempted",
       "Passes Attempted per 90",
