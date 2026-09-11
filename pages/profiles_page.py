@@ -7029,9 +7029,10 @@ def clear_depth_undo(n_clicks, settings):
     Input({"type": "pf-depth-name", "id": ALL, "src": ALL, "slot": ALL}, "n_clicks"),
     State("ui-settings", "data"),
     State("theme", "data"),
+    State("pf-focus-role", "data"),
     prevent_initial_call=True,
 )
-def open_profile_modal_from_depth(n_clicks, settings, theme):
+def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
     if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update, no_update
     profile_id = str(ctx.triggered_id.get("id") or "").strip()
@@ -7054,8 +7055,24 @@ def open_profile_modal_from_depth(n_clicks, settings, theme):
             profile_id,
         )
     settings = us.normalize(settings)
+    # Prefer the clicked formation slot's role when the button carries a slot index.
+    slot_group = None
+    try:
+        slot_raw = ctx.triggered_id.get("slot")
+        slot_i = int(slot_raw) if slot_raw not in (None, "", "_") else None
+    except (TypeError, ValueError):
+        slot_i = None
+    if slot_i is not None:
+        focus = _focus_slot(focus_role)
+        if focus and int(focus.get("slot", -1)) == slot_i:
+            slot_group = _stats_group_for_focus(focus_role)
     body = _build_profile_modal_body(
-        profile, player, settings=settings, theme=theme, mode="roles"
+        profile,
+        player,
+        settings=settings,
+        theme=theme,
+        mode="roles",
+        pos_group=slot_group or _profile_stats_group(profile),
     )
     return True, title, body, profile_id
 
@@ -7097,19 +7114,19 @@ def _build_profile_modal_body(
     settings: dict,
     theme: str | None,
     mode: str = "roles",
+    pos_group: str | None = None,
 ) -> html.Div:
-    """Shared body builder for open and switch callbacks."""
+    """Shared body builder for open and switch callbacks.
+
+    ``pos_group`` forces Player-stats percentiles to the slot/role phase
+    (gk/def/mid/fwd) instead of Best Pos.
+    """
+    eval_group = pos_group or _profile_stats_group(profile)
     stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
     if isinstance(stats_player, dict):
-        from scoring.stats_scorer import resolve_player_pos_group
-
-        stats_player = dict(stats_player)
-        # Prefer identity from the role export when classifying phase.
-        if not stats_player.get("best_pos") and player.get("best_pos"):
-            stats_player["best_pos"] = player.get("best_pos")
-        if not stats_player.get("position") and player.get("position"):
-            stats_player["position"] = player.get("position")
-        stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+        stats_player = _enrich_stats_player(
+            stats_player, player, pos_group=eval_group
+        )
     display_player = dict(player)
     if isinstance(stats_player, dict):
         for key in (
@@ -7135,6 +7152,8 @@ def _build_profile_modal_body(
         ):
             if display_player.get(key) in (None, "", [], {}):
                 display_player[key] = stats_player.get(key)
+        if eval_group:
+            display_player["pos_group"] = eval_group
 
     file_id = str(profile.get("file_id") or "").strip()
     import services.export_library as lib
@@ -7181,6 +7200,7 @@ def _build_profile_modal_body(
                 stats_player,
                 theme=theme,
                 view="bars",
+                eval_group=eval_group,
                 settings=settings,
                 cohort_players=stats_cohort,
                 banding_ctx=banding_ctx,
@@ -7288,7 +7308,14 @@ def open_profile_modal(
         )
     settings = us.normalize(settings)
     body = _build_profile_modal_body(
-        profile, player, settings=settings, theme=theme, mode="roles"
+        profile,
+        player,
+        settings=settings,
+        theme=theme,
+        mode="roles",
+        pos_group=_profile_stats_group(
+            profile, role_column=str(row.get("_role_column") or role or "")
+        ),
     )
     return (True, title, body, profile_id, None)
 
@@ -7313,11 +7340,23 @@ def switch_profile_modal_bottom(mode, profile_id, settings, theme):
 
     settings = us.normalize(settings)
     return _build_profile_modal_body(
-        profile, player, settings=settings, theme=theme, mode=mode or "roles"
+        profile,
+        player,
+        settings=settings,
+        theme=theme,
+        mode=mode or "roles",
+        pos_group=_profile_stats_group(profile),
     )
 
 
-def _enrich_stats_player(stats_player: dict | None, player: dict) -> dict | None:
+def _enrich_stats_player(
+    stats_player: dict | None,
+    player: dict,
+    *,
+    pos_group: str | None = None,
+) -> dict | None:
+    from scoring.stats_scorer import coerce_stats_pos_group
+
     if not isinstance(stats_player, dict):
         if not isinstance(player, dict) or not player:
             return None
@@ -7331,8 +7370,30 @@ def _enrich_stats_player(stats_player: dict | None, player: dict) -> dict | None
         stats_player["best_pos"] = player.get("best_pos")
     if not stats_player.get("position") and player.get("position"):
         stats_player["position"] = player.get("position")
-    stats_player["pos_group"] = resolve_player_pos_group(stats_player)
+    forced = coerce_stats_pos_group(pos_group)
+    stats_player["pos_group"] = forced or resolve_player_pos_group(stats_player)
     return stats_player
+
+
+def _profile_stats_group(
+    profile: dict | None,
+    *,
+    focus_role=None,
+    role_column: str | None = None,
+) -> str | None:
+    """Stats phase for Profiles modals from the profile/slot role column.
+
+    Falls back to the focused depth slot only when the profile has no role.
+    """
+    col = str(
+        role_column
+        or (profile or {}).get("role_column")
+        or ((profile or {}).get("row") or {}).get("Role")
+        or ""
+    ).strip()
+    if col:
+        return _stats_group_for_role_column(col)
+    return _stats_group_for_focus(focus_role)
 
 
 def _profile_table_row_key(row) -> str:
@@ -7530,6 +7591,7 @@ def sync_depth_compare_order(checked_vals, check_ids, order):
     State("pf-depth-compare-order", "data"),
     State("pf-compare-view", "data"),
     State("pf-compare-group", "data"),
+    State("pf-focus-role", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
@@ -7541,6 +7603,7 @@ def open_profile_compare(
     depth_compare_order,
     view,
     eval_group,
+    focus_role,
     theme,
     settings,
 ):
@@ -7566,7 +7629,16 @@ def open_profile_compare(
     label_a = str(player_a.get("name") or profiles.profile_identity(profile_a)[0] or "Player A")
     label_b = str(player_b.get("name") or profiles.profile_identity(profile_b)[0] or "Player B")
     settings = us.normalize(settings)
-    eval_group_out = default_compare_eval_group(player_a, player_b)
+    # Default Evaluate-as to the focused depth slot / profile role, not Best Pos.
+    slot_group = _stats_group_for_focus(focus_role) or _profile_stats_group(
+        profile_a
+    )
+    if slot_group:
+        eval_group_out = normalize_compare_eval_group(
+            slot_group, player_a, player_b
+        )
+    else:
+        eval_group_out = default_compare_eval_group(player_a, player_b)
     body = _build_profile_stats_compare_body(
         profile_a,
         profile_b,
