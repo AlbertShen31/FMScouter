@@ -660,8 +660,8 @@ def player_archetypes_section(
                 [
                     DashIconify(
                         icon=str(award.get("icon") or "game-icons:soccer-ball"),
-                        width=18,
-                        height=18,
+                        width=24,
+                        height=24,
                         className="rs-arch-icon",
                     ),
                     html.Span(

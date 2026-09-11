@@ -260,12 +260,12 @@ def archetype_filter_buttons(
                 html.Span(
                     [
                         html.Button(
-                            DashIconify(
-                                icon=str(arch.get("icon") or "game-icons:soccer-ball"),
-                                width=18,
-                                height=18,
-                                className="rs-arch-icon",
-                            ),
+                                    DashIconify(
+                                        icon=str(arch.get("icon") or "game-icons:soccer-ball"),
+                                        width=24,
+                                        height=24,
+                                        className="rs-arch-icon",
+                                    ),
                             id={"type": f"{prefix}-archetype", "id": arch_id},
                             n_clicks=0,
                             type="button",

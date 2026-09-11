@@ -5066,15 +5066,15 @@ body[data-theme="light"] .st-pizza-legend-pct {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
 }
 
 .rs-arch-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.28rem 0.45rem;
-    border-radius: 8px;
+    gap: 0.35rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: 9px;
     border: 1px solid var(--app-line);
     background: var(--app-card);
     color: var(--app-text);
@@ -5085,10 +5085,12 @@ body[data-theme="light"] .st-pizza-legend-pct {
 .rs-arch-chip .rs-arch-icon {
     color: var(--app-text);
     flex-shrink: 0;
+    width: 24px !important;
+    height: 24px !important;
 }
 
 .rs-arch-chip .rs-arch-group {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.03em;
     color: var(--app-muted);
@@ -5132,25 +5134,32 @@ body[data-theme="light"] .st-pizza-legend-pct {
 
 .rs-arch-filter-btns {
     display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 0.55rem 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
 }
 
 .rs-arch-filter-cat {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.3rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 0 0 auto;
     min-width: 0;
-    padding: 0 0.85rem 0 0;
-    margin-right: 0.85rem;
+    padding: 0 0.9rem;
     border-right: 1px solid var(--app-line);
+}
+
+.rs-arch-filter-cat:first-child {
+    padding-left: 0;
 }
 
 .rs-arch-filter-cat:last-child {
     padding-right: 0;
-    margin-right: 0;
     border-right: none;
 }
 
@@ -5161,13 +5170,14 @@ body[data-theme="light"] .st-pizza-legend-pct {
     text-transform: uppercase;
     color: var(--app-muted);
     line-height: 1.1;
+    white-space: nowrap;
 }
 
 .rs-arch-filter-cat-btns {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
 }
 
 .rs-arch-filter-tip-host {
@@ -5179,10 +5189,10 @@ body[data-theme="light"] .st-pizza-legend-pct {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
-    height: 2rem;
+    width: 2.55rem;
+    height: 2.55rem;
     padding: 0;
-    border-radius: 8px;
+    border-radius: 9px;
     border: 1px solid var(--app-line);
     background: var(--app-card);
     color: var(--app-muted);
@@ -5199,6 +5209,8 @@ body[data-theme="light"] .st-pizza-legend-pct {
     color: inherit;
     flex-shrink: 0;
     pointer-events: none;
+    width: 24px !important;
+    height: 24px !important;
 }
 
 .rs-arch-filter-btn:hover {
