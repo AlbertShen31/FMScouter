@@ -644,7 +644,7 @@ def _detail_levels_section(
             html.Div(columns, className="st-detail-levels-body st-detail-levels-columns"),
         ],
         className="st-detail-levels rs-metrics-details",
-        open=True,
+        open=False,
     )
 
 
