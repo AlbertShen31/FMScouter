@@ -7165,7 +7165,13 @@ def _build_profile_modal_body(
             "loan_status",
             "pos_group",
             "limited_division_tracking",
+            "stats",
+            "stats_unavailable",
         ):
+            if key in ("stats", "stats_unavailable"):
+                if stats_player.get(key) not in (None, "", [], {}):
+                    display_player[key] = stats_player.get(key)
+                continue
             if display_player.get(key) in (None, "", [], {}):
                 display_player[key] = stats_player.get(key)
         if eval_group:
@@ -7175,6 +7181,14 @@ def _build_profile_modal_body(
     import services.export_library as lib
 
     limited_divisions = lib.list_limited_tracking_divisions(file_id=file_id or None)
+
+    banding_ctx = None
+    if stats_cohort:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            stats_cohort,
+            limited_divisions=limited_divisions or None,
+        )
 
     field_status = minutes_status(
         display_player.get("minutes"), us.default_minutes_required(settings)
@@ -7205,13 +7219,6 @@ def _build_profile_modal_body(
         ]
     else:
         if stats_player:
-            banding_ctx = None
-            if stats_cohort:
-                banding_ctx = us.build_stats_banding_context(
-                    settings,
-                    stats_cohort,
-                    limited_divisions=limited_divisions or None,
-                )
             stats_content = stats_charts_bottom_pane(
                 stats_player,
                 theme=theme,
@@ -7247,6 +7254,11 @@ def _build_profile_modal_body(
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
+        cohort_players=stats_cohort,
+        banding_ctx=banding_ctx,
+        show_archetypes=bool(
+            isinstance(stats_player, dict) and stats_player.get("stats")
+        ),
     )
 
 
