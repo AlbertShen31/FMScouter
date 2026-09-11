@@ -188,6 +188,7 @@ PACK_DATA_KEYS = (
     "tier_badge_colors",
     "personality_tier_colors",
     "archetype_tier_floors",
+    "archetype_tier_ceilings",
 )
 
 DEFAULTS: dict[str, Any] = {
@@ -244,8 +245,10 @@ DEFAULTS: dict[str, Any] = {
         "formative": {"bg": "#ffedd5", "fg": "#c2410c"},
         "unsuitable": {"bg": "#fee2e2", "fg": "#b91c1c"},
     },
-    # Archetype badges: all required metric percentiles must clear the floor.
-    "archetype_tier_floors": {"bronze": 60, "silver": 70, "gold": 80},
+    # Archetype badges: all required metric percentiles must clear the floor (high)
+    # or sit under the ceiling (low / opposite tiers).
+    "archetype_tier_floors": {"bronze": 70, "silver": 80, "gold": 90},
+    "archetype_tier_ceilings": {"rust": 30, "slate": 20, "ash": 10},
 }
 
 
@@ -799,7 +802,7 @@ def normalize_default_minutes_required(value) -> int:
 
 
 def normalize_archetype_tier_floors(raw=None) -> dict[str, float]:
-    """Clamp Bronze ≤ Silver ≤ Gold floors to 0–100 (defaults 60 / 70 / 80)."""
+    """Clamp Bronze ≤ Silver ≤ Gold floors to 0–100 (defaults 70 / 80 / 90)."""
     defaults = dict(DEFAULTS["archetype_tier_floors"])
     src = raw if isinstance(raw, dict) else {}
     bronze = max(0.0, min(100.0, _as_float(src.get("bronze"), defaults["bronze"])))
@@ -813,6 +816,24 @@ def normalize_archetype_tier_floors(raw=None) -> dict[str, float]:
         "bronze": round(bronze, 1),
         "silver": round(silver, 1),
         "gold": round(gold, 1),
+    }
+
+
+def normalize_archetype_tier_ceilings(raw=None) -> dict[str, float]:
+    """Clamp Ash ≤ Slate ≤ Rust ceilings to 0–100 (defaults 10 / 20 / 30)."""
+    defaults = dict(DEFAULTS["archetype_tier_ceilings"])
+    src = raw if isinstance(raw, dict) else {}
+    ash = max(0.0, min(100.0, _as_float(src.get("ash"), defaults["ash"])))
+    slate = max(0.0, min(100.0, _as_float(src.get("slate"), defaults["slate"])))
+    rust = max(0.0, min(100.0, _as_float(src.get("rust"), defaults["rust"])))
+    if slate < ash:
+        slate = ash
+    if rust < slate:
+        rust = slate
+    return {
+        "ash": round(ash, 1),
+        "slate": round(slate, 1),
+        "rust": round(rust, 1),
     }
 
 def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
@@ -945,6 +966,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         ),
         "archetype_tier_floors": normalize_archetype_tier_floors(
             raw.get("archetype_tier_floors")
+        ),
+        "archetype_tier_ceilings": normalize_archetype_tier_ceilings(
+            raw.get("archetype_tier_ceilings")
         ),
         # Raw pack cuts (full_detail reference) + per-tier trees for banding.
         "stats_thresholds": raw_threshold_tree,
@@ -1202,6 +1226,11 @@ def _default_settings() -> dict[str, Any]:
             **base["archetype_tier_floors"],
             **(overrides.get("archetype_tier_floors") or {}),
         }
+    if overrides.get("archetype_tier_ceilings"):
+        merged["archetype_tier_ceilings"] = {
+            **base["archetype_tier_ceilings"],
+            **(overrides.get("archetype_tier_ceilings") or {}),
+        }
     if "set_piece_profiles" in overrides:
         merged["set_piece_profiles"] = overrides.get("set_piece_profiles")
     if overrides.get("page_size_options") is not None:
@@ -1423,6 +1452,11 @@ def default_minutes_required(settings=None) -> int:
 def archetype_tier_floors(settings=None) -> dict[str, float]:
     """Bronze / Silver / Gold percentile floors for player archetypes."""
     return copy.deepcopy(normalize(settings)["archetype_tier_floors"])
+
+
+def archetype_tier_ceilings(settings=None) -> dict[str, float]:
+    """Rust / Slate / Ash percentile ceilings (opposite / weak archetype tiers)."""
+    return copy.deepcopy(normalize(settings)["archetype_tier_ceilings"])
 
 
 def exclude_limited_leagues_adaptive_bounds(settings=None) -> bool:

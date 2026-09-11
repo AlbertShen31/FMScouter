@@ -1,14 +1,22 @@
 {
   "source": "FMScouter player archetypes (Game Icons via Iconify; CC BY 3.0)",
   "tiers": [
-    {"id": "bronze", "label": "Bronze"},
-    {"id": "silver", "label": "Silver"},
-    {"id": "gold", "label": "Gold"}
+    {"id": "bronze", "label": "Bronze", "polarity": "high"},
+    {"id": "silver", "label": "Silver", "polarity": "high"},
+    {"id": "gold", "label": "Gold", "polarity": "high"},
+    {"id": "rust", "label": "Rust", "polarity": "low"},
+    {"id": "slate", "label": "Slate", "polarity": "low"},
+    {"id": "ash", "label": "Ash", "polarity": "low"}
   ],
   "default_floors": {
-    "bronze": 60,
-    "silver": 70,
-    "gold": 80
+    "bronze": 70,
+    "silver": 80,
+    "gold": 90
+  },
+  "default_ceilings": {
+    "rust": 30,
+    "slate": 20,
+    "ash": 10
   },
   "archetypes": [
     {

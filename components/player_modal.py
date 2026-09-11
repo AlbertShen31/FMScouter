@@ -638,8 +638,12 @@ def player_archetypes_section(
 
     chips = []
     for i, award in enumerate(awards):
-        chip_id = f"{id_prefix}-arch-{award.get('id')}-{award.get('group')}-{i}"
+        chip_id = (
+            f"{id_prefix}-arch-{award.get('id')}-{award.get('group')}-"
+            f"{award.get('tier')}-{i}"
+        )
         tier = str(award.get("tier") or "bronze")
+        polarity = str(award.get("polarity") or "high")
         metric_lines = []
         for m in award.get("metrics") or []:
             pct = m.get("percentile")
@@ -650,6 +654,7 @@ def player_archetypes_section(
                     className="rs-arch-tip-metric",
                 )
             )
+        tip_kind = "High" if polarity == "high" else "Low"
         chips.append(
             html.Span(
                 [
@@ -667,7 +672,7 @@ def player_archetypes_section(
                         [
                             html.Div(
                                 f"{award.get('label')} · {award.get('tier_label')} · "
-                                f"{award.get('group_label')}",
+                                f"{award.get('group_label')} ({tip_kind})",
                                 className="rs-arch-tip-title",
                             ),
                             *metric_lines,
@@ -678,7 +683,7 @@ def player_archetypes_section(
                     ),
                 ],
                 id=chip_id,
-                className=f"rs-arch-chip is-{tier}",
+                className=f"rs-arch-chip is-{tier} is-{polarity}",
             )
         )
 

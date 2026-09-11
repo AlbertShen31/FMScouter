@@ -36,9 +36,19 @@ from scoring.stats_detail_transform import (
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "player_archetypes.json"
 
-ArchetypeTierId = Literal["bronze", "silver", "gold"]
+ArchetypeTierId = Literal["bronze", "silver", "gold", "rust", "slate", "ash"]
 
-TIER_RANK: dict[str, int] = {"gold": 3, "silver": 2, "bronze": 1}
+# High awards first (gold…bronze), then low awards (ash…rust = more severe first).
+TIER_RANK: dict[str, int] = {
+    "gold": 6,
+    "silver": 5,
+    "bronze": 4,
+    "ash": 3,
+    "slate": 2,
+    "rust": 1,
+}
+HIGH_TIERS = ("gold", "silver", "bronze")
+LOW_TIERS = ("ash", "slate", "rust")
 GROUP_ORDER = ("gk", "def", "mid", "fwd")
 GROUP_ABBR = {"gk": "GK", "def": "DEF", "mid": "MID", "fwd": "FWD"}
 
@@ -55,9 +65,18 @@ def archetype_defs() -> list[dict[str, Any]]:
 def default_tier_floors() -> dict[str, float]:
     raw = _data().get("default_floors") or {}
     return {
-        "bronze": float(raw.get("bronze", 60)),
-        "silver": float(raw.get("silver", 70)),
-        "gold": float(raw.get("gold", 80)),
+        "bronze": float(raw.get("bronze", 70)),
+        "silver": float(raw.get("silver", 80)),
+        "gold": float(raw.get("gold", 90)),
+    }
+
+
+def default_tier_ceilings() -> dict[str, float]:
+    raw = _data().get("default_ceilings") or {}
+    return {
+        "rust": float(raw.get("rust", 30)),
+        "slate": float(raw.get("slate", 20)),
+        "ash": float(raw.get("ash", 10)),
     }
 
 
@@ -67,6 +86,16 @@ def tier_label(tier_id: str | None) -> str:
         if str(tier.get("id") or "").strip().lower() == key:
             return str(tier.get("label") or key.title())
     return key.title() if key else ""
+
+
+def tier_polarity(tier_id: str | None) -> str:
+    key = str(tier_id or "").strip().lower()
+    for tier in _data().get("tiers") or []:
+        if str(tier.get("id") or "").strip().lower() == key:
+            return str(tier.get("polarity") or "high")
+    if key in LOW_TIERS:
+        return "low"
+    return "high"
 
 
 def group_abbr(group: str | None) -> str:
@@ -140,16 +169,32 @@ def resolve_archetype_metrics(
     return primary
 
 
-def _tier_for_percentiles(
+def _high_tier_for_percentiles(
     percentiles: list[float],
     floors: dict[str, float],
 ) -> ArchetypeTierId | None:
+    """All metrics ≥ floor → Bronze / Silver / Gold (strict)."""
     if not percentiles:
         return None
     lowest = min(percentiles)
-    for tier in ("gold", "silver", "bronze"):
+    for tier in HIGH_TIERS:
         floor = float(floors.get(tier, 0))
         if lowest >= floor:
+            return tier  # type: ignore[return-value]
+    return None
+
+
+def _low_tier_for_percentiles(
+    percentiles: list[float],
+    ceilings: dict[str, float],
+) -> ArchetypeTierId | None:
+    """All metrics ≤ ceiling → Rust / Slate / Ash (strict; Ash is worst)."""
+    if not percentiles:
+        return None
+    highest = max(percentiles)
+    for tier in LOW_TIERS:
+        ceiling = float(ceilings.get(tier, 100))
+        if highest <= ceiling:
             return tier  # type: ignore[return-value]
     return None
 
@@ -164,9 +209,10 @@ def evaluate_archetypes(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     value_mode: str = "raw",
     tier_floors: dict[str, float] | None = None,
+    tier_ceilings: dict[str, float] | None = None,
     min_minutes: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Return earned archetypes tagged by group (highest qualifying tier each)."""
+    """Return earned archetypes tagged by group (high and/or low tiers)."""
     if not player:
         return []
 
@@ -175,6 +221,11 @@ def evaluate_archetypes(
     settings = us.normalize(settings) if settings is not None else us.normalize({})
     floors = us.normalize_archetype_tier_floors(
         tier_floors if tier_floors is not None else settings.get("archetype_tier_floors")
+    )
+    ceilings = us.normalize_archetype_tier_ceilings(
+        tier_ceilings
+        if tier_ceilings is not None
+        else settings.get("archetype_tier_ceilings")
     )
     required = (
         float(min_minutes)
@@ -253,24 +304,30 @@ def evaluate_archetypes(
 
             if blocked:
                 continue
-            tier = _tier_for_percentiles(percentiles, floors)
-            if not tier:
-                continue
-            awards.append(
-                {
-                    "id": str(arch.get("id") or ""),
-                    "label": str(arch.get("label") or arch.get("id") or ""),
-                    "icon": str(arch.get("icon") or "game-icons:soccer-ball"),
-                    "tier": tier,
-                    "tier_label": tier_label(tier),
-                    "group": group,
-                    "group_label": group_abbr(group),
-                    "metrics": metric_pcts,
-                }
-            )
+
+            for tier in (
+                _high_tier_for_percentiles(percentiles, floors),
+                _low_tier_for_percentiles(percentiles, ceilings),
+            ):
+                if not tier:
+                    continue
+                awards.append(
+                    {
+                        "id": str(arch.get("id") or ""),
+                        "label": str(arch.get("label") or arch.get("id") or ""),
+                        "icon": str(arch.get("icon") or "game-icons:soccer-ball"),
+                        "tier": tier,
+                        "tier_label": tier_label(tier),
+                        "polarity": tier_polarity(tier),
+                        "group": group,
+                        "group_label": group_abbr(group),
+                        "metrics": metric_pcts,
+                    }
+                )
 
     awards.sort(
         key=lambda a: (
+            0 if a.get("polarity") == "high" else 1,
             -TIER_RANK.get(str(a.get("tier")), 0),
             str(a.get("label") or ""),
             GROUP_ORDER.index(a["group"]) if a.get("group") in GROUP_ORDER else 99,
