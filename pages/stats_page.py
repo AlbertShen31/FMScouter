@@ -30,6 +30,7 @@ from components.player_filters import (
     player_filters,
     player_filters_host,
     archetype_filter_control,
+    register_archetype_filter_callbacks,
 )
 from components.player_modal import player_modal
 from components.stats_compare import (
@@ -168,6 +169,7 @@ register_library_select_callbacks(
     library_only=True,
 )
 register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
+register_archetype_filter_callbacks("st")
 register_marks_callbacks(
     "st",
     marked_store="st-marked",
@@ -1690,6 +1692,7 @@ def layout(**_kwargs):
                     {"type": "pos", "key": "_"},
                     {"type": "cat", "key": "_"},
                     {"type": "foot", "foot": "_"},
+                    {"type": "archetype", "id": "_"},
                     {"type": "player-view", "view": "_"},
                     {"type": "player-group", "group": "_"},
                     {"type": "compare-view", "view": "_"},
@@ -2067,7 +2070,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("st-page-size", "value"),
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
-    Input("st-archetypes", "value"),
+    Input("st-archetypes", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("st-parsed-historical", "data"),
@@ -2892,7 +2895,7 @@ def update_stats_compare_controls(marked, parsed):
     Input("st-value-mode", "value"),
     Input("st-page-size", "value"),
     Input("st-table", "sort_by"),
-    Input("st-archetypes", "value"),
+    Input("st-archetypes", "data"),
     State("st-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -2970,7 +2973,7 @@ clientside_callback(
     Output("st-page-size", "value", allow_duplicate=True),
     Output("st-table", "sort_by", allow_duplicate=True),
     Output("st-sort-memory", "data", allow_duplicate=True),
-    Output("st-archetypes", "value"),
+    Output("st-archetypes", "data", allow_duplicate=True),
     Output("st-hydrated", "data"),
     Input("st-persist-boot", "data"),
     State("st-hydrated", "data"),

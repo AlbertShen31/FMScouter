@@ -4,9 +4,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from dash import html
+from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
 import dash_bootstrap_components as dbc
-import dash_mantine_components as dmc
+from dash_iconify import DashIconify
 
 from scoring.role_scorer import foot_filter_help, foot_filter_hints
 
@@ -211,42 +211,107 @@ def player_filters_host(*, prefix: str, stacked: bool = False) -> html.Div:
     return html.Div(id=f"{prefix}-pos-bar")
 
 
+def archetype_filter_buttons(
+    *,
+    prefix: str,
+    selected: Sequence[str] | None = None,
+) -> list:
+    """Toggle buttons for high-tier archetype filter (icon-only)."""
+    from scoring.player_archetypes import archetype_defs, normalize_archetype_filter
+
+    active = set(normalize_archetype_filter(selected))
+    buttons = []
+    for arch in archetype_defs():
+        arch_id = str(arch.get("id") or "").strip()
+        if not arch_id:
+            continue
+        label = str(arch.get("label") or arch_id)
+        is_on = arch_id in active
+        buttons.append(
+            html.Button(
+                DashIconify(
+                    icon=str(arch.get("icon") or "game-icons:soccer-ball"),
+                    width=18,
+                    height=18,
+                    className="rs-arch-icon",
+                ),
+                id={"type": f"{prefix}-archetype", "id": arch_id},
+                n_clicks=0,
+                title=label,
+                type="button",
+                className="rs-arch-filter-btn" + (" active" if is_on else ""),
+                **{"aria-label": label, "aria-pressed": "true" if is_on else "false"},
+            )
+        )
+    return buttons
+
+
 def archetype_filter_control(
     *,
     prefix: str,
     value: Sequence[str] | None = None,
 ) -> html.Div:
-    """MultiSelect: keep players who earn any selected high-tier archetype."""
-    from scoring.player_archetypes import (
-        archetype_filter_options,
-        normalize_archetype_filter,
-    )
+    """Icon toggles: keep players who earn any selected high-tier archetype."""
+    from scoring.player_archetypes import normalize_archetype_filter
 
+    selected = normalize_archetype_filter(value)
     return html.Div(
         [
             html.Div(
                 [
                     html.Label("Archetypes", className="rs-field-label"),
                     *help_icon(
-                        "Keep players who earn any selected archetype at Bronze, "
-                        "Silver, or Gold (low / opposite tiers are ignored). "
-                        "Requires Moneyball stats and enough minutes.",
+                        "Click icons to keep players who earn any selected "
+                        "archetype at Bronze, Silver, or Gold (low / opposite "
+                        "tiers are ignored). Requires Moneyball stats and enough "
+                        "minutes. Empty selection = any archetype.",
                         f"{prefix}-help-archetypes",
                     ),
                 ],
                 className="rs-field-label-row",
             ),
-            dmc.MultiSelect(
-                id=f"{prefix}-archetypes",
-                data=archetype_filter_options(),
-                value=normalize_archetype_filter(value),
-                placeholder="Any archetype",
-                searchable=True,
-                clearable=True,
-                maxDropdownHeight=280,
-                w="100%",
-                className="rs-archetype-filter",
+            html.Div(
+                archetype_filter_buttons(prefix=prefix, selected=selected),
+                id=f"{prefix}-archetype-btns",
+                className="rs-arch-filter-btns",
+                role="group",
+                **{"aria-label": "Archetype filters"},
             ),
+            dcc.Store(id=f"{prefix}-archetypes", data=selected),
         ],
         className="rs-filter-archetypes",
     )
+
+
+def register_archetype_filter_callbacks(prefix: str) -> None:
+    """Toggle archetype filter store and refresh icon button active states."""
+    from components.scouting_shell import clicked
+    from scoring.player_archetypes import normalize_archetype_filter
+
+    store_id = f"{prefix}-archetypes"
+    btn_host = f"{prefix}-archetype-btns"
+    btn_type = f"{prefix}-archetype"
+
+    @callback(
+        Output(store_id, "data"),
+        Input({"type": btn_type, "id": ALL}, "n_clicks"),
+        State(store_id, "data"),
+        prevent_initial_call=True,
+    )
+    def _toggle_archetype_filter(n_clicks, current):
+        if not ctx.triggered_id or not clicked(n_clicks):
+            return no_update
+        arch_id = str(ctx.triggered_id.get("id") or "").strip()
+        if not arch_id or arch_id == "_":
+            return no_update
+        selected = normalize_archetype_filter(current)
+        if arch_id in selected:
+            return [item for item in selected if item != arch_id]
+        return [*selected, arch_id]
+
+    @callback(
+        Output(btn_host, "children"),
+        Input(store_id, "data"),
+    )
+    def _render_archetype_filter_buttons(selected):
+        return archetype_filter_buttons(prefix=prefix, selected=selected)

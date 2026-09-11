@@ -1254,8 +1254,11 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
     grid-template-columns:
         minmax(140px, 1.4fr)
         minmax(84px, 0.5fr)
-        minmax(120px, 0.9fr)
-        minmax(160px, 1.2fr);
+        minmax(120px, 0.9fr);
+}
+
+.rs-filter-group-player .rs-filter-archetypes {
+    grid-column: 1 / -1;
 }
 
 .rs-filter-group-role .rs-filter-group-role-fields {
@@ -1316,7 +1319,6 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-filter-group-fields .rs-filter-club,
 .rs-filter-group-fields .rs-filter-archetypes {
     min-width: 0;
-}
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -5128,6 +5130,67 @@ body[data-theme="light"] .st-pizza-legend-pct {
     background: color-mix(in srgb, #7f1d1d 22%, var(--app-card));
 }
 
+.rs-arch-filter-btns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.rs-arch-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid var(--app-line);
+    background: var(--app-card);
+    color: var(--app-muted);
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        border-color 0.12s ease,
+        background-color 0.12s ease,
+        color 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+.rs-arch-filter-btn .rs-arch-icon {
+    color: inherit;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.rs-arch-filter-btn:hover {
+    color: var(--app-text);
+    border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-line));
+    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-card));
+}
+
+.rs-arch-filter-btn.active {
+    color: var(--app-text);
+    border-color: var(--app-accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--app-accent) 22%, var(--app-card));
+}
+
+html[data-theme="light"] .rs-arch-filter-btn,
+body[data-theme="light"] .rs-arch-filter-btn {
+    background: #fff;
+}
+
+html[data-theme="light"] .rs-arch-filter-btn:hover,
+body[data-theme="light"] .rs-arch-filter-btn:hover {
+    background: color-mix(in srgb, var(--app-accent) 10%, #fff);
+}
+
+html[data-theme="light"] .rs-arch-filter-btn.active,
+body[data-theme="light"] .rs-arch-filter-btn.active {
+    background: color-mix(in srgb, var(--app-accent) 16%, #fff);
+}
+
 html[data-theme="light"] .rs-arch-chip.is-bronze,
 body[data-theme="light"] .rs-arch-chip.is-bronze {
     background: color-mix(in srgb, #a8794a 12%, #fff);
@@ -5790,17 +5853,21 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
 }
 
 .st-page .rs-shortlist-filters-row > .rs-filter-archetypes {
-    flex: 1 1 14rem;
+    flex: 1 1 100%;
     min-width: 12rem;
-    max-width: 22rem;
+    max-width: none;
+    order: 20;
 }
 
 .st-page .rs-filter-group-player .rs-filter-group-fields {
     grid-template-columns:
         minmax(10rem, 1.4fr)
         6.25rem
-        minmax(8rem, 0.9fr)
-        minmax(12rem, 1.2fr);
+        minmax(8rem, 0.9fr);
+}
+
+.st-page .rs-filter-group-player .rs-filter-archetypes {
+    grid-column: 1 / -1;
 }
 
 .st-page .rs-filter-age {

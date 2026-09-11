@@ -20,7 +20,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.pack_picker import section_card_header
-from components.player_filters import help_icon, player_filters, archetype_filter_control
+from components.player_filters import help_icon, player_filters, archetype_filter_control, register_archetype_filter_callbacks
 from components.scouting_shell import (
     as_list,
     clicked,
@@ -148,6 +148,7 @@ register_pos_foot_callbacks(
     foot_store="rs-foot-filter",
     pos_id_attr="pos",
 )
+register_archetype_filter_callbacks("rs")
 register_marks_callbacks(
     "rs",
     marked_store="rs-squad-marked",
@@ -950,6 +951,7 @@ def layout():
             [
                 {"type": "pos", "pos": "_"},
                 {"type": "foot", "foot": "_"},
+                {"type": "archetype", "id": "_"},
                 {"type": "depth", "role": "_"},
                 {"type": "pill", "role": "_"},
                 {"type": "group", "group": "_"},
@@ -2262,7 +2264,7 @@ def _depth_panel(
     Input("rs-group", "data"),
     Input("rs-page-size", "value"),
     Input("rs-set-piece-min-score", "value"),
-    Input("rs-archetypes", "value"),
+    Input("rs-archetypes", "data"),
     State("rs-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -2360,7 +2362,7 @@ clientside_callback(
     Output("rs-table", "sort_by", allow_duplicate=True),
     Output("rs-search", "value"),
     Output("rs-age", "value", allow_duplicate=True),
-    Output("rs-archetypes", "value"),
+    Output("rs-archetypes", "data", allow_duplicate=True),
     Output("rs-min-score", "value"),
     Output("rs-min-score-quantifier", "value"),
     Output("rs-min-score-scope", "value"),
@@ -3208,7 +3210,7 @@ def _subset_table_data_by_keys(
     Input("rs-set-piece-min-score", "value"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
-    Input("rs-archetypes", "value"),
+    Input("rs-archetypes", "data"),
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
