@@ -187,6 +187,7 @@ PACK_DATA_KEYS = (
     "preferred_theme",
     "tier_badge_colors",
     "personality_tier_colors",
+    "archetype_tier_floors",
 )
 
 DEFAULTS: dict[str, Any] = {
@@ -243,6 +244,8 @@ DEFAULTS: dict[str, Any] = {
         "formative": {"bg": "#ffedd5", "fg": "#c2410c"},
         "unsuitable": {"bg": "#fee2e2", "fg": "#b91c1c"},
     },
+    # Archetype badges: all required metric percentiles must clear the floor.
+    "archetype_tier_floors": {"bronze": 60, "silver": 70, "gold": 80},
 }
 
 
@@ -795,6 +798,23 @@ def normalize_default_minutes_required(value) -> int:
     return max(0, min(20000, number))
 
 
+def normalize_archetype_tier_floors(raw=None) -> dict[str, float]:
+    """Clamp Bronze ≤ Silver ≤ Gold floors to 0–100 (defaults 60 / 70 / 80)."""
+    defaults = dict(DEFAULTS["archetype_tier_floors"])
+    src = raw if isinstance(raw, dict) else {}
+    bronze = max(0.0, min(100.0, _as_float(src.get("bronze"), defaults["bronze"])))
+    silver = max(0.0, min(100.0, _as_float(src.get("silver"), defaults["silver"])))
+    gold = max(0.0, min(100.0, _as_float(src.get("gold"), defaults["gold"])))
+    if silver < bronze:
+        silver = bronze
+    if gold < silver:
+        gold = silver
+    return {
+        "bronze": round(bronze, 1),
+        "silver": round(silver, 1),
+        "gold": round(gold, 1),
+    }
+
 def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
     if value is None:
         return bool(DEFAULTS["exclude_limited_leagues_adaptive_bounds"])
@@ -922,6 +942,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
         "personality_tier_colors": normalize_personality_tier_colors(
             raw.get("personality_tier_colors")
+        ),
+        "archetype_tier_floors": normalize_archetype_tier_floors(
+            raw.get("archetype_tier_floors")
         ),
         # Raw pack cuts (full_detail reference) + per-tier trees for banding.
         "stats_thresholds": raw_threshold_tree,
@@ -1174,6 +1197,11 @@ def _default_settings() -> dict[str, Any]:
             }
             for tier in PERSONALITY_TIER_KEYS
         }
+    if overrides.get("archetype_tier_floors"):
+        merged["archetype_tier_floors"] = {
+            **base["archetype_tier_floors"],
+            **(overrides.get("archetype_tier_floors") or {}),
+        }
     if "set_piece_profiles" in overrides:
         merged["set_piece_profiles"] = overrides.get("set_piece_profiles")
     if overrides.get("page_size_options") is not None:
@@ -1390,6 +1418,11 @@ def page_size_options(settings=None) -> list[str]:
 def default_minutes_required(settings=None) -> int:
     """Minutes threshold from UI settings (defaults to 900)."""
     return int(normalize(settings)["default_minutes_required"])
+
+
+def archetype_tier_floors(settings=None) -> dict[str, float]:
+    """Bronze / Silver / Gold percentile floors for player archetypes."""
+    return copy.deepcopy(normalize(settings)["archetype_tier_floors"])
 
 
 def exclude_limited_leagues_adaptive_bounds(settings=None) -> bool:

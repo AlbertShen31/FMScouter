@@ -1,0 +1,108 @@
+{
+  "source": "FMScouter player archetypes (Game Icons via Iconify; CC BY 3.0)",
+  "tiers": [
+    {"id": "bronze", "label": "Bronze"},
+    {"id": "silver", "label": "Silver"},
+    {"id": "gold", "label": "Gold"}
+  ],
+  "default_floors": {
+    "bronze": 60,
+    "silver": 70,
+    "gold": 80
+  },
+  "archetypes": [
+    {
+      "id": "shot_stopper",
+      "label": "Shot Stopper",
+      "icon": "game-icons:goal-keeper",
+      "groups": ["gk"],
+      "metrics": ["xg_prevented", "goals_conceded"]
+    },
+    {
+      "id": "sweeper_keeper",
+      "label": "Sweeper Keeper",
+      "icon": "game-icons:soccer-field",
+      "groups": ["gk"],
+      "metrics": ["progressive_passes", "passes_attempted", "possession_lost"]
+    },
+    {
+      "id": "distributor",
+      "label": "Distributor",
+      "icon": "game-icons:throwing-ball",
+      "groups": ["gk"],
+      "metrics": ["passes_attempted", "progressive_passes"]
+    },
+    {
+      "id": "ball_winner",
+      "label": "Ball Winner",
+      "icon": "game-icons:foot-trip",
+      "groups": ["def", "mid", "fwd"],
+      "metrics": ["possession_won", "tackles_attempted", "interceptions"]
+    },
+    {
+      "id": "aerial_threat",
+      "label": "Aerial Threat",
+      "icon": "game-icons:high-kick",
+      "groups": ["def", "mid", "fwd"],
+      "metrics": ["header_win_rate", "headers_attempted"]
+    },
+    {
+      "id": "safe_carrier",
+      "label": "Safe Carrier",
+      "icon": "game-icons:body-balance",
+      "groups": ["def", "mid", "fwd"],
+      "metrics": ["dribbles", "possession_lost"]
+    },
+    {
+      "id": "progressive_passer",
+      "label": "Progressive Passer",
+      "icon": "game-icons:arrow-dunk",
+      "groups": ["def", "mid", "fwd"],
+      "metrics": ["progressive_passes", "passes_attempted"]
+    },
+    {
+      "id": "playmaker",
+      "label": "Playmaker",
+      "icon": "game-icons:convergence-target",
+      "groups": ["mid", "fwd"],
+      "metrics": ["key_passes", "expected_assists", "progressive_passes"]
+    },
+    {
+      "id": "goalscorer",
+      "label": "Goalscorer",
+      "icon": "game-icons:soccer-kick",
+      "groups": ["mid", "fwd"],
+      "metrics": ["goals", "expected_goals", "shots"]
+    },
+    {
+      "id": "creator",
+      "label": "Creator",
+      "icon": "game-icons:soccer-ball",
+      "groups": ["mid", "fwd"],
+      "metrics": ["assists", "expected_assists", "key_passes"]
+    },
+    {
+      "id": "box_threat",
+      "label": "Box Threat",
+      "icon": "game-icons:punch-blast",
+      "groups": ["def"],
+      "metrics": ["goals", "expected_goals", "shots"]
+    },
+    {
+      "id": "presser",
+      "label": "Presser",
+      "icon": "game-icons:sprint",
+      "groups": ["mid", "fwd"],
+      "metrics": ["pressures"],
+      "metrics_fallback": ["possession_won", "tackles_attempted"],
+      "note": "Uses pressures when present in the active threshold pack for the group; otherwise possession_won + tackles_attempted."
+    },
+    {
+      "id": "dribbler",
+      "label": "Dribbler",
+      "icon": "game-icons:boots",
+      "groups": ["mid", "fwd"],
+      "metrics": ["dribbles"]
+    }
+  ]
+}

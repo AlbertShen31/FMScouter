@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 
 from dash import html
 import dash_bootstrap_components as dbc
+from dash_iconify import DashIconify
 
 from scoring.personality_ranges import attr_help, estimate_hidden_ranges, range_color
 from scoring.personality_tiers import (
@@ -17,6 +18,7 @@ from scoring.personality_tiers import (
     tier_description,
     tier_label,
 )
+from scoring.player_archetypes import evaluate_archetypes
 import services.ui_settings as us
 
 # FM26 Moneyball export: star ratings are unreliable — never show in the UI.
@@ -590,6 +592,105 @@ def player_personality_section(
     return html.Div(children, className="rs-player-id-section rs-personality-section")
 
 
+def player_archetypes_section(
+    player: dict,
+    *,
+    id_prefix: str = "rs",
+    settings=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    cohort_players: list[dict] | None = None,
+    banding_ctx=None,
+    value_mode: str = "raw",
+) -> html.Div | None:
+    """Icon chips for earned archetypes (Bronze / Silver / Gold × position group)."""
+    if not player or not (player.get("stats") or player.get("minutes")):
+        return None
+
+    settings = us.normalize(settings)
+    threshold_overrides = None
+    metric_p0 = None
+    metric_p100 = None
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player, settings=settings
+        )
+    elif cohort_players is not None:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            cohort_players,
+            limited_divisions=limited_divisions,
+        )
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player, settings=settings
+        )
+
+    awards = evaluate_archetypes(
+        player,
+        settings=settings,
+        threshold_overrides=threshold_overrides,
+        metric_p0=metric_p0,
+        metric_p100=metric_p100,
+        limited_divisions=limited_divisions,
+        value_mode=value_mode,
+    )
+    if not awards:
+        return None
+
+    chips = []
+    for i, award in enumerate(awards):
+        chip_id = f"{id_prefix}-arch-{award.get('id')}-{award.get('group')}-{i}"
+        tier = str(award.get("tier") or "bronze")
+        metric_lines = []
+        for m in award.get("metrics") or []:
+            pct = m.get("percentile")
+            pct_txt = f"{pct:.0f}" if pct is not None else "—"
+            metric_lines.append(
+                html.Div(
+                    f"{m.get('abbr') or m.get('label')}: {pct_txt}",
+                    className="rs-arch-tip-metric",
+                )
+            )
+        chips.append(
+            html.Span(
+                [
+                    DashIconify(
+                        icon=str(award.get("icon") or "game-icons:soccer-ball"),
+                        width=18,
+                        height=18,
+                        className="rs-arch-icon",
+                    ),
+                    html.Span(
+                        str(award.get("group_label") or ""),
+                        className="rs-arch-group",
+                    ),
+                    dbc.Tooltip(
+                        [
+                            html.Div(
+                                f"{award.get('label')} · {award.get('tier_label')} · "
+                                f"{award.get('group_label')}",
+                                className="rs-arch-tip-title",
+                            ),
+                            *metric_lines,
+                        ],
+                        target=chip_id,
+                        placement="top",
+                        class_name="rs-help-tooltip rs-arch-tooltip",
+                    ),
+                ],
+                id=chip_id,
+                className=f"rs-arch-chip is-{tier}",
+            )
+        )
+
+    return html.Div(
+        [
+            html.Div("Archetypes", className="rs-player-id-section-title"),
+            html.Div(chips, className="rs-arch-chip-row"),
+        ],
+        className="rs-player-id-section rs-archetypes-section",
+    )
+
+
 def player_detail_body(
     player: dict,
     *,
@@ -604,6 +705,10 @@ def player_detail_body(
     settings=None,
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    cohort_players: list[dict] | None = None,
+    banding_ctx=None,
+    value_mode: str = "raw",
+    show_archetypes: bool = True,
 ) -> html.Div:
     """Shared modal body: identity → international → finance → career → season stats → discipline → personality → page content."""
     effective_theme = theme
@@ -632,6 +737,18 @@ def player_detail_body(
         player_discipline_section(player, **section_kwargs),
         player_personality_section(player, id_prefix=id_prefix, settings=settings),
     ]
+    if show_archetypes:
+        children.append(
+            player_archetypes_section(
+                player,
+                id_prefix=id_prefix,
+                settings=settings,
+                limited_divisions=limited_divisions,
+                cohort_players=cohort_players,
+                banding_ctx=banding_ctx,
+                value_mode=value_mode,
+            )
+        )
     if after_identity is not None:
         if isinstance(after_identity, (list, tuple)):
             children.extend(after_identity)

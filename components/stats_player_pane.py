@@ -785,6 +785,8 @@ def _player_modal_body(
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
+        banding_ctx=banding_ctx,
+        value_mode=value_mode,
     )
 
 

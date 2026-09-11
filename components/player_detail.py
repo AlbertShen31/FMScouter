@@ -404,7 +404,13 @@ def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
         "loan_status",
         "pos_group",
         "limited_division_tracking",
+        "stats",
+        "stats_unavailable",
     ):
+        if key in ("stats", "stats_unavailable"):
+            if stats_player.get(key) not in (None, "", [], {}):
+                display_player[key] = stats_player.get(key)
+            continue
         if display_player.get(key) in (None, "", [], {}):
             display_player[key] = stats_player.get(key)
     return display_player
@@ -446,6 +452,7 @@ def scout_player_modal_body(
             settings=settings,
             theme=theme,
             limited_divisions=limited_divisions,
+            show_archetypes=False,
         )
 
     display_player = _merge_stats_identity(player, stats_player) if stats_player else dict(player)
@@ -470,6 +477,14 @@ def scout_player_modal_body(
             )
         )
 
+    banding_ctx = None
+    if stats_cohort:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            stats_cohort,
+            limited_divisions=limited_divisions,
+        )
+
     if (mode or "roles") == "roles":
         bottom = [
             section
@@ -484,13 +499,6 @@ def scout_player_modal_body(
         field_formatters = None
     else:
         if stats_player:
-            banding_ctx = None
-            if stats_cohort:
-                banding_ctx = us.build_stats_banding_context(
-                    settings,
-                    stats_cohort,
-                    limited_divisions=limited_divisions,
-                )
             stats_content = stats_charts_bottom_pane(
                 stats_player,
                 theme=theme,
@@ -515,6 +523,7 @@ def scout_player_modal_body(
         modal_fields = us.modal_identity_fields_for("player_stats", settings)
         field_formatters = {"minutes": _format_minutes_identity}
 
+    archetype_player = stats_player or display_player
     return player_detail_body(
         display_player,
         id_prefix=id_prefix,
@@ -527,6 +536,9 @@ def scout_player_modal_body(
         settings=settings,
         theme=theme,
         limited_divisions=limited_divisions,
+        cohort_players=stats_cohort,
+        banding_ctx=banding_ctx,
+        show_archetypes=bool(archetype_player and archetype_player.get("stats")),
     )
 
 
@@ -764,6 +776,8 @@ def stats_player_detail_card(
         ),
         settings=settings,
         limited_divisions=limited_divisions,
+        cohort_players=cohort_players,
+        banding_ctx=banding_ctx,
     )
 
 
@@ -842,11 +856,31 @@ def profile_detail_body(
         children.append(html.P("No player data available.", className="text-muted"))
         return html.Div(children, className="rs-player-detail pf-player-detail")
 
+    if role_player and stats_player:
+        identity_player = _merge_stats_identity(role_player, stats_player)
+    cohort = resolved.get("stats_cohort") or None
+    limited = None
+    banding_ctx = None
+    if stats_player and cohort:
+        import services.export_library as lib
+
+        file_id = str(profile.get("file_id") or "").strip()
+        limited = lib.list_limited_tracking_divisions(file_id=file_id or None) or None
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            cohort,
+            limited_divisions=limited,
+        )
+
     identity = player_detail_body(
         identity_player,
         id_prefix="pf",
         modal_fields=us.modal_identity_fields_for("role_scores", settings),
         settings=settings,
+        limited_divisions=limited,
+        cohort_players=cohort,
+        banding_ctx=banding_ctx,
+        show_archetypes=bool(stats_player and stats_player.get("stats")),
     )
     children.append(identity)
 

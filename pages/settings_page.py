@@ -69,6 +69,7 @@ SECTION_SAVE_KEYS: dict[str, tuple[str, ...]] = {
         "default_minutes_required",
         "exclude_limited_leagues_adaptive_bounds",
         "stats_full_detail_divisions",
+        "archetype_tier_floors",
     ),
     "st-save-display": (
         "bands",
@@ -676,6 +677,55 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                                 size="xs",
                             ),
                             className="st-full-detail-actions mt-2",
+                        ),
+                        html.Hr(className="my-3"),
+                        html.Div(
+                            "Archetype tiers",
+                            className="st-subsection-title",
+                        ),
+                        html.Small(
+                            "Earn an archetype when every required metric percentile "
+                            "clears the floor (evaluated per eligible GK/DEF/MID/FWD group). "
+                            "Bronze ≤ Silver ≤ Gold.",
+                            className="text-muted d-block mb-2",
+                        ),
+                        html.Div(
+                            [
+                                dmc.NumberInput(
+                                    id="st-archetype-bronze",
+                                    label="Bronze floor",
+                                    value=(settings.get("archetype_tier_floors") or {}).get(
+                                        "bronze", 60
+                                    ),
+                                    min=0,
+                                    max=100,
+                                    step=1,
+                                    decimalScale=0,
+                                ),
+                                dmc.NumberInput(
+                                    id="st-archetype-silver",
+                                    label="Silver floor",
+                                    value=(settings.get("archetype_tier_floors") or {}).get(
+                                        "silver", 70
+                                    ),
+                                    min=0,
+                                    max=100,
+                                    step=1,
+                                    decimalScale=0,
+                                ),
+                                dmc.NumberInput(
+                                    id="st-archetype-gold",
+                                    label="Gold floor",
+                                    value=(settings.get("archetype_tier_floors") or {}).get(
+                                        "gold", 80
+                                    ),
+                                    min=0,
+                                    max=100,
+                                    step=1,
+                                    decimalScale=0,
+                                ),
+                            ],
+                            className="st-archetype-floors",
                         ),
                         _section_save_row("st-save-app-filters", "st-status-app-filters"),
                     ]
@@ -1449,6 +1499,9 @@ def _role_form_values(
         settings["depth_undo_max"],
         settings["exclude_limited_leagues_adaptive_bounds"],
         full_detail_values,
+        settings["archetype_tier_floors"]["bronze"],
+        settings["archetype_tier_floors"]["silver"],
+        settings["archetype_tier_floors"]["gold"],
     )
 
 
@@ -1692,6 +1745,9 @@ def _ui_draft_from_state(
     depth_undo_max,
     exclude_limited_adaptive,
     full_detail_divisions,
+    archetype_bronze,
+    archetype_silver,
+    archetype_gold,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
     pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
@@ -1729,6 +1785,11 @@ def _ui_draft_from_state(
         "stats_full_detail_divisions": us.normalize_stats_full_detail_divisions(
             full_detail_divisions
         ),
+        "archetype_tier_floors": {
+            "bronze": archetype_bronze,
+            "silver": archetype_silver,
+            "gold": archetype_gold,
+        },
     }
 
 
@@ -1794,6 +1855,9 @@ def clear_full_detail_divisions(_n_clicks):
     Output("st-depth-undo-max", "value"),
     Output("st-exclude-limited-adaptive", "checked"),
     Output("st-full-detail-divisions", "value"),
+    Output("st-archetype-bronze", "value"),
+    Output("st-archetype-silver", "value"),
+    Output("st-archetype-gold", "value"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
@@ -1838,6 +1902,9 @@ def clear_full_detail_divisions(_n_clicks):
     State("st-depth-undo-max", "value"),
     State("st-exclude-limited-adaptive", "checked"),
     State("st-full-detail-divisions", "value"),
+    State("st-archetype-bronze", "value"),
+    State("st-archetype-silver", "value"),
+    State("st-archetype-gold", "value"),
     State("st-role-weights-pack", "value"),
     prevent_initial_call=True,
 )
@@ -1879,10 +1946,13 @@ def handle_ui_settings(
     depth_undo_max,
     exclude_limited_adaptive,
     full_detail_divisions,
+    archetype_bronze,
+    archetype_silver,
+    archetype_gold,
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 41
+    n_out = 44
     if not triggered:
         return (no_update,) * n_out
 
@@ -1934,6 +2004,9 @@ def handle_ui_settings(
         depth_undo_max,
         exclude_limited_adaptive,
         full_detail_divisions,
+        archetype_bronze,
+        archetype_silver,
+        archetype_gold,
     )
     status_app_filters = no_update
     status_display = no_update

@@ -2048,7 +2048,15 @@ def _depth_banding_for_entry(
     file_cache: dict | None = None,
     banding_cache: dict | None = None,
 ):
-    """Return (threshold_tree, metric_p0, metric_p100) for one depth row."""
+    """Return (threshold_tree, metric_p0, metric_p100) for one depth row.
+
+    Depth charts mix players from Full Detail and No Detail leagues in one
+    ranking. Per-player detail trees make the same raw rate map to different
+    percentiles (e.g. 41 Pass Att/90 at ~47th vs 50 at ~25th). Use the shared
+    Full Detail reference curve so everyone in the slot is on one scale.
+    """
+    from scoring.stats_detail_transform import benchmark_reference_level
+
     settings = us.normalize(settings)
     if not isinstance(stats_player, dict):
         return settings.get("stats_thresholds") or {}, None, None
@@ -2072,7 +2080,11 @@ def _depth_banding_for_entry(
             limited_divisions=limited,
             min_minutes=_resolve_minutes_required(minutes_required, settings),
         )
-    return us.banding_for_player(bcache[cache_key], stats_player, settings=settings)
+    return us.banding_for_level(
+        bcache[cache_key],
+        benchmark_reference_level(),
+        settings=settings,
+    )
 
 
 def _depth_stat_metric_cell(
