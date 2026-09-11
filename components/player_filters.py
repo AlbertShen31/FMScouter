@@ -221,39 +221,74 @@ def archetype_filter_buttons(
         archetypes_by_filter_category,
         normalize_archetype_filter,
     )
+    from scoring.stats_scorer import metric_defs
 
     active = set(normalize_archetype_filter(selected))
+    metrics_meta = metric_defs()
     groups = []
     for category, arches in archetypes_by_filter_category():
         buttons = []
+        cat_label = str(category.get("label") or category.get("id") or "")
         for arch in arches:
             arch_id = str(arch.get("id") or "").strip()
             if not arch_id:
                 continue
             label = str(arch.get("label") or arch_id)
             is_on = arch_id in active
+            tip_id = f"{prefix}-arch-ftip-{arch_id}"
+            metric_lines = []
+            for mid in arch.get("metrics") or []:
+                key = str(mid or "").strip()
+                if not key:
+                    continue
+                meta = metrics_meta.get(key) or {}
+                metric_lines.append(
+                    html.Div(
+                        str(meta.get("abbr") or meta.get("label") or key),
+                        className="rs-arch-tip-metric",
+                    )
+                )
+            tip_body = [
+                html.Div(label, className="rs-arch-tip-title"),
+                html.Div(cat_label, className="rs-arch-tip-cat"),
+            ]
+            if metric_lines:
+                tip_body.append(
+                    html.Div(metric_lines, className="rs-arch-tip-metrics")
+                )
             buttons.append(
-                html.Button(
-                    DashIconify(
-                        icon=str(arch.get("icon") or "game-icons:soccer-ball"),
-                        width=18,
-                        height=18,
-                        className="rs-arch-icon",
-                    ),
-                    id={"type": f"{prefix}-archetype", "id": arch_id},
-                    n_clicks=0,
-                    title=label,
-                    type="button",
-                    className="rs-arch-filter-btn" + (" active" if is_on else ""),
-                    **{
-                        "aria-label": label,
-                        "aria-pressed": "true" if is_on else "false",
-                    },
+                html.Span(
+                    [
+                        html.Button(
+                            DashIconify(
+                                icon=str(arch.get("icon") or "game-icons:soccer-ball"),
+                                width=18,
+                                height=18,
+                                className="rs-arch-icon",
+                            ),
+                            id={"type": f"{prefix}-archetype", "id": arch_id},
+                            n_clicks=0,
+                            type="button",
+                            className="rs-arch-filter-btn"
+                            + (" active" if is_on else ""),
+                            **{
+                                "aria-label": label,
+                                "aria-pressed": "true" if is_on else "false",
+                            },
+                        ),
+                        dbc.Tooltip(
+                            tip_body,
+                            target=tip_id,
+                            placement="top",
+                            class_name="rs-help-tooltip rs-arch-tooltip",
+                        ),
+                    ],
+                    id=tip_id,
+                    className="rs-arch-filter-tip-host",
                 )
             )
         if not buttons:
             continue
-        cat_label = str(category.get("label") or category.get("id") or "")
         groups.append(
             html.Div(
                 [

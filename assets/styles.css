@@ -5133,8 +5133,8 @@ body[data-theme="light"] .st-pizza-legend-pct {
 .rs-arch-filter-btns {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.65rem 1rem;
+    align-items: stretch;
+    gap: 0.55rem 0;
 }
 
 .rs-arch-filter-cat {
@@ -5143,6 +5143,15 @@ body[data-theme="light"] .st-pizza-legend-pct {
     align-items: flex-start;
     gap: 0.3rem;
     min-width: 0;
+    padding: 0 0.85rem 0 0;
+    margin-right: 0.85rem;
+    border-right: 1px solid var(--app-line);
+}
+
+.rs-arch-filter-cat:last-child {
+    padding-right: 0;
+    margin-right: 0;
+    border-right: none;
 }
 
 .rs-arch-filter-cat-label {
@@ -5159,6 +5168,11 @@ body[data-theme="light"] .st-pizza-legend-pct {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem;
+}
+
+.rs-arch-filter-tip-host {
+    display: inline-flex;
+    line-height: 0;
 }
 
 .rs-arch-filter-btn {
@@ -5213,6 +5227,22 @@ body[data-theme="light"] .rs-arch-filter-btn:hover {
 html[data-theme="light"] .rs-arch-filter-btn.active,
 body[data-theme="light"] .rs-arch-filter-btn.active {
     background: color-mix(in srgb, var(--app-accent) 16%, #fff);
+}
+
+.rs-arch-tip-cat {
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    margin-bottom: 0.2rem;
+}
+
+.rs-arch-tip-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-top: 0.15rem;
 }
 
 html[data-theme="light"] .rs-arch-chip.is-bronze,
