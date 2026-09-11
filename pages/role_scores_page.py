@@ -20,7 +20,7 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.pack_picker import section_card_header
-from components.player_filters import help_icon, player_filters
+from components.player_filters import help_icon, player_filters, archetype_filter_control
 from components.scouting_shell import (
     as_list,
     clicked,
@@ -186,6 +186,7 @@ PERSIST_DEFAULTS = {
     "group": "all",
     "page_size": None,
     "set_piece_min_score": None,
+    "archetypes": [],
 }
 
 MIN_SCORE_QUANTIFIERS = frozenset({"all", "any"})
@@ -261,6 +262,10 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
         if str(page_size) != str(default_page_size_value(settings)):
             return True
     if p.get("set_piece_min_score") is not None:
+        return True
+    from scoring.player_archetypes import normalize_archetype_filter
+
+    if normalize_archetype_filter(p.get("archetypes")):
         return True
     return False
 
@@ -847,6 +852,7 @@ def _no_match_placeholder(
     set_piece_min: float,
     query: str,
     max_age: int,
+    archetypes=None,
 ) -> html.Div:
     tips: list[str] = []
     if pos_match == "yes":
@@ -874,6 +880,12 @@ def _no_match_placeholder(
         tips.append("Raise Max age to Any.")
     if query:
         tips.append("Clear the search box.")
+    from scoring.player_archetypes import normalize_archetype_filter
+
+    if normalize_archetype_filter(archetypes):
+        tips.append(
+            "Clear Archetypes — that filter needs Moneyball stats and Bronze+ awards."
+        )
     if not tips:
         tips.append("Loosen any active shortlist filters and try again.")
     return html.Div(
@@ -1238,6 +1250,7 @@ def layout():
                                                             ],
                                                             className="rs-filter-club",
                                                         ),
+                                                        archetype_filter_control(prefix="rs"),
                                                     ],
                                                     className="rs-filter-group-fields",
                                                 ),
@@ -1495,6 +1508,39 @@ TABLE_MARKDOWN_COLS = {"Feet", "Injury"}
 def _limited_tracking_divisions(payload: dict | None) -> set[str]:
     file_id = str((payload or {}).get("file_id") or "").strip()
     return set(lib.list_limited_tracking_divisions(file_id=file_id or None))
+
+
+def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] | None:
+    """Role-row keys matching any selected high archetype via Moneyball stats."""
+    from scoring.player_archetypes import (
+        matching_archetype_keys,
+        normalize_archetype_filter,
+    )
+    from scoring.stats_scorer import player_key as stats_player_key
+    from services.player_profiles import load_stats_players_for_file
+
+    if not normalize_archetype_filter(selected):
+        return None
+    file_id = str((payload or {}).get("file_id") or "").strip()
+    stats_players = load_stats_players_for_file(file_id) if file_id else []
+    if not stats_players:
+        return set()
+    settings = us.normalize(settings)
+    limited = _limited_tracking_divisions(payload)
+    banding_ctx = us.build_stats_banding_context(
+        settings,
+        stats_players,
+        limited_divisions=limited or None,
+        min_minutes=us.default_minutes_required(settings),
+    )
+    return matching_archetype_keys(
+        stats_players,
+        selected,
+        settings=settings,
+        banding_ctx=banding_ctx,
+        limited_divisions=limited,
+        key_fn=stats_player_key,
+    )
 
 
 def _upload_has_stats(parsed: dict | None) -> bool:
@@ -2216,6 +2262,7 @@ def _depth_panel(
     Input("rs-group", "data"),
     Input("rs-page-size", "value"),
     Input("rs-set-piece-min-score", "value"),
+    Input("rs-archetypes", "value"),
     State("rs-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -2240,10 +2287,13 @@ def save_page_persist(
     group,
     page_size,
     set_piece_min_score,
+    archetypes,
     hydrated,
 ):
     if not hydrated:
         return no_update
+    from scoring.player_archetypes import normalize_archetype_filter
+
     settings = us.load()
     return {
         "roles": _as_list(roles),
@@ -2266,6 +2316,7 @@ def save_page_persist(
         "group": group or "all",
         "page_size": _persist_page_size(page_size, settings),
         "set_piece_min_score": set_piece_min_score,
+        "archetypes": normalize_archetype_filter(archetypes),
     }
 
 
@@ -2309,6 +2360,7 @@ clientside_callback(
     Output("rs-table", "sort_by", allow_duplicate=True),
     Output("rs-search", "value"),
     Output("rs-age", "value", allow_duplicate=True),
+    Output("rs-archetypes", "value"),
     Output("rs-min-score", "value"),
     Output("rs-min-score-quantifier", "value"),
     Output("rs-min-score-scope", "value"),
@@ -2325,7 +2377,9 @@ clientside_callback(
     prevent_initial_call=True,
 )
 def hydrate_page_persist(persist, hydrated):
-    _skip = (no_update,) * 26
+    from scoring.player_archetypes import normalize_archetype_filter
+
+    _skip = (no_update,) * 27
     if hydrated:
         return _skip
     raw = persist or {}
@@ -2337,7 +2391,7 @@ def hydrate_page_persist(persist, hydrated):
             True,
             persist.get("role_mode") or "formations",
             no_update,
-            *(no_update,) * 13,
+            *(no_update,) * 14,
         )
     roles = _as_list(persist.get("roles"))
     combos = normalize_combos(persist.get("combos"))
@@ -2355,6 +2409,7 @@ def hydrate_page_persist(persist, hydrated):
     group = persist.get("group") or "all"
     search = persist.get("search") or ""
     max_age = str(persist.get("max_age") or "99")
+    archetypes = normalize_archetype_filter(persist.get("archetypes"))
     min_score = persist.get("min_score")
     if min_score is None:
         min_score_out = no_update
@@ -2384,6 +2439,7 @@ def hydrate_page_persist(persist, hydrated):
         _sort_by_focus(focus) if focus else no_update,
         _changed_or_skip(search, ""),
         _changed_or_skip(max_age, "99"),
+        archetypes if archetypes else no_update,
         min_score_out,
         _changed_or_skip(min_score_quantifier, "all"),
         _changed_or_skip(min_score_scope, "all"),
@@ -3152,6 +3208,7 @@ def _subset_table_data_by_keys(
     Input("rs-set-piece-min-score", "value"),
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
+    Input("rs-archetypes", "value"),
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
@@ -3178,6 +3235,7 @@ def render_shortlist(
     set_piece_min,
     pos_filter,
     foot_filter,
+    archetypes,
     page_size,
     sort_by,
     theme,
@@ -3315,6 +3373,7 @@ def render_shortlist(
             club_filter = _normalize_club_filter(club_filter)
             foot_thresholds = settings["foot_thresholds"]
             combo_by_col = _combo_columns_by_label(combos)
+            archetype_keys = _archetype_match_keys(payload, archetypes, settings)
 
             filtered = []
             for row in rows:
@@ -3324,6 +3383,10 @@ def render_shortlist(
                     continue
                 if not _passes_club_filter(row, club_filter):
                     continue
+                if archetype_keys is not None:
+                    key = player_row_key(row)
+                    if not key or key not in archetype_keys:
+                        continue
                 pos_elig = (
                     _position_eligibility(row, view_roles, combo_by_col=combo_by_col)
                     or "no"
@@ -3425,6 +3488,7 @@ def render_shortlist(
                         set_piece_min=set_piece_min,
                         query=query,
                         max_age=max_age,
+                        archetypes=archetypes,
                     )
                     if no_matches
                     else None
@@ -3471,6 +3535,7 @@ def render_shortlist(
                         set_piece_min=set_piece_min,
                         query=query,
                         max_age=max_age,
+                        archetypes=archetypes,
                     )
                     if no_matches
                     else None
@@ -3583,6 +3648,7 @@ def render_shortlist(
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
     combo_by_col = _combo_columns_by_label(combos)
+    archetype_keys = _archetype_match_keys(payload, archetypes, settings)
 
     filtered = []
     for row in rows:
@@ -3592,6 +3658,10 @@ def render_shortlist(
             continue
         if not _passes_club_filter(row, club_filter):
             continue
+        if archetype_keys is not None:
+            key = player_row_key(row)
+            if not key or key not in archetype_keys:
+                continue
         pos_elig = (
             _position_eligibility(row, view_roles, combo_by_col=combo_by_col) or "no"
         )
@@ -3737,6 +3807,7 @@ def render_shortlist(
             set_piece_min=set_piece_min,
             query=query,
             max_age=max_age,
+            archetypes=archetypes,
         )
         if no_matches
         else None

@@ -1199,6 +1199,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
 .rs-shortlist-filters-row .rs-filter-search,
 .rs-shortlist-filters-row .rs-filter-age,
+.rs-shortlist-filters-row .rs-filter-archetypes,
 .rs-shortlist-filters-row .st-filter-division,
 .rs-shortlist-filters-row .st-filter-minutes,
 .rs-shortlist-filters-row .st-filter-value-mode {
@@ -1217,6 +1218,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
 .rs-shortlist-filters-row .mantine-TextInput-root,
 .rs-shortlist-filters-row .mantine-Select-root,
+.rs-shortlist-filters-row .mantine-MultiSelect-root,
 .rs-shortlist-filters-row .mantine-NumberInput-root {
     width: 100%;
 }
@@ -1250,9 +1252,10 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 
 .rs-filter-group-player .rs-filter-group-fields {
     grid-template-columns:
-        minmax(140px, 1.6fr)
-        minmax(84px, 0.55fr)
-        minmax(120px, 1fr);
+        minmax(140px, 1.4fr)
+        minmax(84px, 0.5fr)
+        minmax(120px, 0.9fr)
+        minmax(160px, 1.2fr);
 }
 
 .rs-filter-group-role .rs-filter-group-role-fields {
@@ -1310,7 +1313,10 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-filter-group-fields .rs-filter-search,
 .rs-filter-group-fields .rs-filter-age,
 .rs-filter-group-fields .rs-filter-pos-match,
-.rs-filter-group-fields .rs-filter-club {
+.rs-filter-group-fields .rs-filter-club,
+.rs-filter-group-fields .rs-filter-archetypes {
+    min-width: 0;
+}
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -5777,16 +5783,24 @@ body[data-theme="light"] .st-metric-value-row.is-limited-metric {
 }
 
 .st-page .rs-shortlist-filters-row > .rs-filter-age,
+.st-page .rs-shortlist-filters-row > .rs-filter-archetypes,
 .st-page .rs-shortlist-filters-row > .st-filter-division,
 .st-page .rs-shortlist-filters-row > .st-filter-minutes {
     flex: 0 0 auto;
 }
 
+.st-page .rs-shortlist-filters-row > .rs-filter-archetypes {
+    flex: 1 1 14rem;
+    min-width: 12rem;
+    max-width: 22rem;
+}
+
 .st-page .rs-filter-group-player .rs-filter-group-fields {
     grid-template-columns:
-        minmax(10rem, 1.6fr)
+        minmax(10rem, 1.4fr)
         6.25rem
-        minmax(8rem, 1fr);
+        minmax(8rem, 0.9fr)
+        minmax(12rem, 1.2fr);
 }
 
 .st-page .rs-filter-age {

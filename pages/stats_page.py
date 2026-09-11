@@ -25,7 +25,12 @@ from components.pack_picker import section_card_header
 from scoring.division_tiers import classify_division, division_sort_key
 import services.export_library as lib
 from services.division_catalog import nation_abbreviation
-from components.player_filters import help_icon, player_filters, player_filters_host
+from components.player_filters import (
+    help_icon,
+    player_filters,
+    player_filters_host,
+    archetype_filter_control,
+)
 from components.player_modal import player_modal
 from components.stats_compare import (
     compare_title,
@@ -182,6 +187,7 @@ ST_PERSIST_DEFAULTS = {
     "value_mode": "raw",
     "page_size": None,
     "sort_by": None,
+    "archetypes": [],
 }
 
 VALUE_MODE_TIP = (
@@ -216,6 +222,10 @@ def _st_persist_has_state(persist: dict | None) -> bool:
     if p.get("page_size") is not None:
         return True
     if p.get("sort_by"):
+        return True
+    from scoring.player_archetypes import normalize_archetype_filter
+
+    if normalize_archetype_filter(p.get("archetypes")):
         return True
     return False
 
@@ -1609,10 +1619,13 @@ def _filter_players(
     division_tier="all",
     include_incomplete=True,
     limited_divisions=None,
+    archetype_keys=None,
 ):
     q = (search or "").strip().casefold()
     max_age = 99 if max_age is None else int(max_age)
     limited = limited_divisions or ()
+    from scoring.stats_scorer import player_key as stats_player_key
+
     out = []
     for p in players:
         if not _player_matches_pos_filter(p, pos):
@@ -1623,6 +1636,10 @@ def _filter_players(
             p.get("division"), limited
         ):
             continue
+        if archetype_keys is not None:
+            key = str(stats_player_key(p) or "").strip()
+            if key not in archetype_keys:
+                continue
         if q:
             blob = " ".join(
                 str(p.get(k) or "")
@@ -1723,6 +1740,7 @@ def layout(**_kwargs):
                                                 ],
                                                 className="rs-filter-age",
                                             ),
+                                            archetype_filter_control(prefix="st"),
                                             html.Div(
                                                 [
                                                     html.Div(
@@ -2049,6 +2067,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("st-page-size", "value"),
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
+    Input("st-archetypes", "value"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("st-parsed-historical", "data"),
@@ -2071,6 +2090,7 @@ def refresh_table(
     page_size,
     marked,
     sort_by,
+    archetypes,
     settings,
     theme,
     hist_parsed,
@@ -2096,6 +2116,16 @@ def refresh_table(
         players,
         limited_divisions=band_limited,
         min_minutes=minutes_required,
+    )
+    from scoring.player_archetypes import matching_archetype_keys
+
+    archetype_keys = matching_archetype_keys(
+        players,
+        archetypes,
+        settings=band_settings,
+        banding_ctx=banding_ctx,
+        limited_divisions=band_limited,
+        value_mode=value_mode,
     )
     compare = bool(parsed_historical_players(hist_parsed))
     hist_percentiles: dict[str, dict[str, float | None]] = {}
@@ -2136,6 +2166,7 @@ def refresh_table(
         division_tier=division_tier or "all",
         include_incomplete=include_incomplete is not False,
         limited_divisions=limited_divisions,
+        archetype_keys=archetype_keys,
     )
     rows = _build_rows(
         filtered,
@@ -2861,6 +2892,7 @@ def update_stats_compare_controls(marked, parsed):
     Input("st-value-mode", "value"),
     Input("st-page-size", "value"),
     Input("st-table", "sort_by"),
+    Input("st-archetypes", "value"),
     State("st-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -2877,10 +2909,13 @@ def save_st_page_persist(
     value_mode,
     page_size,
     sort_by,
+    archetypes,
     hydrated,
 ):
     if not hydrated:
         return no_update
+    from scoring.player_archetypes import normalize_archetype_filter
+
     return {
         "pos": pos or "all",
         "category": category or "all",
@@ -2894,6 +2929,7 @@ def save_st_page_persist(
         "value_mode": normalize_value_mode(value_mode),
         "page_size": page_size,
         "sort_by": sort_by or None,
+        "archetypes": normalize_archetype_filter(archetypes),
     }
 
 
@@ -2934,21 +2970,25 @@ clientside_callback(
     Output("st-page-size", "value", allow_duplicate=True),
     Output("st-table", "sort_by", allow_duplicate=True),
     Output("st-sort-memory", "data", allow_duplicate=True),
+    Output("st-archetypes", "value"),
     Output("st-hydrated", "data"),
     Input("st-persist-boot", "data"),
     State("st-hydrated", "data"),
     prevent_initial_call=True,
 )
 def hydrate_st_page_persist(persist, hydrated):
+    from scoring.player_archetypes import normalize_archetype_filter
+
     if hydrated or persist is None:
-        return (no_update,) * 14
+        return (no_update,) * 15
     raw = persist or {}
     if not _st_persist_has_state(raw):
-        return (*((no_update,) * 13), True)
+        return (*((no_update,) * 14), True)
     p = {**ST_PERSIST_DEFAULTS, **raw}
     sort_by = p.get("sort_by") or None
     page_size = p.get("page_size")
     minutes_required = p.get("minutes_required")
+    archetypes = normalize_archetype_filter(p.get("archetypes"))
     return (
         p.get("pos") or "all",
         p.get("category") or "all",
@@ -2963,5 +3003,6 @@ def hydrate_st_page_persist(persist, hydrated):
         page_size if page_size is not None else no_update,
         sort_by if sort_by else no_update,
         sort_by if sort_by else no_update,
+        archetypes if archetypes else no_update,
         True,
     )

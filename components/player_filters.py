@@ -6,6 +6,7 @@ from typing import Any
 
 from dash import html
 import dash_bootstrap_components as dbc
+import dash_mantine_components as dmc
 
 from scoring.role_scorer import foot_filter_help, foot_filter_hints
 
@@ -208,3 +209,44 @@ def player_filters_host(*, prefix: str, stacked: bool = False) -> html.Div:
     if stacked:
         return html.Div(id=f"{prefix}-filters", className="st-filter-stack")
     return html.Div(id=f"{prefix}-pos-bar")
+
+
+def archetype_filter_control(
+    *,
+    prefix: str,
+    value: Sequence[str] | None = None,
+) -> html.Div:
+    """MultiSelect: keep players who earn any selected high-tier archetype."""
+    from scoring.player_archetypes import (
+        archetype_filter_options,
+        normalize_archetype_filter,
+    )
+
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Label("Archetypes", className="rs-field-label"),
+                    *help_icon(
+                        "Keep players who earn any selected archetype at Bronze, "
+                        "Silver, or Gold (low / opposite tiers are ignored). "
+                        "Requires Moneyball stats and enough minutes.",
+                        f"{prefix}-help-archetypes",
+                    ),
+                ],
+                className="rs-field-label-row",
+            ),
+            dmc.MultiSelect(
+                id=f"{prefix}-archetypes",
+                data=archetype_filter_options(),
+                value=normalize_archetype_filter(value),
+                placeholder="Any archetype",
+                searchable=True,
+                clearable=True,
+                maxDropdownHeight=280,
+                w="100%",
+                className="rs-archetype-filter",
+            ),
+        ],
+        className="rs-filter-archetypes",
+    )

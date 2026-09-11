@@ -102,6 +102,105 @@ def group_abbr(group: str | None) -> str:
     return GROUP_ABBR.get(str(group or "").strip().lower(), str(group or "").upper() or "—")
 
 
+def archetype_filter_options() -> list[dict[str, str]]:
+    """MultiSelect options for high-tier archetype filters."""
+    return [
+        {
+            "value": str(arch.get("id") or ""),
+            "label": str(arch.get("label") or arch.get("id") or ""),
+        }
+        for arch in archetype_defs()
+        if str(arch.get("id") or "").strip()
+    ]
+
+
+def normalize_archetype_filter(raw) -> list[str]:
+    if not isinstance(raw, (list, tuple)):
+        return []
+    allowed = {str(a.get("id") or "") for a in archetype_defs()}
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        key = str(item or "").strip()
+        if key and key in allowed and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def earned_high_archetype_ids(
+    player: dict[str, Any] | None,
+    *,
+    settings: dict[str, Any] | None = None,
+    threshold_overrides: dict[str, Any] | None = None,
+    metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    value_mode: str = "raw",
+) -> set[str]:
+    """Archetype ids earned at Bronze / Silver / Gold for this player."""
+    awards = evaluate_archetypes(
+        player,
+        settings=settings,
+        threshold_overrides=threshold_overrides,
+        metric_p100=metric_p100,
+        metric_p0=metric_p0,
+        limited_divisions=limited_divisions,
+        value_mode=value_mode,
+    )
+    return {
+        str(a.get("id") or "")
+        for a in awards
+        if a.get("polarity") == "high" and a.get("id")
+    }
+
+
+def matching_archetype_keys(
+    players: list[dict[str, Any]] | None,
+    selected_ids,
+    *,
+    settings: dict[str, Any] | None = None,
+    banding_ctx=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    value_mode: str = "raw",
+    key_fn=None,
+) -> set[str] | None:
+    """Keys of players earning any selected high archetype, or None if filter off."""
+    from scoring.stats_scorer import player_key as default_key
+
+    wanted = set(normalize_archetype_filter(selected_ids))
+    if not wanted:
+        return None
+
+    import services.ui_settings as us
+
+    settings = us.normalize(settings) if settings is not None else us.normalize({})
+    resolve_key = key_fn or default_key
+    matched: set[str] = set()
+    for player in players or []:
+        threshold_overrides = None
+        metric_p0 = None
+        metric_p100 = None
+        if banding_ctx is not None:
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+                banding_ctx, player, settings=settings
+            )
+        earned = earned_high_archetype_ids(
+            player,
+            settings=settings,
+            threshold_overrides=threshold_overrides,
+            metric_p0=metric_p0,
+            metric_p100=metric_p100,
+            limited_divisions=limited_divisions,
+            value_mode=value_mode,
+        )
+        if earned & wanted:
+            key = str(resolve_key(player) or "").strip()
+            if key:
+                matched.add(key)
+    return matched
+
+
 def eligible_stats_groups(player: dict[str, Any] | None) -> list[str]:
     """Coarse stats groups (gk/def/mid/fwd) the player may be evaluated in."""
     if not player:
