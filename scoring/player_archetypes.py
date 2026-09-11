@@ -62,6 +62,41 @@ def archetype_defs() -> list[dict[str, Any]]:
     return list(_data().get("archetypes") or [])
 
 
+def archetype_filter_categories() -> list[dict[str, str]]:
+    """Ordered filter groups (GK / Defending / Possession / Final Third)."""
+    raw = _data().get("filter_categories") or []
+    out: list[dict[str, str]] = []
+    for item in raw:
+        cat_id = str(item.get("id") or "").strip()
+        if not cat_id:
+            continue
+        out.append(
+            {
+                "id": cat_id,
+                "label": str(item.get("label") or cat_id),
+            }
+        )
+    return out
+
+
+def archetypes_by_filter_category() -> list[tuple[dict[str, str], list[dict[str, Any]]]]:
+    """(category, archetypes) pairs for filter UI; unknown categories last."""
+    categories = archetype_filter_categories()
+    by_id = {c["id"]: c for c in categories}
+    buckets: dict[str, list[dict[str, Any]]] = {c["id"]: [] for c in categories}
+    leftover: list[dict[str, Any]] = []
+    for arch in archetype_defs():
+        cat = str(arch.get("category") or "").strip()
+        if cat in buckets:
+            buckets[cat].append(arch)
+        else:
+            leftover.append(arch)
+    grouped = [(by_id[c["id"]], buckets[c["id"]]) for c in categories if buckets[c["id"]]]
+    if leftover:
+        grouped.append(({"id": "other", "label": "Other"}, leftover))
+    return grouped
+
+
 def default_tier_floors() -> dict[str, float]:
     raw = _data().get("default_floors") or {}
     return {

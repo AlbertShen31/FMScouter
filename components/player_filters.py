@@ -216,34 +216,55 @@ def archetype_filter_buttons(
     prefix: str,
     selected: Sequence[str] | None = None,
 ) -> list:
-    """Toggle buttons for high-tier archetype filter (icon-only)."""
-    from scoring.player_archetypes import archetype_defs, normalize_archetype_filter
+    """Grouped toggle buttons for high-tier archetype filter (icon-only)."""
+    from scoring.player_archetypes import (
+        archetypes_by_filter_category,
+        normalize_archetype_filter,
+    )
 
     active = set(normalize_archetype_filter(selected))
-    buttons = []
-    for arch in archetype_defs():
-        arch_id = str(arch.get("id") or "").strip()
-        if not arch_id:
+    groups = []
+    for category, arches in archetypes_by_filter_category():
+        buttons = []
+        for arch in arches:
+            arch_id = str(arch.get("id") or "").strip()
+            if not arch_id:
+                continue
+            label = str(arch.get("label") or arch_id)
+            is_on = arch_id in active
+            buttons.append(
+                html.Button(
+                    DashIconify(
+                        icon=str(arch.get("icon") or "game-icons:soccer-ball"),
+                        width=18,
+                        height=18,
+                        className="rs-arch-icon",
+                    ),
+                    id={"type": f"{prefix}-archetype", "id": arch_id},
+                    n_clicks=0,
+                    title=label,
+                    type="button",
+                    className="rs-arch-filter-btn" + (" active" if is_on else ""),
+                    **{
+                        "aria-label": label,
+                        "aria-pressed": "true" if is_on else "false",
+                    },
+                )
+            )
+        if not buttons:
             continue
-        label = str(arch.get("label") or arch_id)
-        is_on = arch_id in active
-        buttons.append(
-            html.Button(
-                DashIconify(
-                    icon=str(arch.get("icon") or "game-icons:soccer-ball"),
-                    width=18,
-                    height=18,
-                    className="rs-arch-icon",
-                ),
-                id={"type": f"{prefix}-archetype", "id": arch_id},
-                n_clicks=0,
-                title=label,
-                type="button",
-                className="rs-arch-filter-btn" + (" active" if is_on else ""),
-                **{"aria-label": label, "aria-pressed": "true" if is_on else "false"},
+        cat_label = str(category.get("label") or category.get("id") or "")
+        groups.append(
+            html.Div(
+                [
+                    html.Span(cat_label, className="rs-arch-filter-cat-label"),
+                    html.Div(buttons, className="rs-arch-filter-cat-btns"),
+                ],
+                className="rs-arch-filter-cat",
+                **{"data-category": str(category.get("id") or "")},
             )
         )
-    return buttons
+    return groups
 
 
 def archetype_filter_control(

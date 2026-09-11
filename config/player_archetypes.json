@@ -8,6 +8,12 @@
     {"id": "slate", "label": "Slate", "polarity": "low"},
     {"id": "ash", "label": "Ash", "polarity": "low"}
   ],
+  "filter_categories": [
+    {"id": "gk", "label": "GK"},
+    {"id": "defending", "label": "Defending"},
+    {"id": "possession", "label": "Possession"},
+    {"id": "final_third", "label": "Final Third"}
+  ],
   "default_floors": {
     "bronze": 70,
     "silver": 80,
@@ -23,6 +29,7 @@
       "id": "shot_stopper",
       "label": "Shot Stopper",
       "icon": "game-icons:goal-keeper",
+      "category": "gk",
       "groups": ["gk"],
       "metrics": ["xg_prevented", "goals_conceded"]
     },
@@ -30,6 +37,7 @@
       "id": "sweeper_keeper",
       "label": "Sweeper Keeper",
       "icon": "game-icons:soccer-field",
+      "category": "gk",
       "groups": ["gk"],
       "metrics": ["progressive_passes", "passes_attempted", "possession_lost"]
     },
@@ -37,6 +45,7 @@
       "id": "distributor",
       "label": "Distributor",
       "icon": "game-icons:throwing-ball",
+      "category": "gk",
       "groups": ["gk"],
       "metrics": ["passes_attempted", "progressive_passes"]
     },
@@ -44,6 +53,7 @@
       "id": "ball_winner",
       "label": "Ball Winner",
       "icon": "game-icons:foot-trip",
+      "category": "defending",
       "groups": ["def", "mid", "fwd"],
       "metrics": ["possession_won", "tackles_attempted", "interceptions"]
     },
@@ -51,13 +61,25 @@
       "id": "aerial_threat",
       "label": "Aerial Threat",
       "icon": "game-icons:high-kick",
+      "category": "defending",
       "groups": ["def", "mid", "fwd"],
       "metrics": ["header_win_rate", "headers_attempted"]
+    },
+    {
+      "id": "presser",
+      "label": "Presser",
+      "icon": "game-icons:sprint",
+      "category": "defending",
+      "groups": ["mid", "fwd"],
+      "metrics": ["pressures"],
+      "metrics_fallback": ["possession_won", "tackles_attempted"],
+      "note": "Uses pressures when present in the active threshold pack for the group; otherwise possession_won + tackles_attempted."
     },
     {
       "id": "safe_carrier",
       "label": "Safe Carrier",
       "icon": "game-icons:body-balance",
+      "category": "possession",
       "groups": ["def", "mid", "fwd"],
       "metrics": ["dribbles", "possession_lost"]
     },
@@ -65,6 +87,7 @@
       "id": "progressive_passer",
       "label": "Progressive Passer",
       "icon": "game-icons:arrow-dunk",
+      "category": "possession",
       "groups": ["def", "mid", "fwd"],
       "metrics": ["progressive_passes", "passes_attempted"]
     },
@@ -72,13 +95,23 @@
       "id": "playmaker",
       "label": "Playmaker",
       "icon": "game-icons:convergence-target",
+      "category": "possession",
       "groups": ["mid", "fwd"],
       "metrics": ["key_passes", "expected_assists", "progressive_passes"]
+    },
+    {
+      "id": "dribbler",
+      "label": "Dribbler",
+      "icon": "game-icons:boots",
+      "category": "possession",
+      "groups": ["mid", "fwd"],
+      "metrics": ["dribbles"]
     },
     {
       "id": "goalscorer",
       "label": "Goalscorer",
       "icon": "game-icons:soccer-kick",
+      "category": "final_third",
       "groups": ["mid", "fwd"],
       "metrics": ["goals", "expected_goals", "shots"]
     },
@@ -86,6 +119,7 @@
       "id": "creator",
       "label": "Creator",
       "icon": "game-icons:soccer-ball",
+      "category": "final_third",
       "groups": ["mid", "fwd"],
       "metrics": ["assists", "expected_assists", "key_passes"]
     },
@@ -93,24 +127,9 @@
       "id": "box_threat",
       "label": "Box Threat",
       "icon": "game-icons:punch-blast",
+      "category": "final_third",
       "groups": ["def"],
       "metrics": ["goals", "expected_goals", "shots"]
-    },
-    {
-      "id": "presser",
-      "label": "Presser",
-      "icon": "game-icons:sprint",
-      "groups": ["mid", "fwd"],
-      "metrics": ["pressures"],
-      "metrics_fallback": ["possession_won", "tackles_attempted"],
-      "note": "Uses pressures when present in the active threshold pack for the group; otherwise possession_won + tackles_attempted."
-    },
-    {
-      "id": "dribbler",
-      "label": "Dribbler",
-      "icon": "game-icons:boots",
-      "groups": ["mid", "fwd"],
-      "metrics": ["dribbles"]
     }
   ]
 }
