@@ -28,6 +28,7 @@
     {
       "id": "shot_stopper",
       "label": "Shot Stopper",
+      "description": "Prevents goals above expected and keeps the concession rate low.",
       "icon": "game-icons:goal-keeper",
       "category": "gk",
       "groups": ["gk"],
@@ -36,6 +37,7 @@
     {
       "id": "sweeper_keeper",
       "label": "Sweeper Keeper",
+      "description": "Plays out confidently with progressive passing and low possession loss.",
       "icon": "game-icons:soccer-field",
       "category": "gk",
       "groups": ["gk"],
@@ -44,6 +46,7 @@
     {
       "id": "distributor",
       "label": "Distributor",
+      "description": "High passing volume that regularly advances the ball upfield.",
       "icon": "game-icons:throwing-ball",
       "category": "gk",
       "groups": ["gk"],
@@ -52,6 +55,7 @@
     {
       "id": "ball_winner",
       "label": "Ball Winner",
+      "description": "Wins possession through tackles, interceptions, and recoveries.",
       "icon": "game-icons:foot-trip",
       "category": "defending",
       "groups": ["def", "mid", "fwd"],
@@ -60,6 +64,7 @@
     {
       "id": "aerial_threat",
       "label": "Aerial Threat",
+      "description": "Contests and wins a high share of aerial duels.",
       "icon": "game-icons:high-kick",
       "category": "defending",
       "groups": ["def", "mid", "fwd"],
@@ -68,6 +73,7 @@
     {
       "id": "presser",
       "label": "Presser",
+      "description": "Applies intense pressing pressure to force turnovers high up the pitch.",
       "icon": "game-icons:sprint",
       "category": "defending",
       "groups": ["mid", "fwd"],
@@ -78,6 +84,7 @@
     {
       "id": "safe_carrier",
       "label": "Safe Carrier",
+      "description": "Carries or dribbles often while keeping possession losses low.",
       "icon": "game-icons:body-balance",
       "category": "possession",
       "groups": ["def", "mid", "fwd"],
@@ -86,6 +93,7 @@
     {
       "id": "progressive_passer",
       "label": "Progressive Passer",
+      "description": "Moves the team forward with frequent progressive passes.",
       "icon": "game-icons:arrow-dunk",
       "category": "possession",
       "groups": ["def", "mid", "fwd"],
@@ -94,6 +102,7 @@
     {
       "id": "playmaker",
       "label": "Playmaker",
+      "description": "Creates chances with key passes, xA, and progressive distribution.",
       "icon": "game-icons:convergence-target",
       "category": "possession",
       "groups": ["mid", "fwd"],
@@ -102,6 +111,7 @@
     {
       "id": "dribbler",
       "label": "Dribbler",
+      "description": "Beats opponents regularly with a high dribble rate.",
       "icon": "game-icons:boots",
       "category": "possession",
       "groups": ["mid", "fwd"],
@@ -110,6 +120,7 @@
     {
       "id": "goalscorer",
       "label": "Goalscorer",
+      "description": "Produces goals and shots at a strong expected-goals volume.",
       "icon": "game-icons:soccer-kick",
       "category": "final_third",
       "groups": ["mid", "fwd"],
@@ -118,6 +129,7 @@
     {
       "id": "creator",
       "label": "Creator",
+      "description": "Sets up teammates with assists, xA, and key passes.",
       "icon": "game-icons:soccer-ball",
       "category": "final_third",
       "groups": ["mid", "fwd"],
@@ -126,6 +138,7 @@
     {
       "id": "box_threat",
       "label": "Box Threat",
+      "description": "A defender who arrives in the box to shoot and score.",
       "icon": "game-icons:punch-blast",
       "category": "final_third",
       "groups": ["def"],

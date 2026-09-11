@@ -252,6 +252,11 @@ def archetype_filter_buttons(
                 html.Div(label, className="rs-arch-tip-title"),
                 html.Div(cat_label, className="rs-arch-tip-cat"),
             ]
+            description = str(arch.get("description") or "").strip()
+            if description:
+                tip_body.append(
+                    html.Div(description, className="rs-arch-tip-desc")
+                )
             if metric_lines:
                 tip_body.append(
                     html.Div(metric_lines, className="rs-arch-tip-metrics")

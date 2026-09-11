@@ -5250,6 +5250,14 @@ body[data-theme="light"] .rs-arch-filter-btn.active {
     margin-bottom: 0.2rem;
 }
 
+.rs-arch-tip-desc {
+    font-size: 12px;
+    line-height: 1.35;
+    opacity: 0.95;
+    margin: 0.15rem 0 0.25rem;
+    max-width: 16rem;
+}
+
 .rs-arch-tip-metrics {
     display: flex;
     flex-direction: column;
