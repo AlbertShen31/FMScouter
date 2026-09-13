@@ -248,7 +248,7 @@ DEFAULTS: dict[str, Any] = {
     # Archetype badges: all required metric percentiles must clear the floor (high)
     # or sit under the ceiling (low / opposite tiers).
     "archetype_tier_floors": {"bronze": 70, "silver": 80, "gold": 90},
-    "archetype_tier_ceilings": {"rust": 30, "slate": 20, "ash": 10},
+    "archetype_tier_ceilings": {"rust": 30},
 }
 
 
@@ -820,21 +820,23 @@ def normalize_archetype_tier_floors(raw=None) -> dict[str, float]:
 
 
 def normalize_archetype_tier_ceilings(raw=None) -> dict[str, float]:
-    """Clamp Ash ≤ Slate ≤ Rust ceilings to 0–100 (defaults 10 / 20 / 30)."""
+    """Clamp the single Rust (opposite) ceiling to 0–100 (default 30).
+
+    Legacy packs may still store slate/ash; prefer rust, then slate, then ash.
+    """
     defaults = dict(DEFAULTS["archetype_tier_ceilings"])
     src = raw if isinstance(raw, dict) else {}
-    ash = max(0.0, min(100.0, _as_float(src.get("ash"), defaults["ash"])))
-    slate = max(0.0, min(100.0, _as_float(src.get("slate"), defaults["slate"])))
-    rust = max(0.0, min(100.0, _as_float(src.get("rust"), defaults["rust"])))
-    if slate < ash:
-        slate = ash
-    if rust < slate:
-        rust = slate
-    return {
-        "ash": round(ash, 1),
-        "slate": round(slate, 1),
-        "rust": round(rust, 1),
-    }
+    fallback = defaults["rust"]
+    if "rust" in src:
+        value = src.get("rust")
+    elif "slate" in src:
+        value = src.get("slate")
+    elif "ash" in src:
+        value = src.get("ash")
+    else:
+        value = fallback
+    rust = max(0.0, min(100.0, _as_float(value, fallback)))
+    return {"rust": round(rust, 1)}
 
 def normalize_exclude_limited_leagues_adaptive_bounds(value) -> bool:
     if value is None:

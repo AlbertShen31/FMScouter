@@ -4,9 +4,7 @@
     {"id": "bronze", "label": "Bronze", "polarity": "high"},
     {"id": "silver", "label": "Silver", "polarity": "high"},
     {"id": "gold", "label": "Gold", "polarity": "high"},
-    {"id": "rust", "label": "Rust", "polarity": "low"},
-    {"id": "slate", "label": "Slate", "polarity": "low"},
-    {"id": "ash", "label": "Ash", "polarity": "low"}
+    {"id": "rust", "label": "Rust", "polarity": "low"}
   ],
   "filter_categories": [
     {"id": "gk", "label": "GK"},
@@ -20,9 +18,7 @@
     "gold": 90
   },
   "default_ceilings": {
-    "rust": 30,
-    "slate": 20,
-    "ash": 10
+    "rust": 30
   },
   "archetypes": [
     {

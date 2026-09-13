@@ -323,8 +323,8 @@ def archetype_filter_control(
                     html.Label("Archetypes", className="rs-field-label"),
                     *help_icon(
                         "Click icons to keep players who earn any selected "
-                        "archetype at Bronze, Silver, or Gold (low / opposite "
-                        "tiers are ignored). Requires Moneyball stats and enough "
+                        "archetype at Bronze, Silver, or Gold (Rust opposite tier "
+                        "is ignored). Requires Moneyball stats and enough "
                         "minutes. Empty selection = any archetype.",
                         f"{prefix}-help-archetypes",
                     ),

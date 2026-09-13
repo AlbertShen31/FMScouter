@@ -686,9 +686,9 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                         ),
                         html.Small(
                             "High tiers: every required metric percentile clears the floor "
-                            "(Bronze ≤ Silver ≤ Gold). Low / opposite tiers: every metric "
-                            "sits under the ceiling (Ash ≤ Slate ≤ Rust). Evaluated per "
-                            "eligible GK/DEF/MID/FWD group.",
+                            "(Bronze ≤ Silver ≤ Gold). Opposite tier: every metric sits at "
+                            "or under the Rust ceiling. Evaluated per eligible "
+                            "GK/DEF/MID/FWD group.",
                             className="text-muted d-block mb-2",
                         ),
                         html.Div(
@@ -736,28 +736,6 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                                     label="Rust ceiling",
                                     value=(settings.get("archetype_tier_ceilings") or {}).get(
                                         "rust", 30
-                                    ),
-                                    min=0,
-                                    max=100,
-                                    step=1,
-                                    decimalScale=0,
-                                ),
-                                dmc.NumberInput(
-                                    id="st-archetype-slate",
-                                    label="Slate ceiling",
-                                    value=(settings.get("archetype_tier_ceilings") or {}).get(
-                                        "slate", 20
-                                    ),
-                                    min=0,
-                                    max=100,
-                                    step=1,
-                                    decimalScale=0,
-                                ),
-                                dmc.NumberInput(
-                                    id="st-archetype-ash",
-                                    label="Ash ceiling",
-                                    value=(settings.get("archetype_tier_ceilings") or {}).get(
-                                        "ash", 10
                                     ),
                                     min=0,
                                     max=100,
@@ -1543,8 +1521,6 @@ def _role_form_values(
         settings["archetype_tier_floors"]["silver"],
         settings["archetype_tier_floors"]["gold"],
         settings["archetype_tier_ceilings"]["rust"],
-        settings["archetype_tier_ceilings"]["slate"],
-        settings["archetype_tier_ceilings"]["ash"],
     )
 
 
@@ -1792,8 +1768,6 @@ def _ui_draft_from_state(
     archetype_silver,
     archetype_gold,
     archetype_rust,
-    archetype_slate,
-    archetype_ash,
 ) -> dict:
     key_map = _set_piece_lists_from_state(sp_keys, sp_key_specs)
     pref_map = _set_piece_lists_from_state(sp_prefs, sp_pref_specs)
@@ -1838,8 +1812,6 @@ def _ui_draft_from_state(
         },
         "archetype_tier_ceilings": {
             "rust": archetype_rust,
-            "slate": archetype_slate,
-            "ash": archetype_ash,
         },
     }
 
@@ -1910,8 +1882,6 @@ def clear_full_detail_divisions(_n_clicks):
     Output("st-archetype-silver", "value"),
     Output("st-archetype-gold", "value"),
     Output("st-archetype-rust", "value"),
-    Output("st-archetype-slate", "value"),
-    Output("st-archetype-ash", "value"),
     Output("st-role-weights-pack", "data"),
     Output("st-role-weights-pack", "value"),
     Output("theme", "data", allow_duplicate=True),
@@ -1960,8 +1930,6 @@ def clear_full_detail_divisions(_n_clicks):
     State("st-archetype-silver", "value"),
     State("st-archetype-gold", "value"),
     State("st-archetype-rust", "value"),
-    State("st-archetype-slate", "value"),
-    State("st-archetype-ash", "value"),
     State("st-role-weights-pack", "value"),
     prevent_initial_call=True,
 )
@@ -2007,12 +1975,10 @@ def handle_ui_settings(
     archetype_silver,
     archetype_gold,
     archetype_rust,
-    archetype_slate,
-    archetype_ash,
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 47
+    n_out = 45
     if not triggered:
         return (no_update,) * n_out
 
@@ -2068,8 +2034,6 @@ def handle_ui_settings(
         archetype_silver,
         archetype_gold,
         archetype_rust,
-        archetype_slate,
-        archetype_ash,
     )
     status_app_filters = no_update
     status_display = no_update

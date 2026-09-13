@@ -5114,22 +5114,21 @@ body[data-theme="light"] .st-pizza-legend-pct {
     background: color-mix(in srgb, #d4a017 20%, var(--app-card));
 }
 
+/* Negative tiers: cool danger / violet spectrum (not metal awards). */
+.rs-arch-chip.is-low {
+    border-style: dashed;
+}
+
 .rs-arch-chip.is-rust {
-    border-color: #c45c38;
-    box-shadow: inset 0 0 0 1px rgba(196, 92, 56, 0.4);
-    background: color-mix(in srgb, #c45c38 18%, var(--app-card));
+    border-color: #db2777;
+    box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.45);
+    background: color-mix(in srgb, #db2777 20%, var(--app-card));
+    color: color-mix(in srgb, #f9a8d4 70%, var(--app-text));
 }
 
-.rs-arch-chip.is-slate {
-    border-color: #64748b;
-    box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.45);
-    background: color-mix(in srgb, #64748b 20%, var(--app-card));
-}
-
-.rs-arch-chip.is-ash {
-    border-color: #7f1d1d;
-    box-shadow: inset 0 0 0 1px rgba(127, 29, 29, 0.5);
-    background: color-mix(in srgb, #7f1d1d 22%, var(--app-card));
+.rs-arch-chip.is-rust .rs-arch-icon,
+.rs-arch-chip.is-rust .rs-arch-group {
+    color: inherit;
 }
 
 .rs-arch-filter-btns {
@@ -5282,17 +5281,8 @@ body[data-theme="light"] .rs-arch-chip.is-gold {
 
 html[data-theme="light"] .rs-arch-chip.is-rust,
 body[data-theme="light"] .rs-arch-chip.is-rust {
-    background: color-mix(in srgb, #c45c38 12%, #fff);
-}
-
-html[data-theme="light"] .rs-arch-chip.is-slate,
-body[data-theme="light"] .rs-arch-chip.is-slate {
-    background: color-mix(in srgb, #64748b 12%, #fff);
-}
-
-html[data-theme="light"] .rs-arch-chip.is-ash,
-body[data-theme="light"] .rs-arch-chip.is-ash {
-    background: color-mix(in srgb, #7f1d1d 12%, #fff);
+    background: color-mix(in srgb, #db2777 12%, #fff);
+    color: #9d174d;
 }
 
 .rs-arch-tip-title {

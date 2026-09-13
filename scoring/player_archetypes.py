@@ -36,19 +36,17 @@ from scoring.stats_detail_transform import (
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "player_archetypes.json"
 
-ArchetypeTierId = Literal["bronze", "silver", "gold", "rust", "slate", "ash"]
+ArchetypeTierId = Literal["bronze", "silver", "gold", "rust"]
 
-# High awards first (gold…bronze), then low awards (ash…rust = more severe first).
+# High awards first (gold…bronze), then the single low award (Rust).
 TIER_RANK: dict[str, int] = {
-    "gold": 6,
-    "silver": 5,
-    "bronze": 4,
-    "ash": 3,
-    "slate": 2,
+    "gold": 4,
+    "silver": 3,
+    "bronze": 2,
     "rust": 1,
 }
 HIGH_TIERS = ("gold", "silver", "bronze")
-LOW_TIERS = ("ash", "slate", "rust")
+LOW_TIERS = ("rust",)
 GROUP_ORDER = ("gk", "def", "mid", "fwd")
 GROUP_ABBR = {"gk": "GK", "def": "DEF", "mid": "MID", "fwd": "FWD"}
 
@@ -110,8 +108,6 @@ def default_tier_ceilings() -> dict[str, float]:
     raw = _data().get("default_ceilings") or {}
     return {
         "rust": float(raw.get("rust", 30)),
-        "slate": float(raw.get("slate", 20)),
-        "ash": float(raw.get("ash", 10)),
     }
 
 
@@ -322,14 +318,13 @@ def _low_tier_for_percentiles(
     percentiles: list[float],
     ceilings: dict[str, float],
 ) -> ArchetypeTierId | None:
-    """All metrics ≤ ceiling → Rust / Slate / Ash (strict; Ash is worst)."""
+    """All metrics ≤ ceiling → Rust (single opposite tier)."""
     if not percentiles:
         return None
     highest = max(percentiles)
-    for tier in LOW_TIERS:
-        ceiling = float(ceilings.get(tier, 100))
-        if highest <= ceiling:
-            return tier  # type: ignore[return-value]
+    ceiling = float(ceilings.get("rust", 30))
+    if highest <= ceiling:
+        return "rust"
     return None
 
 
