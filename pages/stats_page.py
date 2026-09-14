@@ -1362,15 +1362,17 @@ def _build_rows(
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
     )
     avg_cats = _avg_category_columns(g) if cat == "all" else []
-    stripe_limited = set(limited_divisions or [])
+    # Division / percentile cell stripes follow the page Inactive column when the
+    # detail-level map is active; otherwise fall back to export limited-tracking.
+    stripe_limited = set(
+        banding_limited if banding_limited is not None else (limited_divisions or [])
+    )
     full_detail = frozenset(
         banding_full_detail
         if banding_full_detail is not None
         else (settings.get("stats_full_detail_divisions") or [])
     )
-    limited = frozenset(
-        banding_limited if banding_limited is not None else stripe_limited
-    )
+    limited = frozenset(stripe_limited)
     mode = normalize_value_mode(value_mode)
     rows = []
     hist_percentiles = hist_percentiles or {}
@@ -2334,7 +2336,7 @@ def open_player(
         else us.default_minutes_required(settings)
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
-    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+    band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
         parsed, players, settings, detail_map, minutes_required
     )
     return (
@@ -2348,7 +2350,7 @@ def open_player(
             theme=theme,
             settings=band_settings,
             limited_divisions=band_limited,
-            stripe_limited=export_limited,
+            stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2407,7 +2409,7 @@ def switch_player_view(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+    band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
         parsed, players, settings, detail_map, mins_req
     )
     return (
@@ -2420,7 +2422,7 @@ def switch_player_view(
             theme=theme,
             settings=band_settings,
             limited_divisions=band_limited,
-            stripe_limited=export_limited,
+            stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2472,7 +2474,7 @@ def switch_player_group(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+    band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
         parsed, players, settings, detail_map, mins_req
     )
     return (
@@ -2485,7 +2487,7 @@ def switch_player_group(
             theme=theme,
             settings=band_settings,
             limited_divisions=band_limited,
-            stripe_limited=export_limited,
+            stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
         ),
@@ -2530,7 +2532,7 @@ def refresh_player_modal_value_mode(
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
-    band_settings, band_limited, export_limited, banding_ctx = _page_banding_bundle(
+    band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
         parsed, players, settings, detail_map, mins_req
     )
     return _player_modal_body(
@@ -2541,7 +2543,7 @@ def refresh_player_modal_value_mode(
         theme=theme,
         settings=band_settings,
         limited_divisions=band_limited,
-        stripe_limited=export_limited,
+        stripe_limited=band_limited,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
     )
