@@ -647,6 +647,48 @@
           "offset": 0.1763
         }
       }
+    },
+    "save_percentage": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.1597,
+          "b": 0.9581
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.2077,
+          "b": 0.9471
+        }
+      }
+    },
+    "expected_save_percentage": {
+      "gk": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.1443,
+          "b": 1.4214
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.0857,
+          "b": 1.5416
+        }
+      }
+    },
+    "mistakes_leading_to_goals": {
+      "gk": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.4234,
+          "offset": -0.0047
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.502,
+          "offset": -0.0056
+        }
+      }
     }
   }
 }

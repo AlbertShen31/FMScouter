@@ -68,6 +68,67 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "save_percentage": {
+      "label": "Save Percentage",
+      "abbr": "Save %",
+      "csv": [
+        "Save Percentage"
+      ],
+      "higher_is_better": true,
+      "unit": "percent",
+      "ui_hidden": true
+    },
+    "expected_save_percentage": {
+      "label": "Expected Save Percentage",
+      "abbr": "xSave %",
+      "csv": [
+        "Expected Save Percentage"
+      ],
+      "higher_is_better": true,
+      "unit": "percent",
+      "ui_hidden": true
+    },
+    "mistakes_leading_to_goals": {
+      "label": "Mistakes Leading to Goals",
+      "abbr": "MLG/90",
+      "csv": [
+        "Mistakes Leading to Goals",
+        "MLG"
+      ],
+      "higher_is_better": false,
+      "unit": "per90",
+      "ui_hidden": true
+    },
+    "penalties_faced": {
+      "label": "Penalties Faced",
+      "abbr": "Pen F",
+      "csv": [
+        "Penalties Faced"
+      ],
+      "higher_is_better": true,
+      "unit": "count",
+      "ui_hidden": true
+    },
+    "penalties_saved": {
+      "label": "Penalties Saved",
+      "abbr": "Pen S",
+      "csv": [
+        "Penalties Saved"
+      ],
+      "higher_is_better": true,
+      "unit": "count",
+      "ui_hidden": true
+    },
+    "penalties_saved_ratio": {
+      "label": "Penalties Saved Ratio",
+      "abbr": "Pen Save %",
+      "csv": [
+        "Penalties Saved Ratio"
+      ],
+      "higher_is_better": true,
+      "unit": "percent",
+      "ui_hidden": true
+    },
     "goals_conceded": {
       "label": "Goals Conceded",
       "abbr": "Conc/90",
@@ -364,6 +425,42 @@
           1.45,
           1.31,
           1.2
+        ],
+        "save_percentage": [
+          72.35,
+          74.77,
+          77.0,
+          78.96
+        ],
+        "expected_save_percentage": [
+          76.1,
+          77.38,
+          78.36,
+          79.51
+        ],
+        "mistakes_leading_to_goals": [
+          0.083,
+          0.056,
+          0.031,
+          0.0
+        ],
+        "penalties_faced": [
+          2.0,
+          3.0,
+          4.0,
+          5.0
+        ],
+        "penalties_saved": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "penalties_saved_ratio": [
+          0.0,
+          0.0,
+          25.0,
+          40.0
         ]
       },
       "gk_possession": {

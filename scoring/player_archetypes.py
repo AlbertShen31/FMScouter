@@ -272,7 +272,9 @@ def _metric_in_group(
     """Return view category id when the metric exists under the group's thresholds."""
     for cat in view_categories():
         cat_id = cat["id"]
-        if metric_id in metrics_for(group, cat_id, threshold_overrides):
+        if metric_id in metrics_for(
+            group, cat_id, threshold_overrides, include_hidden=True
+        ):
             return cat_id
     return None
 

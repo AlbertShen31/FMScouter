@@ -24,11 +24,29 @@
     {
       "id": "shot_stopper",
       "label": "Shot Stopper",
-      "description": "Prevents goals above expected and keeps the concession rate low.",
+      "description": "High save rates versus expectation, strong xG prevented, and few mistakes leading to goals.",
       "icon": "game-icons:goal-keeper",
       "category": "gk",
       "groups": ["gk"],
-      "metrics": ["xg_prevented", "goals_conceded"]
+      "metrics": [
+        "save_percentage",
+        "expected_save_percentage",
+        "xg_prevented",
+        "mistakes_leading_to_goals"
+      ]
+    },
+    {
+      "id": "penalty_killer",
+      "label": "Penalty Killer",
+      "description": "Faces penalties often and stops a high share of them.",
+      "icon": "game-icons:shield-reflect",
+      "category": "gk",
+      "groups": ["gk"],
+      "metrics": [
+        "penalties_saved_ratio",
+        "penalties_saved",
+        "penalties_faced"
+      ]
     },
     {
       "id": "sweeper_keeper",

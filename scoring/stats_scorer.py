@@ -219,12 +219,23 @@ def default_category_for_group(group: str) -> str:
     return "all"
 
 
+def metric_ui_hidden(metric_id: str) -> bool:
+    """True when a metric is scored/thresholded but omitted from stats UI surfaces."""
+    return bool((metric_defs().get(metric_id) or {}).get("ui_hidden"))
+
+
 def metrics_for(
     group: str,
     category: str,
     threshold_overrides: dict[str, Any] | None = None,
+    *,
+    include_hidden: bool = False,
 ) -> list[str]:
-    """Metrics for one position group + shared category (GK uses mapped storage keys)."""
+    """Metrics for one position group + shared category (GK uses mapped storage keys).
+
+    Metrics flagged ``ui_hidden`` in the benchmark defs are omitted unless
+    ``include_hidden`` is True (archetype scoring still needs them).
+    """
     stored = storage_category(group, category)
     if not stored:
         return []
@@ -236,7 +247,10 @@ def metrics_for(
     block = (root.get(group) or {}).get(stored) or {}
     if not block and threshold_overrides:
         block = (benchmarks()["benchmarks"].get(group) or {}).get(stored) or {}
-    return list(block.keys())
+    ids = list(block.keys())
+    if include_hidden:
+        return ids
+    return [mid for mid in ids if not metric_ui_hidden(mid)]
 
 
 def default_minutes_required() -> int:
@@ -1340,6 +1354,10 @@ def format_metric_display(value: float, unit: str | None = None) -> str:
     """Format a metric number for table / modal cells."""
     if unit == "percent":
         return f"{value:.1f}%"
+    if unit == "count":
+        if float(value).is_integer():
+            return str(int(value))
+        return f"{value:.1f}".rstrip("0").rstrip(".")
     if abs(value) >= 10:
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return f"{value:.2f}"

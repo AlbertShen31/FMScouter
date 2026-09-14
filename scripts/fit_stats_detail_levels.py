@@ -48,7 +48,33 @@ METRICS = {
     "dribbles": ("Drb", True),
     "pressures": ("Pres A", True),
     "headers_attempted": ("Hdrs A", True),
+    "mistakes_leading_to_goals": ("MLG", True),
 }
+
+# Calibration CSV uses Svh/Svp/Svt + Goals Conceded (+ xGP) instead of named %.
+DERIVED_METRICS = frozenset({"save_percentage", "expected_save_percentage"})
+
+
+def _float(row: dict, col: str) -> float:
+    raw = row.get(col)
+    if raw in (None, ""):
+        return 0.0
+    return float(raw)
+
+
+def derived_metric_value(mid: str, row: dict, mins: float) -> float | None:
+    """Derive Save % / Expected Save % when the export only has save components."""
+    saves = _float(row, "Svh") + _float(row, "Svp") + _float(row, "Svt")
+    gc = _float(row, "Goals Conceded")
+    shots = saves + gc
+    if shots <= 0:
+        return None
+    if mid == "save_percentage":
+        return 100.0 * saves / shots
+    if mid == "expected_save_percentage":
+        return 100.0 * (saves - _float(row, "xGP")) / shots
+    return None
+
 
 QUARTILES = [20, 40, 60, 80]
 LEVEL_KEYS = {"no_detail": "no", "inactive": "inactive"}
@@ -153,6 +179,12 @@ def analyze(source: Path) -> dict:
                 if val is None:
                     continue
                 bands[pg][mid][level]["vals"].append(val)
+            if pg == "gk":
+                for mid in DERIVED_METRICS:
+                    val = derived_metric_value(mid, row, mins)
+                    if val is None:
+                        continue
+                    bands[pg][mid][level]["vals"].append(val)
 
     results: dict = {}
     for pg, metrics in bands.items():
