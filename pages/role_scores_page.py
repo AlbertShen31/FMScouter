@@ -1529,6 +1529,16 @@ def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] 
         return set()
     settings = us.normalize(settings)
     limited = _limited_tracking_divisions(payload)
+    # Cached stats players carry stamped high_archetypes → instant set lookup.
+    # Uncached exports fall back to evaluating only the selected archetypes.
+    from scoring.player_archetypes import HIGH_ARCHETYPES_FIELD
+
+    if all(isinstance(p, dict) and HIGH_ARCHETYPES_FIELD in p for p in stats_players):
+        return matching_archetype_keys(
+            stats_players,
+            selected,
+            key_fn=stats_player_key,
+        )
     banding_ctx = us.build_stats_banding_context(
         settings,
         stats_players,

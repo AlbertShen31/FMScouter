@@ -2,8 +2,10 @@
 
 Caches live under ``data/uploads/cache/{file_id}.json.gz``. The settings
 signature invalidates the cache when the role pack, tier weights, set-piece
-profiles, stats thresholds, or benchmarks change. Hybrid IP/OOP weights are
-applied at read time (cheap) and do not force a recompute.
+profiles, stats thresholds, benchmarks, or archetype floors/defs change.
+Hybrid IP/OOP weights are applied at read time (cheap) and do not force a
+recompute. Stats caches also stamp each player with ``high_archetypes`` for
+fast archetype filters.
 """
 from __future__ import annotations
 
@@ -21,8 +23,9 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v26"
+FORMULA_VERSION = "v27"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
+_ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 
 
 def ensure_cache_dir() -> None:
@@ -72,6 +75,12 @@ def current_signature() -> dict[str, Any]:
         "stats_full_detail_divisions": full_detail_divisions,
         "stats_benchmarks_sha": (
             _sha(_BENCHMARKS_PATH.read_bytes()) if _BENCHMARKS_PATH.is_file() else ""
+        ),
+        "player_archetypes_sha": (
+            _sha(_ARCHETYPES_PATH.read_bytes()) if _ARCHETYPES_PATH.is_file() else ""
+        ),
+        "archetype_tier_floors": us.normalize_archetype_tier_floors(
+            settings.get("archetype_tier_floors")
         ),
         "default_minutes_required": us.default_minutes_required(settings),
         "exclude_limited_leagues_adaptive_bounds": us.exclude_limited_leagues_adaptive_bounds(
@@ -335,14 +344,14 @@ def _precompute_stats_percentiles(
         for group in groups:
             metric_ids: list[str] = []
             for cat in categories:
-                for mid in metrics_for(group, cat, tree):
+                for mid in metrics_for(group, cat, tree, include_hidden=True):
                     if mid not in metric_ids:
                         metric_ids.append(mid)
             band_map: dict[str, float] = {}
             for mid in metric_ids:
                 chosen_cat = "all"
                 for cat in categories:
-                    if mid in metrics_for(group, cat, tree):
+                    if mid in metrics_for(group, cat, tree, include_hidden=True):
                         chosen_cat = cat
                         break
                 band = band_metric(
@@ -423,9 +432,27 @@ def compute_file(file_id: str) -> dict[str, Any]:
                 ),
                 settings=settings,
             )
+            from scoring.player_archetypes import stamp_high_archetypes
+
+            min_minutes = float(us.default_minutes_required(settings))
+            exclude_limited = us.exclude_limited_leagues_adaptive_bounds(settings)
+            banding_ctx = us.build_stats_banding_context(
+                settings,
+                players,
+                limited_divisions=limited_divisions,
+                min_minutes=min_minutes,
+                exclude_limited_leagues=exclude_limited,
+            )
+            high_archetypes = stamp_high_archetypes(
+                players,
+                settings=settings,
+                banding_ctx=banding_ctx,
+                limited_divisions=limited_divisions,
+            )
             payload["stats"] = {
                 "players": players,
                 "percentiles": percentiles,
+                "high_archetypes": high_archetypes,
                 "n_players": len(players),
                 "limited_tracking_divisions": limited_divisions,
             }
@@ -520,3 +547,22 @@ def cached_stats_percentiles(file_id: str) -> dict[str, Any] | None:
         return None
     pct = cache["stats"].get("percentiles")
     return pct if isinstance(pct, dict) else None
+
+
+def cached_high_archetypes(file_id: str) -> dict[str, list[str]] | None:
+    """player_key → high archetype ids from a fresh upload cache."""
+    cache = load_cache(file_id)
+    if not is_fresh(cache) or not (cache or {}).get("stats"):
+        return None
+    raw = cache["stats"].get("high_archetypes")
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, list[str]] = {}
+    for key, ids in raw.items():
+        key_s = str(key or "").strip()
+        if not key_s or not isinstance(ids, (list, tuple)):
+            continue
+        cleaned = [str(item).strip() for item in ids if str(item).strip()]
+        if cleaned:
+            out[key_s] = cleaned
+    return out

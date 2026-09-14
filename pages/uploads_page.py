@@ -41,12 +41,14 @@ UP_ELIGIBILITY_TIP = (
     "Eligible means the file has Name/Player, enough player info (Club/Age/Position), plus: "
     "attributes for Role scores; stats markers for Player stats; Salary and match fees for "
     "Squad finance. Upload precomputes all role scores and stats percentiles using current "
-    "Settings / role packs, and records leagues with incomplete advanced match stats (shown "
-    "striped on Player stats / Profiles). If you change those settings, click Compute to "
-    "refresh. Pages then load from the cache instead of rescoring."
+    "Settings / role packs (including high archetype badges for fast filters), and records "
+    "leagues with incomplete advanced match stats (shown striped on Player stats / Profiles). "
+    "If you change those settings, click Compute to refresh. Pages then load from the cache "
+    "instead of rescoring."
 )
 UP_COMPUTE_ALL_TIP = (
-    "Recompute role scores and stats percentiles for every eligible saved file."
+    "Recompute role scores, stats percentiles, and archetype filter fields for every eligible "
+    "saved file."
 )
 
 

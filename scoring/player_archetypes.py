@@ -36,6 +36,9 @@ from scoring.stats_detail_transform import (
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "player_archetypes.json"
 
+# Precomputed on cached stats players for fast archetype filters (not shown in UI).
+HIGH_ARCHETYPES_FIELD = "high_archetypes"
+
 ArchetypeTierId = Literal["bronze", "silver", "gold", "rust"]
 
 # High awards first (gold…bronze), then the single low award (Rust).
@@ -159,6 +162,120 @@ def normalize_archetype_filter(raw) -> list[str]:
     return out
 
 
+def _read_stamped_high_archetypes(player: dict[str, Any] | None) -> set[str] | None:
+    """Return stamped high archetype ids, or None when the field is absent."""
+    if not player or HIGH_ARCHETYPES_FIELD not in player:
+        return None
+    raw = player.get(HIGH_ARCHETYPES_FIELD)
+    if not isinstance(raw, (list, tuple)):
+        return set()
+    return {str(item).strip() for item in raw if str(item).strip()}
+
+
+def high_archetype_ids_for_player(
+    player: dict[str, Any] | None,
+    *,
+    settings: dict[str, Any] | None = None,
+    threshold_overrides: dict[str, Any] | None = None,
+    metric_p100: dict[str, float] | None = None,
+    metric_p0: dict[str, float] | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    value_mode: str = "raw",
+    tier_floors: dict[str, float] | None = None,
+    min_minutes: float | None = None,
+    only_ids: set[str] | frozenset[str] | None = None,
+    settings_normalized: bool = False,
+) -> set[str]:
+    """Bronze/Silver/Gold archetype ids only (no Rust). Faster than full evaluate."""
+    if not player:
+        return set()
+
+    import services.ui_settings as us
+
+    settings = (
+        settings
+        if settings_normalized and isinstance(settings, dict)
+        else (us.normalize(settings) if settings is not None else us.normalize({}))
+    )
+    floors = us.normalize_archetype_tier_floors(
+        tier_floors if tier_floors is not None else settings.get("archetype_tier_floors")
+    )
+    required = (
+        float(min_minutes)
+        if min_minutes is not None
+        else float(us.default_minutes_required(settings))
+    )
+    if minutes_status(player.get("minutes"), required) != "meet":
+        return set()
+
+    if threshold_overrides is None:
+        threshold_overrides = settings.get("stats_thresholds") or {}
+
+    export_level = engine_detail_level_for_player(
+        player,
+        full_detail_divisions=settings.get("stats_full_detail_divisions"),
+        limited_divisions=limited_divisions,
+    )
+    stats = scoring_stats(player)
+    if not stats:
+        return set()
+    stats = stats_for_value_mode(
+        stats,
+        resolve_player_pos_group(player),
+        export_level=export_level,
+        value_mode=normalize_value_mode(value_mode),
+    )
+
+    wanted = set(only_ids) if only_ids is not None else None
+    earned: set[str] = set()
+    for group in eligible_stats_groups(player):
+        for arch in archetype_defs():
+            arch_id = str(arch.get("id") or "").strip()
+            if not arch_id:
+                continue
+            if wanted is not None and arch_id not in wanted:
+                continue
+            allowed = {str(g).strip().lower() for g in (arch.get("groups") or [])}
+            if group not in allowed:
+                continue
+            metric_ids = resolve_archetype_metrics(arch, group, threshold_overrides)
+            if not metric_ids:
+                continue
+
+            percentiles: list[float] = []
+            blocked = False
+            for mid in metric_ids:
+                if metric_is_unavailable(player, mid):
+                    blocked = True
+                    break
+                cat_id = _metric_in_group(group, mid, threshold_overrides)
+                if not cat_id:
+                    blocked = True
+                    break
+                band = band_metric(
+                    group,
+                    cat_id,
+                    mid,
+                    stats.get(mid),
+                    threshold_overrides=threshold_overrides,
+                    metric_p100=metric_p100,
+                    metric_p0=metric_p0,
+                )
+                pct = band.get("percentile")
+                if pct is None:
+                    blocked = True
+                    break
+                percentiles.append(float(pct))
+
+            if blocked:
+                continue
+            if _high_tier_for_percentiles(percentiles, floors):
+                earned.add(arch_id)
+                if wanted is not None and wanted <= earned:
+                    return earned
+    return earned
+
+
 def earned_high_archetype_ids(
     player: dict[str, Any] | None,
     *,
@@ -170,7 +287,7 @@ def earned_high_archetype_ids(
     value_mode: str = "raw",
 ) -> set[str]:
     """Archetype ids earned at Bronze / Silver / Gold for this player."""
-    awards = evaluate_archetypes(
+    return high_archetype_ids_for_player(
         player,
         settings=settings,
         threshold_overrides=threshold_overrides,
@@ -179,11 +296,55 @@ def earned_high_archetype_ids(
         limited_divisions=limited_divisions,
         value_mode=value_mode,
     )
-    return {
-        str(a.get("id") or "")
-        for a in awards
-        if a.get("polarity") == "high" and a.get("id")
-    }
+
+
+def stamp_high_archetypes(
+    players: list[dict[str, Any]] | None,
+    *,
+    settings: dict[str, Any] | None = None,
+    banding_ctx=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    value_mode: str = "raw",
+    key_fn=None,
+) -> dict[str, list[str]]:
+    """Write ``high_archetypes`` onto each player; return player_key → ids."""
+    from scoring.stats_scorer import player_key as default_key
+
+    import services.ui_settings as us
+
+    settings = us.normalize(settings) if settings is not None else us.normalize({})
+    floors = us.normalize_archetype_tier_floors(settings.get("archetype_tier_floors"))
+    min_minutes = float(us.default_minutes_required(settings))
+    resolve_key = key_fn or default_key
+    out: dict[str, list[str]] = {}
+    for player in players or []:
+        if not isinstance(player, dict):
+            continue
+        threshold_overrides = settings.get("stats_thresholds") or {}
+        metric_p0 = None
+        metric_p100 = None
+        if banding_ctx is not None:
+            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+                banding_ctx, player, settings=settings
+            )
+        earned = high_archetype_ids_for_player(
+            player,
+            settings=settings,
+            threshold_overrides=threshold_overrides,
+            metric_p0=metric_p0,
+            metric_p100=metric_p100,
+            limited_divisions=limited_divisions,
+            value_mode=value_mode,
+            tier_floors=floors,
+            min_minutes=min_minutes,
+            settings_normalized=True,
+        )
+        ids = sorted(earned)
+        player[HIGH_ARCHETYPES_FIELD] = ids
+        key = str(resolve_key(player) or "").strip()
+        if key and ids:
+            out[key] = ids
+    return out
 
 
 def matching_archetype_keys(
@@ -195,8 +356,13 @@ def matching_archetype_keys(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     value_mode: str = "raw",
     key_fn=None,
+    precomputed: dict[str, list[str] | tuple[str, ...]] | None = None,
 ) -> set[str] | None:
-    """Keys of players earning any selected high archetype, or None if filter off."""
+    """Keys of players earning any selected high archetype, or None if filter off.
+
+    Prefers stamped ``high_archetypes`` / ``precomputed`` maps (raw mode) so filters
+    stay cheap after upload precompute.
+    """
     from scoring.stats_scorer import player_key as default_key
 
     wanted = set(normalize_archetype_filter(selected_ids))
@@ -205,27 +371,66 @@ def matching_archetype_keys(
 
     import services.ui_settings as us
 
-    settings = us.normalize(settings) if settings is not None else us.normalize({})
     resolve_key = key_fn or default_key
-    matched: set[str] = set()
+    mode = normalize_value_mode(value_mode)
+
+    if mode == "raw" and precomputed is not None:
+        matched: set[str] = set()
+        for key, ids in precomputed.items():
+            key_s = str(key or "").strip()
+            if not key_s:
+                continue
+            earned = {str(item).strip() for item in (ids or []) if str(item).strip()}
+            if earned & wanted:
+                matched.add(key_s)
+        return matched
+
+    if mode == "raw":
+        stamped_ok = True
+        matched = set()
+        for player in players or []:
+            earned = _read_stamped_high_archetypes(player)
+            if earned is None:
+                stamped_ok = False
+                break
+            if earned & wanted:
+                key = str(resolve_key(player) or "").strip()
+                if key:
+                    matched.add(key)
+        if stamped_ok:
+            return matched
+
+    settings = us.normalize(settings) if settings is not None else us.normalize({})
+    floors = us.normalize_archetype_tier_floors(settings.get("archetype_tier_floors"))
+    min_minutes = float(us.default_minutes_required(settings))
+    matched = set()
     for player in players or []:
-        threshold_overrides = None
+        threshold_overrides = settings.get("stats_thresholds") or {}
         metric_p0 = None
         metric_p100 = None
         if banding_ctx is not None:
-            threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-                banding_ctx, player, settings=settings
-            )
-        earned = earned_high_archetype_ids(
+            if mode == "raw":
+                threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+                    banding_ctx, player, settings=settings
+                )
+            else:
+                threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
+                    banding_ctx, player, mode
+                )
+        earned = high_archetype_ids_for_player(
             player,
             settings=settings,
             threshold_overrides=threshold_overrides,
             metric_p0=metric_p0,
             metric_p100=metric_p100,
             limited_divisions=limited_divisions,
-            value_mode=value_mode,
+            value_mode=mode,
+            tier_floors=floors,
+            min_minutes=min_minutes,
+            only_ids=wanted,
+            settings_normalized=True,
         )
-        if earned & wanted:
+        if earned:
             key = str(resolve_key(player) or "").strip()
             if key:
                 matched.add(key)
