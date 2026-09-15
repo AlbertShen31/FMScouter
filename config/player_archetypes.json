@@ -60,11 +60,15 @@
     {
       "id": "distributor",
       "label": "Distributor",
-      "description": "High passing volume that regularly advances the ball upfield.",
+      "description": "High passing volume with strong completion and low possession loss.",
       "icon": "game-icons:throwing-ball",
       "category": "gk",
       "groups": ["gk"],
-      "metrics": ["passes_attempted", "progressive_passes"]
+      "metrics": [
+        "passes_attempted",
+        "pass_completion",
+        "possession_lost"
+      ]
     },
     {
       "id": "ball_winner",

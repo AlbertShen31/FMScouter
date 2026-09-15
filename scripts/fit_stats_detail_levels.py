@@ -52,7 +52,9 @@ METRICS = {
 }
 
 # Calibration CSV uses Svh/Svp/Svt + Goals Conceded (+ xGP) instead of named %.
-DERIVED_METRICS = frozenset({"save_percentage", "expected_save_percentage"})
+DERIVED_METRICS = frozenset(
+    {"save_percentage", "expected_save_percentage", "pass_completion"}
+)
 
 
 def _float(row: dict, col: str) -> float:
@@ -63,16 +65,22 @@ def _float(row: dict, col: str) -> float:
 
 
 def derived_metric_value(mid: str, row: dict, mins: float) -> float | None:
-    """Derive Save % / Expected Save % when the export only has save components."""
-    saves = _float(row, "Svh") + _float(row, "Svp") + _float(row, "Svt")
-    gc = _float(row, "Goals Conceded")
-    shots = saves + gc
-    if shots <= 0:
-        return None
-    if mid == "save_percentage":
-        return 100.0 * saves / shots
-    if mid == "expected_save_percentage":
+    """Derive metrics when the calibration CSV lacks named columns."""
+    if mid in ("save_percentage", "expected_save_percentage"):
+        saves = _float(row, "Svh") + _float(row, "Svp") + _float(row, "Svt")
+        gc = _float(row, "Goals Conceded")
+        shots = saves + gc
+        if shots <= 0:
+            return None
+        if mid == "save_percentage":
+            return 100.0 * saves / shots
         return 100.0 * (saves - _float(row, "xGP")) / shots
+    if mid == "pass_completion":
+        attempted = _float(row, "Pas A")
+        completed = _float(row, "Ps C")
+        if attempted <= 0:
+            return None
+        return 100.0 * completed / attempted
     return None
 
 
