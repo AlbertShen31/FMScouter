@@ -51,11 +51,15 @@
     {
       "id": "sweeper_keeper",
       "label": "Sweeper Keeper",
-      "description": "Plays out confidently with progressive passing and low possession loss.",
+      "description": "Willingness/ability to come off the line and proactively eliminate danger.",
       "icon": "game-icons:soccer-field",
       "category": "gk",
       "groups": ["gk"],
-      "metrics": ["progressive_passes", "passes_attempted", "possession_lost"]
+      "metrics": [
+        "possession_won",
+        "interceptions",
+        "clearances"
+      ]
     },
     {
       "id": "distributor",
