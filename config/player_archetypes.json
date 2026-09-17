@@ -109,6 +109,20 @@
       ]
     },
     {
+      "id": "box_defender",
+      "label": "Box Defender",
+      "description": "Defends the penalty area and blocks danger.",
+      "icon": "game-icons:brick-wall",
+      "category": "defending",
+      "groups": ["def"],
+      "metrics": [
+        "clearances",
+        "shots_blocked",
+        "blocks",
+        "key_headers"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",
