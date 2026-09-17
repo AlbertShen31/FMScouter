@@ -86,7 +86,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Goals From Outside The Box": "Shooting detail; not scored",
     "Headers Attempted": "Header total; per-90 / % variants scored",
     "Headers Lost per 90": "Not in stats benchmarks",
-    "Key Headers per 90": "Not in stats benchmarks",
+    "Key Headers per 90": "Stats percentile (ui_hidden; Aerial Defender archetype)",
     "Key Tackles": "Tackle detail; not scored",
     "Key Tackles per 90": "Not in stats benchmarks",
     "Last Match Rating": "Single-match rating; not parsed",

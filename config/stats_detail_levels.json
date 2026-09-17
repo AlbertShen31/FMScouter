@@ -258,6 +258,82 @@
         }
       }
     },
+    "headers_won": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.1023,
+          "b": 0.9729
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.0961,
+          "b": 0.9804
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.7944,
+          "b": 1.3203
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7892,
+          "b": 1.3559
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.0935,
+          "b": 0.8107
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.1099,
+          "b": 0.7939
+        }
+      }
+    },
+    "header_win_rate": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 2.1401,
+          "b": 0.8322
+        },
+        "inactive": {
+          "type": "power",
+          "a": 2.1559,
+          "b": 0.8315
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.0583,
+          "b": 1.0148
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.9133,
+          "b": 1.0541
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 2.1401,
+          "b": 0.8075
+        },
+        "inactive": {
+          "type": "power",
+          "a": 2.2387,
+          "b": 0.7971
+        }
+      }
+    },
     "interceptions": {
       "gk": {
         "no_detail": {

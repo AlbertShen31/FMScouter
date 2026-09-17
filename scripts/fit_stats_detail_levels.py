@@ -48,6 +48,7 @@ METRICS = {
     "dribbles": ("Drb", True),
     "pressures": ("Pres A", True),
     "headers_attempted": ("Hdrs A", True),
+    "headers_won": ("Hdrs", True),
     "mistakes_leading_to_goals": ("MLG", True),
 }
 
@@ -197,6 +198,10 @@ def analyze(source: Path) -> dict:
                 val = derived_metric_value("pass_completion", row, mins)
                 if val is not None:
                     bands[pg]["pass_completion"][level]["vals"].append(val)
+                ha = _float(row, "Hdrs A")
+                hw = _float(row, "Hdrs")
+                if ha > 0 and pg != "gk":
+                    bands[pg]["header_win_rate"][level]["vals"].append(100.0 * hw / ha)
 
     results: dict = {}
     for pg, metrics in bands.items():

@@ -84,13 +84,17 @@
       "metrics": ["possession_won", "tackles_attempted", "interceptions"]
     },
     {
-      "id": "aerial_threat",
-      "label": "Aerial Threat",
-      "description": "Contests and wins a high share of aerial duels.",
+      "id": "aerial_defender",
+      "label": "Aerial Defender",
+      "description": "Dominates aerial duels.",
       "icon": "game-icons:high-kick",
       "category": "defending",
       "groups": ["def", "mid", "fwd"],
-      "metrics": ["header_win_rate", "headers_attempted"]
+      "metrics": [
+        "headers_won",
+        "header_win_rate",
+        "key_headers"
+      ]
     },
     {
       "id": "ball_playing_defender",
