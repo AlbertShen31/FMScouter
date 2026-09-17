@@ -84,6 +84,19 @@
       "metrics": ["possession_won", "tackles_attempted", "interceptions"]
     },
     {
+      "id": "stopper",
+      "label": "Stopper",
+      "description": "Proactively engages and wins the ball.",
+      "icon": "game-icons:crossed-swords",
+      "category": "defending",
+      "groups": ["def", "mid", "fwd"],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "possession_won"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",

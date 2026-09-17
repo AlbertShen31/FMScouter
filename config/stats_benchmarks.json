@@ -213,6 +213,18 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "tackles_completed": {
+      "label": "Tackles Completed",
+      "abbr": "Tck C/90",
+      "csv": [
+        "Tackles Completed",
+        "Tackles Completed per 90",
+        "Tck C",
+        "Tck C/90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90"
+    },
     "interceptions": {
       "label": "Interceptions",
       "abbr": "Int",
@@ -557,6 +569,12 @@
           2.25,
           3.48
         ],
+        "tackles_completed": [
+          0.6,
+          0.84,
+          1.83,
+          2.53
+        ],
         "interceptions": [
           2.38,
           2.65,
@@ -691,6 +709,12 @@
           2.34,
           2.72
         ],
+        "tackles_completed": [
+          0.84,
+          1.17,
+          1.45,
+          1.77
+        ],
         "interceptions": [
           1.96,
           2.32,
@@ -818,6 +842,12 @@
           1.24,
           2.34,
           2.94
+        ],
+        "tackles_completed": [
+          0.28,
+          0.69,
+          1.38,
+          1.94
         ],
         "interceptions": [
           0.9,

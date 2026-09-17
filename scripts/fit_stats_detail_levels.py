@@ -38,6 +38,7 @@ METRICS = {
     "clearances": ("Clearances", True),
     "blocks": ("Blk", True),
     "tackles_attempted": ("Tck A", True),
+    "tackles_completed": ("Tck C", True),
     "key_passes": ("Key", True),
     "xa": ("xA", True),
     "shots": ("Shots", True),
@@ -202,6 +203,10 @@ def analyze(source: Path) -> dict:
                 hw = _float(row, "Hdrs")
                 if ha > 0 and pg != "gk":
                     bands[pg]["header_win_rate"][level]["vals"].append(100.0 * hw / ha)
+                ta = _float(row, "Tck A")
+                tc = _float(row, "Tck C")
+                if ta > 0 and pg != "gk":
+                    bands[pg]["tackle_win_rate"][level]["vals"].append(100.0 * tc / ta)
 
     results: dict = {}
     for pg, metrics in bands.items():

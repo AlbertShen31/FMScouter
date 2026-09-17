@@ -736,6 +736,82 @@
         }
       }
     },
+    "tackles_completed": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8149,
+          "b": 0.9989
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.7957,
+          "b": 1.036
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.4919,
+          "b": 1.8249
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.4686,
+          "b": 1.977
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.6799,
+          "b": 1.239
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.667,
+          "b": 1.2346
+        }
+      }
+    },
+    "tackle_win_rate": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.4674,
+          "b": 1.1835
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5578,
+          "b": 1.1422
+        }
+      },
+      "mid": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3671,
+          "b": 1.2512
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3714,
+          "b": 1.2481
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.5917,
+          "b": 1.132
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5464,
+          "b": 1.1509
+        }
+      }
+    },
     "xg_prevented": {
       "gk": {
         "no_detail": {
