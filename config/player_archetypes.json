@@ -93,6 +93,20 @@
       "metrics": ["header_win_rate", "headers_attempted"]
     },
     {
+      "id": "ball_playing_defender",
+      "label": "Ball-Playing Defender",
+      "description": "Retains and progresses possession from CB.",
+      "icon": "game-icons:chess-rook",
+      "category": "possession",
+      "groups": ["def"],
+      "metrics": [
+        "progressive_passes",
+        "pass_completion",
+        "passes_attempted",
+        "possession_lost"
+      ]
+    },
+    {
       "id": "presser",
       "label": "Presser",
       "description": "Applies intense pressing pressure to force turnovers high up the pitch.",

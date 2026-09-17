@@ -408,6 +408,18 @@
           "a": 24.0021,
           "b": 0.2839
         }
+      },
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 2.8343,
+          "b": 0.77
+        },
+        "inactive": {
+          "type": "power",
+          "a": 3.2209,
+          "b": 0.742
+        }
       }
     },
     "possession_lost": {

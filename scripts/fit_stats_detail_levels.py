@@ -188,11 +188,15 @@ def analyze(source: Path) -> dict:
                     continue
                 bands[pg][mid][level]["vals"].append(val)
             if pg == "gk":
-                for mid in DERIVED_METRICS:
+                for mid in ("save_percentage", "expected_save_percentage"):
                     val = derived_metric_value(mid, row, mins)
                     if val is None:
                         continue
                     bands[pg][mid][level]["vals"].append(val)
+            if pg in ("gk", "def", "mid", "fwd"):
+                val = derived_metric_value("pass_completion", row, mins)
+                if val is not None:
+                    bands[pg]["pass_completion"][level]["vals"].append(val)
 
     results: dict = {}
     for pg, metrics in bands.items():
