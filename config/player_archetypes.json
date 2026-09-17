@@ -97,6 +97,18 @@
       ]
     },
     {
+      "id": "cover_defender",
+      "label": "Cover Defender",
+      "description": "Reads danger and cuts out attacks.",
+      "icon": "game-icons:intercept-ball",
+      "category": "defending",
+      "groups": ["def"],
+      "metrics": [
+        "interceptions",
+        "possession_won"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",
