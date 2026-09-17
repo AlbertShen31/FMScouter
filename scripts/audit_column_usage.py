@@ -79,6 +79,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Distance": "Physical distance total; not scored",
     "Expected Save Percentage": "GK percentile (ui_hidden; Shot Stopper archetype)",
     "Form": "Generic form string; not parsed",
+    "Fouls Made": "Stats percentile (ui_hidden; Aggressive Defender archetype)",
     "Free Kick Shots": "Shooting detail; not scored",
     "Game Win Ratio": "Results aggregate; not parsed",
     "Games Drawn": "Results aggregate; not parsed",
@@ -135,6 +136,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Tcon/90": "Team conceded per 90; not parsed",
     "Team Goals": "Team context; not parsed",
     "Tgls/90": "Team goals per 90; not parsed",
+    "Yellow Cards": "Stats percentile (ui_hidden; Aggressive Defender archetype)",
     "xG-OP": "Open-play xG delta; not scored",
     "xG/shot": "Shot quality average; not scored",
 }

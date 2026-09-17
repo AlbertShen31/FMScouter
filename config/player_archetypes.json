@@ -123,6 +123,26 @@
       ]
     },
     {
+      "id": "aggressive_defender",
+      "label": "Aggressive Defender",
+      "description": "Physical, high-engagement CB (Enforcer).",
+      "icon": "game-icons:fist",
+      "category": "defending",
+      "groups": ["def"],
+      "metrics": [
+        "tackles_attempted",
+        "fouls_made",
+        "yellow_cards",
+        "pressures"
+      ],
+      "metrics_fallback": [
+        "tackles_attempted",
+        "fouls_made",
+        "yellow_cards"
+      ],
+      "note": "Uses pressures when present in the active threshold pack; otherwise tackles + fouls + yellows."
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",

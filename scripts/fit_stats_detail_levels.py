@@ -51,6 +51,8 @@ METRICS = {
     "headers_attempted": ("Hdrs A", True),
     "headers_won": ("Hdrs", True),
     "mistakes_leading_to_goals": ("MLG", True),
+    "fouls_made": ("Fouls Made", True),
+    "yellow_cards": ("Yel", True),
 }
 
 # Calibration CSV uses Svh/Svp/Svt + Goals Conceded (+ xGP) instead of named %.

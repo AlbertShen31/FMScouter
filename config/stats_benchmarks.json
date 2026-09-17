@@ -360,6 +360,29 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "fouls_made": {
+      "label": "Fouls Made",
+      "abbr": "Fouls/90",
+      "csv": [
+        "Fouls Made",
+        "Fouls Made per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
+    "yellow_cards": {
+      "label": "Yellow Cards",
+      "abbr": "Yel/90",
+      "csv": [
+        "Yellow Cards",
+        "Yel",
+        "Yellow Cards per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
     "crosses_completed": {
       "label": "Open-Play Crosses Completed",
       "abbr": "OP Cr C",
@@ -607,6 +630,24 @@
           0.3,
           0.4,
           0.5
+        ],
+        "pressures": [
+          0.68,
+          0.92,
+          1.89,
+          2.56
+        ],
+        "fouls_made": [
+          0.35,
+          0.54,
+          0.88,
+          1.47
+        ],
+        "yellow_cards": [
+          0.041,
+          0.08,
+          0.127,
+          0.203
         ]
       },
       "final_third": {

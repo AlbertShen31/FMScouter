@@ -168,6 +168,20 @@
         }
       }
     },
+    "fouls_made": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.0205,
+          "b": 0.6778
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.0339,
+          "b": 0.6418
+        }
+      }
+    },
     "goals": {
       "def": {
         "no_detail": {
@@ -598,6 +612,20 @@
         }
       }
     },
+    "pressures": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.1292,
+          "b": 0.6767
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.1079,
+          "b": 0.6909
+        }
+      }
+    },
     "progressive_passes": {
       "gk": {
         "no_detail": {
@@ -809,6 +837,20 @@
           "type": "power",
           "a": 0.5464,
           "b": 1.1509
+        }
+      }
+    },
+    "yellow_cards": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8394,
+          "b": 0.7582
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.9039,
+          "b": 0.6808
         }
       }
     },
