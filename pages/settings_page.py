@@ -685,9 +685,9 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                             className="st-subsection-title",
                         ),
                         html.Small(
-                            "High tiers: every required metric percentile clears the floor "
-                            "(Bronze ≤ Silver ≤ Gold). Opposite tier: every metric sits at "
-                            "or under the Rust ceiling. Evaluated per eligible "
+                            "High tiers: average of required metric percentiles clears the "
+                            "floor (Bronze ≤ Silver ≤ Gold). Opposite tier: that average "
+                            "sits at or under the Rust ceiling. Evaluated per eligible "
                             "GK/DEF/MID/FWD group.",
                             className="text-muted d-block mb-2",
                         ),

@@ -1,4 +1,4 @@
-"""Assign player archetypes from group percentile floors.
+"""Assign player archetypes from average group percentile floors/ceilings.
 
 Game Icons attributions: https://game-icons.net (CC BY 3.0) via Iconify.
 """
@@ -510,13 +510,13 @@ def _high_tier_for_percentiles(
     percentiles: list[float],
     floors: dict[str, float],
 ) -> ArchetypeTierId | None:
-    """All metrics ≥ floor → Bronze / Silver / Gold (strict)."""
+    """Mean of required metric percentiles ≥ floor → Bronze / Silver / Gold."""
     if not percentiles:
         return None
-    lowest = min(percentiles)
+    average = sum(percentiles) / len(percentiles)
     for tier in HIGH_TIERS:
         floor = float(floors.get(tier, 0))
-        if lowest >= floor:
+        if average >= floor:
             return tier  # type: ignore[return-value]
     return None
 
@@ -525,12 +525,12 @@ def _low_tier_for_percentiles(
     percentiles: list[float],
     ceilings: dict[str, float],
 ) -> ArchetypeTierId | None:
-    """All metrics ≤ ceiling → Rust (single opposite tier)."""
+    """Mean of required metric percentiles ≤ ceiling → Rust."""
     if not percentiles:
         return None
-    highest = max(percentiles)
+    average = sum(percentiles) / len(percentiles)
     ceiling = float(ceilings.get("rust", 30))
-    if highest <= ceiling:
+    if average <= ceiling:
         return "rust"
     return None
 

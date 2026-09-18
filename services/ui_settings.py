@@ -245,8 +245,8 @@ DEFAULTS: dict[str, Any] = {
         "formative": {"bg": "#ffedd5", "fg": "#c2410c"},
         "unsuitable": {"bg": "#fee2e2", "fg": "#b91c1c"},
     },
-    # Archetype badges: all required metric percentiles must clear the floor (high)
-    # or sit under the ceiling (low / opposite tiers).
+    # Archetype badges: average of required metric percentiles must clear the floor
+    # (high) or sit under the ceiling (low / opposite tiers).
     "archetype_tier_floors": {"bronze": 70, "silver": 80, "gold": 90},
     "archetype_tier_ceilings": {"rust": 30},
 }
