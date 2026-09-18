@@ -487,6 +487,43 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "xg_per_shot": {
+      "label": "xG per Shot",
+      "abbr": "xG/shot",
+      "csv": [
+        "xG/shot",
+        "xG per Shot"
+      ],
+      "higher_is_better": true,
+      "unit": "ratio",
+      "ui_hidden": true
+    },
+    "shots_on_target_pct": {
+      "label": "Shots on Target Percentage",
+      "abbr": "SOT %",
+      "csv": [
+        "Shots on Target Percentage",
+        "Shots On Target Percentage",
+        "Shots on Target %",
+        "SOT %"
+      ],
+      "higher_is_better": true,
+      "unit": "percent",
+      "ui_hidden": true
+    },
+    "fouls_against": {
+      "label": "Fouls Against",
+      "abbr": "Fouled/90",
+      "csv": [
+        "Fouls Against",
+        "Fouls Against per 90",
+        "Fouled",
+        "Fouled per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
     "sprints": {
       "label": "Sprints",
       "abbr": "Spr",
@@ -1130,6 +1167,24 @@
           10.86,
           15.59,
           18.17
+        ],
+        "fouls_against": [
+          0.8,
+          1.04,
+          1.33,
+          1.73
+        ],
+        "pressures_attempted": [
+          2.61,
+          5.03,
+          9.0,
+          11.38
+        ],
+        "pressures": [
+          0.55,
+          1.2,
+          2.15,
+          2.9
         ]
       },
       "final_third": {
@@ -1198,6 +1253,18 @@
           0.373,
           0.785,
           1.166
+        ],
+        "xg_per_shot": [
+          0.093,
+          0.114,
+          0.14,
+          0.173
+        ],
+        "shots_on_target_pct": [
+          42.86,
+          47.83,
+          52.0,
+          56.73
         ]
       },
       "possession": {

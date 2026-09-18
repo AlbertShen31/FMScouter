@@ -56,6 +56,7 @@ METRICS = {
     "headers_won": ("Hdrs", True),
     "mistakes_leading_to_goals": ("MLG", True),
     "fouls_made": ("Fouls Made", True),
+    "fouls_against": ("Fouls Against", True),
     "yellow_cards": ("Yel", True),
     "sprints": ("Sprints", True),
     "distance": ("Distance", True),
@@ -220,6 +221,14 @@ def analyze(source: Path) -> dict:
                 if cra > 0 and pg != "gk":
                     bands[pg]["open_play_cross_completion"][level]["vals"].append(
                         100.0 * crc / cra
+                    )
+                shots = _float(row, "Shots")
+                if shots > 0 and pg != "gk":
+                    bands[pg]["xg_per_shot"][level]["vals"].append(
+                        _float(row, "xG") / shots
+                    )
+                    bands[pg]["shots_on_target_pct"][level]["vals"].append(
+                        100.0 * _float(row, "ShT") / shots
                     )
 
     results: dict = {}

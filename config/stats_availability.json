@@ -58,7 +58,8 @@
       "pressures",
       "crosses_completed",
       "sprints",
-      "crosses_attempted"
+      "crosses_attempted",
+      "pressures_attempted"
     ],
     "gk": [
       "xg_prevented",

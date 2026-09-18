@@ -127,7 +127,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Saves Tipped": "GK save type; not parsed",
     "Saves per 90": "GK saves rate; not in benchmarks",
     "Shots From Outside The Box Per 90 minutes": "Shooting detail; not scored",
-    "Shots on Target Percentage": "SOT %; SOT per-90 scored",
+    "Shots on Target Percentage": "Percentile (ui_hidden; Poacher archetype)",
     "Shutouts": "GK shutouts; not scored",
     "Starts": "Lineup count; not parsed",
     "Tackled Completed": "Tackle total (FM typo); per-90 from attempts scored",
@@ -138,7 +138,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Tgls/90": "Team goals per 90; not parsed",
     "Yellow Cards": "Stats percentile (ui_hidden; Aggressive Defender archetype)",
     "xG-OP": "Open-play xG delta; not scored",
-    "xG/shot": "Shot quality average; not scored",
+    "xG/shot": "Percentile (ui_hidden; Poacher archetype)",
 }
 
 # Finance keys shown in player modal (components/player_modal.py).

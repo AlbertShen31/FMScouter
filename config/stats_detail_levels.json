@@ -890,6 +890,18 @@
           "a": 0.3812,
           "b": 1.8775
         }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8836,
+          "b": 0.9392
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8533,
+          "b": 0.9595
+        }
       }
     },
     "pressures_attempted": {
@@ -903,6 +915,18 @@
           "type": "power",
           "a": 1.2474,
           "b": 0.8341
+        }
+      },
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3466,
+          "b": 1.3851
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3313,
+          "b": 1.4007
         }
       }
     },
@@ -1239,6 +1263,48 @@
           "type": "power",
           "a": 0.3862,
           "b": 1.3399
+        }
+      }
+    },
+    "xg_per_shot": {
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.2754,
+          "b": 0.4326
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.273,
+          "b": 0.4293
+        }
+      }
+    },
+    "shots_on_target_pct": {
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.2326,
+          "b": 1.3345
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.1784,
+          "b": 1.4024
+        }
+      }
+    },
+    "fouls_against": {
+      "fwd": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.1455,
+          "b": 0.9062
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.1904,
+          "b": 0.8985
         }
       }
     }

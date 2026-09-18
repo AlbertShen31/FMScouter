@@ -445,6 +445,119 @@
       ]
     },
     {
+      "id": "poacher",
+      "label": "Poacher",
+      "description": "Gets into high-quality scoring positions and finishes.",
+      "icon": "game-icons:crosshair",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "goals",
+        "xg_per_shot",
+        "shots_on_target_pct"
+      ]
+    },
+    {
+      "id": "advanced_forward",
+      "label": "Advanced Forward",
+      "description": "High-volume, mobile scoring threat.",
+      "icon": "game-icons:rocket",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "sprints",
+        "dribbles"
+      ]
+    },
+    {
+      "id": "target_forward",
+      "label": "Target Forward",
+      "description": "Provides an aerial outlet and physical presence.",
+      "icon": "game-icons:giant",
+      "category": "defending",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "headers_attempted",
+        "headers_won",
+        "header_win_rate",
+        "fouls_against"
+      ]
+    },
+    {
+      "id": "complete_forward",
+      "label": "Complete Forward",
+      "description": "Contributes scoring, creation, carrying and aerially.",
+      "icon": "game-icons:trophy",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "expected_assists",
+        "key_passes",
+        "dribbles",
+        "headers_won"
+      ]
+    },
+    {
+      "id": "deep_lying_forward",
+      "label": "Deep-Lying Forward",
+      "description": "Drops off to link possession and create.",
+      "icon": "game-icons:return-arrow",
+      "category": "possession",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "passes_attempted",
+        "progressive_passes",
+        "expected_assists",
+        "key_passes"
+      ]
+    },
+    {
+      "id": "pressing_forward",
+      "label": "Pressing Forward",
+      "description": "Defends aggressively from the front.",
+      "icon": "game-icons:hound",
+      "category": "defending",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "pressures_attempted",
+        "pressures",
+        "possession_won",
+        "sprints"
+      ]
+    },
+    {
+      "id": "inside_forward",
+      "label": "Inside Forward",
+      "description": "Wide forward who carries inside and becomes a scoring threat.",
+      "icon": "game-icons:curved-arrow",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "dribbles",
+        "sprints"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",
