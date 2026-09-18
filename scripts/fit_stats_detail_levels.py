@@ -58,6 +58,7 @@ METRICS = {
     "fouls_made": ("Fouls Made", True),
     "yellow_cards": ("Yel", True),
     "sprints": ("Sprints", True),
+    "distance": ("Distance", True),
 }
 
 # Calibration CSV uses Svh/Svp/Svt + Goals Conceded (+ xGP) instead of named %.

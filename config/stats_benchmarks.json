@@ -498,6 +498,18 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "distance": {
+      "label": "Distance",
+      "abbr": "Dist/90",
+      "csv": [
+        "Dist/90",
+        "Distance",
+        "Distance per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
     "conversion_rate": {
       "label": "Conversion Rate",
       "abbr": "Conv %",
@@ -918,6 +930,18 @@
           0.1,
           0.2,
           0.3
+        ],
+        "pressures": [
+          1.31,
+          1.73,
+          2.05,
+          2.36
+        ],
+        "sprints": [
+          11.8,
+          14.09,
+          16.0,
+          18.46
         ]
       },
       "final_third": {
@@ -956,6 +980,36 @@
           1.2,
           1.6,
           2.08
+        ],
+        "non_penalty_xg": [
+          0.065,
+          0.124,
+          0.19,
+          0.27
+        ],
+        "chances_created": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ],
+        "open_play_key_passes": [
+          0.6,
+          1.0,
+          1.5,
+          1.9
+        ],
+        "crosses_attempted": [
+          0.22,
+          0.73,
+          1.93,
+          3.97
+        ],
+        "crosses_completed": [
+          0.06,
+          0.18,
+          0.38,
+          0.69
         ]
       },
       "possession": {
@@ -982,6 +1036,18 @@
           54.66,
           60.74,
           68.83
+        ],
+        "pass_completion": [
+          88.31,
+          89.61,
+          90.6,
+          91.66
+        ],
+        "distance": [
+          12.15,
+          12.47,
+          12.74,
+          13.05
         ]
       }
     },
@@ -1058,6 +1124,12 @@
           0.0,
           0.1,
           0.2
+        ],
+        "sprints": [
+          7.42,
+          10.86,
+          15.59,
+          18.17
         ]
       },
       "final_third": {
@@ -1096,6 +1168,36 @@
           1.53,
           1.95,
           2.31
+        ],
+        "non_penalty_xg": [
+          0.196,
+          0.258,
+          0.318,
+          0.39
+        ],
+        "chances_created": [
+          0.1,
+          0.1,
+          0.2,
+          0.3
+        ],
+        "open_play_key_passes": [
+          0.9,
+          1.1,
+          1.4,
+          1.8
+        ],
+        "crosses_attempted": [
+          0.67,
+          1.75,
+          3.93,
+          6.06
+        ],
+        "crosses_completed": [
+          0.156,
+          0.373,
+          0.785,
+          1.166
         ]
       },
       "possession": {

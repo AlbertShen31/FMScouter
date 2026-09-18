@@ -1,16 +1,44 @@
 {
   "source": "FMScouter player archetypes (Game Icons via Iconify; CC BY 3.0)",
   "tiers": [
-    {"id": "bronze", "label": "Bronze", "polarity": "high"},
-    {"id": "silver", "label": "Silver", "polarity": "high"},
-    {"id": "gold", "label": "Gold", "polarity": "high"},
-    {"id": "rust", "label": "Rust", "polarity": "low"}
+    {
+      "id": "bronze",
+      "label": "Bronze",
+      "polarity": "high"
+    },
+    {
+      "id": "silver",
+      "label": "Silver",
+      "polarity": "high"
+    },
+    {
+      "id": "gold",
+      "label": "Gold",
+      "polarity": "high"
+    },
+    {
+      "id": "rust",
+      "label": "Rust",
+      "polarity": "low"
+    }
   ],
   "filter_categories": [
-    {"id": "gk", "label": "GK"},
-    {"id": "defending", "label": "Defending"},
-    {"id": "possession", "label": "Possession"},
-    {"id": "final_third", "label": "Final Third"}
+    {
+      "id": "gk",
+      "label": "GK"
+    },
+    {
+      "id": "defending",
+      "label": "Defending"
+    },
+    {
+      "id": "possession",
+      "label": "Possession"
+    },
+    {
+      "id": "final_third",
+      "label": "Final Third"
+    }
   ],
   "default_floors": {
     "bronze": 70,
@@ -27,7 +55,9 @@
       "description": "High save rates versus expectation, strong xG prevented, and few mistakes leading to goals.",
       "icon": "game-icons:goal-keeper",
       "category": "gk",
-      "groups": ["gk"],
+      "groups": [
+        "gk"
+      ],
       "metrics": [
         "save_percentage",
         "expected_save_percentage",
@@ -41,7 +71,9 @@
       "description": "Faces penalties often and stops a high share of them.",
       "icon": "game-icons:shield-reflect",
       "category": "gk",
-      "groups": ["gk"],
+      "groups": [
+        "gk"
+      ],
       "metrics": [
         "penalties_saved_ratio",
         "penalties_saved",
@@ -54,7 +86,9 @@
       "description": "Willingness/ability to come off the line and proactively eliminate danger.",
       "icon": "game-icons:soccer-field",
       "category": "gk",
-      "groups": ["gk"],
+      "groups": [
+        "gk"
+      ],
       "metrics": [
         "possession_won",
         "interceptions",
@@ -67,7 +101,9 @@
       "description": "High passing volume with strong completion and low possession loss.",
       "icon": "game-icons:throwing-ball",
       "category": "gk",
-      "groups": ["gk"],
+      "groups": [
+        "gk"
+      ],
       "metrics": [
         "passes_attempted",
         "pass_completion",
@@ -80,8 +116,16 @@
       "description": "Wins possession through tackles, interceptions, and recoveries.",
       "icon": "game-icons:foot-trip",
       "category": "defending",
-      "groups": ["def", "mid", "fwd"],
-      "metrics": ["possession_won", "tackles_attempted", "interceptions"]
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "possession_won",
+        "tackles_attempted",
+        "interceptions"
+      ]
     },
     {
       "id": "stopper",
@@ -89,7 +133,11 @@
       "description": "Proactively engages and wins the ball.",
       "icon": "game-icons:crossed-swords",
       "category": "defending",
-      "groups": ["def", "mid", "fwd"],
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
       "metrics": [
         "tackles_completed",
         "tackle_win_rate",
@@ -102,7 +150,9 @@
       "description": "Reads danger and cuts out attacks.",
       "icon": "game-icons:intercept-ball",
       "category": "defending",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "interceptions",
         "possession_won"
@@ -114,7 +164,9 @@
       "description": "Defends the penalty area and blocks danger.",
       "icon": "game-icons:brick-wall",
       "category": "defending",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "clearances",
         "shots_blocked",
@@ -128,7 +180,9 @@
       "description": "Physical, high-engagement CB (Enforcer).",
       "icon": "game-icons:fist",
       "category": "defending",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "tackles_attempted",
         "fouls_made",
@@ -148,7 +202,9 @@
       "description": "Wins duels and shuts down his flank.",
       "icon": "game-icons:shield",
       "category": "defending",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "tackles_completed",
         "tackle_win_rate",
@@ -162,7 +218,9 @@
       "description": "Aggressively closes down opponents.",
       "icon": "game-icons:lightning-helix",
       "category": "defending",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "pressures_attempted",
         "pressures",
@@ -181,7 +239,9 @@
       "description": "Advances possession through passing and carrying.",
       "icon": "game-icons:wingfoot",
       "category": "possession",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "progressive_passes",
         "dribbles",
@@ -195,7 +255,9 @@
       "description": "Supplies the box through crosses.",
       "icon": "game-icons:boomerang",
       "category": "final_third",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "crosses_attempted",
         "crosses_completed",
@@ -208,7 +270,9 @@
       "description": "Creates chances rather than simply crossing frequently.",
       "icon": "game-icons:crystal-ball",
       "category": "final_third",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "expected_assists",
         "key_passes",
@@ -222,7 +286,9 @@
       "description": "Gets forward and becomes a direct goal threat.",
       "icon": "game-icons:fire-dash",
       "category": "final_third",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "non_penalty_xg",
         "shots",
@@ -231,12 +297,164 @@
       ]
     },
     {
+      "id": "anchor",
+      "label": "Anchor",
+      "description": "Protects the defense through positioning and ball recovery.",
+      "icon": "game-icons:anchor",
+      "category": "defending",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "interceptions",
+        "possession_won",
+        "tackle_win_rate"
+      ]
+    },
+    {
+      "id": "ball_winning_midfielder",
+      "label": "Ball-Winning Midfielder",
+      "description": "Actively engages opponents and wins the ball.",
+      "icon": "game-icons:catch",
+      "category": "defending",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "possession_won",
+        "pressures"
+      ]
+    },
+    {
+      "id": "deep_lying_playmaker",
+      "label": "Deep-Lying Playmaker",
+      "description": "Controls possession and progresses from deep.",
+      "icon": "game-icons:puppet",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "passes_attempted",
+        "pass_completion",
+        "progressive_passes",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "box_to_box_midfielder",
+      "label": "Box-to-Box Midfielder",
+      "description": "Contributes across both phases with high activity.",
+      "icon": "game-icons:journey",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "distance",
+        "possession_won",
+        "progressive_passes",
+        "non_penalty_xg",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "mezzala",
+      "label": "Mezzala / Progressive Midfielder",
+      "description": "Carries and progresses the ball into advanced areas.",
+      "icon": "game-icons:path-distance",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "dribbles",
+        "progressive_passes",
+        "sprints",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "advanced_playmaker",
+      "label": "Advanced Playmaker",
+      "description": "Primary chance creator.",
+      "icon": "game-icons:magic-swirl",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "chances_created",
+        "open_play_key_passes"
+      ]
+    },
+    {
+      "id": "attacking_midfielder",
+      "label": "Attacking Midfielder",
+      "description": "Gets into scoring positions and provides goals.",
+      "icon": "game-icons:bullseye",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "goals",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "wide_playmaker",
+      "label": "Wide Playmaker",
+      "description": "Creates from wide midfield positions.",
+      "icon": "game-icons:lyre",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "crosses_completed",
+        "dribbles"
+      ]
+    },
+    {
+      "id": "wide_midfielder",
+      "label": "Wide Midfielder / Winger",
+      "description": "Direct wide progression through running and crossing.",
+      "icon": "game-icons:feather",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles",
+        "sprints",
+        "crosses_attempted",
+        "crosses_completed"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",
       "icon": "game-icons:high-kick",
       "category": "defending",
-      "groups": ["def", "mid", "fwd"],
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
       "metrics": [
         "headers_won",
         "header_win_rate",
@@ -249,7 +467,9 @@
       "description": "Retains and progresses possession from CB.",
       "icon": "game-icons:chess-rook",
       "category": "possession",
-      "groups": ["def"],
+      "groups": [
+        "def"
+      ],
       "metrics": [
         "progressive_passes",
         "pass_completion",
@@ -263,9 +483,17 @@
       "description": "Applies intense pressing pressure to force turnovers high up the pitch.",
       "icon": "game-icons:sprint",
       "category": "defending",
-      "groups": ["mid", "fwd"],
-      "metrics": ["pressures"],
-      "metrics_fallback": ["possession_won", "tackles_attempted"],
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "pressures"
+      ],
+      "metrics_fallback": [
+        "possession_won",
+        "tackles_attempted"
+      ],
       "note": "Uses pressures when present in the active threshold pack for the group; otherwise possession_won + tackles_attempted."
     },
     {
@@ -274,8 +502,15 @@
       "description": "Carries or dribbles often while keeping possession losses low.",
       "icon": "game-icons:body-balance",
       "category": "possession",
-      "groups": ["def", "mid", "fwd"],
-      "metrics": ["dribbles", "possession_lost"]
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles",
+        "possession_lost"
+      ]
     },
     {
       "id": "progressive_passer",
@@ -283,8 +518,15 @@
       "description": "Moves the team forward with frequent progressive passes.",
       "icon": "game-icons:arrow-dunk",
       "category": "possession",
-      "groups": ["def", "mid", "fwd"],
-      "metrics": ["progressive_passes", "passes_attempted"]
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "progressive_passes",
+        "passes_attempted"
+      ]
     },
     {
       "id": "playmaker",
@@ -292,8 +534,15 @@
       "description": "Creates chances with key passes, xA, and progressive distribution.",
       "icon": "game-icons:convergence-target",
       "category": "possession",
-      "groups": ["mid", "fwd"],
-      "metrics": ["key_passes", "expected_assists", "progressive_passes"]
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "key_passes",
+        "expected_assists",
+        "progressive_passes"
+      ]
     },
     {
       "id": "dribbler",
@@ -301,8 +550,13 @@
       "description": "Beats opponents regularly with a high dribble rate.",
       "icon": "game-icons:boots",
       "category": "possession",
-      "groups": ["mid", "fwd"],
-      "metrics": ["dribbles"]
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles"
+      ]
     },
     {
       "id": "goalscorer",
@@ -310,8 +564,15 @@
       "description": "Produces goals and shots at a strong expected-goals volume.",
       "icon": "game-icons:soccer-kick",
       "category": "final_third",
-      "groups": ["mid", "fwd"],
-      "metrics": ["goals", "expected_goals", "shots"]
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "goals",
+        "expected_goals",
+        "shots"
+      ]
     },
     {
       "id": "creator",
@@ -319,8 +580,15 @@
       "description": "Sets up teammates with assists, xA, and key passes.",
       "icon": "game-icons:soccer-ball",
       "category": "final_third",
-      "groups": ["mid", "fwd"],
-      "metrics": ["assists", "expected_assists", "key_passes"]
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "assists",
+        "expected_assists",
+        "key_passes"
+      ]
     },
     {
       "id": "box_threat",
@@ -328,8 +596,14 @@
       "description": "A defender who arrives in the box to shoot and score.",
       "icon": "game-icons:punch-blast",
       "category": "final_third",
-      "groups": ["def"],
-      "metrics": ["goals", "expected_goals", "shots"]
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "goals",
+        "expected_goals",
+        "shots"
+      ]
     }
   ]
 }
