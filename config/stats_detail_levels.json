@@ -130,6 +130,34 @@
         }
       }
     },
+    "crosses_attempted": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.5773,
+          "b": 0.9645
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.5323,
+          "b": 0.9695
+        }
+      }
+    },
+    "crosses_completed": {
+      "def": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.6496,
+          "offset": -0.0052
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.6632,
+          "offset": -0.0087
+        }
+      }
+    },
     "dribbles": {
       "def": {
         "no_detail": {
@@ -436,6 +464,76 @@
         }
       }
     },
+    "open_play_key_passes": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.8971,
+          "b": 1.0251
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.8169,
+          "b": 1.0294
+        }
+      }
+    },
+    "chances_created": {
+      "def": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 0.6006,
+          "offset": 0.0143
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 0.6318,
+          "offset": 0.0133
+        }
+      }
+    },
+    "expected_assists": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.2574,
+          "b": 0.463
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.2399,
+          "b": 0.4443
+        }
+      }
+    },
+    "non_penalty_xg": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.5583,
+          "b": 1.0966
+        },
+        "inactive": {
+          "type": "power",
+          "a": 2.0329,
+          "b": 1.1883
+        }
+      }
+    },
+    "open_play_cross_completion": {
+      "def": {
+        "no_detail": {
+          "type": "linear",
+          "scale": 1.373,
+          "offset": -8.1525
+        },
+        "inactive": {
+          "type": "linear",
+          "scale": 1.4259,
+          "offset": -8.4075
+        }
+      }
+    },
     "passes_attempted": {
       "gk": {
         "no_detail": {
@@ -626,6 +724,20 @@
         }
       }
     },
+    "pressures_attempted": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 1.2566,
+          "b": 0.8366
+        },
+        "inactive": {
+          "type": "power",
+          "a": 1.2474,
+          "b": 0.8341
+        }
+      }
+    },
     "progressive_passes": {
       "gk": {
         "no_detail": {
@@ -711,6 +823,20 @@
           "type": "power",
           "a": 0.8426,
           "b": 1.4761
+        }
+      }
+    },
+    "sprints": {
+      "def": {
+        "no_detail": {
+          "type": "power",
+          "a": 0.3909,
+          "b": 1.2586
+        },
+        "inactive": {
+          "type": "power",
+          "a": 0.3697,
+          "b": 1.2726
         }
       }
     },

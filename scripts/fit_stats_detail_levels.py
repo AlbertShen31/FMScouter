@@ -37,22 +37,27 @@ METRICS = {
     "interceptions": ("Itc", True),
     "clearances": ("Clearances", True),
     "blocks": ("Blk", True),
+    "crosses_attempted": ("Cr A", True),
+    "crosses_completed": ("Cr C", True),
     "tackles_attempted": ("Tck A", True),
     "tackles_completed": ("Tck C", True),
     "key_passes": ("Key", True),
-    "xa": ("xA", True),
+    "expected_assists": ("xA", True),
     "shots": ("Shots", True),
     "shots_on_target": ("ShT", True),
-    "xg": ("xG", True),
+    "expected_goals": ("xG", True),
+    "non_penalty_xg": ("xG", True),
     "goals": ("Goals", True),
     "assists": ("Assists", True),
     "dribbles": ("Drb", True),
-    "pressures": ("Pres A", True),
+    "pressures": ("Pres C", True),
+    "pressures_attempted": ("Pres A", True),
     "headers_attempted": ("Hdrs A", True),
     "headers_won": ("Hdrs", True),
     "mistakes_leading_to_goals": ("MLG", True),
     "fouls_made": ("Fouls Made", True),
     "yellow_cards": ("Yel", True),
+    "sprints": ("Sprints", True),
 }
 
 # Calibration CSV uses Svh/Svp/Svt + Goals Conceded (+ xGP) instead of named %.
@@ -209,6 +214,12 @@ def analyze(source: Path) -> dict:
                 tc = _float(row, "Tck C")
                 if ta > 0 and pg != "gk":
                     bands[pg]["tackle_win_rate"][level]["vals"].append(100.0 * tc / ta)
+                cra = _float(row, "Cr A")
+                crc = _float(row, "Cr C")
+                if cra > 0 and pg != "gk":
+                    bands[pg]["open_play_cross_completion"][level]["vals"].append(
+                        100.0 * crc / cra
+                    )
 
     results: dict = {}
     for pg, metrics in bands.items():

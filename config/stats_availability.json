@@ -49,6 +49,8 @@
       "clearances",
       "blocks",
       "key_passes",
+      "chances_created",
+      "open_play_key_passes",
       "dribbles",
       "possession_lost",
       "possession_won",

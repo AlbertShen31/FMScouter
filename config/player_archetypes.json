@@ -143,6 +143,94 @@
       "note": "Uses pressures when present in the active threshold pack; otherwise tackles + fouls + yellows."
     },
     {
+      "id": "defensive_fullback",
+      "label": "Defensive Fullback",
+      "description": "Wins duels and shuts down his flank.",
+      "icon": "game-icons:shield",
+      "category": "defending",
+      "groups": ["def"],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "interceptions",
+        "possession_won"
+      ]
+    },
+    {
+      "id": "pressing_wingback",
+      "label": "Pressing Wingback",
+      "description": "Aggressively closes down opponents.",
+      "icon": "game-icons:lightning-helix",
+      "category": "defending",
+      "groups": ["def"],
+      "metrics": [
+        "pressures_attempted",
+        "pressures",
+        "possession_won",
+        "sprints"
+      ],
+      "metrics_fallback": [
+        "possession_won",
+        "sprints"
+      ],
+      "note": "Uses Pres A/C when present in the active threshold pack; otherwise possession_won + sprints."
+    },
+    {
+      "id": "progressive_fullback",
+      "label": "Progressive Fullback",
+      "description": "Advances possession through passing and carrying.",
+      "icon": "game-icons:wingfoot",
+      "category": "possession",
+      "groups": ["def"],
+      "metrics": [
+        "progressive_passes",
+        "dribbles",
+        "pass_completion",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "crossing_wingback",
+      "label": "Crossing Wingback",
+      "description": "Supplies the box through crosses.",
+      "icon": "game-icons:boomerang",
+      "category": "final_third",
+      "groups": ["def"],
+      "metrics": [
+        "crosses_attempted",
+        "crosses_completed",
+        "open_play_cross_completion"
+      ]
+    },
+    {
+      "id": "creative_wingback",
+      "label": "Creative Wingback",
+      "description": "Creates chances rather than simply crossing frequently.",
+      "icon": "game-icons:crystal-ball",
+      "category": "final_third",
+      "groups": ["def"],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "chances_created",
+        "open_play_key_passes"
+      ]
+    },
+    {
+      "id": "attacking_wingback",
+      "label": "Attacking Wingback",
+      "description": "Gets forward and becomes a direct goal threat.",
+      "icon": "game-icons:fire-dash",
+      "category": "final_third",
+      "groups": ["def"],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "goals",
+        "sprints"
+      ]
+    },
+    {
       "id": "aerial_defender",
       "label": "Aerial Defender",
       "description": "Dominates aerial duels.",

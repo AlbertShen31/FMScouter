@@ -286,6 +286,17 @@
       "higher_is_better": true,
       "unit": "per90"
     },
+    "non_penalty_xg": {
+      "label": "Non-Penalty Expected Goals",
+      "abbr": "NP-xG",
+      "csv": [
+        "NP-xG",
+        "NP-xG/90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
     "shots": {
       "label": "Shots",
       "abbr": "Shots",
@@ -350,7 +361,7 @@
     },
     "pressures": {
       "label": "Pressures Completed",
-      "abbr": "Pres C",
+      "abbr": "Pres C/90",
       "csv": [
         "Pressures Completed",
         "Pres C",
@@ -359,6 +370,19 @@
       ],
       "higher_is_better": true,
       "unit": "per90"
+    },
+    "pressures_attempted": {
+      "label": "Pressures Attempted",
+      "abbr": "Pres A/90",
+      "csv": [
+        "Pressures Attempted",
+        "Pres A",
+        "Pressures Attempted per 90",
+        "Pres A/90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
     },
     "fouls_made": {
       "label": "Fouls Made",
@@ -384,18 +408,70 @@
       "ui_hidden": true
     },
     "crosses_completed": {
-      "label": "Open-Play Crosses Completed",
-      "abbr": "OP Cr C",
+      "label": "Crosses Completed",
+      "abbr": "Cr C/90",
       "csv": [
-        "Open Play Crosses Completed",
         "Crosses Completed",
+        "Crosses Completed per 90",
+        "Cr C",
+        "Cr C/90",
+        "Open Play Crosses Completed",
         "Open Play Crosses Completed per 90",
         "OP Crosses Completed per 90",
-        "Crosses Completed per 90",
         "OP Cr C/90"
       ],
       "higher_is_better": true,
       "unit": "per90"
+    },
+    "crosses_attempted": {
+      "label": "Crosses Attempted",
+      "abbr": "Cr A/90",
+      "csv": [
+        "Crosses Attempted",
+        "Crosses Attempted per 90",
+        "Cr A",
+        "Cr A/90",
+        "Open Play Crosses Attempted",
+        "Open Play Crosses Attempted per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
+    "open_play_cross_completion": {
+      "label": "Open Play Cross Completion",
+      "abbr": "OP Cr %",
+      "csv": [
+        "Open Play Cross Completion Percentage",
+        "Crosses Completed Ratio",
+        "Open Play Crosses Completion Ratio"
+      ],
+      "higher_is_better": true,
+      "unit": "percent",
+      "ui_hidden": true
+    },
+    "chances_created": {
+      "label": "Chances Created",
+      "abbr": "Ch C/90",
+      "csv": [
+        "Chances Created per 90",
+        "Chances Created"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
+    },
+    "open_play_key_passes": {
+      "label": "Open Play Key Passes",
+      "abbr": "OP Key/90",
+      "csv": [
+        "Open Play Key Passes per 90",
+        "Open Play Key Passes",
+        "OP Key Passes per 90"
+      ],
+      "higher_is_better": true,
+      "unit": "per90",
+      "ui_hidden": true
     },
     "shots_on_target": {
       "label": "Shots On Target",
@@ -637,6 +713,18 @@
           1.89,
           2.56
         ],
+        "pressures_attempted": [
+          2.33,
+          2.93,
+          6.99,
+          9.25
+        ],
+        "sprints": [
+          5.8,
+          8.29,
+          15.98,
+          21.41
+        ],
         "fouls_made": [
           0.35,
           0.54,
@@ -663,6 +751,12 @@
           0.03,
           0.04
         ],
+        "non_penalty_xg": [
+          0.013,
+          0.027,
+          0.047,
+          0.083
+        ],
         "shots": [
           0.25,
           0.34,
@@ -686,6 +780,36 @@
           0.29,
           0.77,
           1.39
+        ],
+        "crosses_attempted": [
+          0.03,
+          0.19,
+          1.93,
+          5.09
+        ],
+        "crosses_completed": [
+          0.0,
+          0.045,
+          0.28,
+          0.84
+        ],
+        "open_play_cross_completion": [
+          13.0,
+          16.0,
+          19.0,
+          24.0
+        ],
+        "chances_created": [
+          0.1,
+          0.1,
+          0.2,
+          0.3
+        ],
+        "open_play_key_passes": [
+          0.8,
+          1.0,
+          1.2,
+          1.5
         ]
       },
       "possession": {
