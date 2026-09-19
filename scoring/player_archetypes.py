@@ -6,7 +6,6 @@ Game Icons attributions: https://game-icons.net (CC BY 3.0) via Iconify.
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -54,13 +53,33 @@ GROUP_ORDER = ("gk", "def", "mid", "fwd")
 GROUP_ABBR = {"gk": "GK", "def": "DEF", "mid": "MID", "fwd": "FWD"}
 
 
-@lru_cache(maxsize=1)
+_data_mtime: float | None = None
+_data_cache: dict[str, Any] | None = None
+
+
 def _data() -> dict[str, Any]:
-    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+    """Load active archetype pack; reload when ``player_archetypes.json`` changes."""
+    global _data_mtime, _data_cache
+    try:
+        mtime = DATA_PATH.stat().st_mtime
+    except OSError:
+        mtime = None
+    if _data_cache is None or mtime != _data_mtime:
+        _data_cache = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        _data_mtime = mtime
+    return _data_cache
 
 
 def archetype_defs() -> list[dict[str, Any]]:
-    return list(_data().get("archetypes") or [])
+    """Active (non-archived) archetype definitions for UI and scoring."""
+    out: list[dict[str, Any]] = []
+    for arch in _data().get("archetypes") or []:
+        if not isinstance(arch, dict):
+            continue
+        if arch.get("archived"):
+            continue
+        out.append(arch)
+    return out
 
 
 def archetype_filter_categories() -> list[dict[str, str]]:
