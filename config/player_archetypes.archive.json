@@ -1,0 +1,748 @@
+{
+  "source": "FMScouter player archetypes ARCHIVE (pre position-agnostic consolidation)",
+  "tiers": [
+    {
+      "id": "bronze",
+      "label": "Bronze",
+      "polarity": "high"
+    },
+    {
+      "id": "silver",
+      "label": "Silver",
+      "polarity": "high"
+    },
+    {
+      "id": "gold",
+      "label": "Gold",
+      "polarity": "high"
+    },
+    {
+      "id": "rust",
+      "label": "Rust",
+      "polarity": "low"
+    }
+  ],
+  "filter_categories": [
+    {
+      "id": "gk",
+      "label": "GK"
+    },
+    {
+      "id": "defending",
+      "label": "Defending"
+    },
+    {
+      "id": "possession",
+      "label": "Possession"
+    },
+    {
+      "id": "final_third",
+      "label": "Final Third"
+    }
+  ],
+  "default_floors": {
+    "bronze": 70,
+    "silver": 80,
+    "gold": 90
+  },
+  "default_ceilings": {
+    "rust": 30
+  },
+  "archetypes": [
+    {
+      "id": "shot_stopper",
+      "label": "Shot Stopper",
+      "description": "High save rates versus expectation, strong xG prevented, and few mistakes leading to goals.",
+      "icon": "game-icons:goal-keeper",
+      "category": "gk",
+      "groups": [
+        "gk"
+      ],
+      "metrics": [
+        "save_percentage",
+        "expected_save_percentage",
+        "xg_prevented",
+        "mistakes_leading_to_goals"
+      ]
+    },
+    {
+      "id": "penalty_killer",
+      "label": "Penalty Killer",
+      "description": "Faces penalties often and stops a high share of them.",
+      "icon": "game-icons:shield-reflect",
+      "category": "gk",
+      "groups": [
+        "gk"
+      ],
+      "metrics": [
+        "penalties_saved_ratio",
+        "penalties_saved",
+        "penalties_faced"
+      ]
+    },
+    {
+      "id": "sweeper_keeper",
+      "label": "Sweeper Keeper",
+      "description": "Willingness/ability to come off the line and proactively eliminate danger.",
+      "icon": "game-icons:soccer-field",
+      "category": "gk",
+      "groups": [
+        "gk"
+      ],
+      "metrics": [
+        "possession_won",
+        "interceptions",
+        "clearances"
+      ]
+    },
+    {
+      "id": "distributor",
+      "label": "Distributor",
+      "description": "High passing volume with strong completion and low possession loss.",
+      "icon": "game-icons:throwing-ball",
+      "category": "gk",
+      "groups": [
+        "gk"
+      ],
+      "metrics": [
+        "passes_attempted",
+        "pass_completion",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "ball_winner",
+      "label": "Ball Winner",
+      "description": "Wins possession through tackles, interceptions, and recoveries.",
+      "icon": "game-icons:foot-trip",
+      "category": "defending",
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "possession_won",
+        "tackles_attempted",
+        "interceptions"
+      ]
+    },
+    {
+      "id": "stopper",
+      "label": "Stopper",
+      "description": "Proactively engages and wins the ball.",
+      "icon": "game-icons:crossed-swords",
+      "category": "defending",
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "possession_won"
+      ]
+    },
+    {
+      "id": "cover_defender",
+      "label": "Cover Defender",
+      "description": "Reads danger and cuts out attacks.",
+      "icon": "game-icons:intercept-ball",
+      "category": "defending",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "interceptions",
+        "possession_won"
+      ]
+    },
+    {
+      "id": "box_defender",
+      "label": "Box Defender",
+      "description": "Defends the penalty area and blocks danger.",
+      "icon": "game-icons:brick-wall",
+      "category": "defending",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "clearances",
+        "shots_blocked",
+        "blocks",
+        "key_headers"
+      ]
+    },
+    {
+      "id": "aggressive_defender",
+      "label": "Aggressive Defender",
+      "description": "Physical, high-engagement CB (Enforcer).",
+      "icon": "game-icons:fist",
+      "category": "defending",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "tackles_attempted",
+        "fouls_made",
+        "yellow_cards",
+        "pressures"
+      ],
+      "metrics_fallback": [
+        "tackles_attempted",
+        "fouls_made",
+        "yellow_cards"
+      ],
+      "note": "Uses pressures when present in the active threshold pack; otherwise tackles + fouls + yellows."
+    },
+    {
+      "id": "defensive_fullback",
+      "label": "Defensive Fullback",
+      "description": "Wins duels and shuts down his flank.",
+      "icon": "game-icons:shield",
+      "category": "defending",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "interceptions",
+        "possession_won"
+      ]
+    },
+    {
+      "id": "pressing_wingback",
+      "label": "Pressing Wingback",
+      "description": "Aggressively closes down opponents.",
+      "icon": "game-icons:lightning-helix",
+      "category": "defending",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "pressures_attempted",
+        "pressures",
+        "possession_won",
+        "sprints"
+      ],
+      "metrics_fallback": [
+        "possession_won",
+        "sprints"
+      ],
+      "note": "Uses Pres A/C when present in the active threshold pack; otherwise possession_won + sprints."
+    },
+    {
+      "id": "progressive_fullback",
+      "label": "Progressive Fullback",
+      "description": "Advances possession through passing and carrying.",
+      "icon": "game-icons:wingfoot",
+      "category": "possession",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "progressive_passes",
+        "dribbles",
+        "pass_completion",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "crossing_wingback",
+      "label": "Crossing Wingback",
+      "description": "Supplies the box through crosses.",
+      "icon": "game-icons:boomerang",
+      "category": "final_third",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "crosses_attempted",
+        "crosses_completed",
+        "open_play_cross_completion"
+      ]
+    },
+    {
+      "id": "creative_wingback",
+      "label": "Creative Wingback",
+      "description": "Creates chances rather than simply crossing frequently.",
+      "icon": "game-icons:crystal-ball",
+      "category": "final_third",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "chances_created",
+        "open_play_key_passes"
+      ]
+    },
+    {
+      "id": "attacking_wingback",
+      "label": "Attacking Wingback",
+      "description": "Gets forward and becomes a direct goal threat.",
+      "icon": "game-icons:fire-dash",
+      "category": "final_third",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "goals",
+        "sprints"
+      ]
+    },
+    {
+      "id": "anchor",
+      "label": "Anchor",
+      "description": "Protects the defense through positioning and ball recovery.",
+      "icon": "game-icons:anchor",
+      "category": "defending",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "interceptions",
+        "possession_won",
+        "tackle_win_rate"
+      ]
+    },
+    {
+      "id": "ball_winning_midfielder",
+      "label": "Ball-Winning Midfielder",
+      "description": "Actively engages opponents and wins the ball.",
+      "icon": "game-icons:catch",
+      "category": "defending",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "tackles_completed",
+        "tackle_win_rate",
+        "possession_won",
+        "pressures"
+      ]
+    },
+    {
+      "id": "deep_lying_playmaker",
+      "label": "Deep-Lying Playmaker",
+      "description": "Controls possession and progresses from deep.",
+      "icon": "game-icons:puppet",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "passes_attempted",
+        "pass_completion",
+        "progressive_passes",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "box_to_box_midfielder",
+      "label": "Box-to-Box Midfielder",
+      "description": "Contributes across both phases with high activity.",
+      "icon": "game-icons:journey",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "distance",
+        "possession_won",
+        "progressive_passes",
+        "non_penalty_xg",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "mezzala",
+      "label": "Mezzala / Progressive Midfielder",
+      "description": "Carries and progresses the ball into advanced areas.",
+      "icon": "game-icons:path-distance",
+      "category": "possession",
+      "groups": [
+        "mid"
+      ],
+      "metrics": [
+        "dribbles",
+        "progressive_passes",
+        "sprints",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "advanced_playmaker",
+      "label": "Advanced Playmaker",
+      "description": "Primary chance creator.",
+      "icon": "game-icons:magic-swirl",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "chances_created",
+        "open_play_key_passes"
+      ]
+    },
+    {
+      "id": "attacking_midfielder",
+      "label": "Attacking Midfielder",
+      "description": "Gets into scoring positions and provides goals.",
+      "icon": "game-icons:bullseye",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "goals",
+        "expected_assists"
+      ]
+    },
+    {
+      "id": "wide_playmaker",
+      "label": "Wide Playmaker",
+      "description": "Creates from wide midfield positions.",
+      "icon": "game-icons:lyre",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "expected_assists",
+        "key_passes",
+        "crosses_completed",
+        "dribbles"
+      ]
+    },
+    {
+      "id": "wide_midfielder",
+      "label": "Wide Midfielder / Winger",
+      "description": "Direct wide progression through running and crossing.",
+      "icon": "game-icons:feather",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles",
+        "sprints",
+        "crosses_attempted",
+        "crosses_completed"
+      ]
+    },
+    {
+      "id": "poacher",
+      "label": "Poacher",
+      "description": "Gets into high-quality scoring positions and finishes.",
+      "icon": "game-icons:crosshair",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "goals",
+        "xg_per_shot",
+        "shots_on_target_pct"
+      ]
+    },
+    {
+      "id": "advanced_forward",
+      "label": "Advanced Forward",
+      "description": "High-volume, mobile scoring threat.",
+      "icon": "game-icons:rocket",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "sprints",
+        "dribbles"
+      ]
+    },
+    {
+      "id": "target_forward",
+      "label": "Target Forward",
+      "description": "Provides an aerial outlet and physical presence.",
+      "icon": "game-icons:giant",
+      "category": "defending",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "headers_attempted",
+        "headers_won",
+        "header_win_rate",
+        "fouls_against"
+      ]
+    },
+    {
+      "id": "complete_forward",
+      "label": "Complete Forward",
+      "description": "Contributes scoring, creation, carrying and aerially.",
+      "icon": "game-icons:trophy",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "expected_assists",
+        "key_passes",
+        "dribbles",
+        "headers_won"
+      ]
+    },
+    {
+      "id": "deep_lying_forward",
+      "label": "Deep-Lying Forward",
+      "description": "Drops off to link possession and create.",
+      "icon": "game-icons:return-arrow",
+      "category": "possession",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "passes_attempted",
+        "progressive_passes",
+        "expected_assists",
+        "key_passes"
+      ]
+    },
+    {
+      "id": "pressing_forward",
+      "label": "Pressing Forward",
+      "description": "Defends aggressively from the front.",
+      "icon": "game-icons:hound",
+      "category": "defending",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "pressures_attempted",
+        "pressures",
+        "possession_won",
+        "sprints"
+      ]
+    },
+    {
+      "id": "inside_forward",
+      "label": "Inside Forward",
+      "description": "Wide forward who carries inside and becomes a scoring threat.",
+      "icon": "game-icons:curved-arrow",
+      "category": "final_third",
+      "groups": [
+        "fwd"
+      ],
+      "metrics": [
+        "non_penalty_xg",
+        "shots",
+        "dribbles",
+        "sprints"
+      ]
+    },
+    {
+      "id": "aerial_defender",
+      "label": "Aerial Defender",
+      "description": "Dominates aerial duels.",
+      "icon": "game-icons:high-kick",
+      "category": "defending",
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "headers_won",
+        "header_win_rate",
+        "key_headers"
+      ]
+    },
+    {
+      "id": "ball_playing_defender",
+      "label": "Ball-Playing Defender",
+      "description": "Retains and progresses possession from CB.",
+      "icon": "game-icons:chess-rook",
+      "category": "possession",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "progressive_passes",
+        "pass_completion",
+        "passes_attempted",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "presser",
+      "label": "Presser",
+      "description": "Applies intense pressing pressure to force turnovers high up the pitch.",
+      "icon": "game-icons:sprint",
+      "category": "defending",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "pressures"
+      ],
+      "metrics_fallback": [
+        "possession_won",
+        "tackles_attempted"
+      ],
+      "note": "Uses pressures when present in the active threshold pack for the group; otherwise possession_won + tackles_attempted."
+    },
+    {
+      "id": "safe_carrier",
+      "label": "Safe Carrier",
+      "description": "Carries or dribbles often while keeping possession losses low.",
+      "icon": "game-icons:body-balance",
+      "category": "possession",
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles",
+        "possession_lost"
+      ]
+    },
+    {
+      "id": "progressive_passer",
+      "label": "Progressive Passer",
+      "description": "Moves the team forward with frequent progressive passes.",
+      "icon": "game-icons:arrow-dunk",
+      "category": "possession",
+      "groups": [
+        "def",
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "progressive_passes",
+        "passes_attempted"
+      ]
+    },
+    {
+      "id": "playmaker",
+      "label": "Playmaker",
+      "description": "Creates chances with key passes, xA, and progressive distribution.",
+      "icon": "game-icons:convergence-target",
+      "category": "possession",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "key_passes",
+        "expected_assists",
+        "progressive_passes"
+      ]
+    },
+    {
+      "id": "dribbler",
+      "label": "Dribbler",
+      "description": "Beats opponents regularly with a high dribble rate.",
+      "icon": "game-icons:boots",
+      "category": "possession",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "dribbles"
+      ]
+    },
+    {
+      "id": "goalscorer",
+      "label": "Goalscorer",
+      "description": "Produces goals and shots at a strong expected-goals volume.",
+      "icon": "game-icons:soccer-kick",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "goals",
+        "expected_goals",
+        "shots"
+      ]
+    },
+    {
+      "id": "creator",
+      "label": "Creator",
+      "description": "Sets up teammates with assists, xA, and key passes.",
+      "icon": "game-icons:soccer-ball",
+      "category": "final_third",
+      "groups": [
+        "mid",
+        "fwd"
+      ],
+      "metrics": [
+        "assists",
+        "expected_assists",
+        "key_passes"
+      ]
+    },
+    {
+      "id": "box_threat",
+      "label": "Box Threat",
+      "description": "A defender who arrives in the box to shoot and score.",
+      "icon": "game-icons:punch-blast",
+      "category": "final_third",
+      "groups": [
+        "def"
+      ],
+      "metrics": [
+        "goals",
+        "expected_goals",
+        "shots"
+      ]
+    }
+  ],
+  "archived_note": "Full pre-consolidation archetype pack. Active defs live in player_archetypes.json. Role-named / position-tied clones were folded into trait archetypes (2026-09-18).",
+  "folded_into": {
+    "pressing_wingback": "presser",
+    "pressing_forward": "presser",
+    "creative_wingback": "creator",
+    "advanced_playmaker": "creator",
+    "deep_lying_playmaker": "progressive_passer",
+    "ball_playing_defender": "progressive_passer",
+    "advanced_forward": "goalscorer",
+    "inside_forward": "goalscorer",
+    "attacking_wingback": "goalscorer",
+    "attacking_midfielder": "goalscorer",
+    "box_threat": "goalscorer",
+    "crossing_wingback": "crosser",
+    "wide_midfielder": "crosser",
+    "cover_defender": "ball_winner",
+    "defensive_fullback": "stopper",
+    "ball_winning_midfielder": "stopper",
+    "anchor": "ball_winner",
+    "progressive_fullback": "progressive_passer",
+    "mezzala": "dribbler",
+    "wide_playmaker": "playmaker",
+    "deep_lying_forward": "playmaker",
+    "target_forward": "aerial_defender",
+    "complete_forward": "creator"
+  }
+}
