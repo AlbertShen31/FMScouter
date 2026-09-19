@@ -542,6 +542,8 @@ def player_personality_section(
                     ],
                     target=help_id,
                     placement="top",
+                    trigger="hover",
+                    delay={"show": 0, "hide": 0},
                     class_name="rs-help-tooltip rs-pers-attr-tooltip",
                 )
             )
@@ -679,6 +681,9 @@ def player_archetypes_section(
                         ],
                         target=chip_id,
                         placement="top",
+                        trigger="hover",
+                        delay={"show": 450, "hide": 500},
+                        fade=False,
                         class_name="rs-help-tooltip rs-arch-tooltip",
                     ),
                 ],

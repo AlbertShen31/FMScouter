@@ -286,6 +286,14 @@ body {
     line-height: 1.4;
 }
 
+/* Don't paint until Popper has placed the tip (avoids left-edge / 0,0 flash). */
+.tooltip:not([data-popper-placement]),
+.tooltip[data-popper-reference-hidden="true"] {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .tooltip.rs-pers-attr-tooltip .tooltip-inner {
     max-width: 340px;
 }
@@ -5066,7 +5074,7 @@ body[data-theme="light"] .st-pizza-legend-pct {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.7rem;
 }
 
 .rs-arch-chip {
@@ -5176,7 +5184,7 @@ body[data-theme="light"] .st-pizza-legend-pct {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.75rem;
 }
 
 .rs-arch-filter-tip-host {

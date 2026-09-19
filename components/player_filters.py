@@ -30,6 +30,8 @@ def help_icon(tip: str, help_id: str) -> list:
             tip,
             target=help_id,
             placement="top",
+            trigger="hover",
+            delay={"show": 0, "hide": 0},
             class_name="rs-help-tooltip",
         ),
     ]
@@ -285,6 +287,9 @@ def archetype_filter_buttons(
                             tip_body,
                             target=tip_id,
                             placement="top",
+                            trigger="hover",
+                            delay={"show": 450, "hide": 500},
+                            fade=False,
                             class_name="rs-help-tooltip rs-arch-tooltip",
                         ),
                     ],
