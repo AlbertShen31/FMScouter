@@ -57,6 +57,8 @@ from scoring.role_scorer import (
     normalize_eligibility,
     parse_combo_id,
     parse_export,
+    parse_positions,
+    player_pos_groups,
     player_row_key,
     role_meta,
     role_options,
@@ -2171,10 +2173,27 @@ def _cached_table_chrome(
     return pack
 
 
+def _row_pos_groups(row: dict) -> list[str]:
+    """Position-card keys for filters; derive from Position when PosGroups is empty."""
+    groups = row.get("PosGroups") or []
+    if isinstance(groups, list) and groups:
+        return [str(g) for g in groups]
+    cards = row.get("pos_cards") or row.get("pos_groups") or []
+    if isinstance(cards, list) and cards:
+        return [str(c) for c in cards]
+    positions = row.get("positions")
+    if isinstance(positions, list) and positions:
+        return player_pos_groups(positions)
+    text = str(row.get("Position") or row.get("position") or "").strip()
+    if not text or text in ("-", "—"):
+        return []
+    return player_pos_groups(parse_positions(text))
+
+
 def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> html.Div:
     counts = {"all": len(rows)}
     for key, _name, _code, _css in POS_CARDS[1:]:
-        counts[key] = sum(1 for row in rows if key in (row.get("PosGroups") or []))
+        counts[key] = sum(1 for row in rows if key in _row_pos_groups(row))
     groups = [
         {
             "key": key,
@@ -3539,7 +3558,7 @@ def render_shortlist(
 
             filtered = []
             for row in rows:
-                if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
+                if pos_filter != "all" and pos_filter not in _row_pos_groups(row):
                     continue
                 if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
                     continue
@@ -3593,6 +3612,7 @@ def render_shortlist(
                         continue
                 row = dict(row)
                 row["_PosEligible"] = pos_elig
+                row["PosGroups"] = _row_pos_groups(row)
                 filtered.append(row)
 
             _sort_table_rows(filtered, sort_by, score_cols, quantifier)
@@ -3830,7 +3850,7 @@ def render_shortlist(
 
     filtered = []
     for row in rows:
-        if pos_filter != "all" and pos_filter not in (row.get("PosGroups") or []):
+        if pos_filter != "all" and pos_filter not in _row_pos_groups(row):
             continue
         if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
             continue
@@ -3880,6 +3900,7 @@ def render_shortlist(
                 continue
         row = dict(row)
         row["_PosEligible"] = pos_elig
+        row["PosGroups"] = _row_pos_groups(row)
         filtered.append(row)
 
     _sort_table_rows(filtered, sort_by, score_cols, quantifier)

@@ -90,6 +90,7 @@ IDENTITY_COPY_KEYS = (
     "yth_apps",
     "yth_gls",
     "pos_group",
+    "pos_groups",
     "pos_cards",
     "positions",
     "left_foot_n",
@@ -534,6 +535,23 @@ def merge_player_bundle(
     base["multi_year_status"] = status
     base["by_year"] = by_year
 
+    # Role scores use pos_groups; stats exports stamp pos_cards. Keep both filled.
+    positions = list(base.get("positions") or [])
+    if not positions and base.get("position"):
+        from scoring.role_scorer import parse_positions
+
+        positions = parse_positions(base.get("position"))
+        base["positions"] = positions
+    groups = list(base.get("pos_groups") or []) or list(base.get("pos_cards") or [])
+    if not groups and positions:
+        from scoring.role_scorer import player_pos_groups
+
+        groups = player_pos_groups(positions)
+    if groups:
+        base["pos_groups"] = groups
+        if not base.get("pos_cards"):
+            base["pos_cards"] = list(groups)
+
     if include_stats:
         stats, sp_stats, total_mins, eff_mins, unavail, limited = merge_stats_for_player(
             {y: year_players[y] for y in present},
@@ -662,14 +680,20 @@ def merge_year_maps(
             if role_p and stats_p:
                 combined = deepcopy(stats_p)
                 for field in IDENTITY_COPY_KEYS:
-                    if combined.get(field) in (None, "", "-") and role_p.get(field) not in (
+                    if combined.get(field) in (None, "", "-", []) and role_p.get(field) not in (
                         None,
                         "",
                         "-",
+                        [],
                     ):
                         combined[field] = role_p.get(field)
                 if role_p.get("attrs"):
                     combined["attrs"] = dict(role_p["attrs"])
+                # Stats parse uses pos_cards; role parse uses pos_groups.
+                if not combined.get("pos_groups") and role_p.get("pos_groups"):
+                    combined["pos_groups"] = list(role_p["pos_groups"])
+                if not combined.get("pos_cards") and combined.get("pos_groups"):
+                    combined["pos_cards"] = list(combined["pos_groups"])
                 year_players[year] = combined
             elif role_p:
                 year_players[year] = deepcopy(role_p)
