@@ -1102,16 +1102,24 @@ _KEY_COLUMN_HIDE = [
 
 
 def _table_columns(
-    group: str, category: str, threshold_overrides=None, settings=None
+    group: str, category: str, threshold_overrides=None, settings=None, *, include_status: bool = False
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
     cols = []
     for col in us.shortlist_columns_for("player_stats", settings):
         spec = {"name": identity_header_name(col), "id": col}
-        if col in ("Feet", "Injury"):
+        if col in ("Feet", "Injury", "Status"):
             spec["presentation"] = "markdown"
         cols.append(spec)
+        if include_status and col == "Name":
+            cols.append(
+                {"name": "Status", "id": "Status", "presentation": "markdown"}
+            )
+    if include_status and not any(c.get("id") == "Status" for c in cols):
+        cols.insert(
+            1, {"name": "Status", "id": "Status", "presentation": "markdown"}
+        )
     cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     if cat == "all":
         cols.append(
@@ -1156,6 +1164,7 @@ def _identity_cells(
     """Build shortlist identity cells for one stats player row."""
     from scoring.division_tiers import apply_division_tier
     from components.player_table import apply_division_limited_flag
+    from components.multi_year_ui import status_markdown
 
     left = player.get("left_foot") or ""
     right = player.get("right_foot") or ""
@@ -1173,6 +1182,7 @@ def _identity_cells(
         "Inf": lambda: _display_blank(player.get("inf")),
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
+        "Status": lambda: status_markdown(player.get("multi_year_status")),
     }
     row: dict = {
         "Division": _display_blank(player.get("division")),
@@ -1204,6 +1214,7 @@ def _header_tooltips(
     g, cat = _resolve_category(group, category)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
     tips = identity_header_tooltips(*identity_cols, "Minutes")
+    tips["Status"] = "Multi-year presence (new / returned / departed / continuous)"
     if cat == "all":
         tips[OVERALL_COL["id"]] = OVERALL_COL["label"]
         for section in _avg_category_columns(group):
@@ -1356,7 +1367,15 @@ def _build_rows(
     banding_limited: set[str] | frozenset[str] | list[str] | None = None,
 ) -> list[dict]:
     settings = us.normalize(settings)
-    identity_cols = us.shortlist_columns_for("player_stats", settings)
+    identity_cols = list(us.shortlist_columns_for("player_stats", settings))
+    include_status = any(
+        isinstance(p, dict) and p.get("multi_year_status") for p in (players or [])
+    )
+    if include_status and "Status" not in identity_cols:
+        if "Name" in identity_cols:
+            identity_cols.insert(identity_cols.index("Name") + 1, "Status")
+        else:
+            identity_cols.insert(0, "Status")
     g, cat = _resolve_category(group, category)
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
@@ -2188,7 +2207,15 @@ def refresh_table(
         banding_full_detail=band_settings.get("stats_full_detail_divisions"),
         banding_limited=band_limited,
     )
-    cols = _table_columns(pos, category, thresh, settings=settings)
+    cols = _table_columns(
+        pos,
+        category,
+        thresh,
+        settings=settings,
+        include_status=any(
+            isinstance(p, dict) and p.get("multi_year_status") for p in filtered
+        ),
+    )
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(
         sort_by,

@@ -537,6 +537,11 @@ def build_player_modal_body(
                 ],
             )
         )
+    from components.multi_year_ui import by_year_section
+
+    year_section = by_year_section(display_player)
+    if year_section is not None:
+        after_identity.append(year_section)
 
     chart_player = stats_player or display_player
     resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")

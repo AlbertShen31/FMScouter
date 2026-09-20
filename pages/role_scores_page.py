@@ -1504,7 +1504,22 @@ def _cell_number(value) -> float:
 
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
-TABLE_MARKDOWN_COLS = {"Feet", "Injury"}
+TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status"}
+
+
+def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> list[str]:
+    """Insert Status after Name when any row carries multi_year_status."""
+    if not rows or "Status" in cols:
+        return cols
+    if not any((r or {}).get("multi_year_status") for r in rows):
+        return cols
+    out = list(cols)
+    if "Name" in out:
+        idx = out.index("Name") + 1
+        out.insert(idx, "Status")
+    else:
+        out.insert(0, "Status")
+    return out
 
 
 def _limited_tracking_divisions(payload: dict | None) -> set[str]:
@@ -1709,6 +1724,8 @@ def _column_header_abbr(col_id: str) -> str:
 
 def _column_display_name(col_id: str) -> str:
     """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM; set pieces as COR/AER/…"""
+    if col_id == "Status":
+        return "Status"
     if col_id in TABLE_TEXT_COLS:
         return identity_header_name(col_id)
     piece = set_piece_header(col_id)
@@ -3040,6 +3057,28 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
             set_piece_profiles=profiles,
             partial_adjacency=partial_adj,
         )
+        # Preserve multi-year growth fields from merged players onto scored rows.
+        by_key = {
+            player_row_key(p): p
+            for p in (parsed.get("players") or [])
+            if player_row_key(p)
+        }
+        for row in scored:
+            src = by_key.get(player_row_key(row)) or by_key.get(
+                player_row_key(
+                    {
+                        "name": row.get("Name"),
+                        "unique_id": row.get("Unique ID"),
+                        "club": row.get("Club"),
+                    }
+                )
+            )
+            if not src or not src.get("multi_year"):
+                continue
+            row["multi_year_status"] = src.get("multi_year_status")
+            row["years_present"] = list(src.get("years_present") or [])
+            row["role_scores_by_year"] = src.get("role_scores_by_year") or {}
+            row["role_scores_combined"] = src.get("role_scores_combined") or {}
     rows = apply_combos(
         scored,
         combos,
@@ -3726,6 +3765,8 @@ def render_shortlist(
         hybrids_only=hybrids_only,
         set_pieces=set_pieces,
     )
+    data_cols = _inject_multi_year_status_col(data_cols, filtered)
+    visible_cols = _inject_multi_year_status_col(visible_cols, filtered)
     score_cols = visible_score_cols
     columns = _table_columns(visible_cols)
     header_tips = _header_tooltips(visible_cols, combos=combos)
@@ -3735,6 +3776,8 @@ def render_shortlist(
     # Hoist once — per-cell band_text_color/normalize was ~0.5ms × tens of thousands.
     band_colors = us.band_text_colors(settings, theme=theme)
     limited_divisions = _limited_tracking_divisions(payload)
+    from components.multi_year_ui import score_year_suffix_html, status_markdown
+
     for row in filtered:
         row_key = player_row_key(row)
         hist_row = (
@@ -3751,12 +3794,14 @@ def render_shortlist(
                         band = score_band(float(raw), **bands)
                 except (TypeError, ValueError):
                     band = None
-                item[key] = score_display(
+                cell = score_display(
                     raw,
                     hist_row.get(key) if hist_row else None,
                     enabled=compare,
                     color=band_colors.get(band) if band else None,
                 )
+                suffix = score_year_suffix_html(row, key)
+                item[key] = f"{cell}{suffix}" if suffix else cell
             else:
                 if key == "Feet":
                     item[key] = feet_cell(row)
@@ -3764,9 +3809,12 @@ def render_shortlist(
                     injury_raw = row.get(key)
                     item[key] = injury_cell(injury_raw)
                     tip_row = injury_tooltip_entry(injury_raw, row=row)
+                elif key == "Status":
+                    item[key] = status_markdown(row.get("multi_year_status"))
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
+        item["multi_year_status"] = row.get("multi_year_status") or ""
         _attach_division_style_fields(item, row, limited_divisions)
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()

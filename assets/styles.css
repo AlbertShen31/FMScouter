@@ -7359,6 +7359,119 @@ body[data-theme="light"] .up-elig.yes {
 .up-elig.no {
     color: var(--app-muted);
 }
+.up-kind {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+.up-kind.multi {
+    color: var(--app-accent);
+    font-weight: 650;
+}
+.up-kind.single {
+    color: var(--app-muted);
+}
+.up-my-year-field .up-my-select {
+    max-width: 36rem;
+}
+.up-my-name {
+    max-width: 24rem;
+}
+.my-status-pill {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 650;
+    border: 1px solid var(--app-line);
+    background: var(--app-input);
+    color: var(--app-text);
+    white-space: nowrap;
+}
+.my-status-pill.new {
+    border-color: #34d399;
+    color: #6ee7b7;
+}
+.my-status-pill.returned {
+    border-color: #a78bfa;
+    color: #c4b5fd;
+}
+.my-status-pill.departed {
+    border-color: #f87171;
+    color: #fca5a5;
+}
+.my-status-pill.continuous {
+    border-color: var(--app-line);
+    color: var(--app-muted);
+}
+.my-status-pill.partial {
+    border-color: #fbbf24;
+    color: #fcd34d;
+}
+html[data-theme="light"] .my-status-pill.new,
+body[data-theme="light"] .my-status-pill.new {
+    color: #15803d;
+    border-color: #6ee7b7;
+}
+html[data-theme="light"] .my-status-pill.returned,
+body[data-theme="light"] .my-status-pill.returned {
+    color: #6d28d9;
+    border-color: #c4b5fd;
+}
+html[data-theme="light"] .my-status-pill.departed,
+body[data-theme="light"] .my-status-pill.departed {
+    color: #b91c1c;
+    border-color: #fca5a5;
+}
+html[data-theme="light"] .my-status-pill.partial,
+body[data-theme="light"] .my-status-pill.partial {
+    color: #b45309;
+    border-color: #fbbf24;
+}
+.my-year-section {
+    margin-top: 0.75rem;
+}
+.my-year-grid {
+    display: grid;
+    gap: 0.65rem;
+}
+.my-year-card {
+    background: var(--app-elev, var(--app-card));
+    border: 1px solid var(--app-line);
+    border-radius: 0.45rem;
+    padding: 0.65rem 0.75rem;
+}
+.my-year-card h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.9rem;
+    color: var(--app-text);
+}
+.my-year-meta {
+    color: var(--app-muted);
+    font-size: 0.8125rem;
+    margin-bottom: 0.35rem;
+}
+.my-role-growth {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--app-text);
+    align-items: baseline;
+}
+.my-role-growth .my-role-delta-up {
+    color: #6ee7b7;
+}
+.my-role-growth .my-role-delta-down {
+    color: #fca5a5;
+}
+html[data-theme="light"] .my-role-growth .my-role-delta-up,
+body[data-theme="light"] .my-role-growth .my-role-delta-up {
+    color: #15803d;
+}
+html[data-theme="light"] .my-role-growth .my-role-delta-down,
+body[data-theme="light"] .my-role-growth .my-role-delta-down {
+    color: #b91c1c;
+}
 .up-cache {
     font-weight: 650;
     font-size: 0.85rem;
