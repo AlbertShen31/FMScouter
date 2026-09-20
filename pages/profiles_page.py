@@ -152,7 +152,8 @@ PF_SQUAD_DEPTH_TIP = (
 PF_DEPTH_CHART_TIP = (
     "Focus a Squad depth card to rank that slot here (drag to reorder; × removes from slot only). "
     "Switch Percentiles / Defending / Final third (Goalkeeping for GK) / Possession to see "
-    "category averages or the underlying per-90 stats."
+    "category averages or the underlying per-90 stats. Year toggles Current (newest season) vs "
+    "Multi-year (recency-weighted) rates for those percentiles."
 )
 PF_SET_PIECES_TIP = (
     "Top set-piece takers among players on formation squad depth. COR / DFK / IFK split into "
@@ -218,13 +219,20 @@ def _entry_has_multi_year(entry: dict | None) -> bool:
         return False
     row = entry.get("row") if isinstance(entry.get("row"), dict) else {}
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
-    if row.get("multi_year") or player.get("multi_year"):
+    stats_player = (
+        entry.get("stats_player")
+        if isinstance(entry.get("stats_player"), dict)
+        else {}
+    )
+    if row.get("multi_year") or player.get("multi_year") or stats_player.get("multi_year"):
         return True
     if row.get("multi_year_status") or player.get("multi_year_status"):
         return True
     if row.get("years_present") or player.get("years_present"):
         return True
     if row.get("role_scores_by_year") or player.get("role_scores_by_year"):
+        return True
+    if player.get("by_year") or stats_player.get("by_year"):
         return True
     return False
 
@@ -361,6 +369,7 @@ def _ensure_profile_percentiles(settings) -> None:
 PCT_COLS = ("overall", "defending", "final_third", "possession")
 OVERALL_PCT_COL = {"id": "overall", "label": "Overall average", "abbr": "Ovr"}
 DEPTH_STATS_VIEWS = ("percentiles", "defending", "final_third", "possession")
+DEPTH_PCT_BASIS_VALUES = ("multiyear", "current")
 
 
 def _pct_header_name(col_id: str) -> str:
@@ -701,7 +710,15 @@ def _minutes_cell(mins_raw, settings, *, minutes_required=None) -> str:
     )
 
 
-def _profile_minutes_raw(entry: dict, raw: dict) -> Any:
+def _profile_minutes_raw(
+    entry: dict, raw: dict, *, pct_basis: str = "multiyear"
+) -> Any:
+    if _normalize_depth_pct_basis(pct_basis) == "current":
+        stats_player = _resolve_depth_stats_player(entry, pct_basis="current")
+        if isinstance(stats_player, dict):
+            mins = stats_player.get("minutes")
+            if mins not in (None, "", "-", "—", "undefined", "null", "None"):
+                return mins
     for source in (
         raw.get("Minutes"),
         raw.get("minutes"),
@@ -903,6 +920,50 @@ def _depth_stats_view_switcher(active=None, *, group: str | None = None) -> html
         className="st-player-seg pf-depth-stats-view-seg",
         role="group",
         **{"aria-label": "Depth chart stats view"},
+    )
+
+
+def _normalize_depth_pct_basis(value) -> str:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in ("current", "current_year", "latest", "newest", "year"):
+        return "current"
+    if raw in ("multiyear", "multi_year", "combined", "merged", "all"):
+        return "multiyear"
+    return "multiyear"
+
+
+def _depth_pct_basis_switcher(active=None) -> html.Div:
+    current = _normalize_depth_pct_basis(active)
+    options = (
+        (
+            "current",
+            "Current",
+            "Percentiles and category rates from the newest season only",
+        ),
+        (
+            "multiyear",
+            "Multi-year",
+            "Percentiles and category rates from recency-weighted multi-year stats",
+        ),
+    )
+    buttons = []
+    for value, label, title in options:
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": "pf-depth-pct-basis", "view": value},
+                n_clicks=0,
+                type="button",
+                title=title,
+                className="st-player-seg-btn"
+                + (" active" if value == current else ""),
+            )
+        )
+    return html.Div(
+        buttons,
+        className="st-player-seg pf-depth-pct-basis-seg",
+        role="group",
+        **{"aria-label": "Depth chart percentile year basis"},
     )
 
 
@@ -2124,51 +2185,134 @@ def _depth_stats_file_caches():
     return {}, {}
 
 
+def _attach_year_maps_from_entry(stats_player: dict, entry: dict | None) -> dict:
+    """Copy by_year / years_present onto a stats player when the cohort blob lacks them."""
+    out = dict(stats_player)
+    if not isinstance(entry, dict):
+        return out
+    sources = []
+    for key in ("stats_player", "player", "row"):
+        blob = entry.get(key)
+        if isinstance(blob, dict):
+            sources.append(blob)
+    for key in ("by_year", "years_present", "multi_year", "multi_year_status"):
+        if out.get(key) not in (None, "", {}, []):
+            continue
+        for src in sources:
+            val = src.get(key)
+            if val not in (None, "", {}, []):
+                out[key] = val
+                break
+    return out
+
+
+def _newest_year_key(
+    by_year: dict | None,
+    years_present=None,
+) -> str | None:
+    from services.export_library import YEAR_KEYS
+
+    by_year = by_year if isinstance(by_year, dict) else {}
+    present: list[str] = []
+    if years_present is not None:
+        present = [str(y) for y in (years_present or []) if str(y) in by_year]
+    if not present:
+        present = [y for y in YEAR_KEYS if y in by_year]
+    else:
+        present = [y for y in YEAR_KEYS if y in present] or present
+    return present[-1] if present else None
+
+
+def _stats_player_for_pct_basis(
+    stats_player: dict | None,
+    *,
+    pct_basis: str = "multiyear",
+) -> dict | None:
+    """Overlay newest-year rates when depth chart Year is Current."""
+    if not isinstance(stats_player, dict):
+        return None
+    if _normalize_depth_pct_basis(pct_basis) != "current":
+        return stats_player
+    by_year = stats_player.get("by_year")
+    if not isinstance(by_year, dict) or not by_year:
+        return stats_player
+    year = _newest_year_key(by_year, stats_player.get("years_present"))
+    if not year:
+        return stats_player
+    snap = by_year.get(year)
+    if not isinstance(snap, dict):
+        return stats_player
+    out = dict(stats_player)
+    if isinstance(snap.get("stats"), dict):
+        out["stats"] = dict(snap["stats"])
+    if isinstance(snap.get("set_piece_stats"), dict):
+        out["set_piece_stats"] = dict(snap["set_piece_stats"])
+    if snap.get("minutes") not in (None, "", "-", "—"):
+        out["minutes"] = snap["minutes"]
+        if snap.get("effective_minutes") not in (None, "", "-", "—"):
+            out["effective_minutes"] = snap["effective_minutes"]
+        else:
+            out["effective_minutes"] = snap["minutes"]
+    if "stats_unavailable" in snap:
+        out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
+    if "stats_limited_tracking" in snap:
+        out["stats_limited_tracking"] = bool(snap.get("stats_limited_tracking"))
+    if "limited_division_tracking" in snap:
+        out["limited_division_tracking"] = bool(snap.get("limited_division_tracking"))
+    return out
+
+
 def _resolve_depth_stats_player(
     entry: dict | None,
     *,
     file_cache: dict | None = None,
+    pct_basis: str = "multiyear",
 ) -> dict | None:
     """Best-effort Moneyball/stats player for a depth-chart profile row."""
     if not isinstance(entry, dict):
         return None
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
     embedded = entry.get("stats_player")
+    resolved = None
     if isinstance(embedded, dict) and (
         embedded.get("stats") is not None or embedded.get("pos_group")
     ):
-        return _enrich_stats_player(embedded, player or {})
+        resolved = _enrich_stats_player(embedded, player or {})
+    else:
+        file_id = str(entry.get("file_id") or "").strip()
+        if not file_id:
+            return None
+        cache = file_cache if file_cache is not None else {}
+        if file_id not in cache:
+            cache[file_id] = profiles.load_stats_players_for_file(file_id)
+        cohort = cache.get(file_id) or []
+        if not cohort:
+            return None
+        from scoring.stats_scorer import player_key as stats_player_key
 
-    file_id = str(entry.get("file_id") or "").strip()
-    if not file_id:
+        row = entry.get("row") or {}
+        name = (player.get("name") or row.get("Name") or "").strip()
+        unique_id = str(
+            player.get("unique_id") or row.get("Unique ID") or ""
+        ).strip()
+        club = (player.get("club") or row.get("Club") or "").strip()
+        target = (
+            stats_player_key({"name": name, "unique_id": unique_id, "club": club})
+            if name
+            else ""
+        )
+        if not target:
+            target = str(entry.get("player_key") or "").strip()
+        if not target:
+            return None
+        for sp in cohort:
+            if stats_player_key(sp) == target:
+                resolved = _enrich_stats_player(sp, player or {})
+                break
+    if not isinstance(resolved, dict):
         return None
-    cache = file_cache if file_cache is not None else {}
-    if file_id not in cache:
-        cache[file_id] = profiles.load_stats_players_for_file(file_id)
-    cohort = cache.get(file_id) or []
-    if not cohort:
-        return None
-    from scoring.stats_scorer import player_key as stats_player_key
-
-    row = entry.get("row") or {}
-    name = (player.get("name") or row.get("Name") or "").strip()
-    unique_id = str(
-        player.get("unique_id") or row.get("Unique ID") or ""
-    ).strip()
-    club = (player.get("club") or row.get("Club") or "").strip()
-    target = (
-        stats_player_key({"name": name, "unique_id": unique_id, "club": club})
-        if name
-        else ""
-    )
-    if not target:
-        target = str(entry.get("player_key") or "").strip()
-    if not target:
-        return None
-    for sp in cohort:
-        if stats_player_key(sp) == target:
-            return _enrich_stats_player(sp, player or {})
-    return None
+    resolved = _attach_year_maps_from_entry(resolved, entry)
+    return _stats_player_for_pct_basis(resolved, pct_basis=pct_basis)
 
 
 def _depth_banding_for_entry(
@@ -2280,6 +2424,7 @@ def _depth_percentile_cells(
     banding_cache: dict | None = None,
     stats_group: str | None = None,
     row: dict | None = None,
+    pct_basis: str = "multiyear",
 ) -> list:
     """Ovr / Def / F3 / Poss cells banded against the slot role when possible."""
     from scoring.stats_scorer import (
@@ -2331,12 +2476,15 @@ def _depth_percentile_cells(
             group = _stats_group_for_role_column(role_col)
     if not group:
         return _from_row(row if isinstance(row, dict) else entry.get("row"))
-    stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
+    base_player = _resolve_depth_stats_player(
+        entry, file_cache=file_cache, pct_basis="multiyear"
+    )
+    stats_player = _stats_player_for_pct_basis(base_player, pct_basis=pct_basis)
     if not isinstance(stats_player, dict):
         return _from_row(row if isinstance(row, dict) else entry.get("row"))
     thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
         entry,
-        stats_player,
+        base_player if isinstance(base_player, dict) else stats_player,
         settings=settings,
         minutes_required=minutes_required,
         file_cache=file_cache,
@@ -2388,6 +2536,7 @@ def _depth_category_cells(
     file_cache: dict | None = None,
     banding_cache: dict | None = None,
     stats_group: str | None = None,
+    pct_basis: str = "multiyear",
 ) -> list:
     """% AVG + metric cells for one depth row in a category view."""
     from scoring.stats_availability import metric_is_unavailable
@@ -2408,7 +2557,10 @@ def _depth_category_cells(
     ]
     if entry is None:
         return blank
-    stats_player = _resolve_depth_stats_player(entry, file_cache=file_cache)
+    base_player = _resolve_depth_stats_player(
+        entry, file_cache=file_cache, pct_basis="multiyear"
+    )
+    stats_player = _stats_player_for_pct_basis(base_player, pct_basis=pct_basis)
     if not isinstance(stats_player, dict):
         return blank
     # Prefer the formation slot / role's phase so a winger in a CM slot is
@@ -2420,7 +2572,7 @@ def _depth_category_cells(
     stats = scoring_stats(stats_player)
     thresh, metric_p0, metric_p100 = _depth_banding_for_entry(
         entry,
-        stats_player,
+        base_player if isinstance(base_player, dict) else stats_player,
         settings=settings,
         minutes_required=minutes_required,
         file_cache=file_cache,
@@ -2676,6 +2828,7 @@ def _depth_chart_player_row(
     file_cache: dict | None = None,
     banding_cache: dict | None = None,
     grid_style: dict | None = None,
+    pct_basis: str = "multiyear",
 ) -> html.Div:
     del total  # kept for call-site compatibility
     settings = us.normalize(settings)
@@ -2684,6 +2837,7 @@ def _depth_chart_player_row(
     role_col = str(role_column or "").strip()
     name_src = str(name_src or "depth").strip() or "depth"
     stats_view = _normalize_depth_stats_view(stats_view)
+    pct_basis = _normalize_depth_pct_basis(pct_basis)
     metric_ids = list(metric_ids or [])
     row_style = dict(grid_style or {})
 
@@ -2786,6 +2940,7 @@ def _depth_chart_player_row(
                     settings=settings,
                     minutes_required=mins_limit,
                     stats_group=stats_group,
+                    pct_basis=pct_basis,
                 )
             )
         cells.append(remove_cell)
@@ -2930,7 +3085,7 @@ def _depth_chart_player_row(
             className="pf-depth-chart-score",
         ),
         _depth_mins_cell(
-            _profile_minutes_raw(entry, row),
+            _profile_minutes_raw(entry, row, pct_basis=pct_basis),
             settings,
             minutes_required=mins_limit,
         ),
@@ -2945,6 +3100,7 @@ def _depth_chart_player_row(
                 banding_cache=banding_cache,
                 stats_group=stats_group,
                 row=row,
+                pct_basis=pct_basis,
             )
         )
     else:
@@ -2958,6 +3114,7 @@ def _depth_chart_player_row(
                 file_cache=file_cache,
                 banding_cache=banding_cache,
                 stats_group=stats_group,
+                pct_basis=pct_basis,
             )
         )
     cells.append(remove_cell)
@@ -3747,6 +3904,7 @@ def _build_depth_chart(
     cache: _PfProfileCache | None = None,
     stats_view: str = "percentiles",
     status_filter: str = "active",
+    pct_basis: str = "multiyear",
 ) -> html.Div:
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
@@ -3754,6 +3912,7 @@ def _build_depth_chart(
     slots = list(formation_slots or [])
     xi_view = _normalize_xi_view(xi_view)
     stats_view = _normalize_depth_stats_view(stats_view)
+    pct_basis = _normalize_depth_pct_basis(pct_basis)
     status_filter = _normalize_status_filter(status_filter)
 
     if not focus:
@@ -3895,6 +4054,7 @@ def _build_depth_chart(
             file_cache=file_cache,
             banding_cache=banding_cache,
             grid_style=grid_style,
+            pct_basis=pct_basis,
         )
         for idx, entry in enumerate(ordered)
     ]
@@ -4750,6 +4910,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-depth-stats-view", storage_type="local", data="percentiles"),
+            dcc.Store(id="pf-depth-pct-basis", storage_type="local", data="multiyear"),
             dcc.Store(id="pf-status-filter", storage_type="local", data="active"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
             dcc.Store(id="pf-setpiece-show-gk", storage_type="local", data=True),
@@ -5154,6 +5315,25 @@ def layout(**_kwargs):
                                                             "pf-squad-depth-field "
                                                             "pf-depth-stats-view-field"
                                                         ),
+                                                    ),
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Year",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            html.Div(
+                                                                _depth_pct_basis_switcher(
+                                                                    "multiyear"
+                                                                ),
+                                                                id="pf-depth-pct-basis-switch",
+                                                            ),
+                                                        ],
+                                                        className=(
+                                                            "pf-squad-depth-field "
+                                                            "pf-depth-pct-basis-field"
+                                                        ),
+                                                        id="pf-depth-pct-basis-wrap",
                                                     ),
                                                 ],
                                                 className="pf-depth-chart-toolbar-actions",
@@ -5727,6 +5907,39 @@ def sync_depth_stats_view_switch(view, focus_role):
 
 
 @callback(
+    Output("pf-depth-pct-basis", "data"),
+    Input({"type": "pf-depth-pct-basis", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_depth_pct_basis(n_clicks):
+    if not _pattern_click_triggered() or not clicked(n_clicks):
+        return no_update
+    basis = _normalize_depth_pct_basis((ctx.triggered_id or {}).get("view"))
+    if basis not in DEPTH_PCT_BASIS_VALUES:
+        return no_update
+    return basis
+
+
+@callback(
+    Output("pf-depth-pct-basis-switch", "children"),
+    Input("pf-depth-pct-basis", "data"),
+)
+def sync_depth_pct_basis_switch(basis):
+    return _depth_pct_basis_switcher(basis)
+
+
+@callback(
+    Output("pf-depth-pct-basis-wrap", "hidden"),
+    Input("pf-rev", "data"),
+    Input("pf-hydrated", "data"),
+)
+def toggle_depth_pct_basis_visibility(_rev, hydrated):
+    if not hydrated:
+        return no_update
+    return not _profiles_have_multi_year()
+
+
+@callback(
     Output("pf-setpiece-show-gk", "data"),
     Input({"type": "pf-setpiece-gk", "view": ALL, "panel": ALL}, "n_clicks"),
     prevent_initial_call=True,
@@ -5800,11 +6013,11 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Depth chart: spinner while focus / formation / rev / minutes / stats view / refresh rebuilds
-# (not XI toggle). Refresh also bumps pf-rev after syncing exports.
+# Depth chart: spinner while focus / formation / rev / minutes / stats view / year /
+# refresh rebuilds (not XI toggle). Refresh also bumps pf-rev after syncing exports.
 clientside_callback(
     """
-    function(focus, formation, rev, minutes, statsView, refreshClicks) {
+    function(focus, formation, rev, minutes, statsView, pctBasis, refreshClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -5818,6 +6031,7 @@ clientside_callback(
     Input("pf-rev", "data"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-depth-stats-view", "data"),
+    Input("pf-depth-pct-basis", "data"),
     Input("pf-squad-depth-refresh", "n_clicks"),
     prevent_initial_call=True,
 )
@@ -6350,6 +6564,7 @@ def refresh_profiles_squad_depth(
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-depth-stats-view", "data"),
+    Input("pf-depth-pct-basis", "data"),
     Input("pf-status-filter", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
@@ -6362,6 +6577,7 @@ def refresh_profiles_depth_chart(
     formation_id,
     depth_minutes_required,
     stats_view,
+    pct_basis,
     status_filter,
     settings,
     theme,
@@ -6376,6 +6592,7 @@ def refresh_profiles_depth_chart(
     _ensure_profile_percentiles(settings)
     xi_view = _normalize_xi_view(xi_view)
     stats_view = _normalize_depth_stats_view(stats_view)
+    pct_basis = _normalize_depth_pct_basis(pct_basis)
     status_filter = _normalize_status_filter(status_filter)
     depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
     formation_slots = _formation_slots(formation_id)
@@ -6395,6 +6612,7 @@ def refresh_profiles_depth_chart(
             cache=profile_cache,
             stats_view=stats_view,
             status_filter=status_filter,
+            pct_basis=pct_basis,
         ),
         epoch=f"r{int(_rev or 0)}",
     )
@@ -6912,6 +7130,7 @@ def apply_depth_chart_drag(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-depth-pct-basis", "data"),
     State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
@@ -6925,6 +7144,7 @@ def auto_rank_depth_role(
     xi_view,
     depth_minutes,
     stats_view,
+    pct_basis,
     status_filter,
     settings,
     theme,
@@ -6958,6 +7178,7 @@ def auto_rank_depth_role(
             cache=profile_cache,
             stats_view=stats_view,
             status_filter=status_filter,
+            pct_basis=pct_basis,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -7000,6 +7221,7 @@ def refresh_export_staging_notice(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-depth-pct-basis", "data"),
     State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
@@ -7013,6 +7235,7 @@ def refresh_depth_from_role_exports(
     xi_view,
     depth_minutes,
     stats_view,
+    pct_basis,
     status_filter,
     settings,
     theme,
@@ -7036,6 +7259,7 @@ def refresh_depth_from_role_exports(
             cache=_PfProfileCache(),
             stats_view=stats_view,
             status_filter=status_filter,
+            pct_basis=pct_basis,
         ),
         epoch=f"sync-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -7053,6 +7277,7 @@ def refresh_depth_from_role_exports(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-depth-pct-basis", "data"),
     State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
@@ -7066,6 +7291,7 @@ def auto_rank_depth_all(
     xi_view,
     depth_minutes,
     stats_view,
+    pct_basis,
     status_filter,
     settings,
     theme,
@@ -7093,6 +7319,7 @@ def auto_rank_depth_all(
             cache=_PfProfileCache(),
             stats_view=stats_view,
             status_filter=status_filter,
+            pct_basis=pct_basis,
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )

@@ -8939,6 +8939,22 @@ body[data-theme="light"] .pf-depth-undo-row {
     white-space: nowrap;
 }
 
+.pf-depth-pct-basis-field {
+    min-width: 12.5rem;
+}
+
+.pf-depth-pct-basis-seg {
+    width: auto;
+    min-width: 11.5rem;
+}
+
+.pf-depth-pct-basis-seg .st-player-seg-btn {
+    flex: 1 1 0;
+    padding: 7px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
 .pf-xi-view-seg {
     width: auto;
     min-width: 11rem;
