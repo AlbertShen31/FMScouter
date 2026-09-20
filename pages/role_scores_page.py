@@ -175,6 +175,7 @@ PERSIST_DEFAULTS = {
     "hybrids_only": True,
     "pos_match": "yes",
     "club_filter": "any",
+    "status_filter": "active",
     "focus_role": [],
     "search": "",
     "max_age": "99",
@@ -229,6 +230,7 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
         or p.get("hybrids_only")
         or _normalize_pos_match(p.get("pos_match")) != "yes"
         or _normalize_club_filter(p.get("club_filter")) != "any"
+        or _normalize_status_filter(p.get("status_filter")) != "active"
         or (p.get("role_mode") or "formations") != "formations"
     ):
         return True
@@ -317,6 +319,11 @@ CLUB_FILTER_OPTIONS = [
     {"value": "club", "label": "Clubs only"},
 ]
 CLUB_FILTER_VALUES = {opt["value"] for opt in CLUB_FILTER_OPTIONS}
+STATUS_FILTER_OPTIONS = [
+    {"value": "active", "label": "Continuous + New"},
+    {"value": "all", "label": "All"},
+]
+STATUS_FILTER_VALUES = {opt["value"] for opt in STATUS_FILTER_OPTIONS}
 _FREE_AGENT_CLUBS = frozenset(
     {
         "",
@@ -344,6 +351,52 @@ def _normalize_pos_match(value) -> str:
 
 def _normalize_club_filter(value) -> str:
     return value if value in CLUB_FILTER_VALUES else "any"
+
+
+def _normalize_status_filter(value) -> str:
+    text = str(value or "active").strip().lower()
+    return text if text in STATUS_FILTER_VALUES else "active"
+
+
+def _row_multi_year_status(row: dict, configured: list[str] | None) -> str:
+    """Prefer live presence classification from years_present when available."""
+    present = row.get("years_present")
+    if configured and present is not None:
+        from scoring.multi_year import presence_status
+
+        status = presence_status(configured, present)
+        if status:
+            return status
+    return str(row.get("multi_year_status") or "").strip()
+
+
+def _configured_years_for_payload(payload: dict | None) -> list[str] | None:
+    file_id = str((payload or {}).get("file_id") or "").strip()
+    if not file_id:
+        return None
+    try:
+        import services.export_library as lib
+
+        entry = lib.get_file(file_id)
+        if not entry or not lib.is_multi_year(entry):
+            return None
+        years = list(lib.configured_years(entry).keys())
+        return years or None
+    except Exception:
+        return None
+
+
+def _passes_status_filter(
+    row: dict,
+    status_filter: str,
+    *,
+    configured: list[str] | None,
+    multi_year: bool,
+) -> bool:
+    if not multi_year or status_filter == "all":
+        return True
+    status = _row_multi_year_status(row, configured)
+    return status in {"continuous", "new"}
 
 
 def _is_free_agent_row(row: dict) -> bool:
@@ -847,6 +900,7 @@ def _no_match_placeholder(
     *,
     pos_match: str,
     club_filter: str,
+    status_filter: str,
     pos_filter: str,
     foot_filter: str,
     min_score: float,
@@ -869,6 +923,8 @@ def _no_match_placeholder(
         tips.append("Set Club to Any club or Players with clubs.")
     elif club_filter == "club":
         tips.append("Set Club to Any club or Free agents.")
+    if status_filter == "active":
+        tips.append("Set Status to All — Continuous + New hides returned / departed / partial.")
     if pos_filter != "all":
         tips.append("Select All in the position bar above.")
     if foot_filter:
@@ -1251,6 +1307,31 @@ def layout():
                                                                 ),
                                                             ],
                                                             className="rs-filter-club",
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                _field_label(
+                                                                    "Status",
+                                                                    tip=(
+                                                                        "Multi-year packs only. "
+                                                                        "Continuous + New keeps players "
+                                                                        "in every assigned season or only "
+                                                                        "the most recent year. All includes "
+                                                                        "returned, departed, and partial."
+                                                                    ),
+                                                                    help_id="rs-help-status-filter",
+                                                                ),
+                                                                dmc.Select(
+                                                                    id="rs-status-filter",
+                                                                    data=STATUS_FILTER_OPTIONS,
+                                                                    value="active",
+                                                                    clearable=False,
+                                                                    searchable=False,
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-status",
+                                                            id="rs-status-filter-wrap",
+                                                            hidden=True,
                                                         ),
                                                         archetype_filter_control(prefix="rs"),
                                                     ],
@@ -2278,6 +2359,7 @@ def _depth_panel(
     Input("rs-set-pieces", "value"),
     Input("rs-pos-match", "value"),
     Input("rs-club-filter", "value"),
+    Input("rs-status-filter", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
@@ -2303,6 +2385,7 @@ def save_page_persist(
     set_pieces,
     pos_match,
     club_filter,
+    status_filter,
     hybrids_only,
     focus_role,
     search,
@@ -2333,6 +2416,7 @@ def save_page_persist(
         "hybrids_only": bool(hybrids_only),
         "pos_match": _normalize_pos_match(pos_match),
         "club_filter": _normalize_club_filter(club_filter),
+        "status_filter": _normalize_status_filter(status_filter),
         "focus_role": _as_list(focus_role),
         "search": (search or "").strip(),
         "max_age": str(max_age or "99"),
@@ -2382,6 +2466,7 @@ clientside_callback(
     Output("rs-set-pieces", "value"),
     Output("rs-pos-match", "value"),
     Output("rs-club-filter", "value"),
+    Output("rs-status-filter", "value"),
     Output("rs-hybrids-only", "checked"),
     Output("rs-focus-role", "data", allow_duplicate=True),
     Output("rs-hydrated", "data"),
@@ -2408,7 +2493,7 @@ clientside_callback(
 def hydrate_page_persist(persist, hydrated):
     from scoring.player_archetypes import normalize_archetype_filter
 
-    _skip = (no_update,) * 27
+    _skip = (no_update,) * 28
     if hydrated:
         return _skip
     raw = persist or {}
@@ -2416,7 +2501,7 @@ def hydrate_page_persist(persist, hydrated):
     settings = us.load()
     if not _persist_has_state(raw, settings):
         return (
-            *(no_update,) * 10,
+            *(no_update,) * 11,
             True,
             persist.get("role_mode") or "formations",
             no_update,
@@ -2432,6 +2517,7 @@ def hydrate_page_persist(persist, hydrated):
     else:
         pos_match = _normalize_pos_match(persist.get("eligible", True))
     club_filter = _normalize_club_filter(persist.get("club_filter"))
+    status_filter = _normalize_status_filter(persist.get("status_filter"))
     hybrids_only = bool(persist.get("hybrids_only", True))
     focus = _as_list(persist.get("focus_role"))
     phase = persist.get("phase") or "all"
@@ -2461,6 +2547,7 @@ def hydrate_page_persist(persist, hydrated):
         set_pieces if set_pieces else no_update,
         _changed_or_skip(pos_match, "yes"),
         _changed_or_skip(club_filter, "any"),
+        _changed_or_skip(status_filter, "active"),
         hybrids_only if hybrids_only else no_update,
         focus if focus else no_update,
         True,
@@ -2503,6 +2590,22 @@ def _workflow_visibility(parsed, payload):
 )
 def reveal_workflow(parsed, payload):
     return _workflow_visibility(parsed, payload)
+
+
+@callback(
+    Output("rs-status-filter-wrap", "hidden"),
+    Input("rs-rows", "data"),
+)
+def toggle_multi_year_status_filter(payload):
+    rows = (payload or {}).get("rows") if isinstance(payload, dict) else None
+    if not rows:
+        return True
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("multi_year_status") or row.get("years_present"):
+            return False
+    return True
 
 
 @callback(
@@ -3254,6 +3357,7 @@ def _subset_table_data_by_keys(
     Input("rs-min-score-scope", "value"),
     Input("rs-pos-match", "value"),
     Input("rs-club-filter", "value"),
+    Input("rs-status-filter", "value"),
     Input("rs-hybrids-only", "checked"),
     Input("rs-set-pieces", "value"),
     Input("rs-set-piece-min-score", "value"),
@@ -3281,6 +3385,7 @@ def render_shortlist(
     min_score_scope,
     pos_match,
     club_filter,
+    status_filter,
     hybrids_only,
     set_pieces,
     set_piece_min,
@@ -3422,9 +3527,15 @@ def render_shortlist(
             pos_filter = pos_filter or "all"
             foot_filter = foot_filter or ""
             club_filter = _normalize_club_filter(club_filter)
+            status_filter = _normalize_status_filter(status_filter)
             foot_thresholds = settings["foot_thresholds"]
             combo_by_col = _combo_columns_by_label(combos)
             archetype_keys = _archetype_match_keys(payload, archetypes, settings)
+            configured_years = _configured_years_for_payload(payload)
+            multi_year = bool(configured_years) or any(
+                (r or {}).get("multi_year_status") or (r or {}).get("years_present")
+                for r in rows
+            )
 
             filtered = []
             for row in rows:
@@ -3433,6 +3544,13 @@ def render_shortlist(
                 if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
                     continue
                 if not _passes_club_filter(row, club_filter):
+                    continue
+                if not _passes_status_filter(
+                    row,
+                    status_filter,
+                    configured=configured_years,
+                    multi_year=multi_year,
+                ):
                     continue
                 if archetype_keys is not None:
                     key = player_row_key(row)
@@ -3533,6 +3651,7 @@ def render_shortlist(
                     _no_match_placeholder(
                         pos_match=pos_match,
                         club_filter=club_filter,
+                        status_filter=status_filter,
                         pos_filter=pos_filter,
                         foot_filter=foot_filter,
                         min_score=min_score,
@@ -3580,6 +3699,7 @@ def render_shortlist(
                     _no_match_placeholder(
                         pos_match=pos_match,
                         club_filter=club_filter,
+                        status_filter=status_filter,
                         pos_filter=pos_filter,
                         foot_filter=foot_filter,
                         min_score=min_score,
@@ -3696,10 +3816,17 @@ def render_shortlist(
     set_piece_min = us.parse_score_floor(set_piece_min)
     pos_match = _normalize_pos_match(pos_match)
     club_filter = _normalize_club_filter(club_filter)
+    status_filter = _normalize_status_filter(status_filter)
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
     combo_by_col = _combo_columns_by_label(combos)
     archetype_keys = _archetype_match_keys(payload, archetypes, settings)
+    configured_years = _configured_years_for_payload(payload)
+    multi_year = bool(configured_years) or any(
+        (r or {}).get("multi_year_status") or (r or {}).get("years_present")
+        for r in rows
+    )
+    hybrid_w = us.hybrid_weights(settings)
 
     filtered = []
     for row in rows:
@@ -3708,6 +3835,13 @@ def render_shortlist(
         if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
             continue
         if not _passes_club_filter(row, club_filter):
+            continue
+        if not _passes_status_filter(
+            row,
+            status_filter,
+            configured=configured_years,
+            multi_year=multi_year,
+        ):
             continue
         if archetype_keys is not None:
             key = player_row_key(row)
@@ -3800,8 +3934,18 @@ def render_shortlist(
                     enabled=compare,
                     color=band_colors.get(band) if band else None,
                 )
-                suffix = score_year_suffix_html(row, key)
-                item[key] = f"{cell}{suffix}" if suffix else cell
+                suffix = score_year_suffix_html(
+                    row,
+                    key,
+                    combo_meta=combo_by_col.get(key),
+                    ip_weight=hybrid_w["ip"],
+                    oop_weight=hybrid_w["oop"],
+                )
+                item[key] = (
+                    f'<span class="rs-score-with-growth">{cell}{suffix}</span>'
+                    if suffix
+                    else cell
+                )
             else:
                 if key == "Feet":
                     item[key] = feet_cell(row)
@@ -3810,11 +3954,17 @@ def render_shortlist(
                     item[key] = injury_cell(injury_raw)
                     tip_row = injury_tooltip_entry(injury_raw, row=row)
                 elif key == "Status":
-                    item[key] = status_markdown(row.get("multi_year_status"))
+                    item[key] = status_markdown(
+                        _row_multi_year_status(row, configured_years)
+                    )
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
-        item["multi_year_status"] = row.get("multi_year_status") or ""
+        item["multi_year_status"] = (
+            _row_multi_year_status(row, configured_years)
+            or row.get("multi_year_status")
+            or ""
+        )
         _attach_division_style_fields(item, row, limited_divisions)
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()
@@ -3861,6 +4011,7 @@ def render_shortlist(
         _no_match_placeholder(
             pos_match=pos_match,
             club_filter=club_filter,
+            status_filter=status_filter,
             pos_filter=pos_filter,
             foot_filter=foot_filter,
             min_score=min_score,

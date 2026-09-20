@@ -146,9 +146,9 @@ def presence_status(
         return "departed"
     older = years[:-1]
     older_present = [y for y in older if y in present_set]
+    # New = present only in the most recent configured year.
     if not older_present:
         return "new"
-    # Contiguous suffix ending at newest → appeared later (still "new").
     first_idx = next(i for i, y in enumerate(years) if y in present_set)
     last_idx = next(
         len(years) - 1 - i for i, y in enumerate(reversed(years)) if y in present_set
@@ -156,8 +156,7 @@ def presence_status(
     span = years[first_idx : last_idx + 1]
     if any(y not in present_set for y in span):
         return "returned"
-    if first_idx > 0:
-        return "new"
+    # Contiguous mid-pack arrival (e.g. Y2+Y3, missing Y1) — not New.
     return "partial"
 
 

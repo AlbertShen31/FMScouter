@@ -1315,6 +1315,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-filter-elig,
 .rs-filter-pos-match,
 .rs-filter-club,
+.rs-filter-status,
 .rs-filter-columns,
 .rs-filter-toggles,
 .rs-filter-hybrids {
@@ -1325,6 +1326,7 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 .rs-filter-group-fields .rs-filter-age,
 .rs-filter-group-fields .rs-filter-pos-match,
 .rs-filter-group-fields .rs-filter-club,
+.rs-filter-group-fields .rs-filter-status,
 .rs-filter-group-fields .rs-filter-archetypes {
     min-width: 0;
     display: flex;
@@ -1372,7 +1374,8 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 }
 
 .rs-filter-pos-match,
-.rs-filter-club {
+.rs-filter-club,
+.rs-filter-status {
     min-width: 0;
     max-width: none;
 }
@@ -7451,12 +7454,22 @@ body[data-theme="light"] .my-status-pill.partial {
     margin-bottom: 0.35rem;
 }
 .my-role-growth {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 0.5rem;
-    font-size: 0.8125rem;
-    color: var(--app-text);
-    align-items: baseline;
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.7rem;
+    line-height: 1.25;
+    color: var(--app-muted);
+    white-space: normal;
+}
+#rs-table .dash-spreadsheet-inner td.dash-cell .my-role-growth {
+    font-weight: 500;
+}
+#rs-table .dash-spreadsheet-inner td.dash-cell .rs-score-with-growth {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    line-height: 1.2;
 }
 .my-role-growth .my-role-delta-up {
     color: #6ee7b7;
