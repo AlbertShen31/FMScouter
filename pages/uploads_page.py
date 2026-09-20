@@ -138,7 +138,8 @@ UP_MULTI_YEAR_TIP = (
     "Combine 1–3 season CSVs already in the library. Year 3 is the most recent "
     "(weight 1.0), Year 2 mid (0.75), Year 1 oldest (0.5). Stats are pooled from "
     "raw totals with those weights; identity and attributes come from the newest "
-    "year each player appears in. A pack with only Year 3 behaves like a single season."
+    "year each player appears in. A pack with only Year 3 behaves like a single season. "
+    "To swap a season later, Edit the pack in the saved-files table and change that year."
 )
 
 
@@ -473,19 +474,71 @@ def _view_panel() -> html.Div:
     )
 
 
+def _edit_year_fields() -> html.Div:
+    """Year source pickers shown only when editing a multi-year pack."""
+    labels = {
+        "3": ("Year 3 (most recent)", "weight 1.0"),
+        "2": ("Year 2", "weight 0.75"),
+        "1": ("Year 1 (oldest)", "weight 0.5"),
+    }
+    fields = []
+    for key in ("3", "2", "1"):
+        title, hint = labels[key]
+        fields.append(
+            html.Div(
+                [
+                    html.Label(
+                        [title, html.Span(f" · {hint}", className="text-muted")],
+                        className="rs-field-label",
+                    ),
+                    dmc.Select(
+                        id=f"up-edit-year-{key}",
+                        data=[],
+                        value="",
+                        clearable=True,
+                        searchable=True,
+                        placeholder="Select a saved CSV…",
+                        className="up-edit-year-select",
+                        # Bootstrap modal sits ~1055; portal dropdown must clear it.
+                        comboboxProps={"withinPortal": True, "zIndex": 10000},
+                    ),
+                ],
+                className="up-edit-year-field mb-3",
+            )
+        )
+    return html.Div(
+        [
+            html.P(
+                "Replace any season file below. Saving recomputes the pack cache.",
+                className="text-muted small mb-3",
+            ),
+            *fields,
+        ],
+        id="up-edit-years",
+        className="up-edit-years",
+        style={"display": "none"},
+    )
+
+
 def _edit_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Edit saved file"), close_button=True),
+            dbc.ModalHeader(
+                dbc.ModalTitle(id="up-edit-title", children="Edit saved file"),
+                close_button=True,
+            ),
             dbc.ModalBody(
                 [
                     dcc.Store(id="up-edit-id"),
+                    dcc.Store(id="up-edit-kind", data="single"),
+                    dcc.Store(id="up-edit-last-clicks", data={}),
                     html.Label("Name", className="rs-field-label"),
                     dmc.TextInput(
                         id="up-edit-name",
                         placeholder="Display name",
                         className="mb-3 up-edit-name",
                     ),
+                    _edit_year_fields(),
                     html.Label("Note", className="rs-field-label"),
                     dbc.Textarea(
                         id="up-edit-note",
@@ -811,16 +864,32 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
 @callback(
     Output("up-edit-modal", "is_open"),
     Output("up-edit-id", "data"),
+    Output("up-edit-kind", "data"),
+    Output("up-edit-title", "children"),
     Output("up-edit-name", "value"),
     Output("up-edit-note", "value"),
     Output("up-edit-error", "children"),
+    Output("up-edit-years", "style"),
+    Output("up-edit-year-1", "data"),
+    Output("up-edit-year-2", "data"),
+    Output("up-edit-year-3", "data"),
+    Output("up-edit-year-1", "value"),
+    Output("up-edit-year-2", "value"),
+    Output("up-edit-year-3", "value"),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-edit-last-clicks", "data"),
     Input({"type": "up-edit", "id": ALL}, "n_clicks"),
     Input("up-edit-cancel", "n_clicks"),
     Input("up-edit-save", "n_clicks"),
     State("up-edit-id", "data"),
+    State("up-edit-kind", "data"),
     State("up-edit-name", "value"),
     State("up-edit-note", "value"),
+    State("up-edit-year-1", "value"),
+    State("up-edit-year-2", "value"),
+    State("up-edit-year-3", "value"),
     State("up-rev", "data"),
+    State("up-edit-last-clicks", "data"),
     prevent_initial_call=True,
 )
 def edit_modal(
@@ -828,45 +897,172 @@ def edit_modal(
     cancel_clicks,
     save_clicks,
     edit_id,
+    edit_kind,
     name,
     note,
+    y1,
+    y2,
+    y3,
     rev,
+    last_clicks,
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update, no_update, no_update, no_update
+        return tuple([no_update] * 16)
+
+    years_hidden = {"display": "none"}
+    years_shown = {"display": "block"}
+    last_clicks = dict(last_clicks or {})
 
     if triggered == "up-edit-cancel":
-        return False, None, "", "", None
+        return (
+            False,
+            None,
+            "single",
+            "Edit saved file",
+            "",
+            "",
+            None,
+            years_hidden,
+            no_update,
+            no_update,
+            no_update,
+            "",
+            "",
+            "",
+            no_update,
+            last_clicks,
+        )
 
     if triggered == "up-edit-save":
         if not edit_id:
-            return False, None, "", "", None
+            return (
+                False,
+                None,
+                "single",
+                "Edit saved file",
+                "",
+                "",
+                None,
+                years_hidden,
+                no_update,
+                no_update,
+                no_update,
+                "",
+                "",
+                "",
+                no_update,
+                last_clicks,
+            )
         try:
-            lib.update_file_meta(edit_id, display_name=name or "", user_note=note or "")
-        except ValueError as exc:
-            return True, edit_id, name, note, html.Div(str(exc), className="rs-upload-error")
-        return False, None, "", "", None
+            if edit_kind == lib.KIND_MULTI_YEAR:
+                lib.save_multi_year_pack(
+                    display_name=name or "",
+                    years={"1": y1 or "", "2": y2 or "", "3": y3 or ""},
+                    user_note=note or "",
+                    pack_id=edit_id,
+                )
+            else:
+                lib.update_file_meta(
+                    edit_id, display_name=name or "", user_note=note or ""
+                )
+        except (ValueError, FileNotFoundError) as exc:
+            # Bump rev so the busy overlay clears after a failed multi-year save.
+            return (
+                True,
+                edit_id,
+                edit_kind or "single",
+                no_update,
+                name,
+                note,
+                html.Div(str(exc), className="rs-upload-error"),
+                years_shown if edit_kind == lib.KIND_MULTI_YEAR else years_hidden,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                int(rev or 0) + 1,
+                last_clicks,
+            )
+        return (
+            False,
+            None,
+            "single",
+            "Edit saved file",
+            "",
+            "",
+            None,
+            years_hidden,
+            no_update,
+            no_update,
+            no_update,
+            "",
+            "",
+            "",
+            no_update,
+            last_clicks,
+        )
 
     if isinstance(triggered, dict) and triggered.get("type") == "up-edit":
         file_id = triggered.get("id")
         if not file_id or file_id == "_":
-            return no_update, no_update, no_update, no_update, no_update
-        if not any((n or 0) > 0 for n in (edit_clicks or [])):
-            return no_update, no_update, no_update, no_update, no_update
+            return tuple([no_update] * 16)
+        # Table rebuild after save remounts Edit buttons and re-fires this Input
+        # with the same n_clicks — ignore unless the user actually clicked again.
+        try:
+            raw_clicks = ctx.triggered[0]["value"] if ctx.triggered else None
+            clicks = int(raw_clicks or 0)
+        except (TypeError, ValueError):
+            clicks = 0
+        if clicks <= int(last_clicks.get(file_id) or 0):
+            return tuple([no_update] * 16)
         entry = lib.get_file(file_id)
         if not entry:
-            return no_update, no_update, no_update, no_update, no_update
+            return tuple([no_update] * 16)
+        last_clicks[file_id] = clicks
+        if lib.is_multi_year(entry):
+            years = lib.configured_years(entry)
+            src = _source_select_data()
+            return (
+                True,
+                file_id,
+                lib.KIND_MULTI_YEAR,
+                "Edit multi-year pack",
+                lib.display_label(entry),
+                entry.get("user_note") or "",
+                None,
+                years_shown,
+                src,
+                src,
+                src,
+                years.get("1") or "",
+                years.get("2") or "",
+                years.get("3") or "",
+                no_update,
+                last_clicks,
+            )
         return (
             True,
             file_id,
+            "single",
+            "Edit saved file",
             lib.display_label(entry),
             entry.get("user_note") or "",
             None,
+            years_hidden,
+            no_update,
+            no_update,
+            no_update,
+            "",
+            "",
+            "",
+            no_update,
+            last_clicks,
         )
 
-    return no_update, no_update, no_update, no_update, no_update
-
+    return tuple([no_update] * 16)
 
 @callback(
     Output("up-files-table", "children", allow_duplicate=True),
@@ -985,7 +1181,7 @@ def download_view(n_clicks):
 
 clientside_callback(
     """
-    function(contents, computeClicks, computeAllClicks, packClicks) {
+    function(contents, computeClicks, computeAllClicks, packClicks, editSave, editKind) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -1000,6 +1196,11 @@ clientside_callback(
         if (prop.indexOf("up-my-create") !== -1 && !packClicks) {
             return window.dash_clientside.no_update;
         }
+        if (prop.indexOf("up-edit-save") !== -1) {
+            if (!editSave || editKind !== "multi_year") {
+                return window.dash_clientside.no_update;
+            }
+        }
         if (prop.indexOf("up-compute") !== -1 && prop.indexOf("up-compute-all") === -1) {
             var clicks = computeClicks || [];
             var any = false;
@@ -1012,7 +1213,9 @@ clientside_callback(
         }
         var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
         if (label) {
-            if (prop.indexOf("up-my-create") !== -1) {
+            if (prop.indexOf("up-edit-save") !== -1) {
+                label.textContent = "Updating multi-year pack…";
+            } else if (prop.indexOf("up-my-create") !== -1) {
                 label.textContent = "Creating multi-year pack…";
             } else if (prop.indexOf("up-compute-all") !== -1) {
                 label.textContent = "Precomputing all files…";
@@ -1030,6 +1233,8 @@ clientside_callback(
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
     Input("up-compute-all", "n_clicks"),
     Input("up-my-create", "n_clicks"),
+    Input("up-edit-save", "n_clicks"),
+    State("up-edit-kind", "data"),
     prevent_initial_call=True,
 )
 

@@ -7701,6 +7701,35 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 .up-edit-modal .mantine-TextInput-input::placeholder {
     color: var(--app-faint) !important;
 }
+
+.up-edit-years {
+    margin-bottom: 0.25rem;
+}
+
+.up-edit-year-field .up-edit-year-select {
+    width: 100%;
+}
+
+/* Keep year Select dropdowns usable inside Bootstrap's modal stacking context. */
+.up-edit-modal.modal {
+    overflow: visible;
+}
+
+.up-edit-modal .modal-dialog,
+.up-edit-modal .modal-content {
+    overflow: visible;
+}
+
+.up-edit-modal .modal-body {
+    overflow: visible;
+}
+
+.up-edit-modal .up-edit-year-select .mantine-Select-input,
+.up-edit-modal .up-edit-year-select input {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border-color: var(--app-line) !important;
+}
 .up-save-row {
     margin-bottom: 0.35rem;
 }
