@@ -128,10 +128,19 @@ PF_NEW_PROFILE_TIP = (
 PF_REPLACE_TIP = (
     "Replaces personal info, role scores, and percentiles for saved profiles that match by "
     "Unique ID (name is kept in the player key). Club changes are fine. Depth ranking and "
-    "profile ids are kept. Only "
-    "files eligible for Player stats are listed. Compute the file on Uploads first when the "
-    "label says Stale."
+    "profile ids are kept. Single exports and multi-year packs eligible for Player stats are "
+    "listed. Compute the file on Uploads first when the label says Stale."
 )
+PF_STATUS_FILTER_TIP = (
+    "Multi-year packs only. Continuous + New keeps players in every assigned season or only "
+    "the most recent year. All includes returned, departed, and partial."
+)
+
+STATUS_FILTER_VALUES = frozenset({"active", "all"})
+STATUS_FILTER_OPTIONS = [
+    {"value": "active", "label": "Continuous + New"},
+    {"value": "all", "label": "All"},
+]
 PF_SQUAD_DEPTH_TIP = (
     "One card per formation position (up to 11). Save from Role scores queues exports "
     "until Refresh exports places them on every matching slot (bottom of depth) that also "
@@ -167,8 +176,145 @@ FILTER_SORT_RESET_IDS = frozenset(
     {
         "pf-focus-role",
         "pf-formation-select",
+        "pf-status-filter",
     }
 )
+
+
+def _normalize_status_filter(value) -> str:
+    text = str(value or "active").strip().lower()
+    return text if text in STATUS_FILTER_VALUES else "active"
+
+
+def _profile_multi_year_status(entry: dict | None) -> str:
+    """Status from the profile row snapshot or embedded player blob."""
+    if not isinstance(entry, dict):
+        return ""
+    row = entry.get("row") if isinstance(entry.get("row"), dict) else {}
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    status = str(
+        row.get("multi_year_status") or player.get("multi_year_status") or ""
+    ).strip()
+    if status:
+        return status
+    present = row.get("years_present")
+    if present is None:
+        present = player.get("years_present")
+    if present is not None:
+        try:
+            from scoring.multi_year import presence_status
+
+            years = [str(y) for y in (present or [])]
+            configured = years or None
+            if configured:
+                return str(presence_status(configured, present) or "").strip()
+        except Exception:
+            pass
+    return ""
+
+
+def _entry_has_multi_year(entry: dict | None) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    row = entry.get("row") if isinstance(entry.get("row"), dict) else {}
+    player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
+    if row.get("multi_year") or player.get("multi_year"):
+        return True
+    if row.get("multi_year_status") or player.get("multi_year_status"):
+        return True
+    if row.get("years_present") or player.get("years_present"):
+        return True
+    if row.get("role_scores_by_year") or player.get("role_scores_by_year"):
+        return True
+    return False
+
+
+def _profiles_have_multi_year(entries=None) -> bool:
+    for entry in entries if entries is not None else profiles.list_role_profiles():
+        if _entry_has_multi_year(entry):
+            return True
+    return False
+
+
+def _passes_profile_status_filter(entry: dict | None, status_filter: str) -> bool:
+    if _normalize_status_filter(status_filter) == "all":
+        return True
+    if not _entry_has_multi_year(entry):
+        return True
+    status = _profile_multi_year_status(entry)
+    if not status:
+        return True
+    return status in {"continuous", "new"}
+
+
+def _growth_fields_from_row(row: dict | None, role_column: str) -> dict:
+    """Subset of multi-year fields needed for score year-growth HTML."""
+    if not isinstance(row, dict):
+        return {}
+    out: dict = {}
+    for key in (
+        "role_scores_by_year",
+        "role_scores_combined",
+        "years_present",
+        "multi_year_status",
+        "multi_year",
+    ):
+        if key in row:
+            out[key] = row.get(key)
+    role_column = str(role_column or "").strip()
+    if role_column:
+        for suffix in ("Y1", "Y2", "Y3", "Combined"):
+            stamp = f"{role_column} ({suffix})"
+            if stamp in row:
+                out[stamp] = row.get(stamp)
+    return out
+
+
+def _score_with_growth_markdown(
+    score,
+    settings,
+    theme=None,
+    *,
+    growth_row: dict | None = None,
+    role_column: str = "",
+) -> str:
+    cell = _score_markdown(score, settings, theme=theme)
+    if not growth_row or not role_column:
+        return cell
+    from components.multi_year_ui import score_year_suffix_html
+
+    suffix = score_year_suffix_html(growth_row, role_column)
+    if not suffix:
+        return cell
+    return f'<span class="rs-score-with-growth">{cell}{suffix}</span>'
+
+
+def _merge_filtered_slot_order(previous: list[str], visible_new: list[str]) -> list[str]:
+    """Apply a reordered visible subset while keeping hidden ids in place."""
+    previous = [str(pid).strip() for pid in previous if str(pid or "").strip()]
+    visible_new = [str(pid).strip() for pid in visible_new if str(pid or "").strip()]
+    if not previous:
+        return list(visible_new)
+    if not visible_new:
+        return list(previous)
+    visible_set = set(visible_new)
+    if set(previous) <= visible_set:
+        seen = set(visible_new)
+        return list(visible_new) + [pid for pid in previous if pid not in seen]
+    it = iter(visible_new)
+    out: list[str] = []
+    for pid in previous:
+        if pid in visible_set:
+            try:
+                out.append(next(it))
+            except StopIteration:
+                break
+        else:
+            out.append(pid)
+    for pid in it:
+        if pid not in out:
+            out.append(pid)
+    return out
 
 
 def _depth_heading(label: str, tip: str, help_id: str) -> html.Div:
@@ -2335,21 +2481,45 @@ def _depth_category_cells(
     return cells
 
 
-def _depth_score_cell(score, settings, theme=None):
+def _depth_score_cell(
+    score,
+    settings,
+    theme=None,
+    *,
+    row: dict | None = None,
+    role_column: str = "",
+):
     """Score pill using the same band colors as the Profiles table."""
     if score is None or score in ("", "-", "—"):
-        return html.Span("—", className="pf-depth-chart-metric")
-    settings = us.normalize(settings)
-    try:
-        score_f = float(score)
-        band = score_band(score_f, **settings["bands"])
-    except (TypeError, ValueError):
-        return html.Span(str(score), className="pf-depth-chart-metric")
-    return html.Span(
-        f"{score_f:.1f}",
-        className=f"pf-depth-chart-score-pill is-{band}",
-        title=f"Score {score_f:.1f} ({band})",
-    )
+        pill = html.Span("—", className="pf-depth-chart-metric")
+    else:
+        settings = us.normalize(settings)
+        try:
+            score_f = float(score)
+            band = score_band(score_f, **settings["bands"])
+            pill = html.Span(
+                f"{score_f:.1f}",
+                className=f"pf-depth-chart-score-pill is-{band}",
+                title=f"Score {score_f:.1f} ({band})",
+            )
+        except (TypeError, ValueError):
+            pill = html.Span(str(score), className="pf-depth-chart-metric")
+    children = [pill]
+    if row and role_column:
+        from components.multi_year_ui import score_year_suffix_html
+
+        suffix = score_year_suffix_html(row, role_column)
+        if suffix:
+            children.append(
+                dcc.Markdown(
+                    suffix,
+                    dangerously_allow_html=True,
+                    className="pf-depth-score-growth",
+                )
+            )
+    if len(children) == 1:
+        return pill
+    return html.Div(children, className="pf-depth-chart-score-stack")
 
 
 def _depth_ovr_cell(percentile, color=None, *, pill: bool = False):
@@ -2649,6 +2819,17 @@ def _depth_chart_player_row(
     limited = division_has_limited_tracking(
         row.get("Division"), _limited_tracking_divisions()
     )
+    my_status = _profile_multi_year_status(entry)
+    name_children: list = [name or "Player"]
+    if my_status:
+        from components.multi_year_ui import status_pill
+
+        name_children.append(status_pill(my_status))
+    name_label = (
+        html.Span(name_children, className="pf-depth-chart-name-inner")
+        if my_status
+        else (name or "Player")
+    )
     if removable and profile_id and slot_index is not None:
         remove_cell = html.Button(
             "×",
@@ -2691,7 +2872,7 @@ def _depth_chart_player_row(
         rank_cell(str(display_rank), profile_id),
         (
             html.Button(
-                name or "Player",
+                name_label,
                 id={
                     "type": "pf-depth-name",
                     "id": profile_id,
@@ -2739,7 +2920,13 @@ def _depth_chart_player_row(
         _depth_rec_cell(row.get("Rec"), theme=theme),
         _depth_injury_cell(row, player),
         html.Div(
-            _depth_score_cell(row.get("Score"), settings, theme=theme),
+            _depth_score_cell(
+                row.get("Score"),
+                settings,
+                theme=theme,
+                row=row,
+                role_column=role_col,
+            ),
             className="pf-depth-chart-score",
         ),
         _depth_mins_cell(
@@ -3559,6 +3746,7 @@ def _build_depth_chart(
     xi_view=None,
     cache: _PfProfileCache | None = None,
     stats_view: str = "percentiles",
+    status_filter: str = "active",
 ) -> html.Div:
     settings = us.normalize(settings)
     mins_limit = _resolve_minutes_required(minutes_required, settings)
@@ -3566,6 +3754,7 @@ def _build_depth_chart(
     slots = list(formation_slots or [])
     xi_view = _normalize_xi_view(xi_view)
     stats_view = _normalize_depth_stats_view(stats_view)
+    status_filter = _normalize_status_filter(status_filter)
 
     if not focus:
         if slots:
@@ -3608,6 +3797,13 @@ def _build_depth_chart(
         ordered = profiles.ordered_profiles_for_slot(
             formation_id, slot_index, column
         )
+    # Display filter only — First/Second XI still use true depth ranks.
+    if status_filter != "all" and any(_entry_has_multi_year(e) for e in ordered):
+        ordered = [
+            entry
+            for entry in ordered
+            if _passes_profile_status_filter(entry, status_filter)
+        ]
     if slots:
         _starters, multi_starters, conflicted_slots, unique_slots = (
             _formation_starter_slot_maps(
@@ -3817,7 +4013,9 @@ def _build_depth_chart(
     )
 
 
-def _role_table_columns(settings, *, include_slot: bool = False) -> list[dict]:
+def _role_table_columns(
+    settings, *, include_slot: bool = False, multi_year: bool = False
+) -> list[dict]:
     settings = us.normalize(settings)
     cols = []
     for col in _profile_identity_columns("role_scores", settings):
@@ -3825,6 +4023,10 @@ def _role_table_columns(settings, *, include_slot: bool = False) -> list[dict]:
         if col in ("Feet", "Injury"):
             spec["presentation"] = "markdown"
         cols.append(spec)
+        if multi_year and col == "Name":
+            cols.append(
+                {"name": "Status", "id": "Status", "presentation": "markdown"}
+            )
     if include_slot:
         cols.append({"name": "Slot", "id": "Slot", "presentation": "markdown"})
     cols.append({"name": "Role", "id": "Role", "presentation": "markdown"})
@@ -3849,6 +4051,7 @@ _PF_LEFT_COLS = ("Name", "Position", "Club")
 # No fixed widths — fill_width can still grow columns into spare space.
 _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Name": "120px",
+    "Status": "72px",
     "Position": "72px",
     "Club": "88px",
     "Division": "80px",
@@ -4073,6 +4276,19 @@ def _entry_to_role_table_row(
         else:
             item[col] = _blank(raw.get(col))
     _apply_profile_division(item, raw)
+    my_status = _profile_multi_year_status(entry)
+    growth_row = _growth_fields_from_row(raw, role_column)
+    # Prefer player blob maps when the row snapshot was cleaned historically.
+    if not growth_row.get("role_scores_by_year") and isinstance(player, dict):
+        extra = _growth_fields_from_row(player, role_column)
+        for key, val in extra.items():
+            growth_row.setdefault(key, val)
+    item["_my_status"] = my_status
+    item["_growth_row"] = growth_row
+    item["multi_year_status"] = my_status
+    from components.multi_year_ui import status_markdown
+
+    item["Status"] = status_markdown(my_status) if (my_status or growth_row) else "—"
     item["Slot"] = _slot_cell_markdown(
         slot_label or "—",
         conflicted=slot_conflicted,
@@ -4080,7 +4296,13 @@ def _entry_to_role_table_row(
     )
     item["Role"] = _role_cell_markdown(role_column, theme=theme)
     item["Rank"] = str(rank_raw) if rank_raw is not None else "—"
-    item["Score"] = _score_markdown(score_raw, settings, theme=theme)
+    item["Score"] = _score_with_growth_markdown(
+        score_raw,
+        settings,
+        theme=theme,
+        growth_row=growth_row,
+        role_column=role_column,
+    )
     mins_raw = _profile_minutes_raw(entry, raw)
     item["_minutes_raw"] = mins_raw
     item["Minutes"] = _minutes_cell(
@@ -4255,16 +4477,24 @@ def _sort_role_rows(rows: list[dict]) -> list[dict]:
     return sorted(rows, key=key)
 
 
-def _filter_role_rows(rows: list[dict], *, focus_roles) -> list[dict]:
+def _filter_role_rows(
+    rows: list[dict], *, focus_roles, status_filter: str = "all"
+) -> list[dict]:
     """Keep rows for the focused Squad depth role (or all when none focused)."""
     focused = _focus_roles(focus_roles)
-    if not focused:
-        return list(rows)
+    status_filter = _normalize_status_filter(status_filter)
     out = []
     for row in rows:
-        role_col = str(row.get("_role_column") or row.get("Role") or "").strip()
-        if role_col in focused:
-            out.append(row)
+        if focused:
+            role_col = str(row.get("_role_column") or row.get("Role") or "").strip()
+            if role_col not in focused:
+                continue
+        if status_filter != "all":
+            status = str(row.get("_my_status") or row.get("multi_year_status") or "")
+            # Non-multiyear rows have empty status and stay visible.
+            if status and status not in {"continuous", "new"}:
+                continue
+        out.append(row)
     return out
 
 
@@ -4305,8 +4535,12 @@ def _remint_theme_rows(rows: list[dict], *, settings, theme) -> list[dict]:
         role_col = str(item.get("_role_column") or "").strip()
         if role_col:
             item["Role"] = _role_cell_markdown(role_col, theme=theme)
-        item["Score"] = _score_markdown(
-            item.get("_score_raw"), settings, theme=theme
+        item["Score"] = _score_with_growth_markdown(
+            item.get("_score_raw"),
+            settings,
+            theme=theme,
+            growth_row=item.get("_growth_row"),
+            role_column=role_col,
         )
         out.append(item)
     return out
@@ -4516,6 +4750,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-focus-role", data=[]),
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-depth-stats-view", storage_type="local", data="percentiles"),
+            dcc.Store(id="pf-status-filter", storage_type="local", data="active"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
             dcc.Store(id="pf-setpiece-show-gk", storage_type="local", data=True),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
@@ -4659,6 +4894,33 @@ def layout(**_kwargs):
                                                 size="sm",
                                                 n_clicks=0,
                                                 disabled=True,
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Status",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            *help_icon(
+                                                                PF_STATUS_FILTER_TIP,
+                                                                "pf-help-status-filter",
+                                                            ),
+                                                        ],
+                                                        className="rs-field-label-row",
+                                                    ),
+                                                    dmc.Select(
+                                                        id="pf-status-filter-select",
+                                                        data=STATUS_FILTER_OPTIONS,
+                                                        value="active",
+                                                        clearable=False,
+                                                        searchable=False,
+                                                    ),
+                                                ],
+                                                className="pf-status-filter",
+                                                id="pf-status-filter-wrap",
+                                                hidden=True,
                                             ),
                                         ],
                                         className="pf-replace-controls",
@@ -5723,6 +5985,7 @@ clientside_callback(
     Input("pf-depth-minutes-required", "value"),
     Input("pf-page-size", "value"),
     Input("pf-table", "sort_by"),
+    Input("pf-status-filter", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("pf-hydrated", "data"),
@@ -5736,6 +5999,7 @@ def refresh_profiles_table(
     depth_minutes_required,
     page_size,
     sort_by,
+    status_filter,
     settings,
     theme,
     hydrated,
@@ -5747,6 +6011,7 @@ def refresh_profiles_table(
         return (no_update,) * 18
 
     settings = us.normalize(settings)
+    status_filter = _normalize_status_filter(status_filter)
     formation_slots = _formation_slots(formation_id)
     if formation_slots:
         # Starting XI panel owns the formation lineup view.
@@ -5781,8 +6046,14 @@ def refresh_profiles_table(
     # Pure header-sort: reorder cached full rows (keeps _rank_raw etc.).
     if triggered_props == {"pf-table.sort_by"} and cached_rows:
         formation_slots = _formation_slots(formation_id)
+        multi_year = any(
+            (r or {}).get("multi_year_status") or (r or {}).get("_my_status")
+            for r in cached_rows
+        ) or any(
+            (r or {}).get("Status") not in (None, "", "—") for r in cached_rows
+        )
         columns = _role_table_columns(
-            settings, include_slot=bool(formation_slots)
+            settings, include_slot=bool(formation_slots), multi_year=multi_year
         )
         col_ids = {col["id"] for col in columns}
         sort_in = list(sort_by) if sort_by else []
@@ -5890,13 +6161,19 @@ def refresh_profiles_table(
     _ensure_profile_percentiles(settings)
     reset_sort = bool(triggered & FILTER_SORT_RESET_IDS)
     profile_cache = _PfProfileCache()
+    role_entries = profile_cache.list_role_profiles()
+    multi_year = _profiles_have_multi_year(role_entries)
 
     include_slot = False
-    columns = _role_table_columns(settings, include_slot=include_slot)
+    columns = _role_table_columns(
+        settings, include_slot=include_slot, multi_year=multi_year
+    )
     all_rows, tips = _build_role_table_rows(
         settings, theme=theme, cache=profile_cache
     )
-    filtered = _filter_role_rows(all_rows, focus_roles=focus_role)
+    filtered = _filter_role_rows(
+        all_rows, focus_roles=focus_role, status_filter=status_filter
+    )
     sort_mode = "roles"
     style_data, style_header = _role_table_styles(theme, settings)
     empty_msg = (
@@ -6073,6 +6350,7 @@ def refresh_profiles_squad_depth(
     Input("pf-formation-select", "value"),
     Input("pf-depth-minutes-required", "value"),
     Input("pf-depth-stats-view", "data"),
+    Input("pf-status-filter", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("pf-hydrated", "data"),
@@ -6084,6 +6362,7 @@ def refresh_profiles_depth_chart(
     formation_id,
     depth_minutes_required,
     stats_view,
+    status_filter,
     settings,
     theme,
     hydrated,
@@ -6097,6 +6376,7 @@ def refresh_profiles_depth_chart(
     _ensure_profile_percentiles(settings)
     xi_view = _normalize_xi_view(xi_view)
     stats_view = _normalize_depth_stats_view(stats_view)
+    status_filter = _normalize_status_filter(status_filter)
     depth_minutes_f = _resolve_minutes_required(depth_minutes_required, settings)
     formation_slots = _formation_slots(formation_id)
     focus = _focus_slot(focus_role)
@@ -6114,6 +6394,7 @@ def refresh_profiles_depth_chart(
             xi_view=xi_view,
             cache=profile_cache,
             stats_view=stats_view,
+            status_filter=status_filter,
         ),
         epoch=f"r{int(_rev or 0)}",
     )
@@ -6328,6 +6609,40 @@ def toggle_replace_btn(file_id):
 
 
 @callback(
+    Output("pf-status-filter-select", "value"),
+    Output("pf-status-filter", "data"),
+    Input("pf-status-filter-select", "value"),
+    Input("pf-status-filter", "data"),
+    Input("pf-hydrated", "data"),
+)
+def sync_status_filter(select_value, store_value, hydrated):
+    """Keep Select and local Store aligned; prefer the triggering side."""
+    if not hydrated:
+        return no_update, no_update
+    triggered = ctx.triggered_id
+    if triggered == "pf-status-filter-select":
+        value = _normalize_status_filter(select_value)
+        if value == _normalize_status_filter(store_value):
+            return no_update, no_update
+        return value, value
+    value = _normalize_status_filter(store_value)
+    if value == _normalize_status_filter(select_value):
+        return no_update, no_update
+    return value, no_update
+
+
+@callback(
+    Output("pf-status-filter-wrap", "hidden"),
+    Input("pf-rev", "data"),
+    Input("pf-hydrated", "data"),
+)
+def toggle_multi_year_status_filter(_rev, hydrated):
+    if not hydrated:
+        return no_update
+    return not _profiles_have_multi_year()
+
+
+@callback(
     Output("pf-replace-file", "data"),
     Input("pf-rev", "data"),
 )
@@ -6478,6 +6793,7 @@ def sync_profile_selection_order(selected_ids, table_data, order):
     State("pf-table", "sort_by"),
     State("pf-depth-order-guard", "data"),
     State("pf-depth-minutes-required", "value"),
+    State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
@@ -6490,6 +6806,7 @@ def apply_depth_chart_drag(
     sort_by,
     order_guard,
     depth_minutes,
+    status_filter,
     settings,
     theme,
 ):
@@ -6526,8 +6843,7 @@ def apply_depth_chart_drag(
         previous = profiles.get_slot_order_ids(
             formation_id, slot_index, role, seed=True
         )
-        seen = set(ids)
-        merged = list(ids) + [pid for pid in previous if pid not in seen]
+        merged = _merge_filtered_slot_order(previous, ids)
         profiles.set_slot_order_ids(formation_id, slot_index, merged)
     else:
         profiles.set_depth_ranks(role, ids)
@@ -6570,7 +6886,9 @@ def apply_depth_chart_drag(
     rows, tips = _build_role_table_rows(
         settings=settings, theme=theme, cache=profile_cache
     )
-    filtered = _filter_role_rows(rows, focus_roles=focus_role)
+    filtered = _filter_role_rows(
+        rows, focus_roles=focus_role, status_filter=status_filter
+    )
     filtered = _sort_profile_rows(filtered, sort_by, mode="roles")
     display_tips = _reorder_tips_for_rows(rows, tips, filtered)
     display_rows, display_tips = _display_from_cached_rows(
@@ -6594,12 +6912,22 @@ def apply_depth_chart_drag(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_role(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
+    n_clicks,
+    rev,
+    formation_id,
+    focus_role,
+    xi_view,
+    depth_minutes,
+    stats_view,
+    status_filter,
+    settings,
+    theme,
 ):
     if not _pattern_click_triggered() or not clicked(n_clicks):
         return no_update, no_update, no_update
@@ -6629,6 +6957,7 @@ def auto_rank_depth_role(
             xi_view=xi_view,
             cache=profile_cache,
             stats_view=stats_view,
+            status_filter=status_filter,
         ),
         epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -6671,12 +7000,22 @@ def refresh_export_staging_notice(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def refresh_depth_from_role_exports(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
+    n_clicks,
+    rev,
+    formation_id,
+    focus_role,
+    xi_view,
+    depth_minutes,
+    stats_view,
+    status_filter,
+    settings,
+    theme,
 ):
     """Load staged Role-score exports into formation slots, then rebuild charts."""
     if not n_clicks:
@@ -6696,6 +7035,7 @@ def refresh_depth_from_role_exports(
             xi_view=xi_view,
             cache=_PfProfileCache(),
             stats_view=stats_view,
+            status_filter=status_filter,
         ),
         epoch=f"sync-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -6713,12 +7053,22 @@ def refresh_depth_from_role_exports(
     State("pf-xi-view", "data"),
     State("pf-depth-minutes-required", "value"),
     State("pf-depth-stats-view", "data"),
+    State("pf-status-filter", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def auto_rank_depth_all(
-    n_clicks, rev, formation_id, focus_role, xi_view, depth_minutes, stats_view, settings, theme
+    n_clicks,
+    rev,
+    formation_id,
+    focus_role,
+    xi_view,
+    depth_minutes,
+    stats_view,
+    status_filter,
+    settings,
+    theme,
 ):
     if not n_clicks:
         return no_update, no_update, no_update
@@ -6742,6 +7092,7 @@ def auto_rank_depth_all(
             xi_view=xi_view,
             cache=_PfProfileCache(),
             stats_view=stats_view,
+            status_filter=status_filter,
         ),
         epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
     )
@@ -7093,6 +7444,34 @@ def _resolve_stats_player_for_profile(
     return None, cohort
 
 
+def _enrich_player_multi_year(player: dict, profile: dict) -> dict:
+    """Ensure modal By year has multi-year maps from the stored player or row."""
+    out = dict(player or {})
+    row = profile.get("row") if isinstance(profile.get("row"), dict) else {}
+    if row.get("multi_year") or row.get("role_scores_by_year") or out.get("by_year"):
+        out["multi_year"] = True
+    for key in (
+        "multi_year_status",
+        "years_present",
+        "role_scores_by_year",
+        "role_scores_combined",
+        "by_year",
+    ):
+        if out.get(key) in (None, "", {}, []):
+            val = row.get(key)
+            if val not in (None, "", {}, []):
+                out[key] = val
+            elif key in ("role_scores_by_year", "role_scores_combined", "by_year"):
+                embedded = profile.get("player") if isinstance(profile.get("player"), dict) else {}
+                if embedded.get(key) not in (None, "", {}, []):
+                    out[key] = embedded.get(key)
+    if not out.get("multi_year_status"):
+        status = _profile_multi_year_status(profile)
+        if status:
+            out["multi_year_status"] = status
+    return out
+
+
 def _build_profile_modal_body(
     profile: dict,
     player: dict,
@@ -7104,6 +7483,7 @@ def _build_profile_modal_body(
 ) -> html.Div:
     """Profiles modal: resolve slot phase + stats cohort, then shared body."""
     eval_group = pos_group or _profile_stats_group(profile)
+    player = _enrich_player_multi_year(player, profile)
     stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
     file_id = str(profile.get("file_id") or "").strip()
     import services.export_library as lib

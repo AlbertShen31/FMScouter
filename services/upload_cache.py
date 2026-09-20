@@ -23,7 +23,7 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v41"
+FORMULA_VERSION = "v42"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 _ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 
@@ -118,12 +118,27 @@ def delete_cache(file_id: str) -> None:
         path.unlink()
 
 
-def is_fresh(cache: dict[str, Any] | None, sig: dict[str, Any] | None = None) -> bool:
+def is_fresh(
+    cache: dict[str, Any] | None,
+    sig: dict[str, Any] | None = None,
+    *,
+    entry: dict[str, Any] | None = None,
+) -> bool:
     if not cache:
         return False
     current = signature_key(sig)
     stored = cache.get("signature_key") or signature_key(cache.get("signature") or {})
-    return stored == current and bool(cache.get("role_scores") or cache.get("stats"))
+    if stored != current or not bool(cache.get("role_scores") or cache.get("stats")):
+        return False
+    # Multi-year packs also stamp year ids/weights inside the cache signature blob.
+    if entry and lib.is_multi_year(entry):
+        from scoring.multi_year import pack_signature_bits
+
+        bits = pack_signature_bits(entry)
+        cached_bits = (cache.get("signature") or {}).get("multi_year_pack") or {}
+        if cached_bits != bits:
+            return False
+    return True
 
 
 def _patch_index_cache(
@@ -210,6 +225,19 @@ def cache_status_light(
     current = sig_key or signature_key()
     stored = meta.get("signature_key") or ""
     if stored and stored == current:
+        if lib.is_multi_year(entry):
+            from scoring.multi_year import pack_signature_bits
+
+            cached_bits = meta.get("multi_year_pack") or {}
+            if cached_bits != pack_signature_bits(entry):
+                return {
+                    "status": "stale",
+                    "label": "Stale",
+                    "detail": "Season files changed — recompute on Uploads",
+                    "role_scores": role_ok,
+                    "stats": stats_ok,
+                    "computed_at": meta.get("computed_at"),
+                }
         bits = []
         if role_ok:
             bits.append("roles")
@@ -264,7 +292,7 @@ def cache_status(file_id: str, entry: dict[str, Any] | None = None) -> dict[str,
             "role_scores": False,
             "stats": False,
         }
-    if is_fresh(cache):
+    if is_fresh(cache, entry=entry):
         bits = []
         if cache.get("role_scores"):
             bits.append("roles")
@@ -373,15 +401,18 @@ def _precompute_stats_percentiles(
     return out
 
 
-def compute_file(file_id: str) -> dict[str, Any]:
-    """Parse + score eligible pages for one saved upload; write gzip cache."""
+def _compute_single_file(
+    file_id: str,
+    text: str,
+    entry: dict[str, Any],
+    *,
+    sig: dict[str, Any],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
     import config.role_weights.fm26_role_weight_config as pc
     import services.ui_settings as us
     from scoring.stats_scorer import parse_stats_export_with_meta
 
-    text, entry = lib.read_text(file_id)
-    sig = current_signature()
-    settings = us.load()
     payload: dict[str, Any] = {
         "file_id": file_id,
         "signature": sig,
@@ -467,10 +498,244 @@ def compute_file(file_id: str) -> dict[str, Any]:
             errors.append(f"stats: {exc}")
             traceback.print_exc()
 
+    payload["_errors"] = errors
+    return payload
+
+
+def _compute_multi_year_pack(
+    file_id: str,
+    entry: dict[str, Any],
+    *,
+    sig: dict[str, Any],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    import config.role_weights.fm26_role_weight_config as pc
+    import services.ui_settings as us
+    from scoring.multi_year import (
+        attach_role_scores_by_year,
+        merge_year_maps,
+        pack_signature_bits,
+    )
+    from scoring.role_scorer import parse_export, score_players
+    from scoring.stats_availability import nation_counts_for_limited_divisions
+    from scoring.stats_scorer import parse_stats_export_with_meta
+
+    years = lib.configured_years(entry)
+    weights = lib.year_weights(entry)
+    configured = list(years.keys())
+    if not configured:
+        raise ValueError("Multi-year pack has no season files assigned.")
+
+    pack_bits = pack_signature_bits(entry)
+    full_sig = dict(sig)
+    full_sig["multi_year_pack"] = pack_bits
+
+    payload: dict[str, Any] = {
+        "file_id": file_id,
+        "signature": full_sig,
+        "signature_key": signature_key(sig),
+        "computed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "role_scores": None,
+        "stats": None,
+        "multi_year": True,
+        "years": years,
+        "weights": weights,
+    }
+    errors: list[str] = []
+
+    role_by_year: dict[str, list[dict[str, Any]]] = {}
+    stats_by_year: dict[str, list[dict[str, Any]]] = {}
+    want_roles = bool(entry.get("role_scores"))
+    want_stats = bool(entry.get("stats"))
+
+    for year, src_id in years.items():
+        text, src_entry = lib.read_text(src_id)
+        if want_roles and src_entry.get("role_scores"):
+            try:
+                role_by_year[year] = parse_export(text)
+            except Exception as exc:
+                errors.append(f"role year {year}: {exc}")
+                traceback.print_exc()
+        if want_stats and src_entry.get("stats"):
+            try:
+                players, _limited = parse_stats_export_with_meta(text)
+                stats_by_year[year] = players
+            except Exception as exc:
+                errors.append(f"stats year {year}: {exc}")
+                traceback.print_exc()
+
+    if want_roles and not role_by_year:
+        errors.append("role_scores: no seasons parsed")
+    if want_stats and not stats_by_year:
+        errors.append("stats: no seasons parsed")
+
+    try:
+        merged, limited_divisions = merge_year_maps(
+            role_by_year=role_by_year if want_roles else None,
+            stats_by_year=stats_by_year if want_stats else None,
+            configured=configured,
+            weights=weights,
+        )
+    except Exception as exc:
+        payload["_errors"] = errors + [str(exc)]
+        traceback.print_exc()
+        return payload
+
+    role_ids = list(pc.all_positions.keys())
+    tier_w = us.tier_weights(settings)
+    sp_profiles = us.set_piece_profiles(settings)
+
+    if want_roles and role_by_year:
+        try:
+            rc.load_pack(sig["role_pack_id"], persist=False)
+            attach_role_scores_by_year(
+                merged,
+                role_players_by_year=role_by_year,
+                role_ids=role_ids,
+                weights=weights,
+                tier_weights=tier_w,
+                set_piece_profiles=sp_profiles,
+            )
+            rows = score_players(
+                merged,
+                role_ids,
+                tier_weights=tier_w,
+                set_piece_profiles=sp_profiles,
+                partial_adjacency=rs.default_partial_adjacency(),
+            )
+            # Stamp combined scores onto scored rows for table display.
+            from scoring.role_scorer import player_row_key, role_meta
+
+            by_key = {player_row_key(p): p for p in merged if player_row_key(p)}
+            for row in rows:
+                key = player_row_key(row) if "name" in row else None
+                # score_players rows use "Name" not "name"
+                if not key:
+                    key = player_row_key(
+                        {
+                            "name": row.get("Name"),
+                            "unique_id": row.get("Unique ID"),
+                            "club": row.get("Club"),
+                        }
+                    )
+                src = by_key.get(key) if key else None
+                if not src:
+                    continue
+                row["multi_year_status"] = src.get("multi_year_status")
+                row["years_present"] = list(src.get("years_present") or [])
+                row["role_scores_by_year"] = src.get("role_scores_by_year") or {}
+                combined = src.get("role_scores_combined") or {}
+                row["role_scores_combined"] = combined
+                for role_ref, score in combined.items():
+                    try:
+                        col = role_meta(role_ref)["column"]
+                    except Exception:
+                        col = role_ref
+                    row[f"{col} (Combined)"] = (
+                        round(score, 1) if score is not None else None
+                    )
+                    for year in ("1", "2", "3"):
+                        yscore = (row["role_scores_by_year"].get(year) or {}).get(
+                            role_ref
+                        )
+                        if yscore is None:
+                            yscore = (row["role_scores_by_year"].get(year) or {}).get(
+                                col
+                            )
+                        if yscore is not None:
+                            row[f"{col} (Y{year})"] = round(float(yscore), 1)
+            payload["role_scores"] = {
+                "players": merged,
+                "rows": rows,
+                "role_ids": role_ids,
+                "n_players": len(merged),
+                "n_roles": len(role_ids),
+                "multi_year": True,
+            }
+        except Exception as exc:
+            errors.append(f"role_scores: {exc}")
+            traceback.print_exc()
+
+    if want_stats and stats_by_year:
+        try:
+            # Merged list already has stats when include_stats; if roles-only merge
+            # ran first with both, players are the same list.
+            stats_players = merged
+            percentiles = _precompute_stats_percentiles(
+                stats_players,
+                stp.load_tree(sig.get("stats_pack_id")),
+                min_minutes=float(us.default_minutes_required(settings)),
+                limited_divisions=limited_divisions,
+                exclude_limited_leagues=us.exclude_limited_leagues_adaptive_bounds(
+                    settings
+                ),
+                settings=settings,
+            )
+            from scoring.player_archetypes import stamp_high_archetypes
+
+            min_minutes = float(us.default_minutes_required(settings))
+            exclude_limited = us.exclude_limited_leagues_adaptive_bounds(settings)
+            banding_ctx = us.build_stats_banding_context(
+                settings,
+                stats_players,
+                limited_divisions=limited_divisions,
+                min_minutes=min_minutes,
+                exclude_limited_leagues=exclude_limited,
+            )
+            high_archetypes = stamp_high_archetypes(
+                stats_players,
+                settings=settings,
+                banding_ctx=banding_ctx,
+                limited_divisions=limited_divisions,
+            )
+            payload["stats"] = {
+                "players": stats_players,
+                "percentiles": percentiles,
+                "high_archetypes": high_archetypes,
+                "n_players": len(stats_players),
+                "limited_tracking_divisions": limited_divisions,
+                "multi_year": True,
+            }
+            payload["limited_tracking_divisions"] = limited_divisions
+            payload["limited_tracking_by_nation"] = [
+                {"nation": nation, "count": count}
+                for nation, count in nation_counts_for_limited_divisions(
+                    limited_divisions, stats_players
+                )
+            ]
+        except Exception as exc:
+            errors.append(f"stats: {exc}")
+            traceback.print_exc()
+
+    payload["_errors"] = errors
+    return payload
+
+
+def compute_file(file_id: str) -> dict[str, Any]:
+    """Parse + score eligible pages for one saved upload; write gzip cache."""
+    import services.ui_settings as us
+
+    entry = lib.get_file(file_id)
+    if not entry:
+        raise FileNotFoundError("Saved file not found.")
+    sig = current_signature()
+    settings = us.load()
+
+    if lib.is_multi_year(entry):
+        payload = _compute_multi_year_pack(
+            file_id, entry, sig=sig, settings=settings
+        )
+    else:
+        text, entry = lib.read_text(file_id)
+        payload = _compute_single_file(
+            file_id, text, entry, sig=sig, settings=settings
+        )
+
+    errors = list(payload.pop("_errors", []) or [])
     limited_divisions = list(payload.get("limited_tracking_divisions") or [])
     limited_by_nation = list(payload.get("limited_tracking_by_nation") or [])
 
-    if not payload["role_scores"] and not payload["stats"]:
+    if not payload.get("role_scores") and not payload.get("stats"):
         meta = {
             "status": "error",
             "signature_key": payload["signature_key"],
@@ -494,12 +759,17 @@ def compute_file(file_id: str) -> dict[str, Any]:
         "status": "ready",
         "signature_key": payload["signature_key"],
         "computed_at": payload["computed_at"],
-        "role_scores": bool(payload["role_scores"]),
-        "stats": bool(payload["stats"]),
+        "role_scores": bool(payload.get("role_scores")),
+        "stats": bool(payload.get("stats")),
         "error": "; ".join(errors) if errors else "",
         "limited_tracking_divisions": limited_divisions,
         "limited_tracking_by_nation": limited_by_nation,
+        "multi_year": bool(lib.is_multi_year(entry)),
     }
+    if lib.is_multi_year(entry):
+        from scoring.multi_year import pack_signature_bits
+
+        meta["multi_year_pack"] = pack_signature_bits(entry)
     _patch_index_cache(
         file_id,
         meta,
@@ -512,8 +782,9 @@ def compute_file(file_id: str) -> dict[str, Any]:
 def try_role_players(
     file_id: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    entry = lib.get_file(file_id)
     cache = load_cache(file_id)
-    if not is_fresh(cache) or not (cache or {}).get("role_scores"):
+    if not is_fresh(cache, entry=entry) or not (cache or {}).get("role_scores"):
         return None
     players = cache["role_scores"].get("players")
     if not isinstance(players, list):
@@ -524,8 +795,9 @@ def try_role_players(
 def try_stats_players(
     file_id: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    entry = lib.get_file(file_id)
     cache = load_cache(file_id)
-    if not is_fresh(cache) or not (cache or {}).get("stats"):
+    if not is_fresh(cache, entry=entry) or not (cache or {}).get("stats"):
         return None
     players = cache["stats"].get("players")
     if not isinstance(players, list):
@@ -534,16 +806,18 @@ def try_stats_players(
 
 
 def cached_role_rows(file_id: str) -> list[dict[str, Any]] | None:
+    entry = lib.get_file(file_id)
     cache = load_cache(file_id)
-    if not is_fresh(cache) or not (cache or {}).get("role_scores"):
+    if not is_fresh(cache, entry=entry) or not (cache or {}).get("role_scores"):
         return None
     rows = cache["role_scores"].get("rows")
     return rows if isinstance(rows, list) else None
 
 
 def cached_stats_percentiles(file_id: str) -> dict[str, Any] | None:
+    entry = lib.get_file(file_id)
     cache = load_cache(file_id)
-    if not is_fresh(cache) or not (cache or {}).get("stats"):
+    if not is_fresh(cache, entry=entry) or not (cache or {}).get("stats"):
         return None
     pct = cache["stats"].get("percentiles")
     return pct if isinstance(pct, dict) else None
@@ -551,8 +825,9 @@ def cached_stats_percentiles(file_id: str) -> dict[str, Any] | None:
 
 def cached_high_archetypes(file_id: str) -> dict[str, list[str]] | None:
     """player_key → high archetype ids from a fresh upload cache."""
+    entry = lib.get_file(file_id)
     cache = load_cache(file_id)
-    if not is_fresh(cache) or not (cache or {}).get("stats"):
+    if not is_fresh(cache, entry=entry) or not (cache or {}).get("stats"):
         return None
     raw = cache["stats"].get("high_archetypes")
     if not isinstance(raw, dict):

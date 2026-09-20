@@ -30,7 +30,7 @@ UP_PAGE_TIP = (
     "Squad finance can also upload manually. Rename files and add notes so the dropdowns stay "
     "readable. Files stay under data/uploads/ (not published as static assets). Moneyball / "
     "finance exports include contracts and wages — encrypt the host disk or delete CSVs you "
-    "do not need."
+    "do not need. Multi-year packs combine seasons with recency weights on Uploads."
 )
 UP_VIEW_TIP = (
     "Download the custom views pack, put the .fmf files in Football Manager’s views folder, "
@@ -134,6 +134,46 @@ def _limited_count_cell(entry: dict, limited: list[str]) -> dmc.Tooltip:
     )
 
 
+UP_MULTI_YEAR_TIP = (
+    "Combine 1–3 season CSVs already in the library. Year 3 is the most recent "
+    "(weight 1.0), Year 2 mid (0.75), Year 1 oldest (0.5). Stats are pooled from "
+    "raw totals with those weights; identity and attributes come from the newest "
+    "year each player appears in. A pack with only Year 3 behaves like a single season."
+)
+
+
+def _source_select_data(*, page: str | None = None) -> list[dict[str, str]]:
+    opts = [{"value": "", "label": "— None —"}]
+    for entry in lib.list_single_files(page=page):
+        label = lib.display_label(entry)
+        when = (entry.get("saved_at") or "")[:10]
+        bits = []
+        if entry.get("role_scores"):
+            bits.append("Roles")
+        if entry.get("stats"):
+            bits.append("Stats")
+        elig = f" · {', '.join(bits)}" if bits else ""
+        opts.append(
+            {
+                "value": entry["id"],
+                "label": f"{label}" + (f" · {when}" if when else "") + elig,
+            }
+        )
+    return opts
+
+
+def _kind_cell(entry: dict) -> html.Span:
+    if lib.is_multi_year(entry):
+        years = lib.configured_years(entry)
+        slots = "+".join(f"Y{k}" for k in lib.YEAR_KEYS if k in years)
+        return html.Span(
+            f"Multi-year ({slots})",
+            className="up-kind multi",
+            title="Recency-weighted merge of season files",
+        )
+    return html.Span("Single", className="up-kind single")
+
+
 def _files_table(entries: list[dict] | None = None) -> html.Div:
     entries = entries if entries is not None else lib.list_files()
     if not entries:
@@ -144,6 +184,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
     header = html.Tr(
         [
             html.Th("Name"),
+            html.Th("Type"),
             html.Th("Saved"),
             html.Th("Role scores"),
             html.Th("Player stats"),
@@ -183,6 +224,12 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         else:
             limited_cell = html.Span("—", className="text-muted")
         title = original if original and original != label else entry.get("stored_name") or ""
+        if lib.is_multi_year(entry):
+            years = lib.configured_years(entry)
+            title = " · ".join(
+                f"Y{k}: {lib.display_label(lib.get_file(fid))}"
+                for k, fid in years.items()
+            )
         rows.append(
             html.Tr(
                 [
@@ -193,15 +240,20 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
                                 original,
                                 className="up-file-original text-muted",
                             )
-                            if original and original != label
+                            if original and original != label and not lib.is_multi_year(entry)
                             else None,
                         ],
                         title=title,
                     ),
+                    html.Td(_kind_cell(entry)),
                     html.Td((entry.get("saved_at") or "")[:19].replace("T", " ")),
                     html.Td(_yes_no(bool(entry.get("role_scores")))),
                     html.Td(_yes_no(bool(entry.get("stats")))),
-                    html.Td(_yes_no(bool(entry.get("squad_finance")))),
+                    html.Td(
+                        _yes_no(bool(entry.get("squad_finance")))
+                        if not lib.is_multi_year(entry)
+                        else html.Span("—", className="text-muted")
+                    ),
                     html.Td(_cache_status_cell(entry, sig_key=sig_key)),
                     html.Td(limited_cell),
                     html.Td(note_bits, className="up-notes"),
@@ -248,6 +300,72 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
             className="up-files-table",
         ),
         className="up-files-wrap",
+    )
+
+
+def _multi_year_panel() -> html.Div:
+    src = _source_select_data()
+    year_fields = []
+    labels = {
+        "3": ("Year 3 (most recent)", "weight 1.0"),
+        "2": ("Year 2", "weight 0.75"),
+        "1": ("Year 1 (oldest)", "weight 0.5"),
+    }
+    for key in ("3", "2", "1"):
+        title, hint = labels[key]
+        year_fields.append(
+            html.Div(
+                [
+                    html.Label(
+                        [title, html.Span(f" · {hint}", className="text-muted")],
+                        className="rs-field-label",
+                    ),
+                    dmc.Select(
+                        id=f"up-my-year-{key}",
+                        data=src,
+                        value="",
+                        clearable=True,
+                        searchable=True,
+                        placeholder="Select a saved CSV…",
+                        className="up-my-select",
+                    ),
+                ],
+                className="up-my-year-field mb-3",
+            )
+        )
+    return html.Div(
+        [
+            html.P(
+                "Assign season files already saved above. At least Year 3 is enough "
+                "for a single-season pack; add Year 2 / Year 1 to merge.",
+                className="text-muted small mb-3",
+            ),
+            html.Label("Pack name", className="rs-field-label"),
+            dmc.TextInput(
+                id="up-my-name",
+                placeholder="e.g. Liga I 2023–26",
+                className="mb-3 up-my-name",
+            ),
+            *year_fields,
+            html.Label("Note", className="rs-field-label"),
+            dbc.Textarea(
+                id="up-my-note",
+                placeholder="Optional note",
+                rows=2,
+                className="up-my-note mb-3",
+            ),
+            html.Div(
+                [
+                    dmc.Button(
+                        "Create multi-year pack",
+                        id="up-my-create",
+                        n_clicks=0,
+                    ),
+                ],
+                className="up-my-actions",
+            ),
+            html.Div(id="up-my-status", className="mt-2"),
+        ]
     )
 
 
@@ -471,7 +589,18 @@ def layout(**_kwargs):
                     dbc.Card(
                         [
                             _card_header(
-                                "3. Saved files & page eligibility",
+                                "3. Multi-year pack",
+                                UP_MULTI_YEAR_TIP,
+                                "up-help-multi-year",
+                            ),
+                            dbc.CardBody(_multi_year_panel()),
+                        ],
+                        className="mb-3 rs-section-card",
+                    ),
+                    dbc.Card(
+                        [
+                            _card_header(
+                                "4. Saved files & page eligibility",
                                 UP_ELIGIBILITY_TIP,
                                 "up-help-eligibility",
                             ),
@@ -527,6 +656,9 @@ def layout(**_kwargs):
     Output("up-files-table", "children"),
     Output("up-rev", "data"),
     Output("up-compute-all", "disabled"),
+    Output("up-my-year-1", "data"),
+    Output("up-my-year-2", "data"),
+    Output("up-my-year-3", "data"),
     Input("up-upload", "contents"),
     State("up-upload", "filename"),
     State("up-rev", "data"),
@@ -534,7 +666,7 @@ def layout(**_kwargs):
 )
 def save_uploads(contents_list, filenames, rev):
     if not contents_list:
-        return no_update, no_update, no_update, no_update
+        return tuple([no_update] * 7)
     if isinstance(contents_list, str):
         contents_list = [contents_list]
         filenames = [filenames]
@@ -570,12 +702,16 @@ def save_uploads(contents_list, filenames, rev):
         except Exception as exc:
             messages.append(upload_error(f"{name}: {exc}"))
     if not messages:
-        return no_update, no_update, no_update, no_update
+        return tuple([no_update] * 7)
+    src = _source_select_data()
     return (
         html.Div(messages),
         _files_table(),
         int(rev or 0) + 1,
         not _any_computable(),
+        src,
+        src,
+        src,
     )
 
 
@@ -583,21 +719,94 @@ def save_uploads(contents_list, filenames, rev):
     Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
+    Output("up-my-year-1", "data", allow_duplicate=True),
+    Output("up-my-year-2", "data", allow_duplicate=True),
+    Output("up-my-year-3", "data", allow_duplicate=True),
     Input({"type": "up-delete", "id": ALL}, "n_clicks"),
     State("up-rev", "data"),
     prevent_initial_call=True,
 )
 def delete_saved(n_clicks, rev):
     if not ctx.triggered_id or not any(n_clicks or []):
-        return no_update, no_update, no_update
+        return tuple([no_update] * 6)
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
-        return no_update, no_update, no_update
+        return tuple([no_update] * 6)
     if not any((n or 0) > 0 for n in (n_clicks or [])):
-        return no_update, no_update, no_update
+        return tuple([no_update] * 6)
     lib.delete_file(file_id)
-    return _files_table(), int(rev or 0) + 1, not _any_computable()
+    src = _source_select_data()
+    return (
+        _files_table(),
+        int(rev or 0) + 1,
+        not _any_computable(),
+        src,
+        src,
+        src,
+    )
 
+
+@callback(
+    Output("up-my-status", "children"),
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-compute-all", "disabled", allow_duplicate=True),
+    Output("up-my-name", "value"),
+    Output("up-my-note", "value"),
+    Output("up-my-year-1", "value"),
+    Output("up-my-year-2", "value"),
+    Output("up-my-year-3", "value"),
+    Input("up-my-create", "n_clicks"),
+    State("up-my-name", "value"),
+    State("up-my-note", "value"),
+    State("up-my-year-1", "value"),
+    State("up-my-year-2", "value"),
+    State("up-my-year-3", "value"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
+    if not n_clicks:
+        return tuple([no_update] * 9)
+    years = {"1": y1 or "", "2": y2 or "", "3": y3 or ""}
+    try:
+        entry = lib.save_multi_year_pack(
+            display_name=name or "",
+            years=years,
+            user_note=note or "",
+        )
+        cache = upload_cache.cache_status(entry.get("id") or "", entry)
+        msg = html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(f"Created {lib.display_label(entry)}"),
+                html.Span(f" · precompute: {cache['label']}", className="text-muted"),
+            ],
+            className="up-save-row",
+        )
+        return (
+            msg,
+            _files_table(),
+            int(rev or 0) + 1,
+            not _any_computable(),
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+    except Exception as exc:
+        return (
+            upload_error(str(exc)),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
 
 @callback(
     Output("up-edit-modal", "is_open"),
@@ -776,7 +985,7 @@ def download_view(n_clicks):
 
 clientside_callback(
     """
-    function(contents, computeClicks, computeAllClicks) {
+    function(contents, computeClicks, computeAllClicks, packClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -786,6 +995,9 @@ clientside_callback(
             return window.dash_clientside.no_update;
         }
         if (prop.indexOf("up-compute-all") !== -1 && !computeAllClicks) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("up-my-create") !== -1 && !packClicks) {
             return window.dash_clientside.no_update;
         }
         if (prop.indexOf("up-compute") !== -1 && prop.indexOf("up-compute-all") === -1) {
@@ -800,7 +1012,9 @@ clientside_callback(
         }
         var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
         if (label) {
-            if (prop.indexOf("up-compute-all") !== -1) {
+            if (prop.indexOf("up-my-create") !== -1) {
+                label.textContent = "Creating multi-year pack…";
+            } else if (prop.indexOf("up-compute-all") !== -1) {
                 label.textContent = "Precomputing all files…";
             } else if (prop.indexOf("n_clicks") !== -1) {
                 label.textContent = "Precomputing…";
@@ -815,6 +1029,7 @@ clientside_callback(
     Input("up-upload", "contents"),
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
     Input("up-compute-all", "n_clicks"),
+    Input("up-my-create", "n_clicks"),
     prevent_initial_call=True,
 )
 

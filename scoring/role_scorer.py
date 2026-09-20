@@ -1836,7 +1836,9 @@ def score_players(
             "Injured On": player.get("injured_on") or "-",
             "Time Missed": player.get("time_missed") or "-",
             "Squad": player["squad"] or "-",
-            "PosGroups": player.get("pos_groups") or [],
+            "PosGroups": player.get("pos_groups")
+            or player.get("pos_cards")
+            or player_pos_groups(player.get("positions") or []),
         }
         apply_division_tier(row)
         apply_personality_tier(row)

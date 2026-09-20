@@ -770,9 +770,34 @@ def register_library_select_callbacks(
                     players = None
                     cache_extra = {}
                 if players is None:
-                    text, entry = lib.read_text(file_id)
-                    players = parse_fn(text)
-                    cache_extra = {}
+                    if lib.is_multi_year(entry):
+                        # Packs have no CSV; compute (or refresh) then reload cache.
+                        upload_cache.compute_file(file_id)
+                        if library_page == "role_scores":
+                            hit = upload_cache.try_role_players(file_id)
+                            if hit:
+                                players, _cache = hit
+                                cache_extra = {"from_cache": True}
+                        elif library_page == "stats":
+                            hit = upload_cache.try_stats_players(file_id)
+                            if hit:
+                                players, cache = hit
+                                cache_extra = {
+                                    "from_cache": True,
+                                    "percentiles": (cache.get("stats") or {}).get(
+                                        "percentiles"
+                                    )
+                                    or upload_cache.cached_stats_percentiles(file_id),
+                                }
+                        if players is None:
+                            raise ValueError(
+                                "Multi-year pack could not be loaded. "
+                                "Recompute it on the Uploads page."
+                            )
+                    else:
+                        text, entry = lib.read_text(file_id)
+                        players = parse_fn(text)
+                        cache_extra = {}
             except Exception as exc:
                 if not catch_exceptions and not isinstance(
                     exc, (ValueError, FileNotFoundError, OSError)

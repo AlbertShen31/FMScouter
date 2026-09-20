@@ -1,0 +1,108 @@
+{
+  "id": "5-2-3-0-park-the-bus",
+  "name": "5-2-3-0 Park the Bus",
+  "schema": 2,
+  "shape": "5-2-3-0",
+  "notes": "",
+  "slots": [
+    {
+      "label": "GK",
+      "ip_pos": "gk",
+      "oop_pos": "",
+      "ip": "Ball_Playing_Goalkeeper_IP_GK",
+      "oop": "Goalkeeper_OOP_GK",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "RB",
+      "ip_pos": "rb",
+      "oop_pos": "",
+      "ip": "Inside_Full_Back_IP",
+      "oop": "Full_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "RCB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Centre_Back_IP",
+      "oop": "Centre_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "CB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Centre_Back_IP",
+      "oop": "Centre_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "LCB",
+      "ip_pos": "cb",
+      "oop_pos": "",
+      "ip": "Centre_Back_IP",
+      "oop": "Centre_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "LB",
+      "ip_pos": "lb",
+      "oop_pos": "",
+      "ip": "Inside_Full_Back_IP",
+      "oop": "Full_Back_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "RDM",
+      "ip_pos": "dm",
+      "oop_pos": "",
+      "ip": "Defensive_Midfielder_IP",
+      "oop": "Defensive_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "LDM",
+      "ip_pos": "dm",
+      "oop_pos": "",
+      "ip": "Defensive_Midfielder_IP",
+      "oop": "Pressing_Defensive_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "RCM",
+      "ip_pos": "cm",
+      "oop_pos": "",
+      "ip": "Central_Midfielder_IP",
+      "oop": "Central_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "CM",
+      "ip_pos": "cm",
+      "oop_pos": "",
+      "ip": "Central_Midfielder_IP",
+      "oop": "Central_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    },
+    {
+      "label": "LCM",
+      "ip_pos": "cm",
+      "oop_pos": "",
+      "ip": "Central_Midfielder_IP",
+      "oop": "Central_Midfielder_OOP",
+      "foot_left": "none",
+      "foot_right": "none"
+    }
+  ]
+}
