@@ -1420,6 +1420,9 @@ def _clean_cell(value: Any) -> Any:
         return None
     if isinstance(value, (int, float, bool)):
         return value
+    # Nested multi-year maps / lists must not be stringified.
+    if isinstance(value, (dict, list, tuple)):
+        return value
     text = str(value).strip()
     if text in ("", "-", "—"):
         return None
@@ -1432,6 +1435,38 @@ def _clean_snapshot_dict(row: dict[str, Any] | None) -> dict[str, Any]:
     return {key: _clean_cell(value) for key, value in row.items()}
 
 
+_MULTI_YEAR_ROW_KEYS = (
+    "multi_year",
+    "multi_year_status",
+    "years_present",
+    "role_scores_by_year",
+    "role_scores_combined",
+)
+
+
+def _attach_multi_year_row_fields(
+    out: dict[str, Any],
+    scored_row: dict[str, Any],
+    role_column: str,
+) -> None:
+    """Copy multi-year presence / growth fields onto a role snapshot row."""
+    for key in _MULTI_YEAR_ROW_KEYS:
+        if key not in scored_row:
+            continue
+        val = scored_row.get(key)
+        if key in ("role_scores_by_year", "role_scores_combined", "years_present"):
+            if isinstance(val, (dict, list)):
+                out[key] = val
+            continue
+        out[key] = val
+    if not role_column:
+        return
+    for suffix in ("Y1", "Y2", "Y3", "Combined"):
+        stamp_key = f"{role_column} ({suffix})"
+        if stamp_key in scored_row:
+            out[stamp_key] = scored_row.get(stamp_key)
+
+
 def build_role_row_snapshot(
     scored_row: dict[str, Any],
     role_column: str,
@@ -1441,6 +1476,7 @@ def build_role_row_snapshot(
 ) -> dict[str, Any]:
     """Preserve the computed row and add normalized role snapshot fields."""
     out = _clean_snapshot_dict(scored_row)
+    _attach_multi_year_row_fields(out, scored_row, role_column)
     score = scored_row.get(role_column)
     try:
         score_f = float(score) if score not in (None, "", "-", "—") else None
@@ -1758,6 +1794,74 @@ def expand_role_profile_rows(
     return out
 
 
+def _stamp_multi_year_onto_scored_rows(
+    scored: list[dict[str, Any]],
+    role_players: list[dict[str, Any]],
+) -> None:
+    """Copy multi-year presence / growth maps from merged players onto scored rows."""
+    by_key = {
+        player_row_key(
+            {
+                "Name": p.get("name"),
+                "Unique ID": p.get("unique_id"),
+                "Club": p.get("club"),
+            }
+        ): p
+        for p in role_players
+        if player_row_key(
+            {
+                "Name": p.get("name"),
+                "Unique ID": p.get("unique_id"),
+                "Club": p.get("club"),
+            }
+        )
+    }
+    for row in scored:
+        src = by_key.get(player_row_key(row))
+        if not src or not src.get("multi_year"):
+            continue
+        row["multi_year"] = True
+        row["multi_year_status"] = src.get("multi_year_status")
+        row["years_present"] = list(src.get("years_present") or [])
+        row["role_scores_by_year"] = src.get("role_scores_by_year") or {}
+        row["role_scores_combined"] = src.get("role_scores_combined") or {}
+
+
+def _load_role_players_from_library(
+    file_id: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
+    """Return ``(role_players, cached_scored_rows_or_None)`` for a library file.
+
+    Multi-year packs have no single CSV — compute the upload cache on miss
+    (same pattern as scouting_shell library load).
+    """
+    import services.upload_cache as upload_cache
+    from scoring.role_scorer import parse_export
+
+    hit = upload_cache.try_role_players(file_id)
+    if hit:
+        return hit[0], upload_cache.cached_role_rows(file_id)
+
+    entry = lib.get_file(file_id)
+    if not entry:
+        raise FileNotFoundError("Saved file not found.")
+    if not entry.get("role_scores"):
+        return [], None
+
+    if lib.is_multi_year(entry):
+        upload_cache.compute_file(file_id)
+        hit = upload_cache.try_role_players(file_id)
+        if not hit:
+            raise ValueError(
+                "Multi-year pack could not be computed for role scores. "
+                "Open Uploads and Compute the pack, then try again."
+            )
+        return hit[0], upload_cache.cached_role_rows(file_id)
+
+    text, _ = lib.read_text(file_id)
+    return parse_export(text), None
+
+
 def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
     """Best-effort stats players for enriching role-score saves with percentiles."""
     if not file_id:
@@ -1772,6 +1876,10 @@ def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
         entry = lib.get_file(file_id)
         if not entry:
             return []
+        if lib.is_multi_year(entry):
+            upload_cache.compute_file(file_id)
+            hit = upload_cache.try_stats_players(file_id)
+            return hit[0] if hit else []
         text, _ = lib.read_text(file_id)
         if not text:
             return []
@@ -2006,11 +2114,9 @@ def _load_role_score_bundle(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return ``(role_players, scored_rows)`` for the library file."""
     import services.ui_settings as us
-    import services.upload_cache as upload_cache
     from scoring.role_scorer import (
         apply_combos,
         has_bucket_role_refs,
-        parse_export,
         score_players,
     )
 
@@ -2026,22 +2132,15 @@ def _load_role_score_bundle(
 
         needed = list(pc.all_positions.keys())
 
-    role_players: list[dict[str, Any]] | None = None
-    scored: list[dict[str, Any]] | None = None
-    if not has_bucket_role_refs(needed):
-        hit = upload_cache.try_role_players(file_id)
-        if hit:
-            role_players, _cache = hit
-            scored = upload_cache.cached_role_rows(file_id)
+    use_cached_rows = not has_bucket_role_refs(needed)
+    role_players, cached_rows = _load_role_players_from_library(file_id)
+    if not role_players:
+        return [], []
 
-    if role_players is None or scored is None:
-        entry = lib.get_file(file_id)
-        if not entry:
-            raise FileNotFoundError("Saved file not found.")
-        if not entry.get("role_scores"):
-            return [], []
-        text, _ = lib.read_text(file_id)
-        role_players = parse_export(text)
+    scored: list[dict[str, Any]] | None = (
+        cached_rows if use_cached_rows and cached_rows is not None else None
+    )
+    if scored is None:
         scored = score_players(
             role_players,
             needed,
@@ -2049,6 +2148,7 @@ def _load_role_score_bundle(
             set_piece_profiles=us.set_piece_profiles(settings),
             partial_adjacency=default_partial_adjacency(),
         )
+        _stamp_multi_year_onto_scored_rows(scored, role_players)
 
     if combos:
         scored = apply_combos(
@@ -2057,7 +2157,7 @@ def _load_role_score_bundle(
             ip_weight=hybrid_w["ip"],
             oop_weight=hybrid_w["oop"],
         )
-    return role_players or [], scored or []
+    return role_players, scored or []
 
 
 def replace_profiles_from_saved_file(

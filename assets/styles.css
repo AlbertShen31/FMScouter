@@ -2110,6 +2110,53 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     max-width: 520px;
 }
 
+.pf-status-filter {
+    flex: 0 1 200px;
+    min-width: 160px;
+    max-width: 240px;
+}
+
+.pf-status-filter .mantine-Select-root {
+    width: 100%;
+}
+
+.pf-depth-chart-name-inner {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    line-height: 1.2;
+    text-align: left;
+}
+
+.pf-depth-chart-name-inner .my-status-pill {
+    font-size: 0.65rem;
+    padding: 0.05rem 0.35rem;
+}
+
+.pf-depth-chart-score-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    line-height: 1.2;
+}
+
+.pf-depth-chart-score-stack .pf-depth-score-growth,
+.pf-depth-chart-score .pf-depth-score-growth {
+    margin: 0;
+    padding: 0;
+}
+
+.pf-depth-chart-score-stack .pf-depth-score-growth p,
+.pf-depth-chart-score .pf-depth-score-growth p {
+    margin: 0;
+}
+
+.pf-depth-chart-score .my-role-growth {
+    text-align: center;
+}
+
 .rs-table-page-size {
     display: flex;
     align-items: center;
@@ -7464,7 +7511,8 @@ body[data-theme="light"] .my-status-pill.partial {
 #rs-table .dash-spreadsheet-inner td.dash-cell .my-role-growth {
     font-weight: 500;
 }
-#rs-table .dash-spreadsheet-inner td.dash-cell .rs-score-with-growth {
+#rs-table .dash-spreadsheet-inner td.dash-cell .rs-score-with-growth,
+#pf-table .dash-spreadsheet-inner td.dash-cell .rs-score-with-growth {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
