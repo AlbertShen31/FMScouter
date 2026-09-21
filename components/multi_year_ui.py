@@ -493,6 +493,15 @@ def role_growth_figure(
             font=dict(size=11, color=colors["muted"]),
         ),
         hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="rgba(15, 23, 42, 0.96)" if dark else "rgba(255, 255, 255, 0.98)",
+            bordercolor="rgba(148, 163, 184, 0.55)" if dark else "rgba(100, 116, 139, 0.45)",
+            font=dict(
+                color="#f8fafc" if dark else "#0f172a",
+                size=13,
+            ),
+            align="left",
+        ),
         dragmode=False,
         xaxis=dict(
             title=None,

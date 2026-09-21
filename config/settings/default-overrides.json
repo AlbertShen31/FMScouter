@@ -181,16 +181,7 @@
   "exclude_limited_leagues_adaptive_bounds": true,
   "stats_full_detail_divisions": [
     "Liga I",
-    "Liga II",
-    "Liga de Tineret",
-    "Liga III Seria I",
-    "Liga III Seria II",
-    "Liga III Seria III",
-    "Liga III Seria IV",
-    "Liga III Seria V",
-    "Liga III Seria VI",
-    "Liga III Seria VII",
-    "Liga III Seria VIII"
+    "Liga II"
   ],
   "depth_undo_max": 10,
   "page_size": 25,
@@ -230,5 +221,13 @@
       "bg": "#fee2e2",
       "fg": "#b91c1c"
     }
+  },
+  "archetype_tier_floors": {
+    "bronze": 70.0,
+    "silver": 80.0,
+    "gold": 90.0
+  },
+  "archetype_tier_ceilings": {
+    "rust": 30.0
   }
 }
