@@ -19,9 +19,13 @@ from components.scouting_shell import (
 from scoring.comparison import money_delta_span
 from scoring.squad_finance import (
     DEFAULT_GAMES,
+    DEFAULT_SEASON_CALENDAR,
     DEFAULT_SEASON_GAMES,
+    DEFAULT_SEASON_YEAR,
     EXPENSE_CATEGORIES,
     INCOME_CATEGORIES,
+    SEASON_CALENDAR_JAN_DEC,
+    SEASON_CALENDAR_JUL_JUN,
     STARTERS,
     SUBS,
     SUSTAINABILITY_YEARS,
@@ -32,6 +36,8 @@ from scoring.squad_finance import (
     format_signed_money,
     load_squad_finance,
     matchday_statement,
+    normalize_season_calendar,
+    projected_annual_fees,
     projected_annual_wages,
     player_wage_outlook,
     restore_matchday_keys,
@@ -53,6 +59,10 @@ _PROJECTION_YEAR_OPTIONS = [
     {"value": str(SUSTAINABILITY_YEARS), "label": str(SUSTAINABILITY_YEARS)},
 ]
 _PROJECTION_YEAR_CHOICES = {1, SUSTAINABILITY_YEARS}
+_SEASON_CALENDAR_OPTIONS = [
+    {"value": SEASON_CALENDAR_JUL_JUN, "label": "Jul–Jun"},
+    {"value": SEASON_CALENDAR_JAN_DEC, "label": "Jan–Dec"},
+]
 
 register_page(__name__, path="/squad-finance", name="Squad finance")
 
@@ -72,13 +82,14 @@ SF_CLUB_FINANCES_TIP = (
 )
 SF_WAGE_SCENARIO_TIP = (
     "Uses division-change and Yearly Salary Raise columns from the Moneyball export. "
-    "Projected Y1–Yn salaries are end-of-season figures after raises and drops."
+    "Projected Y1–Yn salaries are end-of-season figures after raises and drops. "
+    "Set season calendar + current season year so players drop off after Expires."
 )
 SF_SUSTAINABILITY_TIP = (
     "Projects N years at today's annual income and club expenses. Expenses = club P&L (box 3) + "
     f"debt payments + full-season squad bill from the statement (box 4, scaled to "
     f"{DEFAULT_SEASON_GAMES} games). Closing position = (balance − debt) + sum of each year's "
-    "(income − expenses)."
+    "(income − expenses). Expired contracts (per season settings) remove wages and matchday fees."
 )
 SF_BALANCE_DEBT_TIP = (
     "Cash balance grows by each year's net; outstanding debt falls by annual debt payments "
@@ -86,7 +97,8 @@ SF_BALANCE_DEBT_TIP = (
 )
 SF_STATEMENT_OUTLOOK_TIP = (
     "Y1–Yn are expected annual salaries at the end of each season if the player stays on this "
-    "contract (division change plus that year's raise/drop applied)."
+    "contract (division change plus that year's raise/drop applied). Once Expires falls before "
+    "that season's end (Jun 30 for Jul–Jun, Dec 31 for Jan–Dec), the cell is $0."
 )
 SF_STATEMENT_NOTE_TIP = (
     "Matchday starters and substitutes are assumed to appear in every game (appearance fee × games). "
@@ -133,6 +145,8 @@ _CLUB_FIELD_IDS = [
 _WAGE_SCENARIO_IDS = [
     "sf-division-mode",
     "sf-projection-years",
+    "sf-season-calendar",
+    "sf-season-year",
 ]
 _CLUB_PERSIST_IDS = [*_CLUB_FIELD_IDS, *_WAGE_SCENARIO_IDS]
 
@@ -322,6 +336,14 @@ def _projection_years(value) -> int:
     return 1 if years < 3 else SUSTAINABILITY_YEARS
 
 
+def _season_year(value) -> int:
+    try:
+        year = int(value if value is not None else DEFAULT_SEASON_YEAR)
+    except (TypeError, ValueError):
+        year = DEFAULT_SEASON_YEAR
+    return max(1990, min(2100, year))
+
+
 def _pill_control(
     control_id: str,
     data: list[dict],
@@ -478,6 +500,8 @@ def _statement_table(
     outlook_years: int = SUSTAINABILITY_YEARS,
     hist_statement: dict | None = None,
     compare: bool = False,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
 ) -> html.Div:
     years = max(1, int(outlook_years or SUSTAINABILITY_YEARS))
     header = html.Tr(
@@ -498,6 +522,13 @@ def _statement_table(
     hist_lines = {
         line.get("key"): line for line in (hist_statement or {}).get("lines") or []
     }
+    outlook_kwargs = dict(
+        years=years,
+        division_mode=division_mode,
+        apply_yearly_raises=apply_yearly_raises,
+        season_calendar=season_calendar,
+        current_season_year=current_season_year,
+    )
     for line in statement.get("lines") or []:
         role = _ROLE_LABEL.get(line["role"], line["role"])
         name = line["name"]
@@ -513,20 +544,10 @@ def _statement_table(
                 else outlook
             )
         else:
-            outlook = player_wage_outlook(
-                player,
-                years=years,
-                division_mode=division_mode,
-                apply_yearly_raises=apply_yearly_raises,
-            )
+            outlook = player_wage_outlook(player, **outlook_kwargs)
             hist_player = hist_by_key.get(line.get("key") or "")
             if compare and hist_player:
-                hist_outlook = player_wage_outlook(
-                    hist_player,
-                    years=years,
-                    division_mode=division_mode,
-                    apply_yearly_raises=apply_yearly_raises,
-                )
+                hist_outlook = player_wage_outlook(hist_player, **outlook_kwargs)
             elif compare and hist_line:
                 hist_outlook = [float(hist_line.get("salary_annual") or 0)] * years
             else:
@@ -909,7 +930,9 @@ def layout(**_kwargs):
                                                                     "Each Yn column is the "
                                                                     "salary at the end of that "
                                                                     "season after division "
-                                                                    "change and yearly raises."
+                                                                    "change and yearly raises, "
+                                                                    "or $0 once the contract "
+                                                                    "has expired."
                                                                 ),
                                                                 help_id="sf-help-projection-years",
                                                             ),
@@ -920,6 +943,58 @@ def layout(**_kwargs):
                                                                     SUSTAINABILITY_YEARS
                                                                 ),
                                                                 class_name="sf-years-pills",
+                                                            ),
+                                                        ],
+                                                        className="sf-scenario-item",
+                                                    ),
+                                                    html.Div(
+                                                        [
+                                                            _field_label(
+                                                                "Season calendar",
+                                                                tip=(
+                                                                    "Jul–Jun: current season "
+                                                                    "year is the start year "
+                                                                    "(2028 = 2028/29), seasons "
+                                                                    "end 30 Jun. Jan–Dec: "
+                                                                    "calendar year seasons "
+                                                                    "ending 31 Dec. Used with "
+                                                                    "Expires to drop players "
+                                                                    "from Y1–Yn and "
+                                                                    "sustainability."
+                                                                ),
+                                                                help_id="sf-help-season-calendar",
+                                                            ),
+                                                            _pill_control(
+                                                                "sf-season-calendar",
+                                                                _SEASON_CALENDAR_OPTIONS,
+                                                                value=DEFAULT_SEASON_CALENDAR,
+                                                                class_name="sf-season-pills",
+                                                            ),
+                                                        ],
+                                                        className="sf-scenario-item",
+                                                    ),
+                                                    html.Div(
+                                                        [
+                                                            _field_label(
+                                                                "Current season year",
+                                                                tip=(
+                                                                    "Jul–Jun: enter the start "
+                                                                    "year (2028 for 2028/29). "
+                                                                    "Jan–Dec: enter the "
+                                                                    "calendar year. Y1 is this "
+                                                                    "season; later Yn years "
+                                                                    "advance one season each."
+                                                                ),
+                                                                help_id="sf-help-season-year",
+                                                            ),
+                                                            dmc.NumberInput(
+                                                                id="sf-season-year",
+                                                                value=DEFAULT_SEASON_YEAR,
+                                                                min=1990,
+                                                                max=2100,
+                                                                step=1,
+                                                                hideControls=False,
+                                                                className="sf-number",
                                                             ),
                                                         ],
                                                         className="sf-scenario-item",
@@ -1108,6 +1183,8 @@ def _club_payload(
     *category_values,
     division_mode="none",
     projection_years=SUSTAINABILITY_YEARS,
+    season_calendar=DEFAULT_SEASON_CALENDAR,
+    season_year=DEFAULT_SEASON_YEAR,
 ):
     n_income = len(_INCOME_IDS)
     income_vals = list(category_values[:n_income])
@@ -1125,6 +1202,8 @@ def _club_payload(
         "yearly_raises": True,
         "division_mode": (division_mode or "none"),
         "projection_years": _projection_years(projection_years),
+        "season_calendar": normalize_season_calendar(season_calendar),
+        "season_year": _season_year(season_year),
     }
 
 
@@ -1140,6 +1219,8 @@ def _club_values(cached: dict | None) -> tuple:
         *[expenses.get(key) for key, _ in EXPENSE_CATEGORIES],
         _migrate_division_mode(cached),
         str(_projection_years(cached.get("projection_years"))),
+        normalize_season_calendar(cached.get("season_calendar")),
+        _season_year(cached.get("season_year")),
     )
 
 
@@ -1157,15 +1238,26 @@ def _club_has_values(cached: dict | None) -> bool:
     *[Input(field_id, "value") for field_id in _CLUB_FIELD_IDS],
     Input("sf-division-mode", "value"),
     Input("sf-projection-years", "value"),
+    Input("sf-season-calendar", "value"),
+    Input("sf-season-year", "value"),
     State("sf-club", "data"),
     prevent_initial_call=True,
 )
 def persist_club_finances(*args):
-    *field_values, division_mode, projection_years, cached = args
+    (
+        *field_values,
+        division_mode,
+        projection_years,
+        season_calendar,
+        season_year,
+        cached,
+    ) = args
     payload = _club_payload(
         *field_values,
         division_mode=division_mode,
         projection_years=projection_years,
+        season_calendar=season_calendar,
+        season_year=season_year,
     )
     # NumberInputs remount empty before hydrate; keep prior session values.
     if not _club_has_values(payload) and _club_has_values(cached):
@@ -1173,6 +1265,8 @@ def persist_club_finances(*args):
         if ctx.triggered_id in {
             "sf-division-mode",
             "sf-projection-years",
+            "sf-season-calendar",
+            "sf-season-year",
         }:
             cached = cached or {}
             return {
@@ -1180,6 +1274,8 @@ def persist_club_finances(*args):
                 "yearly_raises": True,
                 "division_mode": division_mode or "none",
                 "projection_years": _projection_years(projection_years),
+                "season_calendar": normalize_season_calendar(season_calendar),
+                "season_year": _season_year(season_year),
             }
         return no_update
     return payload
@@ -1189,6 +1285,8 @@ def persist_club_finances(*args):
     *[Output(field_id, "value") for field_id in _CLUB_FIELD_IDS],
     Output("sf-division-mode", "value"),
     Output("sf-projection-years", "value"),
+    Output("sf-season-calendar", "value"),
+    Output("sf-season-year", "value"),
     Input("sf-hydrate-tick", "n_intervals"),
     State("sf-club", "data"),
 )
@@ -1200,6 +1298,9 @@ def hydrate_club_finances(_tick, cached):
         not _club_has_values(cached)
         and _migrate_division_mode(cached) == "none"
         and _projection_years(cached.get("projection_years")) == SUSTAINABILITY_YEARS
+        and normalize_season_calendar(cached.get("season_calendar"))
+        == DEFAULT_SEASON_CALENDAR
+        and _season_year(cached.get("season_year")) == DEFAULT_SEASON_YEAR
     )
     if wage_only:
         return tuple(no_update for _ in _CLUB_PERSIST_IDS)
@@ -1224,6 +1325,8 @@ _RENDER_INPUTS = [
     *[Input(field_id, "value") for field_id in _EXPENSE_IDS],
     Input("sf-division-mode", "value"),
     Input("sf-projection-years", "value"),
+    Input("sf-season-calendar", "value"),
+    Input("sf-season-year", "value"),
     Input("sf-parsed-historical", "data"),
     Input("theme", "data"),
 ]
@@ -1247,9 +1350,17 @@ def render_statement(
 ):
     theme = rest[-1] if rest else "dark"
     hist_parsed = rest[-2] if len(rest) >= 2 else None
-    projection_years = _projection_years(rest[-3] if len(rest) >= 3 else SUSTAINABILITY_YEARS)
-    division_mode = rest[-4] if len(rest) >= 4 else "none"
-    category_values = rest[:-4] if len(rest) >= 4 else rest
+    season_year = _season_year(
+        rest[-3] if len(rest) >= 3 else DEFAULT_SEASON_YEAR
+    )
+    season_calendar = normalize_season_calendar(
+        rest[-4] if len(rest) >= 4 else DEFAULT_SEASON_CALENDAR
+    )
+    projection_years = _projection_years(
+        rest[-5] if len(rest) >= 5 else SUSTAINABILITY_YEARS
+    )
+    division_mode = rest[-6] if len(rest) >= 6 else "none"
+    category_values = rest[:-6] if len(rest) >= 6 else rest
     compare = bool(parsed_historical_players(hist_parsed))
     rows = parsed_players(parsed)
     starters = list(starters or [])
@@ -1429,6 +1540,8 @@ def render_statement(
                 outlook_years=projection_years,
                 hist_statement=hist_statement,
                 compare=compare and bool(hist_statement),
+                season_calendar=season_calendar,
+                current_season_year=season_year,
             ),
             hint=(
                 f"Period costs plus Y1–Y{projection_years} expected annual "
@@ -1439,6 +1552,7 @@ def render_statement(
 
     club_values = [balance, debt, debt_payments, *income_vals, *expense_vals]
     if any(v is not None and v != "" for v in club_values):
+        matchday_keys = list(starters) + [k for k in subs if k not in set(starters)]
         sustain = club_sustainability(
             balance=_millions_to_cash(balance),
             debt=_millions_to_cash(debt),
@@ -1459,6 +1573,16 @@ def render_statement(
                 years=projection_years,
                 division_mode=division_mode,
                 apply_yearly_raises=True,
+                season_calendar=season_calendar,
+                current_season_year=season_year,
+            ),
+            squad_fees_by_year=projected_annual_fees(
+                rows,
+                matchday_keys,
+                years=projection_years,
+                season_games=DEFAULT_SEASON_GAMES,
+                season_calendar=season_calendar,
+                current_season_year=season_year,
             ),
         )
         children.append(_sustainability_panel(sustain, theme))

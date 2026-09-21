@@ -6442,6 +6442,10 @@ body.st-detail-level-dragging {
     width: auto;
 }
 
+.sf-season-pills.mantine-SegmentedControl-root {
+    width: auto;
+}
+
 .sf-pill-control .mantine-SegmentedControl-label {
     font-size: 0.8125rem;
     font-weight: 600;

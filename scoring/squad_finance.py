@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+from datetime import date
 from typing import Any
 
 from scoring.role_scorer import (
@@ -27,6 +28,12 @@ MATCHDAY = STARTERS + SUBS
 DEFAULT_GAMES = 38
 DEFAULT_SEASON_GAMES = 38
 SUSTAINABILITY_YEARS = 5
+DEFAULT_SEASON_CALENDAR = "jul_jun"
+DEFAULT_SEASON_YEAR = 2028
+
+# Season calendars for mapping ``Expires`` onto projection years.
+SEASON_CALENDAR_JUL_JUN = "jul_jun"
+SEASON_CALENDAR_JAN_DEC = "jan_dec"
 
 # Club P&L category keys (values are absolute currency, not millions).
 INCOME_CATEGORIES = (
@@ -51,6 +58,10 @@ _PERCENT_TOKEN = re.compile(
     re.IGNORECASE,
 )
 _GK_TOKEN = re.compile(r"\bGK\b", re.IGNORECASE)
+# Moneyball ``Expires`` is typically US-style M/D/YYYY (e.g. 6/30/2030).
+_DATE_TOKEN = re.compile(
+    r"(?P<a>\d{1,4})\s*[/\-.]\s*(?P<b>\d{1,2})\s*[/\-.]\s*(?P<c>\d{1,4})"
+)
 
 _CLAUSE_KEYS = (
     "yearly_salary_raise",
@@ -130,6 +141,115 @@ def resolve_salary_clause(salary: float, text: str | None) -> dict[str, float | 
     return {"amount": float(value), "kind": "money", "rate": 0.0, "raw": raw}
 
 
+def parse_contract_expires(text: str | None) -> date | None:
+    """Parse Moneyball ``Expires`` into a ``date`` (typically M/D/YYYY)."""
+    if text is None:
+        return None
+    raw = str(text).strip()
+    if not raw or raw in {"-", "—", "N/A", "n/a"}:
+        return None
+    match = _DATE_TOKEN.search(raw)
+    if not match:
+        return None
+    a, b, c = int(match.group("a")), int(match.group("b")), int(match.group("c"))
+
+    def _build(year: int, month: int, day: int) -> date | None:
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+
+    # YYYY-M-D
+    if a >= 1000:
+        return _build(a, b, c)
+    # D-M-YYYY when day is unambiguous (>12)
+    if a > 12 and c >= 1000:
+        return _build(c, b, a)
+    # M-D-YYYY (Moneyball default) / fallback D-M-YYYY
+    if c >= 1000:
+        parsed = _build(c, a, b)
+        if parsed is not None:
+            return parsed
+        return _build(c, b, a)
+    return None
+
+
+def normalize_season_calendar(value: str | None) -> str:
+    key = (value or DEFAULT_SEASON_CALENDAR).strip().lower().replace("-", "_")
+    if key in {"jan_dec", "calendar", "jan_december", "calendar_year"}:
+        return SEASON_CALENDAR_JAN_DEC
+    return SEASON_CALENDAR_JUL_JUN
+
+
+def season_end_date(
+    *,
+    season_calendar: str | None,
+    current_season_year: int | None,
+    year: int,
+) -> date | None:
+    """End date of projection season ``year`` (1 = current season).
+
+    - Jan–Dec: season ``Y`` ends 31 Dec ``current + year − 1``.
+    - Jul–Jun: season start ``S`` ends 30 Jun ``S + 1``; projection year ``y``
+      uses start ``current + y − 1`` → end 30 Jun ``current + y``.
+    """
+    if current_season_year is None:
+        return None
+    try:
+        base = int(current_season_year)
+    except (TypeError, ValueError):
+        return None
+    y = max(1, int(year or 1))
+    cal = normalize_season_calendar(season_calendar)
+    if cal == SEASON_CALENDAR_JAN_DEC:
+        return date(base + y - 1, 12, 31)
+    return date(base + y, 6, 30)
+
+
+def _as_expires_date(value: Any) -> date | None:
+    if value is None or value == "" or value == "—":
+        return None
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    # ISO from finance_row / session store
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        try:
+            return date.fromisoformat(text)
+        except ValueError:
+            return None
+    return parse_contract_expires(text)
+
+
+def contract_covers_season(
+    row: dict[str, Any],
+    *,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
+    year: int = 1,
+) -> bool:
+    """True when the player is still on contract through the end of season ``year``.
+
+    Missing / unparseable ``Expires`` keeps the player on the books (no drop).
+    When ``current_season_year`` is unset, expiration filtering is skipped.
+    """
+    end = season_end_date(
+        season_calendar=season_calendar,
+        current_season_year=current_season_year,
+        year=year,
+    )
+    if end is None:
+        return True
+    expires = _as_expires_date(row.get("contract_expires_date"))
+    if expires is None:
+        expires = _as_expires_date(row.get("contract_expires"))
+    if expires is None:
+        return True
+    return expires >= end
+
+
 def format_money(value: float | None, *, currency: str = "$") -> str:
     if value is None:
         return "—"
@@ -177,6 +297,8 @@ def finance_row(player: dict[str, Any]) -> dict[str, Any]:
     club = player.get("club") or "—"
     position = player.get("position") or player.get("best_pos") or "—"
     best_pos = player.get("best_pos") or ""
+    expires_raw = player.get("contract_expires")
+    expires_date = parse_contract_expires(expires_raw)
     row: dict[str, Any] = {
         "key": player_row_key(
             {
@@ -200,7 +322,8 @@ def finance_row(player: dict[str, Any]) -> dict[str, Any]:
         "unused_sub_fee": unused or 0.0,
         "ffp_contribution": ffp or 0.0,
         "transfer_value": player.get("transfer_value") or "—",
-        "contract_expires": player.get("contract_expires") or "—",
+        "contract_expires": expires_raw or "—",
+        "contract_expires_date": expires_date.isoformat() if expires_date else None,
     }
     for key in _CLAUSE_KEYS:
         resolved = resolve_salary_clause(salary, player.get(key))
@@ -255,16 +378,26 @@ def player_wage_for_year(
     *,
     division_mode: str | None = "none",
     apply_yearly_raises: bool = False,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
 ) -> float:
     """Project one player's annual wage at the **end** of season ``year`` (1-indexed).
 
     Division change is applied first, then yearly raises for each completed season
     through that year (so Y1 already includes one raise cycle when enabled).
     Percentage clauses compound on the post-division wage; absolute clauses add
-    a flat amount per year.
+    a flat amount per year. Wage is ``0`` once ``Expires`` is before that season's
+    end (see ``contract_covers_season``).
     """
-    base = player_wage_after_division(row, division_mode)
     year = max(1, int(year or 1))
+    if not contract_covers_season(
+        row,
+        season_calendar=season_calendar,
+        current_season_year=current_season_year,
+        year=year,
+    ):
+        return 0.0
+    base = player_wage_after_division(row, division_mode)
     if not apply_yearly_raises:
         return base
     steps = year
@@ -282,6 +415,8 @@ def projected_annual_wages(
     years: int = SUSTAINABILITY_YEARS,
     division_mode: str | None = "none",
     apply_yearly_raises: bool = False,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
 ) -> list[float]:
     """Squad wage bill for each projected season (length ``years``)."""
     years = max(1, int(years or 1))
@@ -292,11 +427,44 @@ def projected_annual_wages(
                 year,
                 division_mode=division_mode,
                 apply_yearly_raises=apply_yearly_raises,
+                season_calendar=season_calendar,
+                current_season_year=current_season_year,
             )
             for row in rows
         )
         for year in range(1, years + 1)
     ]
+
+
+def projected_annual_fees(
+    rows: list[dict[str, Any]],
+    matchday_keys: list[str] | set[str] | None,
+    *,
+    years: int = SUSTAINABILITY_YEARS,
+    season_games: int = DEFAULT_SEASON_GAMES,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
+) -> list[float]:
+    """Full-season appearance fees for matchday players still under contract."""
+    years = max(1, int(years or 1))
+    season_games = max(1, int(season_games or DEFAULT_SEASON_GAMES))
+    keys = {str(k) for k in (matchday_keys or []) if k}
+    by_key = {row["key"]: row for row in rows if row.get("key")}
+    players = [by_key[k] for k in keys if k in by_key]
+    out: list[float] = []
+    for year in range(1, years + 1):
+        total = 0.0
+        for row in players:
+            if not contract_covers_season(
+                row,
+                season_calendar=season_calendar,
+                current_season_year=current_season_year,
+                year=year,
+            ):
+                continue
+            total += float(row.get("appearance_fee") or 0) * season_games
+        out.append(total)
+    return out
 
 
 def player_wage_outlook(
@@ -305,6 +473,8 @@ def player_wage_outlook(
     years: int = SUSTAINABILITY_YEARS,
     division_mode: str | None = "none",
     apply_yearly_raises: bool = False,
+    season_calendar: str | None = None,
+    current_season_year: int | None = None,
 ) -> list[float]:
     """Annual wages for one player over ``years`` seasons on the current contract."""
     years = max(1, int(years or 1))
@@ -314,6 +484,8 @@ def player_wage_outlook(
             year,
             division_mode=division_mode,
             apply_yearly_raises=apply_yearly_raises,
+            season_calendar=season_calendar,
+            current_season_year=current_season_year,
         )
         for year in range(1, years + 1)
     ]
@@ -528,6 +700,7 @@ def club_sustainability(
     promotion_raise_total: float = 0.0,
     relegation_drop_total: float = 0.0,
     squad_wages_by_year: list[float] | None = None,
+    squad_fees_by_year: list[float] | None = None,
 ) -> dict[str, Any]:
     """Project club cash over ``years`` at today's annual income / expenses.
 
@@ -545,7 +718,8 @@ def club_sustainability(
       (wages floored at zero before fees).
     - ``yearly_raise_total`` (when ``apply_yearly_raises``) adds after each
       completed year: year 1 = base (+ promo − relegation), year 2 = that + 1×
-      raise, and so on. Adjustments apply to wages only; appearance fees stay flat.
+      raise, and so on. Adjustments apply to wages only; appearance fees stay flat
+      unless ``squad_fees_by_year`` is provided (e.g. contracts expiring).
     - Prefer ``squad_wages_by_year`` (absolute annual wages per season) when
       clauses are percentage-based so compounding stays per-player accurate.
     """
@@ -585,13 +759,28 @@ def club_sustainability(
         while len(projected) < years:
             projected.append(projected[-1] if projected else annual_wages_base)
 
+    projected_fees = None
+    if squad_fees_by_year is not None:
+        projected_fees = [
+            max(0.0, _as_float(v)) for v in list(squad_fees_by_year)[:years]
+        ]
+        while len(projected_fees) < years:
+            projected_fees.append(
+                projected_fees[-1] if projected_fees else annual_fees
+            )
+
     def squad_for_year(year: int) -> float:
         # year is 1-indexed season number within the projection.
         if projected is not None:
             wages = projected[year - 1]
         else:
             wages = annual_wages_base + promo - releg + max(0, year - 1) * yearly
-        return max(0.0, wages) + annual_fees
+        fees = (
+            projected_fees[year - 1]
+            if projected_fees is not None
+            else annual_fees
+        )
+        return max(0.0, wages) + max(0.0, fees)
 
     opening_net = bal - debt_bal
     cash = bal
