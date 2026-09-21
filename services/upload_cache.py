@@ -27,6 +27,11 @@ FORMULA_VERSION = "v42"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 _ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 
+# Process-level gunzip/JSON cache. Multiyear packs are ~10× single-year on disk;
+# modal/rescore paths used to re-parse the same file repeatedly.
+_CACHE_LRU_MAX = 4
+_CACHE_LRU: dict[str, tuple[tuple[int, int], dict[str, Any]]] = {}
+
 
 def ensure_cache_dir() -> None:
     UPLOAD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -35,6 +40,29 @@ def ensure_cache_dir() -> None:
 def _cache_path(file_id: str) -> Path:
     safe = "".join(ch for ch in str(file_id) if ch.isalnum() or ch in "-_")
     return UPLOAD_CACHE_DIR / f"{safe}.json.gz"
+
+
+def _cache_fingerprint(path: Path) -> tuple[int, int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (int(st.st_mtime_ns), int(st.st_size))
+
+
+def _invalidate_cache_lru(file_id: str | None = None) -> None:
+    if file_id is None:
+        _CACHE_LRU.clear()
+        return
+    _CACHE_LRU.pop(str(file_id), None)
+
+
+def _remember_cache(file_id: str, fingerprint: tuple[int, int], data: dict[str, Any]) -> None:
+    if len(_CACHE_LRU) >= _CACHE_LRU_MAX and file_id not in _CACHE_LRU:
+        oldest = next(iter(_CACHE_LRU), None)
+        if oldest is not None:
+            _CACHE_LRU.pop(oldest, None)
+    _CACHE_LRU[file_id] = (fingerprint, data)
 
 
 def _canonical_json(value: Any) -> str:
@@ -98,24 +126,65 @@ def _write_cache(file_id: str, payload: dict[str, Any]) -> Path:
     path = _cache_path(file_id)
     blob = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
     path.write_bytes(gzip.compress(blob, compresslevel=6))
+    _invalidate_cache_lru(file_id)
+    fingerprint = _cache_fingerprint(path)
+    if fingerprint is not None:
+        _remember_cache(file_id, fingerprint, payload)
     return path
 
 
 def load_cache(file_id: str) -> dict[str, Any] | None:
     path = _cache_path(file_id)
     if not path.is_file():
+        _invalidate_cache_lru(file_id)
         return None
+    fingerprint = _cache_fingerprint(path)
+    if fingerprint is None:
+        return None
+    hit = _CACHE_LRU.get(file_id)
+    if hit and hit[0] == fingerprint:
+        # Refresh insertion order for simple LRU.
+        _CACHE_LRU.pop(file_id, None)
+        _CACHE_LRU[file_id] = hit
+        return hit[1]
     try:
         data = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError, EOFError):
+        _invalidate_cache_lru(file_id)
         return None
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    _remember_cache(file_id, fingerprint, data)
+    return data
 
 
 def delete_cache(file_id: str) -> None:
+    _invalidate_cache_lru(file_id)
     path = _cache_path(file_id)
     if path.is_file():
         path.unlink()
+
+
+def _players_from_cache(cache: dict[str, Any] | None, section: str) -> list[dict[str, Any]] | None:
+    """Resolve player list for a cache section (shared multiyear payload supported)."""
+    if not cache:
+        return None
+    block = cache.get(section)
+    if isinstance(block, dict):
+        players = block.get("players")
+        if isinstance(players, list):
+            return players
+    shared = cache.get("players")
+    if isinstance(shared, list):
+        return shared
+    # Older multiyear caches duplicated players under both sections.
+    other = "stats" if section == "role_scores" else "role_scores"
+    other_block = cache.get(other)
+    if isinstance(other_block, dict):
+        players = other_block.get("players")
+        if isinstance(players, list):
+            return players
+    return None
 
 
 def is_fresh(
@@ -549,17 +618,33 @@ def _compute_multi_year_pack(
     want_stats = bool(entry.get("stats"))
 
     for year, src_id in years.items():
-        text, src_entry = lib.read_text(src_id)
+        src_entry = lib.get_file(src_id) or {}
+        text: str | None = None
+
+        def _season_text() -> str:
+            nonlocal text, src_entry
+            if text is None:
+                text, src_entry = lib.read_text(src_id)
+            return text
+
         if want_roles and src_entry.get("role_scores"):
             try:
-                role_by_year[year] = parse_export(text)
+                hit = try_role_players(src_id)
+                if hit:
+                    role_by_year[year] = hit[0]
+                else:
+                    role_by_year[year] = parse_export(_season_text())
             except Exception as exc:
                 errors.append(f"role year {year}: {exc}")
                 traceback.print_exc()
         if want_stats and src_entry.get("stats"):
             try:
-                players, _limited = parse_stats_export_with_meta(text)
-                stats_by_year[year] = players
+                hit = try_stats_players(src_id)
+                if hit:
+                    stats_by_year[year] = hit[0]
+                else:
+                    players, _limited = parse_stats_export_with_meta(_season_text())
+                    stats_by_year[year] = players
             except Exception as exc:
                 errors.append(f"stats year {year}: {exc}")
                 traceback.print_exc()
@@ -585,6 +670,10 @@ def _compute_multi_year_pack(
     tier_w = us.tier_weights(settings)
     sp_profiles = us.set_piece_profiles(settings)
 
+    # One shared players list — duplicated under role_scores + stats nearly
+    # doubled multiyear cache size for identical blobs.
+    payload["players"] = merged
+
     if want_roles and role_by_year:
         try:
             rc.load_pack(sig["role_pack_id"], persist=False)
@@ -603,8 +692,10 @@ def _compute_multi_year_pack(
                 set_piece_profiles=sp_profiles,
                 partial_adjacency=rs.default_partial_adjacency(),
             )
-            # Stamp combined scores onto scored rows for table display.
-            from scoring.role_scorer import player_row_key, role_meta
+            # Stamp growth maps onto scored rows for table display.
+            # Per-year / Combined score columns are derived at read time from
+            # role_scores_by_year (avoid ~200 denormalized columns per row).
+            from scoring.role_scorer import player_row_key
 
             by_key = {player_row_key(p): p for p in merged if player_row_key(p)}
             for row in rows:
@@ -624,28 +715,12 @@ def _compute_multi_year_pack(
                 row["multi_year_status"] = src.get("multi_year_status")
                 row["years_present"] = list(src.get("years_present") or [])
                 row["role_scores_by_year"] = src.get("role_scores_by_year") or {}
-                combined = src.get("role_scores_combined") or {}
-                row["role_scores_combined"] = combined
-                for role_ref, score in combined.items():
-                    try:
-                        col = role_meta(role_ref)["column"]
-                    except Exception:
-                        col = role_ref
-                    row[f"{col} (Combined)"] = (
-                        round(score, 1) if score is not None else None
-                    )
-                    for year in ("1", "2", "3"):
-                        yscore = (row["role_scores_by_year"].get(year) or {}).get(
-                            role_ref
-                        )
-                        if yscore is None:
-                            yscore = (row["role_scores_by_year"].get(year) or {}).get(
-                                col
-                            )
-                        if yscore is not None:
-                            row[f"{col} (Y{year})"] = round(float(yscore), 1)
+                row["role_scores_combined"] = src.get("role_scores_combined") or {}
+                if src.get("by_year"):
+                    row["by_year"] = src.get("by_year")
+                if src.get("multi_year"):
+                    row["multi_year"] = True
             payload["role_scores"] = {
-                "players": merged,
                 "rows": rows,
                 "role_ids": role_ids,
                 "n_players": len(merged),
@@ -658,11 +733,8 @@ def _compute_multi_year_pack(
 
     if want_stats and stats_by_year:
         try:
-            # Merged list already has stats when include_stats; if roles-only merge
-            # ran first with both, players are the same list.
-            stats_players = merged
             percentiles = _precompute_stats_percentiles(
-                stats_players,
+                merged,
                 stp.load_tree(sig.get("stats_pack_id")),
                 min_minutes=float(us.default_minutes_required(settings)),
                 limited_divisions=limited_divisions,
@@ -677,22 +749,22 @@ def _compute_multi_year_pack(
             exclude_limited = us.exclude_limited_leagues_adaptive_bounds(settings)
             banding_ctx = us.build_stats_banding_context(
                 settings,
-                stats_players,
+                merged,
                 limited_divisions=limited_divisions,
                 min_minutes=min_minutes,
                 exclude_limited_leagues=exclude_limited,
+                cache_key=f"compute:{file_id}",
             )
             high_archetypes = stamp_high_archetypes(
-                stats_players,
+                merged,
                 settings=settings,
                 banding_ctx=banding_ctx,
                 limited_divisions=limited_divisions,
             )
             payload["stats"] = {
-                "players": stats_players,
                 "percentiles": percentiles,
                 "high_archetypes": high_archetypes,
-                "n_players": len(stats_players),
+                "n_players": len(merged),
                 "limited_tracking_divisions": limited_divisions,
                 "multi_year": True,
             }
@@ -700,7 +772,7 @@ def _compute_multi_year_pack(
             payload["limited_tracking_by_nation"] = [
                 {"nation": nation, "count": count}
                 for nation, count in nation_counts_for_limited_divisions(
-                    limited_divisions, stats_players
+                    limited_divisions, merged
                 )
             ]
         except Exception as exc:
@@ -786,7 +858,7 @@ def try_role_players(
     cache = load_cache(file_id)
     if not is_fresh(cache, entry=entry) or not (cache or {}).get("role_scores"):
         return None
-    players = cache["role_scores"].get("players")
+    players = _players_from_cache(cache, "role_scores")
     if not isinstance(players, list):
         return None
     return players, cache
@@ -799,7 +871,7 @@ def try_stats_players(
     cache = load_cache(file_id)
     if not is_fresh(cache, entry=entry) or not (cache or {}).get("stats"):
         return None
-    players = cache["stats"].get("players")
+    players = _players_from_cache(cache, "stats")
     if not isinstance(players, list):
         return None
     return players, cache

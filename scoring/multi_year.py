@@ -168,22 +168,37 @@ def status_label(status: str | None) -> str:
 
 
 def _year_snapshot(player: dict[str, Any]) -> dict[str, Any]:
-    """Compact per-year payload for modal / growth UI."""
-    snap = {
+    """Compact per-year payload for modal / growth UI.
+
+    Keep identity + key rates only — full attrs/stats maps blew up multiyear
+    cache size and were unused by the By year modal cards.
+    """
+    stats = player.get("stats") or {}
+    key_stats = {
+        mid: stats[mid]
+        for mid in (
+            "goals",
+            "assists",
+            "expected_goals",
+            "expected_assists",
+            "pass_completion",
+            "passes_attempted",
+            "tackles_attempted",
+            "key_passes",
+            "shots",
+            "possession_won",
+        )
+        if mid in stats
+    }
+    return {
         "minutes": player.get("minutes"),
-        "stats": dict(player.get("stats") or {}),
-        "set_piece_stats": dict(player.get("set_piece_stats") or {}),
-        "attrs": dict(player.get("attrs") or {}),
-        "stats_unavailable": list(player.get("stats_unavailable") or []),
-        "stats_limited_tracking": bool(player.get("stats_limited_tracking")),
-        "limited_division_tracking": bool(player.get("limited_division_tracking")),
+        "stats": key_stats,
         "club": player.get("club"),
         "age": player.get("age"),
         "division": player.get("division"),
         "position": player.get("position"),
         "best_pos": player.get("best_pos"),
     }
-    return snap
 
 
 def _metric_unit(metric_id: str) -> str | None:
@@ -634,9 +649,6 @@ def attach_role_scores_by_year(
             scores = (scores_index.get(year) or {}).get(key) or {}
             if scores:
                 by_year_scores[year] = scores
-                snap = (player.get("by_year") or {}).get(year)
-                if isinstance(snap, dict):
-                    snap["role_scores"] = scores
         player["role_scores_by_year"] = by_year_scores
         player["role_scores_combined"] = combined_role_scores(by_year_scores, weights)
 

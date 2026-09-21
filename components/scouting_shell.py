@@ -827,6 +827,8 @@ def register_library_select_callbacks(
                 if track_rev and rev_payload:
                     store["rev"] = rev_payload["n"]
             store["file_id"] = file_id
+            if lib.is_multi_year(entry):
+                store["multi_year"] = True
             if cache_extra:
                 store.update(cache_extra)
             row = [

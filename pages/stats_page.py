@@ -505,11 +505,13 @@ def _page_banding_bundle(
         settings, export_limited, detail_map
     )
     band_limited_list = list(band_limited or [])
+    file_id = str((parsed or {}).get("file_id") or "").strip()
     banding_ctx = us.build_stats_banding_context(
         band_settings,
         players,
         limited_divisions=band_limited_list,
         min_minutes=minutes_required,
+        cache_key=f"st:{file_id}" if file_id else None,
     )
     return band_settings, band_limited_list, list(export_limited or []), banding_ctx
 

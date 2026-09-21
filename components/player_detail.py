@@ -347,13 +347,23 @@ def role_player_detail_card(
 
 
 def resolve_stats_player_for_file(
-    file_id: str, player: dict
+    file_id: str,
+    player: dict,
+    *,
+    cohort: list[dict] | None = None,
 ) -> tuple[dict | None, list[dict] | None]:
-    """Return (stats player, cohort) for a saved upload when stats are available."""
+    """Return (stats player, cohort) for a saved upload when stats are available.
+
+    Pass ``cohort`` when the page already has players in memory (multiyear /
+    combined caches embed stats on the role-score players) to avoid reloading
+    the full upload cache on every modal open.
+    """
     from scoring.stats_scorer import player_key as stats_player_key
     from services.player_profiles import load_stats_players_for_file
 
-    stat_players = load_stats_players_for_file(file_id) if file_id else None
+    stat_players = cohort
+    if stat_players is None:
+        stat_players = load_stats_players_for_file(file_id) if file_id else None
     name = (player.get("name") or "").strip()
     unique_id = str(player.get("unique_id") or "").strip()
     club = (player.get("club") or "").strip()
@@ -366,6 +376,9 @@ def resolve_stats_player_for_file(
         for sp in stat_players:
             if stats_player_key(sp) == target_key:
                 return sp, stat_players
+    # Multiyear / combined role players often already carry stats.
+    if isinstance(player, dict) and player.get("stats"):
+        return player, stat_players if stat_players is not None else [player]
     return None, stat_players
 
 
@@ -542,6 +555,7 @@ def build_player_modal_body(
             settings,
             stats_cohort,
             limited_divisions=limited_divisions,
+            cache_key=str(file_id or "").strip() or None,
         )
 
     after_identity: list = []
@@ -739,6 +753,7 @@ def scout_player_modal_body(
     stats_cohort: list[dict] | None = None,
     upload_has_stats: bool = False,
     role_growth_column: str | None = None,
+    banding_ctx=None,
 ) -> html.Div:
     """Role-scores modal body (thin wrapper around ``build_player_modal_body``)."""
     return build_player_modal_body(
@@ -756,6 +771,7 @@ def scout_player_modal_body(
         show_mode_toggle=bool(upload_has_stats),
         upload_has_stats=upload_has_stats,
         role_growth_column=role_growth_column,
+        banding_ctx=banding_ctx,
     )
 
 

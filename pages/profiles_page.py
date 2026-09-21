@@ -7687,13 +7687,21 @@ def _resolve_stats_player_for_profile(
 ) -> tuple[dict | None, list[dict] | None]:
     """Return (stats player, cohort) for the Profiles modal if available."""
     file_id = str(profile.get("file_id") or "").strip()
-    stats_player, cohort = resolve_stats_player_for_file(file_id, player)
-    if stats_player:
-        return stats_player, cohort
     embedded = profile.get("stats_player")
+    preferred = None
     if isinstance(embedded, dict) and embedded.get("stats"):
-        return embedded, cohort
-    return None, cohort
+        preferred = embedded
+    elif isinstance(player, dict) and player.get("stats"):
+        preferred = player
+    if preferred is not None:
+        cohort = None
+        if file_id:
+            try:
+                cohort = profiles.load_stats_players_for_file(file_id) or None
+            except Exception:
+                cohort = None
+        return preferred, cohort
+    return resolve_stats_player_for_file(file_id, player)
 
 
 def _enrich_player_multi_year(player: dict, profile: dict) -> dict:
@@ -7748,6 +7756,14 @@ def _build_profile_modal_body(
         or (profile.get("row") or {}).get("Role")
         or ""
     ).strip() or None
+    banding_ctx = None
+    if stats_cohort:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            stats_cohort,
+            limited_divisions=limited_divisions or None,
+            cache_key=file_id or None,
+        )
     return build_player_modal_body(
         player,
         settings,
@@ -7765,6 +7781,8 @@ def _build_profile_modal_body(
         always_minutes_styles=True,
         upload_has_stats=True,
         role_growth_column=growth_col,
+        banding_ctx=banding_ctx,
+        file_id=file_id,
         stats_missing_message=(
             "Player stats not available. This profile was saved from an "
             "attribute-only export. To see charts, re-save from a combined "

@@ -979,6 +979,10 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
     }
 
 
+_BANDING_CTX_LRU_MAX = 8
+_BANDING_CTX_LRU: dict[str, dict[str, Any]] = {}
+
+
 def build_stats_banding_context(
     settings: dict[str, Any] | None,
     players: list[dict[str, Any]] | None,
@@ -986,8 +990,13 @@ def build_stats_banding_context(
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     min_minutes: float | None = None,
     exclude_limited_leagues: bool | None = None,
+    cache_key: str | None = None,
 ) -> dict[str, Any]:
-    """Precompute per-tier threshold trees and adaptive p0/p100 maps for a cohort."""
+    """Precompute per-tier threshold trees and adaptive p0/p100 maps for a cohort.
+
+    Pass ``cache_key`` (e.g. file_id + minutes) so modal opens can reuse the
+    same context instead of scanning the full cohort again.
+    """
     from collections import defaultdict
 
     from scoring.stats_detail_transform import engine_detail_level_for_player
@@ -1007,6 +1016,30 @@ def build_stats_banding_context(
     )
     if exclude_limited_leagues is not None:
         bound_opts["exclude_limited_leagues"] = bool(exclude_limited_leagues)
+
+    if cache_key:
+        import hashlib
+        import json as _json
+
+        trees_fp = hashlib.sha1(
+            _json.dumps(trees, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:12]
+        memo_key = "|".join(
+            [
+                str(cache_key),
+                str(len(players or [])),
+                str(bound_opts.get("min_minutes")),
+                str(bool(bound_opts.get("exclude_limited_leagues"))),
+                trees_fp,
+                ",".join(sorted(str(x) for x in limited)),
+                ",".join(sorted(str(x) for x in full_detail)),
+            ]
+        )
+        hit = _BANDING_CTX_LRU.get(memo_key)
+        if hit is not None:
+            _BANDING_CTX_LRU.pop(memo_key, None)
+            _BANDING_CTX_LRU[memo_key] = hit
+            return hit
 
     by_level: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for player in players or []:
@@ -1028,12 +1061,19 @@ def build_stats_banding_context(
             **bound_opts,
         )
 
-    return {
+    ctx = {
         "trees": trees,
         "full_detail_divisions": full_detail,
         "limited_divisions": limited,
         "bounds_by_level": bounds_by_level,
     }
+    if cache_key:
+        if len(_BANDING_CTX_LRU) >= _BANDING_CTX_LRU_MAX and memo_key not in _BANDING_CTX_LRU:
+            oldest = next(iter(_BANDING_CTX_LRU), None)
+            if oldest is not None:
+                _BANDING_CTX_LRU.pop(oldest, None)
+        _BANDING_CTX_LRU[memo_key] = ctx
+    return ctx
 
 
 def banding_for_level(

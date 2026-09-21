@@ -1673,7 +1673,21 @@ def _build_role_modal_body(
     role_growth_column: str | None = None,
 ) -> html.Div:
     file_id = str((parsed or {}).get("file_id") or "").strip()
-    stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
+    parsed_players = list((parsed or {}).get("players") or [])
+    # Prefer in-memory cohort when players already carry stats (multiyear /
+    # combined caches) so modal open does not re-gunzip the upload cache.
+    local_cohort = None
+    if parsed_players and (
+        bool(player.get("stats"))
+        or bool((parsed or {}).get("multi_year"))
+        or any(bool((p or {}).get("stats")) for p in parsed_players[:8])
+    ):
+        local_cohort = parsed_players
+    stats_player, stats_cohort = resolve_stats_player_for_file(
+        file_id if local_cohort is None else "",
+        player,
+        cohort=local_cohort,
+    )
     # Prefer scored-row multi-year role maps when the parsed player blob is thin.
     player = dict(player or {})
     if payload and not player.get("role_scores_by_year"):
@@ -1701,6 +1715,15 @@ def _build_role_modal_body(
                     player[key] = scored.get(key)
             if scored.get("role_scores_by_year") or scored.get("multi_year_status"):
                 player["multi_year"] = True
+    limited = _limited_tracking_divisions(payload)
+    banding_ctx = None
+    if stats_cohort:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            stats_cohort,
+            limited_divisions=limited or None,
+            cache_key=file_id or None,
+        )
     return scout_player_modal_body(
         player,
         settings,
@@ -1708,13 +1731,14 @@ def _build_role_modal_body(
         file_id=file_id,
         position_eligible=position_eligible,
         theme=theme,
-        limited_divisions=_limited_tracking_divisions(payload),
+        limited_divisions=limited,
         id_prefix="rs",
         modal_mode_id="rs-modal-bottom-mode",
         stats_player=stats_player,
         stats_cohort=stats_cohort,
         upload_has_stats=_upload_has_stats(parsed),
         role_growth_column=role_growth_column,
+        banding_ctx=banding_ctx,
     )
 
 
