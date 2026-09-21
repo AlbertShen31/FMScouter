@@ -7646,20 +7646,25 @@ def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
                 "Re-save from Role scores to open the scout modal.",
                 className="rs-player-missing",
             ),
-            profile_id,
+            {"id": profile_id, "role_growth_column": None},
         )
     settings = us.normalize(settings)
     # Prefer the clicked formation slot's role when the button carries a slot index.
     slot_group = None
+    growth_col = None
     try:
         slot_raw = ctx.triggered_id.get("slot")
         slot_i = int(slot_raw) if slot_raw not in (None, "", "_") else None
     except (TypeError, ValueError):
         slot_i = None
-    if slot_i is not None:
-        focus = _focus_slot(focus_role)
-        if focus and int(focus.get("slot", -1)) == slot_i:
-            slot_group = _stats_group_for_focus(focus_role)
+    focus = _focus_slot(focus_role)
+    if slot_i is not None and focus and int(focus.get("slot", -1)) == slot_i:
+        slot_group = _stats_group_for_focus(focus_role)
+        growth_col = str(focus.get("role") or "").strip() or None
+    if not growth_col and focus:
+        growth_col = str(focus.get("role") or "").strip() or None
+    if not growth_col:
+        growth_col = str(role or "").strip() or None
     body = _build_profile_modal_body(
         profile,
         player,
@@ -7667,8 +7672,14 @@ def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
         theme=theme,
         mode="roles",
         pos_group=slot_group or _profile_stats_group(profile),
+        role_growth_column=growth_col,
     )
-    return True, title, body, profile_id
+    return (
+        True,
+        title,
+        body,
+        {"id": profile_id, "role_growth_column": growth_col},
+    )
 
 
 def _resolve_stats_player_for_profile(
@@ -7721,6 +7732,7 @@ def _build_profile_modal_body(
     theme: str | None,
     mode: str = "roles",
     pos_group: str | None = None,
+    role_growth_column: str | None = None,
 ) -> html.Div:
     """Profiles modal: resolve slot phase + stats cohort, then shared body."""
     eval_group = pos_group or _profile_stats_group(profile)
@@ -7730,6 +7742,12 @@ def _build_profile_modal_body(
     import services.export_library as lib
 
     limited_divisions = lib.list_limited_tracking_divisions(file_id=file_id or None)
+    growth_col = str(
+        role_growth_column
+        or profile.get("role_column")
+        or (profile.get("row") or {}).get("Role")
+        or ""
+    ).strip() or None
     return build_player_modal_body(
         player,
         settings,
@@ -7746,6 +7764,7 @@ def _build_profile_modal_body(
         identity_fields_page="player_stats",
         always_minutes_styles=True,
         upload_has_stats=True,
+        role_growth_column=growth_col,
         stats_missing_message=(
             "Player stats not available. This profile was saved from an "
             "attribute-only export. To see charts, re-save from a combined "
@@ -7766,6 +7785,7 @@ def _build_profile_modal_body(
     Input("pf-player-modal-close", "n_clicks"),
     State("pf-table", "derived_viewport_data"),
     State("pf-player-modal", "is_open"),
+    State("pf-focus-role", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
@@ -7776,6 +7796,7 @@ def open_profile_modal(
     _close_clicks,
     viewport,
     is_open,
+    focus_role,
     settings,
     theme,
 ):
@@ -7824,10 +7845,17 @@ def open_profile_modal(
                 "Re-save from Role scores to open the scout modal.",
                 className="rs-player-missing",
             ),
-            profile_id,
+            {"id": profile_id, "role_growth_column": None},
             None,
         )
     settings = us.normalize(settings)
+    focus = _focus_slot(focus_role)
+    growth_col = (
+        (focus.get("role") if focus else None)
+        or str(row.get("_role_column") or "").strip()
+        or str(role or "").strip()
+        or None
+    )
     body = _build_profile_modal_body(
         profile,
         player,
@@ -7837,19 +7865,34 @@ def open_profile_modal(
         pos_group=_profile_stats_group(
             profile, role_column=str(row.get("_role_column") or role or "")
         ),
+        role_growth_column=growth_col,
     )
-    return (True, title, body, profile_id, None)
+    return (
+        True,
+        title,
+        body,
+        {"id": profile_id, "role_growth_column": growth_col},
+        None,
+    )
 
 
 @callback(
     Output("pf-player-modal-body", "children", allow_duplicate=True),
     Input("pf-modal-bottom-mode", "value"),
     State("pf-player-key", "data"),
+    State("pf-focus-role", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
-def switch_profile_modal_bottom(mode, profile_id, settings, theme):
+def switch_profile_modal_bottom(mode, player_key, focus_role, settings, theme):
+    profile_id = ""
+    stored_growth = None
+    if isinstance(player_key, dict):
+        profile_id = str(player_key.get("id") or "").strip()
+        stored_growth = player_key.get("role_growth_column")
+    else:
+        profile_id = str(player_key or "").strip()
     if not profile_id:
         return no_update
     profile = profiles.get_profile(str(profile_id))
@@ -7860,6 +7903,13 @@ def switch_profile_modal_bottom(mode, profile_id, settings, theme):
         return no_update
 
     settings = us.normalize(settings)
+    focus = _focus_slot(focus_role)
+    growth_col = (
+        (focus.get("role") if focus else None)
+        or str(stored_growth or "").strip()
+        or str(profile.get("role_column") or "").strip()
+        or None
+    )
     return _build_profile_modal_body(
         profile,
         player,
@@ -7867,6 +7917,7 @@ def switch_profile_modal_bottom(mode, profile_id, settings, theme):
         theme=theme,
         mode=mode or "roles",
         pos_group=_profile_stats_group(profile),
+        role_growth_column=growth_col,
     )
 
 

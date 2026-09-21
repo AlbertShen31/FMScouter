@@ -456,10 +456,13 @@ def build_player_modal_body(
     identity_fields_page: str | None = None,
     always_minutes_styles: bool = False,
     stats_missing_message: str | None = None,
+    role_growth_column: str | None = None,
 ) -> html.Div:
     """Shared player modal body for Role scores, Player stats, and Profiles.
 
     Pages resolve their own player/cohort/flags, then pass them here.
+    ``role_growth_column`` enables a standalone multi-year role-score growth
+    section (Profiles / Role scores only — omit on Player stats).
     """
     settings = us.normalize(settings)
     mode = mode or "roles"
@@ -474,12 +477,28 @@ def build_player_modal_body(
         upload_has_stats = has_stats_payload or show_mode_toggle
     upload_has_stats = bool(upload_has_stats)
 
+    hybrid_w = us.hybrid_weights(settings)
+
+    def _role_growth_for(p: dict) -> html.Div | None:
+        col = str(role_growth_column or "").strip()
+        if not col:
+            return None
+        from components.multi_year_ui import role_growth_section
+
+        return role_growth_section(
+            p,
+            column=col,
+            ip_weight=hybrid_w["ip"],
+            oop_weight=hybrid_w["oop"],
+        )
+
     # Role-scores attribute-only export: roles bottom, no toggle / archetypes.
     if not upload_has_stats and not has_stats_payload and mode == "roles" and not show_stats_controls:
         bottom_sections = [
             player_role_fit_section(player, settings),
             player_set_piece_scores_section(player, settings),
             player_attributes(player, settings),
+            _role_growth_for(player),
         ]
         return player_detail_body(
             player,
@@ -540,6 +559,7 @@ def build_player_modal_body(
     from components.multi_year_ui import by_year_section
 
     year_section = by_year_section(display_player)
+    growth_section = _role_growth_for(display_player)
 
     chart_player = stats_player or display_player
     resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")
@@ -551,6 +571,7 @@ def build_player_modal_body(
                 player_role_fit_section(display_player, settings),
                 player_set_piece_scores_section(display_player, settings),
                 player_attributes(display_player, settings),
+                growth_section,
             )
             if section is not None
         ]
@@ -642,6 +663,7 @@ def build_player_modal_body(
                 ]
             )
         ]
+        # Stats page: by-year only (no role growth).
         if year_section is not None:
             bottom.append(year_section)
         fields_page = identity_fields_page or "player_stats"
@@ -673,6 +695,8 @@ def build_player_modal_body(
         if set_piece_metrics:
             bottom.append(set_piece_metrics)
         bottom.append(player_stats_modal_section(stats_content))
+        if growth_section is not None:
+            bottom.append(growth_section)
         if year_section is not None:
             bottom.append(year_section)
         fields_page = identity_fields_page or "player_stats"
@@ -713,6 +737,7 @@ def scout_player_modal_body(
     stats_player: dict | None = None,
     stats_cohort: list[dict] | None = None,
     upload_has_stats: bool = False,
+    role_growth_column: str | None = None,
 ) -> html.Div:
     """Role-scores modal body (thin wrapper around ``build_player_modal_body``)."""
     return build_player_modal_body(
@@ -729,6 +754,7 @@ def scout_player_modal_body(
         stats_cohort=stats_cohort,
         show_mode_toggle=bool(upload_has_stats),
         upload_has_stats=upload_has_stats,
+        role_growth_column=role_growth_column,
     )
 
 

@@ -1670,9 +1670,37 @@ def _build_role_modal_body(
     *,
     mode: str = "roles",
     position_eligible: str | None = None,
+    role_growth_column: str | None = None,
 ) -> html.Div:
     file_id = str((parsed or {}).get("file_id") or "").strip()
     stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
+    # Prefer scored-row multi-year role maps when the parsed player blob is thin.
+    player = dict(player or {})
+    if payload and not player.get("role_scores_by_year"):
+        scored = _find_scored_row(
+            payload,
+            str(player.get("name") or ""),
+            str(player.get("club") or ""),
+            unique_id=str(player.get("unique_id") or ""),
+        )
+        if scored:
+            for key in (
+                "multi_year",
+                "multi_year_status",
+                "years_present",
+                "role_scores_by_year",
+                "role_scores_combined",
+                "by_year",
+            ):
+                if player.get(key) in (None, "", {}, []) and scored.get(key) not in (
+                    None,
+                    "",
+                    {},
+                    [],
+                ):
+                    player[key] = scored.get(key)
+            if scored.get("role_scores_by_year") or scored.get("multi_year_status"):
+                player["multi_year"] = True
     return scout_player_modal_body(
         player,
         settings,
@@ -1686,6 +1714,7 @@ def _build_role_modal_body(
         stats_player=stats_player,
         stats_cohort=stats_cohort,
         upload_has_stats=_upload_has_stats(parsed),
+        role_growth_column=role_growth_column,
     )
 
 
@@ -2710,11 +2739,14 @@ def open_player_modal(
         )
     title = player.get("name") or name or "Player"
     settings = us.normalize(settings)
+    focused = _focus_roles(focus_role)
+    growth_col = focused[-1] if focused else None
     player_key = {
         "name": name,
         "unique_id": unique_id,
         "club": club,
         "position_eligible": position_eligible,
+        "role_growth_column": growth_col,
     }
     return (
         True,
@@ -2726,6 +2758,7 @@ def open_player_modal(
             settings,
             theme,
             position_eligible=position_eligible,
+            role_growth_column=growth_col,
         ),
         None,
         player_key,
@@ -2760,6 +2793,7 @@ def switch_role_modal_bottom(mode, player_key, parsed, payload, settings, theme)
         theme,
         mode=mode or "roles",
         position_eligible=player_key.get("position_eligible"),
+        role_growth_column=player_key.get("role_growth_column"),
     )
 
 

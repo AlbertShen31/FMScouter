@@ -160,6 +160,22 @@ def _year_score_bits(
     return bits
 
 
+def _role_display_label(column: str | None) -> str:
+    """Short role label for modal growth headers (e.g. CF, CF+CM)."""
+    text = str(column or "").strip()
+    if not text:
+        return ""
+    try:
+        from scoring.role_scorer import column_display_abbr
+
+        if "+" in text:
+            ip, _, oop = text.partition("+")
+            return f"{column_display_abbr(ip)}+{column_display_abbr(oop)}"
+        return column_display_abbr(text)
+    except Exception:
+        return text
+
+
 def role_growth_row(
     role_scores_by_year: dict[str, dict[str, float]] | None,
     *,
@@ -170,7 +186,11 @@ def role_growth_row(
     ip_weight: float = 2.0,
     oop_weight: float = 1.0,
 ) -> html.Div | None:
-    """Earliest → current year scores with one overall delta (hybrid-aware)."""
+    """Per-year role scores with growth into the most recent year (Y3).
+
+    Shows Y1 / Y2 / Y3 when present, plus Y2→Y3 and Y1→Y3 deltas (hybrid-aware).
+    Year 3 is most recent; Year 1 is oldest.
+    """
     by_year = role_scores_by_year or {}
     if not by_year:
         return None
@@ -214,30 +234,93 @@ def role_growth_row(
                 return num
         return None
 
-    year_bits: list[tuple[str, float]] = []
+    score_by_year: dict[str, float] = {}
     for year in keys:
         score = _pick(by_year.get(year) or {})
         if score is not None:
-            year_bits.append((year, score))
-    if len(year_bits) < 2:
+            score_by_year[year] = score
+    if len(score_by_year) < 2:
         return None
 
-    earliest_year, earliest = year_bits[0]
-    current_year, current = year_bits[-1]
-    delta = current - earliest
-    parts: list = [
-        html.Span(f"Y{earliest_year} {_fmt_num(earliest, digits=1)}"),
-        html.Span(" → ", className="text-muted"),
-        html.Span(f"Y{current_year} {_fmt_num(current, digits=1)}"),
-    ]
-    if abs(delta) >= 0.05:
+    # Oldest → newest score trail (include Y2 when present).
+    ordered = [y for y in ("1", "2", "3") if y in score_by_year]
+    score_parts: list = []
+    for idx, year in enumerate(ordered):
+        if idx:
+            score_parts.append(html.Span(" · ", className="text-muted"))
+        score_parts.append(
+            html.Span(f"Y{year} {_fmt_num(score_by_year[year], digits=1)}")
+        )
+
+    def _delta_span(from_year: str, to_year: str) -> html.Span | None:
+        if from_year not in score_by_year or to_year not in score_by_year:
+            return None
+        delta = score_by_year[to_year] - score_by_year[from_year]
+        if abs(delta) < 0.05:
+            return None
         cls = "my-role-delta-up" if delta >= 0 else "my-role-delta-down"
         sign = "+" if delta >= 0 else ""
-        parts.append(html.Span(" "))
-        parts.append(
-            html.Span(f"({sign}{_fmt_num(delta, digits=1)})", className=cls)
+        return html.Span(
+            f"Y{from_year}→Y{to_year} {sign}{_fmt_num(delta, digits=1)}",
+            className=cls,
         )
-    return html.Div(parts, className="my-role-growth")
+
+    # Growth into most recent year: Y2→Y3 and Y1→Y3 (labels match upload years).
+    newest = ordered[-1]
+    delta_parts: list = []
+    for older in ("2", "1"):
+        if older == newest:
+            continue
+        bit = _delta_span(older, newest)
+        if bit is None:
+            continue
+        if delta_parts:
+            delta_parts.append(html.Span(" · ", className="text-muted"))
+        delta_parts.append(bit)
+
+    children: list = [html.Div(score_parts, className="my-role-growth-scores")]
+    if delta_parts:
+        children.append(html.Div(delta_parts, className="my-role-growth-deltas"))
+    return html.Div(children, className="my-role-growth")
+
+
+def role_growth_section(
+    player: dict[str, Any],
+    *,
+    column: str | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+) -> html.Div | None:
+    """Standalone modal section for role-score year growth (not inside By year)."""
+    if not player.get("multi_year") and not player.get("role_scores_by_year"):
+        return None
+    col = str(column or "").strip()
+    if not col:
+        return None
+    growth = role_growth_row(
+        player.get("role_scores_by_year"),
+        column=col,
+        combined=player.get("role_scores_combined"),
+        combo_meta=_resolve_combo_meta(col),
+        ip_weight=ip_weight,
+        oop_weight=oop_weight,
+    )
+    if growth is None:
+        return None
+    label = _role_display_label(col)
+    title_bits: list = [
+        html.Span("Role score growth", className="rs-player-id-section-title"),
+    ]
+    if label:
+        title_bits.append(html.Span(" · ", className="text-muted"))
+        title_bits.append(html.Span(label, className="my-role-growth-role"))
+    return html.Div(
+        [
+            html.Div(title_bits, className="d-flex align-items-center gap-1 mb-1"),
+            growth,
+        ],
+        className="my-role-growth-section rs-player-id-section",
+    )
 
 
 def score_year_suffix_html(
@@ -311,7 +394,7 @@ _KEY_STAT_IDS = (
 
 
 def by_year_section(player: dict[str, Any]) -> html.Div | None:
-    """Modal section showing original per-year stats and role growth."""
+    """Modal section showing original per-year stats (no role-score growth)."""
     if not player.get("multi_year"):
         return None
     by_year = player.get("by_year") or {}
@@ -343,7 +426,6 @@ def by_year_section(player: dict[str, Any]) -> html.Div | None:
             if mid not in stats:
                 continue
             stat_bits.append(f"{_metric_label(mid)} {_fmt_num(stats[mid])}")
-        # Prefer full growth across years once (below cards).
         body = []
         if meta_bits:
             body.append(html.Div(" · ".join(meta_bits), className="my-year-meta"))
@@ -363,23 +445,10 @@ def by_year_section(player: dict[str, Any]) -> html.Div | None:
             )
         )
 
-    growth_all = role_growth_row(
-        player.get("role_scores_by_year"),
-        combined=player.get("role_scores_combined"),
-    )
     children = [
         html.Div(header_bits, className="d-flex align-items-center gap-2 mb-2"),
         html.Div(cards, className="my-year-grid"),
     ]
-    if growth_all:
-        children.append(
-            html.Div(
-                [
-                    html.Div("Role score growth", className="rs-player-id-section-title mt-2"),
-                    growth_all,
-                ]
-            )
-        )
     # Combined vs per-year note for stats
     if player.get("stats"):
         children.append(

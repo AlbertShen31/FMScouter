@@ -7559,6 +7559,26 @@ body[data-theme="light"] .my-status-pill.partial {
     color: var(--app-muted);
     white-space: normal;
 }
+.my-role-growth-section {
+    margin-top: 0.75rem;
+}
+.my-role-growth-section .my-role-growth {
+    font-size: 0.8125rem;
+    color: var(--app-text);
+}
+.my-role-growth-scores {
+    display: block;
+}
+.my-role-growth-deltas {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.75rem;
+}
+.my-role-growth-role {
+    color: var(--app-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
 #rs-table .dash-spreadsheet-inner td.dash-cell .my-role-growth {
     font-weight: 500;
 }
