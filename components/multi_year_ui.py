@@ -48,6 +48,24 @@ def _metric_label(metric_id: str) -> str:
     return str(meta.get("abbr") or meta.get("label") or metric_id)
 
 
+def _resolve_combo_meta(
+    column: str | None,
+    combo_meta: dict[str, str] | None = None,
+) -> dict[str, str] | None:
+    """Use caller meta, or resolve hybrid column names (formation / IP+OOP)."""
+    if combo_meta:
+        return combo_meta
+    text = str(column or "").strip()
+    if "+" not in text:
+        return None
+    try:
+        from scoring.role_scorer import combo_meta_for_column
+
+        return combo_meta_for_column(text)
+    except Exception:
+        return None
+
+
 def _score_from_map(
     scores: dict[str, Any] | None,
     column: str,
@@ -58,13 +76,14 @@ def _score_from_map(
 ) -> float | None:
     """Pick a role/hybrid score from a year or combined score map."""
     scores = scores or {}
-    if combo_meta:
-        ip = _safe_float(scores.get(combo_meta.get("ip_column") or ""))
+    meta = _resolve_combo_meta(column, combo_meta)
+    if meta:
+        ip = _safe_float(scores.get(meta.get("ip_column") or ""))
         if ip is None:
-            ip = _safe_float(scores.get(combo_meta.get("ip") or ""))
-        oop = _safe_float(scores.get(combo_meta.get("oop_column") or ""))
+            ip = _safe_float(scores.get(meta.get("ip") or ""))
+        oop = _safe_float(scores.get(meta.get("oop_column") or ""))
         if oop is None:
-            oop = _safe_float(scores.get(combo_meta.get("oop") or ""))
+            oop = _safe_float(scores.get(meta.get("oop") or ""))
         if ip is None and oop is None:
             return None
         total = float(ip_weight) + float(oop_weight)
@@ -78,6 +97,41 @@ def _score_from_map(
     return None
 
 
+def _year_score_bits(
+    row: dict[str, Any] | None,
+    column: str,
+    *,
+    by_year: dict[str, dict[str, float]] | None = None,
+    combo_meta: dict[str, str] | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+) -> list[tuple[str, float]]:
+    """Collect (year, score) for years that have a value, oldest → newest."""
+    row = row or {}
+    by_year = by_year if by_year is not None else (row.get("role_scores_by_year") or {})
+    meta = _resolve_combo_meta(column, combo_meta)
+    bits: list[tuple[str, float]] = []
+    if by_year:
+        for year in ("1", "2", "3"):
+            val = _score_from_map(
+                by_year.get(year) or {},
+                column,
+                combo_meta=meta,
+                ip_weight=ip_weight,
+                oop_weight=oop_weight,
+            )
+            if val is None and not meta:
+                val = _safe_float(row.get(f"{column} (Y{year})"))
+            if val is not None:
+                bits.append((year, val))
+    else:
+        for year in ("1", "2", "3"):
+            val = _safe_float(row.get(f"{column} (Y{year})"))
+            if val is not None:
+                bits.append((year, val))
+    return bits
+
+
 def role_growth_row(
     role_scores_by_year: dict[str, dict[str, float]] | None,
     *,
@@ -88,17 +142,19 @@ def role_growth_row(
     ip_weight: float = 2.0,
     oop_weight: float = 1.0,
 ) -> html.Div | None:
-    """Compact Y1 → Y2 → Y3 (+ Combined) for one role."""
+    """Earliest → current year scores with one overall delta (hybrid-aware)."""
     by_year = role_scores_by_year or {}
-    if not by_year and not combined:
+    if not by_year:
         return None
     keys = [k for k in ("1", "2", "3") if k in by_year]
-    if not keys and not combined:
+    if not keys:
         return None
+
+    meta = _resolve_combo_meta(column, combo_meta)
 
     # Prefer a stable role key present across years.
     pick_key = role_ref or column
-    if not pick_key and not combo_meta:
+    if not pick_key and not meta:
         key_sets = [set((by_year.get(y) or {}).keys()) for y in keys]
         shared: set[str] = set.intersection(*key_sets) if key_sets else set()
         # Prefer short role-ref style keys over long column labels when both exist.
@@ -112,11 +168,11 @@ def role_growth_row(
                 pick_key = sorted(first_scores.keys(), key=len)[0]
 
     def _pick(scores: dict[str, float]) -> float | None:
-        if combo_meta or (pick_key and pick_key == column):
+        if meta or (pick_key and pick_key == column):
             return _score_from_map(
                 scores,
                 pick_key or column or "",
-                combo_meta=combo_meta,
+                combo_meta=meta,
                 ip_weight=ip_weight,
                 oop_weight=oop_weight,
             )
@@ -130,47 +186,29 @@ def role_growth_row(
                 return num
         return None
 
-    parts: list = []
-    prev = None
+    year_bits: list[tuple[str, float]] = []
     for year in keys:
         score = _pick(by_year.get(year) or {})
-        if score is None:
-            continue
-        bit = f"Y{year} {_fmt_num(score, digits=1)}"
-        if prev is not None:
-            delta = score - prev
-            cls = "my-role-delta-up" if delta >= 0 else "my-role-delta-down"
-            sign = "+" if delta >= 0 else ""
-            parts.append(
-                html.Span(
-                    [bit, " ", html.Span(f"({sign}{_fmt_num(delta, digits=1)})", className=cls)],
-                )
-            )
-        else:
-            parts.append(html.Span(bit))
-        prev = score
-        if year != keys[-1] and any(
-            _pick(by_year.get(y) or {}) is not None for y in keys[keys.index(year) + 1 :]
-        ):
-            parts.append(html.Span(" → ", className="text-muted"))
-
-    if combined is not None:
-        cscore = _pick(combined) if not combo_meta else _score_from_map(
-            combined,
-            column or "",
-            combo_meta=combo_meta,
-            ip_weight=ip_weight,
-            oop_weight=oop_weight,
-        )
-        if cscore is None and not combo_meta:
-            cscore = _pick(combined)
-        if cscore is not None:
-            if parts:
-                parts.append(html.Span(" · ", className="text-muted"))
-            parts.append(html.Span(f"Combined {_fmt_num(cscore, digits=1)}"))
-
-    if not parts:
+        if score is not None:
+            year_bits.append((year, score))
+    if len(year_bits) < 2:
         return None
+
+    earliest_year, earliest = year_bits[0]
+    current_year, current = year_bits[-1]
+    delta = current - earliest
+    parts: list = [
+        html.Span(f"Y{earliest_year} {_fmt_num(earliest, digits=1)}"),
+        html.Span(" → ", className="text-muted"),
+        html.Span(f"Y{current_year} {_fmt_num(current, digits=1)}"),
+    ]
+    if abs(delta) >= 0.05:
+        cls = "my-role-delta-up" if delta >= 0 else "my-role-delta-down"
+        sign = "+" if delta >= 0 else ""
+        parts.append(html.Span(" "))
+        parts.append(
+            html.Span(f"({sign}{_fmt_num(delta, digits=1)})", className=cls)
+        )
     return html.Div(parts, className="my-role-growth")
 
 
@@ -182,84 +220,23 @@ def score_year_suffix_html(
     ip_weight: float = 2.0,
     oop_weight: float = 1.0,
 ) -> str:
-    """Append Y1→Y2→Y3 growth (+ Combined) under a score cell (HTML string)."""
-    by_year = row.get("role_scores_by_year") or {}
-    combined = row.get("role_scores_combined") or {}
+    """Earliest→current role-score delta under a cell (historical-compare style)."""
+    from scoring.comparison import delta_html
 
-    year_bits: list[tuple[str, float]] = []
-    if by_year:
-        for year in ("1", "2", "3"):
-            val = _score_from_map(
-                by_year.get(year) or {},
-                column,
-                combo_meta=combo_meta,
-                ip_weight=ip_weight,
-                oop_weight=oop_weight,
-            )
-            if val is None and not combo_meta:
-                stamped = row.get(f"{column} (Y{year})")
-                val = _safe_float(stamped)
-            if val is not None:
-                year_bits.append((year, val))
-    else:
-        for year in ("1", "2", "3"):
-            val = _safe_float(row.get(f"{column} (Y{year})"))
-            if val is not None:
-                year_bits.append((year, val))
-
-    cval = _score_from_map(
-        combined,
+    meta = _resolve_combo_meta(column, combo_meta)
+    year_bits = _year_score_bits(
+        row,
         column,
-        combo_meta=combo_meta,
+        combo_meta=meta,
         ip_weight=ip_weight,
         oop_weight=oop_weight,
     )
-    if cval is None and not combo_meta:
-        cval = _safe_float(row.get(f"{column} (Combined)"))
-
-    # Single-year presence with matching Combined is just noise under the cell.
-    if len(year_bits) <= 1:
-        if cval is None:
-            return ""
-        if year_bits and abs(year_bits[0][1] - cval) < 0.05:
-            return ""
-
-    if not year_bits and cval is None:
+    if len(year_bits) < 2:
         return ""
 
-    parts: list[str] = []
-    prev: float | None = None
-    for i, (year, score) in enumerate(year_bits):
-        bit = f"Y{year} {_fmt_num(score, digits=1)}"
-        if prev is not None:
-            delta = score - prev
-            if abs(delta) >= 0.05:
-                cls = "my-role-delta-up" if delta >= 0 else "my-role-delta-down"
-                sign = "+" if delta >= 0 else ""
-                bit += (
-                    f' <span class="{cls}">'
-                    f"({sign}{_fmt_num(delta, digits=1)})</span>"
-                )
-        parts.append(bit)
-        prev = score
-        if i < len(year_bits) - 1:
-            parts.append('<span class="text-muted"> → </span>')
-
-    if cval is not None:
-        # Skip Combined when it matches the newest year score.
-        newest = year_bits[-1][1] if year_bits else None
-        if newest is None or abs(newest - cval) >= 0.05:
-            if parts:
-                parts.append('<span class="text-muted"> · </span>')
-            parts.append(f"C {_fmt_num(cval, digits=1)}")
-
-    if not parts:
-        return ""
-    return (
-        '<span class="my-role-growth text-muted">'
-        + "".join(parts)
-        + "</span>"
-    )
+    earliest = year_bits[0][1]
+    current = year_bits[-1][1]
+    return delta_html(current - earliest, decimals=1, kind="score")
 
 
 _KEY_STAT_IDS = (

@@ -291,7 +291,14 @@ def _score_with_growth_markdown(
         return cell
     from components.multi_year_ui import score_year_suffix_html
 
-    suffix = score_year_suffix_html(growth_row, role_column)
+    hybrid_w = us.hybrid_weights(settings)
+    suffix = score_year_suffix_html(
+        growth_row,
+        role_column,
+        combo_meta=combo_meta_for_column(role_column),
+        ip_weight=hybrid_w["ip"],
+        oop_weight=hybrid_w["oop"],
+    )
     if not suffix:
         return cell
     return f'<span class="rs-score-with-growth">{cell}{suffix}</span>'
@@ -2660,7 +2667,14 @@ def _depth_score_cell(
     if row and role_column:
         from components.multi_year_ui import score_year_suffix_html
 
-        suffix = score_year_suffix_html(row, role_column)
+        hybrid_w = us.hybrid_weights(settings)
+        suffix = score_year_suffix_html(
+            row,
+            role_column,
+            combo_meta=combo_meta_for_column(role_column),
+            ip_weight=hybrid_w["ip"],
+            oop_weight=hybrid_w["oop"],
+        )
         if suffix:
             children.append(
                 dcc.Markdown(
