@@ -7579,6 +7579,14 @@ body[data-theme="light"] .my-status-pill.partial {
     font-size: 0.85rem;
     font-weight: 600;
 }
+.my-role-growth-chart {
+    margin-top: 0.55rem;
+    width: 100%;
+}
+.my-role-growth-chart .js-plotly-plot,
+.my-role-growth-chart .plotly {
+    width: 100% !important;
+}
 #rs-table .dash-spreadsheet-inner td.dash-cell .my-role-growth {
     font-weight: 500;
 }

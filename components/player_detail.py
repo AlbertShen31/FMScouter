@@ -490,6 +490,7 @@ def build_player_modal_body(
             column=col,
             ip_weight=hybrid_w["ip"],
             oop_weight=hybrid_w["oop"],
+            theme=theme,
         )
 
     # Role-scores attribute-only export: roles bottom, no toggle / archetypes.

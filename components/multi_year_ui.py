@@ -3,10 +3,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from dash import html
+from dash import dcc, html
+import plotly.graph_objects as go
 
 from scoring.multi_year import YEAR_KEYS, status_label
 from scoring.stats_scorer import metric_defs
+
+_ROLE_GROWTH_CHART_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "editable": False,
+}
 
 
 def status_pill(status: str | None) -> html.Span | str:
@@ -331,12 +341,206 @@ def role_growth_row(
     return html.Div(children, className="my-role-growth")
 
 
+def _year_scores_for_column(
+    by_year: dict[str, dict[str, float]] | None,
+    column: str,
+    *,
+    combo_meta: dict[str, str] | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+) -> dict[str, float]:
+    """Year → score for one role / hybrid column (skips missing years)."""
+    by_year = by_year or {}
+    meta = _resolve_combo_meta(column, combo_meta)
+    out: dict[str, float] = {}
+    for year in YEAR_KEYS:
+        val = _score_from_map(
+            by_year.get(year) or {},
+            column,
+            combo_meta=meta,
+            ip_weight=ip_weight,
+            oop_weight=oop_weight,
+        )
+        if val is not None:
+            out[year] = val
+    return out
+
+
+def _growth_tone_colors(theme: str | None) -> dict[str, str]:
+    dark = (theme or "dark") != "light"
+    return {
+        "ip": "#3dff88" if dark else "#15803d",
+        "oop": "#f87171" if dark else "#b91c1c",
+        "combo": "#c4b5fd" if dark else "#6d28d9",
+        "role": "#38bdf8" if dark else "#0284c7",
+        "font": "#e8eef6" if dark else "#0f172a",
+        "muted": "#8b9bb0" if dark else "#64748b",
+        "grid": "rgba(139, 155, 176, 0.22)" if dark else "rgba(100, 116, 139, 0.25)",
+    }
+
+
+def role_growth_figure(
+    role_scores_by_year: dict[str, dict[str, float]] | None,
+    *,
+    column: str,
+    combo_meta: dict[str, str] | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+    theme: str | None = None,
+) -> go.Figure | None:
+    """Line chart of role score by year; hybrids add IP and OOP traces."""
+    by_year = role_scores_by_year or {}
+    if not by_year:
+        return None
+    col = str(column or "").strip()
+    if not col:
+        return None
+    meta = _resolve_combo_meta(col, combo_meta)
+    main = _year_scores_for_column(
+        by_year,
+        col,
+        combo_meta=meta,
+        ip_weight=ip_weight,
+        oop_weight=oop_weight,
+    )
+    if len(main) < 2:
+        return None
+
+    colors = _growth_tone_colors(theme)
+    dark = (theme or "dark") != "light"
+    years = [y for y in YEAR_KEYS if y in main]
+    labels = [f"Year {y}" for y in years]
+
+    series: list[tuple[str, dict[str, float], str, dict]] = []
+    main_label = _role_display_label(col) or "Role"
+    main_color = colors["combo"] if meta else colors["role"]
+    series.append(
+        (
+            main_label,
+            main,
+            main_color,
+            dict(width=3),
+        )
+    )
+    if meta:
+        ip_col = str(meta.get("ip_column") or "").strip()
+        oop_col = str(meta.get("oop_column") or "").strip()
+        if ip_col:
+            ip_scores = _year_scores_for_column(by_year, ip_col)
+            if ip_scores:
+                series.append(
+                    (
+                        f"{_role_display_label(ip_col) or 'IP'} (IP)",
+                        ip_scores,
+                        colors["ip"],
+                        dict(width=2, dash="dot"),
+                    )
+                )
+        if oop_col:
+            oop_scores = _year_scores_for_column(by_year, oop_col)
+            if oop_scores:
+                series.append(
+                    (
+                        f"{_role_display_label(oop_col) or 'OOP'} (OOP)",
+                        oop_scores,
+                        colors["oop"],
+                        dict(width=2, dash="dash"),
+                    )
+                )
+
+    fig = go.Figure()
+    all_vals: list[float] = []
+    for name, scores, color, line in series:
+        ys = [scores.get(y) for y in years]
+        all_vals.extend(v for v in ys if v is not None)
+        fig.add_trace(
+            go.Scatter(
+                x=labels,
+                y=ys,
+                name=name,
+                mode="lines+markers",
+                line=dict(color=color, **line),
+                marker=dict(size=8, color=color),
+                connectgaps=False,
+                hovertemplate=f"{name}: %{{y:.1f}}<extra></extra>",
+            )
+        )
+
+    y_min = min(all_vals) if all_vals else 0.0
+    y_max = max(all_vals) if all_vals else 20.0
+    pad = max(0.6, (y_max - y_min) * 0.15)
+    fig.update_layout(
+        template="plotly_dark" if dark else "plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=colors["font"], size=12),
+        margin=dict(l=44, r=16, t=8, b=36),
+        height=220,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11, color=colors["muted"]),
+        ),
+        hovermode="x unified",
+        dragmode=False,
+        xaxis=dict(
+            title=None,
+            tickfont=dict(color=colors["muted"], size=11),
+            gridcolor=colors["grid"],
+            zeroline=False,
+            fixedrange=True,
+        ),
+        yaxis=dict(
+            title=None,
+            range=[max(0.0, y_min - pad), y_max + pad],
+            tickfont=dict(color=colors["muted"], size=11),
+            gridcolor=colors["grid"],
+            zeroline=False,
+            fixedrange=True,
+        ),
+    )
+    return fig
+
+
+def role_growth_chart(
+    role_scores_by_year: dict[str, dict[str, float]] | None,
+    *,
+    column: str,
+    combo_meta: dict[str, str] | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+    theme: str | None = None,
+) -> dcc.Graph | None:
+    """Dash graph wrapper for :func:`role_growth_figure`."""
+    fig = role_growth_figure(
+        role_scores_by_year,
+        column=column,
+        combo_meta=combo_meta,
+        ip_weight=ip_weight,
+        oop_weight=oop_weight,
+        theme=theme,
+    )
+    if fig is None:
+        return None
+    return dcc.Graph(
+        figure=fig,
+        config=_ROLE_GROWTH_CHART_CONFIG,
+        className="my-role-growth-chart",
+    )
+
+
 def role_growth_section(
     player: dict[str, Any],
     *,
     column: str | None = None,
     ip_weight: float = 2.0,
     oop_weight: float = 1.0,
+    theme: str | None = None,
 ) -> html.Div | None:
     """Standalone modal section for role-score year growth (not inside By year)."""
     if not player.get("multi_year") and not player.get("role_scores_by_year"):
@@ -344,15 +548,25 @@ def role_growth_section(
     col = str(column or "").strip()
     if not col:
         return None
+    meta = _resolve_combo_meta(col)
+    by_year = player.get("role_scores_by_year")
     growth = role_growth_row(
-        player.get("role_scores_by_year"),
+        by_year,
         column=col,
         combined=player.get("role_scores_combined"),
-        combo_meta=_resolve_combo_meta(col),
+        combo_meta=meta,
         ip_weight=ip_weight,
         oop_weight=oop_weight,
     )
-    if growth is None:
+    chart = role_growth_chart(
+        by_year,
+        column=col,
+        combo_meta=meta,
+        ip_weight=ip_weight,
+        oop_weight=oop_weight,
+        theme=theme,
+    )
+    if growth is None and chart is None:
         return None
     label = _role_display_label(col)
     title_bits: list = [
@@ -361,13 +575,14 @@ def role_growth_section(
     if label:
         title_bits.append(html.Span(" · ", className="text-muted"))
         title_bits.append(html.Span(label, className="my-role-growth-role"))
-    return html.Div(
-        [
-            html.Div(title_bits, className="d-flex align-items-center gap-1 mb-1"),
-            growth,
-        ],
-        className="my-role-growth-section rs-player-id-section",
-    )
+    body: list = [
+        html.Div(title_bits, className="d-flex align-items-center gap-1 mb-1"),
+    ]
+    if growth is not None:
+        body.append(growth)
+    if chart is not None:
+        body.append(chart)
+    return html.Div(body, className="my-role-growth-section rs-player-id-section")
 
 
 def score_year_suffix_html(
