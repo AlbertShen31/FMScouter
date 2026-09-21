@@ -80,6 +80,64 @@ def _lookup_map_score(scores: dict[str, Any], *keys: Any) -> float | None:
     return None
 
 
+def _role_part_lookup_keys(column: str | None, role_ref: str | None = None) -> list[str]:
+    """Candidate map keys for one hybrid side (bucketed + plain + role-id forms)."""
+    keys: list[str] = []
+    col = str(column or "").strip()
+    ref = str(role_ref or "").strip()
+    if col:
+        keys.append(col)
+    if ref:
+        keys.append(ref)
+    try:
+        from scoring.role_scorer import (
+            column_display_abbr,
+            decode_role_ref,
+            parse_bucket_column,
+            role_meta,
+        )
+
+        if col:
+            _bucket, remainder = parse_bucket_column(col)
+            if remainder and remainder != col:
+                keys.append(remainder)
+            abbr = column_display_abbr(col)
+            # Prefer phase-bearing short ids (AM-IP) over bare codes (AM).
+            if remainder:
+                keys.append(remainder)
+            if abbr:
+                for suffix in ("-IP", "-OOP", "-GK"):
+                    if col.endswith(suffix) or remainder.endswith(suffix):
+                        keys.append(f"{abbr}{suffix}")
+                        break
+                keys.append(abbr)
+        if ref:
+            role_id, _group = decode_role_ref(ref)
+            if role_id and role_id != ref:
+                keys.append(role_id)
+            try:
+                plain_col = role_meta(role_id or ref)["column"]
+            except Exception:
+                plain_col = ""
+            if plain_col:
+                keys.append(plain_col)
+                _b, rem = parse_bucket_column(plain_col)
+                if rem and rem != plain_col:
+                    keys.append(rem)
+    except Exception:
+        pass
+    # Preserve order, drop empties / dupes.
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        text = str(key or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
 def _score_from_map(
     scores: dict[str, Any] | None,
     column: str,
@@ -94,35 +152,24 @@ def _score_from_map(
     if meta:
         ip_col = str(meta.get("ip_column") or "").strip()
         oop_col = str(meta.get("oop_column") or "").strip()
-        ip_abbr = oop_abbr = ""
-        try:
-            from scoring.role_scorer import column_display_abbr
-
-            if ip_col:
-                ip_abbr = column_display_abbr(ip_col)
-            if oop_col:
-                oop_abbr = column_display_abbr(oop_col)
-        except Exception:
-            pass
-        # Year maps often store short codes (CHM) while combo columns use
-        # position-prefixed ids (AM-CHM) — try both plus role-ref keys.
-        ip = _lookup_map_score(scores, ip_col, meta.get("ip"), ip_abbr)
-        oop = _lookup_map_score(scores, oop_col, meta.get("oop"), oop_abbr)
+        # Year maps often store plain role columns (AM-IP) while formation
+        # hybrids use bucket-prefixed ids (CM-AM-IP) — try both forms.
+        ip = _lookup_map_score(scores, *_role_part_lookup_keys(ip_col, meta.get("ip")))
+        oop = _lookup_map_score(scores, *_role_part_lookup_keys(oop_col, meta.get("oop")))
         if ip is None and oop is None:
+            return None
+        # Do not zero-fill a missing half — that collapses hybrids (e.g. OOP-only
+        # → ~1/3 of the real score). Require both sides when either weight > 0.
+        if ip is None or oop is None:
             return None
         total = float(ip_weight) + float(oop_weight)
         if total <= 0:
             total = 1.0
-        return (float(ip_weight) * (ip or 0.0) + float(oop_weight) * (oop or 0.0)) / total
-    val = _lookup_map_score(scores, column)
+        return (float(ip_weight) * ip + float(oop_weight) * oop) / total
+    val = _lookup_map_score(scores, *_role_part_lookup_keys(column))
     if val is not None:
         return val
-    try:
-        from scoring.role_scorer import column_display_abbr
-
-        return _lookup_map_score(scores, column_display_abbr(column))
-    except Exception:
-        return None
+    return None
 
 
 def _year_score_bits(
