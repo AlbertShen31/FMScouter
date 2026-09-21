@@ -66,6 +66,20 @@ def _resolve_combo_meta(
         return None
 
 
+def _lookup_map_score(scores: dict[str, Any], *keys: Any) -> float | None:
+    """First numeric hit among candidate keys (column ids, refs, short abbrs)."""
+    seen: set[str] = set()
+    for key in keys:
+        text = str(key or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        val = _safe_float(scores.get(text))
+        if val is not None:
+            return val
+    return None
+
+
 def _score_from_map(
     scores: dict[str, Any] | None,
     column: str,
@@ -78,23 +92,37 @@ def _score_from_map(
     scores = scores or {}
     meta = _resolve_combo_meta(column, combo_meta)
     if meta:
-        ip = _safe_float(scores.get(meta.get("ip_column") or ""))
-        if ip is None:
-            ip = _safe_float(scores.get(meta.get("ip") or ""))
-        oop = _safe_float(scores.get(meta.get("oop_column") or ""))
-        if oop is None:
-            oop = _safe_float(scores.get(meta.get("oop") or ""))
+        ip_col = str(meta.get("ip_column") or "").strip()
+        oop_col = str(meta.get("oop_column") or "").strip()
+        ip_abbr = oop_abbr = ""
+        try:
+            from scoring.role_scorer import column_display_abbr
+
+            if ip_col:
+                ip_abbr = column_display_abbr(ip_col)
+            if oop_col:
+                oop_abbr = column_display_abbr(oop_col)
+        except Exception:
+            pass
+        # Year maps often store short codes (CHM) while combo columns use
+        # position-prefixed ids (AM-CHM) — try both plus role-ref keys.
+        ip = _lookup_map_score(scores, ip_col, meta.get("ip"), ip_abbr)
+        oop = _lookup_map_score(scores, oop_col, meta.get("oop"), oop_abbr)
         if ip is None and oop is None:
             return None
         total = float(ip_weight) + float(oop_weight)
         if total <= 0:
             total = 1.0
         return (float(ip_weight) * (ip or 0.0) + float(oop_weight) * (oop or 0.0)) / total
-    val = _safe_float(scores.get(column))
+    val = _lookup_map_score(scores, column)
     if val is not None:
         return val
-    # Stamped cache columns as a last resort (single roles only).
-    return None
+    try:
+        from scoring.role_scorer import column_display_abbr
+
+        return _lookup_map_score(scores, column_display_abbr(column))
+    except Exception:
+        return None
 
 
 def _year_score_bits(
@@ -237,6 +265,35 @@ def score_year_suffix_html(
     earliest = year_bits[0][1]
     current = year_bits[-1][1]
     return delta_html(current - earliest, decimals=1, kind="score")
+
+
+def score_year_delta_span(
+    row: dict[str, Any],
+    column: str,
+    *,
+    combo_meta: dict[str, str] | None = None,
+    ip_weight: float = 2.0,
+    oop_weight: float = 1.0,
+) -> html.Span | None:
+    """Dash span for earliest→current delta (Profiles depth chart / non-markdown)."""
+    year_bits = _year_score_bits(
+        row,
+        column,
+        combo_meta=_resolve_combo_meta(column, combo_meta),
+        ip_weight=ip_weight,
+        oop_weight=oop_weight,
+    )
+    if len(year_bits) < 2:
+        return None
+    delta = year_bits[-1][1] - year_bits[0][1]
+    if abs(delta) < 0.05:
+        return None
+    tone = "up" if delta > 0 else "down"
+    arrow = "↑" if delta > 0 else "↓"
+    return html.Span(
+        f"{arrow}{delta:+.1f}",
+        className=f"cmp-delta cmp-delta-{tone} cmp-delta-block",
+    )
 
 
 _KEY_STAT_IDS = (

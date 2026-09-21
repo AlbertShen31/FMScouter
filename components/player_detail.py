@@ -540,8 +540,6 @@ def build_player_modal_body(
     from components.multi_year_ui import by_year_section
 
     year_section = by_year_section(display_player)
-    if year_section is not None:
-        after_identity.append(year_section)
 
     chart_player = stats_player or display_player
     resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")
@@ -636,12 +634,16 @@ def build_player_modal_body(
                 else []
             ),
         ]
-        bottom = player_stats_modal_section(
-            [
-                html.Div(control_children, className="st-player-controls"),
-                html.Div(metrics, className="st-player-metrics"),
-            ]
-        )
+        bottom = [
+            player_stats_modal_section(
+                [
+                    html.Div(control_children, className="st-player-controls"),
+                    html.Div(metrics, className="st-player-metrics"),
+                ]
+            )
+        ]
+        if year_section is not None:
+            bottom.append(year_section)
         fields_page = identity_fields_page or "player_stats"
         field_formatters = {"minutes": _format_minutes_identity}
     else:
@@ -671,6 +673,8 @@ def build_player_modal_body(
         if set_piece_metrics:
             bottom.append(set_piece_metrics)
         bottom.append(player_stats_modal_section(stats_content))
+        if year_section is not None:
+            bottom.append(year_section)
         fields_page = identity_fields_page or "player_stats"
         field_formatters = {"minutes": _format_minutes_identity}
 

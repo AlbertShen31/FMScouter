@@ -2146,11 +2146,29 @@ body[data-theme="dark"] .rs-phase-tag.combo {
 .pf-depth-chart-score .pf-depth-score-growth {
     margin: 0;
     padding: 0;
+    display: block;
+    width: 100%;
+    text-align: center;
+    line-height: 1;
 }
 
 .pf-depth-chart-score-stack .pf-depth-score-growth p,
 .pf-depth-chart-score .pf-depth-score-growth p {
     margin: 0;
+}
+
+.pf-depth-chart-score-stack .pf-depth-score-growth .cmp-delta,
+.pf-depth-chart-score .pf-depth-score-growth .cmp-delta,
+.pf-depth-chart-score-stack .cmp-delta-block,
+.pf-depth-chart-score .cmp-delta-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.62em;
+    font-weight: 650;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.92;
 }
 
 .pf-depth-chart-score .my-role-growth {
@@ -2936,6 +2954,39 @@ body[data-theme="light"] .rs-depth-slot.is-unique-slot {
 }
 
 #rs-table .dash-spreadsheet-inner td .cmp-delta-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.62em;
+    font-weight: 650;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.92;
+}
+
+#pf-table .dash-spreadsheet-inner td .rs-score-cell .cmp-cell,
+#pf-table .dash-spreadsheet-inner td .cmp-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    line-height: 1.1;
+    text-align: center;
+}
+
+#pf-table .dash-spreadsheet-inner td .rs-score-cell .cmp-cell-val,
+#pf-table .dash-spreadsheet-inner td .cmp-cell-val {
+    display: block;
+    width: 100%;
+    text-align: center;
+    line-height: 1.15;
+}
+
+#pf-table .dash-spreadsheet-inner td .cmp-delta-block {
     display: block;
     width: 100%;
     text-align: center;
@@ -7959,8 +8010,6 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     max-width: 88px !important;
 }
 
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Score"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Score"],
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Minutes"],
 #pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Minutes"],
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="overall"],
@@ -7972,6 +8021,16 @@ body[data-theme="light"] .up-edit-modal .btn-close {
     min-width: 44px !important;
     max-width: 60px !important;
     width: 52px !important;
+}
+
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Score"],
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Score"] {
+    min-width: 64px !important;
+    max-width: 80px !important;
+    width: 72px !important;
+    vertical-align: middle !important;
+    white-space: normal !important;
+    line-height: 1.2 !important;
 }
 
 #pf-table .dash-spreadsheet-inner th.dash-header,

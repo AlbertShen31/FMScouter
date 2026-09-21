@@ -2646,6 +2646,7 @@ def _depth_score_cell(
     theme=None,
     *,
     row: dict | None = None,
+    player: dict | None = None,
     role_column: str = "",
 ):
     """Score pill using the same band colors as the Profiles table."""
@@ -2664,25 +2665,23 @@ def _depth_score_cell(
         except (TypeError, ValueError):
             pill = html.Span(str(score), className="pf-depth-chart-metric")
     children = [pill]
-    if row and role_column:
-        from components.multi_year_ui import score_year_suffix_html
+    if role_column and (row or player):
+        from components.multi_year_ui import score_year_delta_span
 
+        growth_row = _growth_fields_from_row(row, role_column)
+        if isinstance(player, dict):
+            for key, val in _growth_fields_from_row(player, role_column).items():
+                growth_row.setdefault(key, val)
         hybrid_w = us.hybrid_weights(settings)
-        suffix = score_year_suffix_html(
-            row,
+        delta = score_year_delta_span(
+            growth_row,
             role_column,
             combo_meta=combo_meta_for_column(role_column),
             ip_weight=hybrid_w["ip"],
             oop_weight=hybrid_w["oop"],
         )
-        if suffix:
-            children.append(
-                dcc.Markdown(
-                    suffix,
-                    dangerously_allow_html=True,
-                    className="pf-depth-score-growth",
-                )
-            )
+        if delta is not None:
+            children.append(html.Div(delta, className="pf-depth-score-growth"))
     if len(children) == 1:
         return pill
     return html.Div(children, className="pf-depth-chart-score-stack")
@@ -3094,6 +3093,7 @@ def _depth_chart_player_row(
                 settings,
                 theme=theme,
                 row=row,
+                player=player,
                 role_column=role_col,
             ),
             className="pf-depth-chart-score",
@@ -4240,7 +4240,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Slot": "56px",
     "Role": "56px",
     "Rank": "48px",
-    "Score": "52px",
+    "Score": "72px",
     "Minutes": "48px",
     "overall": "44px",
     "defending": "44px",
