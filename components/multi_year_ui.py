@@ -468,14 +468,20 @@ def role_growth_figure(
 
     y_min = min(all_vals) if all_vals else 0.0
     y_max = max(all_vals) if all_vals else 20.0
-    pad = max(0.6, (y_max - y_min) * 0.15)
+    data_span = max(0.0, y_max - y_min)
+    # Keep the axis tight so a ~0.1 delta is ~10% of the plot height.
+    visible_span = max(data_span * 1.4, 1.0)
+    mid = (y_min + y_max) / 2.0
+    half = visible_span / 2.0
+    y0 = max(0.0, mid - half)
+    y1 = y0 + visible_span
     fig.update_layout(
         template="plotly_dark" if dark else "plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=colors["font"], size=12),
         margin=dict(l=44, r=16, t=8, b=36),
-        height=220,
+        height=360,
         showlegend=True,
         legend=dict(
             orientation="h",
@@ -497,7 +503,8 @@ def role_growth_figure(
         ),
         yaxis=dict(
             title=None,
-            range=[max(0.0, y_min - pad), y_max + pad],
+            range=[y0, y1],
+            dtick=0.5,
             tickfont=dict(color=colors["muted"], size=11),
             gridcolor=colors["grid"],
             zeroline=False,
