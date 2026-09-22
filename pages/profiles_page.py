@@ -2192,6 +2192,35 @@ def _depth_stats_file_caches():
     return {}, {}
 
 
+def _by_year_metric_count(by_year: dict | None) -> int:
+    """How many non-null scored rates are stored across year snapshots."""
+    if not isinstance(by_year, dict):
+        return 0
+    total = 0
+    for snap in by_year.values():
+        if not isinstance(snap, dict):
+            continue
+        for key in ("stats", "set_piece_stats"):
+            blob = snap.get(key)
+            if not isinstance(blob, dict):
+                continue
+            total += sum(1 for val in blob.values() if val is not None)
+    return total
+
+
+def _prefer_richer_by_year(
+    primary: dict | None, secondary: dict | None
+) -> dict | None:
+    """Keep the year map with more scored metrics (fresh cache vs stale profile)."""
+    if not isinstance(primary, dict) or not primary:
+        return secondary if isinstance(secondary, dict) and secondary else primary
+    if not isinstance(secondary, dict) or not secondary:
+        return primary
+    if _by_year_metric_count(secondary) > _by_year_metric_count(primary):
+        return secondary
+    return primary
+
+
 def _attach_year_maps_from_entry(stats_player: dict, entry: dict | None) -> dict:
     """Copy by_year / years_present onto a stats player when the cohort blob lacks them."""
     out = dict(stats_player)
@@ -2203,6 +2232,15 @@ def _attach_year_maps_from_entry(stats_player: dict, entry: dict | None) -> dict
         if isinstance(blob, dict):
             sources.append(blob)
     for key in ("by_year", "years_present", "multi_year", "multi_year_status"):
+        if key == "by_year":
+            # Prefer the richer map: profile snapshots may still use the old
+            # outfield-only whitelist while the upload cohort was recomputed.
+            candidate = out.get("by_year")
+            for src in sources:
+                candidate = _prefer_richer_by_year(candidate, src.get("by_year"))
+            if isinstance(candidate, dict) and candidate:
+                out["by_year"] = candidate
+            continue
         if out.get(key) not in (None, "", {}, []):
             continue
         for src in sources:
@@ -2281,22 +2319,21 @@ def _resolve_depth_stats_player(
     player = entry.get("player") if isinstance(entry.get("player"), dict) else {}
     embedded = entry.get("stats_player")
     resolved = None
-    if isinstance(embedded, dict) and (
-        embedded.get("stats") is not None or embedded.get("pos_group")
-    ):
-        resolved = _enrich_stats_player(embedded, player or {})
-    else:
-        file_id = str(entry.get("file_id") or "").strip()
+    cohort_hit = None
+    file_id = str(entry.get("file_id") or "").strip()
+    from scoring.stats_scorer import player_key as stats_player_key
+
+    def _cohort_player() -> dict | None:
+        nonlocal cohort_hit
+        if cohort_hit is not None:
+            return cohort_hit or None
         if not file_id:
+            cohort_hit = False
             return None
         cache = file_cache if file_cache is not None else {}
         if file_id not in cache:
             cache[file_id] = profiles.load_stats_players_for_file(file_id)
         cohort = cache.get(file_id) or []
-        if not cohort:
-            return None
-        from scoring.stats_scorer import player_key as stats_player_key
-
         row = entry.get("row") or {}
         name = (player.get("name") or row.get("Name") or "").strip()
         unique_id = str(
@@ -2311,14 +2348,41 @@ def _resolve_depth_stats_player(
         if not target:
             target = str(entry.get("player_key") or "").strip()
         if not target:
+            cohort_hit = False
             return None
         for sp in cohort:
             if stats_player_key(sp) == target:
-                resolved = _enrich_stats_player(sp, player or {})
-                break
+                cohort_hit = sp
+                return sp
+        cohort_hit = False
+        return None
+
+    if isinstance(embedded, dict) and (
+        embedded.get("stats") is not None or embedded.get("pos_group")
+    ):
+        resolved = _enrich_stats_player(embedded, player or {})
+    else:
+        hit = _cohort_player()
+        if isinstance(hit, dict):
+            resolved = _enrich_stats_player(hit, player or {})
     if not isinstance(resolved, dict):
         return None
     resolved = _attach_year_maps_from_entry(resolved, entry)
+    # Profile-embedded by_year can lag the upload cache (old metric whitelist).
+    # Prefer the cohort's richer year map so Current-year Goalkeeping works.
+    hit = _cohort_player()
+    if isinstance(hit, dict):
+        richer = _prefer_richer_by_year(resolved.get("by_year"), hit.get("by_year"))
+        if richer is not None:
+            resolved["by_year"] = richer
+        for key in ("years_present", "multi_year", "multi_year_status"):
+            if resolved.get(key) in (None, "", {}, []) and hit.get(key) not in (
+                None,
+                "",
+                {},
+                [],
+            ):
+                resolved[key] = hit.get(key)
     return _stats_player_for_pct_basis(resolved, pct_basis=pct_basis)
 
 

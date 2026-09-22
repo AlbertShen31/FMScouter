@@ -168,29 +168,28 @@ def status_label(status: str | None) -> str:
 
 
 def _year_snapshot(player: dict[str, Any]) -> dict[str, Any]:
-    """Compact per-year payload for modal / growth UI.
+    """Per-year payload for modal By-year cards and depth Current-year rates.
 
-    Keep identity + key rates only — full attrs/stats maps blew up multiyear
-    cache size and were unused by the By year modal cards.
+    Keep identity plus every scored metric present that year. A tiny outfield
+    whitelist used to drop GK rates (xG prevented, goals conceded, save %, …),
+    so Profiles depth → Current → Goalkeeping showed blanks while the modal
+    (combined multi-year stats) still had percentiles. Omit full attrs to
+    limit cache size.
     """
+    known = set(_all_metric_ids())
     stats = player.get("stats") or {}
+    sp_stats = player.get("set_piece_stats") or {}
     key_stats = {
         mid: stats[mid]
-        for mid in (
-            "goals",
-            "assists",
-            "expected_goals",
-            "expected_assists",
-            "pass_completion",
-            "passes_attempted",
-            "tackles_attempted",
-            "key_passes",
-            "shots",
-            "possession_won",
-        )
-        if mid in stats
+        for mid in known
+        if mid in stats and stats[mid] is not None
     }
-    return {
+    key_sp = {
+        mid: sp_stats[mid]
+        for mid in known
+        if mid in sp_stats and sp_stats[mid] is not None
+    }
+    out: dict[str, Any] = {
         "minutes": player.get("minutes"),
         "stats": key_stats,
         "club": player.get("club"),
@@ -199,6 +198,17 @@ def _year_snapshot(player: dict[str, Any]) -> dict[str, Any]:
         "position": player.get("position"),
         "best_pos": player.get("best_pos"),
     }
+    if key_sp:
+        out["set_piece_stats"] = key_sp
+    if "stats_unavailable" in player:
+        out["stats_unavailable"] = list(player.get("stats_unavailable") or [])
+    if "stats_limited_tracking" in player:
+        out["stats_limited_tracking"] = bool(player.get("stats_limited_tracking"))
+    if "limited_division_tracking" in player:
+        out["limited_division_tracking"] = bool(
+            player.get("limited_division_tracking")
+        )
+    return out
 
 
 def _metric_unit(metric_id: str) -> str | None:
