@@ -1576,8 +1576,10 @@ def _player_modal_body(
     stripe_limited: set[str] | frozenset[str] | list[str] | None = None,
     banding_ctx=None,
     value_mode: str = "raw",
+    pct_basis: str | None = None,
 ) -> html.Div:
     """Player Stats modal — thin wrapper around the shared builder."""
+    from components.multi_year_ui import normalize_pct_basis
     from components.player_detail import build_player_modal_body
 
     return build_player_modal_body(
@@ -1598,6 +1600,7 @@ def _player_modal_body(
         always_minutes_styles=True,
         identity_fields_page="player_stats",
         upload_has_stats=True,
+        pct_basis=normalize_pct_basis(pct_basis),
     )
 
 
@@ -1702,6 +1705,7 @@ def layout(**_kwargs):
             dcc.Store(id="st-marked", data=[]),
             dcc.Store(id="st-sort-memory", data=None),
             dcc.Store(id="st-player-key", data=None),
+            dcc.Store(id="st-modal-pct-basis", data="current"),
             dcc.Store(id="st-player-view", data="bars", storage_type="local"),
             dcc.Store(id="st-player-group", data="mid"),
             dcc.Store(id="st-compare-keys", data=None),
@@ -1720,6 +1724,7 @@ def layout(**_kwargs):
                     {"type": "player-group", "group": "_"},
                     {"type": "compare-view", "view": "_"},
                     {"type": "compare-group", "group": "_"},
+                    {"type": "modal-pct-basis", "view": "_"},
                 ],
             ),
             upload_card(
@@ -2312,6 +2317,7 @@ def refresh_table(
     Output("st-player-key", "data"),
     Output("st-player-group", "data"),
     Output("st-table", "active_cell"),
+    Output("st-modal-pct-basis", "data", allow_duplicate=True),
     Input("st-table", "active_cell"),
     Input("st-player-modal", "is_open"),
     Input("st-player-modal-close", "n_clicks"),
@@ -2342,22 +2348,46 @@ def open_player(
     if triggered == "st-player-modal":
         # Backdrop / Escape / header X — clear active_cell so the same name can reopen.
         if not is_open:
-            return False, no_update, no_update, None, "mid", None
-        return no_update, no_update, no_update, no_update, no_update, no_update
+            return False, no_update, no_update, None, "mid", None, no_update
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
     if triggered == "st-player-modal-close":
-        return False, no_update, no_update, None, "mid", None
+        return False, no_update, no_update, None, "mid", None, no_update
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update, no_update, no_update
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
     rows = viewport or []
     idx = active_cell.get("row")
     if idx is None or idx >= len(rows):
-        return no_update, no_update, no_update, no_update, no_update, no_update
+        return (
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
     key = _row_mark_key(rows[idx])
     players = _parsed_players(parsed)
     player = next((p for p in players if player_key(p) == key), None)
     view = _normalize_player_view(view)
     if not player:
-        return True, "Player", html.Div("Player not found."), None, "mid", None
+        return True, "Player", html.Div("Player not found."), None, "mid", None, "current"
     settings = us.normalize(settings)
     minutes_required = float(
         minutes_required
@@ -2382,10 +2412,12 @@ def open_player(
             stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
+            pct_basis="current",
         ),
         key,
         eval_group,
         None,
+        "current",
     )
 
 
@@ -2407,6 +2439,7 @@ def _lookup_modal_player(parsed, player_key_value):
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
     State("st-detail-level-map", "data"),
+    State("st-modal-pct-basis", "data"),
     prevent_initial_call=True,
 )
 def switch_player_view(
@@ -2420,6 +2453,7 @@ def switch_player_view(
     settings,
     value_mode,
     detail_map,
+    pct_basis,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2454,6 +2488,7 @@ def switch_player_view(
             stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
+            pct_basis=pct_basis,
         ),
     )
 
@@ -2471,6 +2506,7 @@ def switch_player_view(
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
     State("st-detail-level-map", "data"),
+    State("st-modal-pct-basis", "data"),
     prevent_initial_call=True,
 )
 def switch_player_group(
@@ -2484,6 +2520,7 @@ def switch_player_group(
     settings,
     value_mode,
     detail_map,
+    pct_basis,
 ):
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
@@ -2519,6 +2556,7 @@ def switch_player_group(
             stripe_limited=band_limited,
             banding_ctx=banding_ctx,
             value_mode=value_mode,
+            pct_basis=pct_basis,
         ),
     )
 
@@ -2527,6 +2565,7 @@ def switch_player_group(
     Output("st-player-modal-body", "children", allow_duplicate=True),
     Input("st-value-mode", "value"),
     Input("st-detail-level-map", "data"),
+    Input("st-modal-pct-basis", "data"),
     State("st-player-modal", "is_open"),
     State("st-player-key", "data"),
     State("st-player-view", "data"),
@@ -2540,6 +2579,7 @@ def switch_player_group(
 def refresh_player_modal_value_mode(
     value_mode,
     detail_map,
+    pct_basis,
     is_open,
     player_key_value,
     view,
@@ -2575,7 +2615,24 @@ def refresh_player_modal_value_mode(
         stripe_limited=band_limited,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
+        pct_basis=pct_basis,
     )
+
+
+@callback(
+    Output("st-modal-pct-basis", "data", allow_duplicate=True),
+    Input({"type": "st-modal-pct-basis", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_stats_modal_pct_basis(n_clicks):
+    from components.multi_year_ui import normalize_pct_basis
+
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update
+    view = (ctx.triggered_id or {}).get("view")
+    if view in (None, "", "_"):
+        return no_update
+    return normalize_pct_basis(view)
 
 
 def _build_stats_compare_body(

@@ -1002,6 +1002,7 @@ def layout():
         dcc.Store(id="rs-persist-boot"),
         dcc.Store(id="rs-role-mode-prev", data=None),
         dcc.Store(id="rs-player-key", data=None),
+        dcc.Store(id="rs-modal-pct-basis", data="current"),
         dcc.Interval(id="rs-hydrate-tick", interval=50, max_intervals=1),
         player_modal(prefix="rs"),
         pattern_matching_stubs(
@@ -1015,6 +1016,7 @@ def layout():
                 {"type": "group", "group": "_"},
                 {"type": "combo-pill", "combo": "_"},
                 {"type": "clear-roles", "loc": "_"},
+                {"type": "modal-pct-basis", "view": "_"},
             ],
         ),
         dcc.Store(id="rs-config", data=rc.active_pack_id()),
@@ -1671,7 +1673,10 @@ def _build_role_modal_body(
     mode: str = "roles",
     position_eligible: str | None = None,
     role_growth_column: str | None = None,
+    pct_basis: str | None = None,
 ) -> html.Div:
+    from components.multi_year_ui import normalize_pct_basis
+
     file_id = str((parsed or {}).get("file_id") or "").strip()
     parsed_players = list((parsed or {}).get("players") or [])
     # Prefer in-memory cohort when players already carry stats (multiyear /
@@ -1739,6 +1744,7 @@ def _build_role_modal_body(
         upload_has_stats=_upload_has_stats(parsed),
         role_growth_column=role_growth_column,
         banding_ctx=banding_ctx,
+        pct_basis=normalize_pct_basis(pct_basis),
     )
 
 
@@ -2686,6 +2692,7 @@ def toggle_multi_year_status_filter(payload):
     Output("rs-player-modal-body", "children"),
     Output("rs-table", "active_cell"),
     Output("rs-player-key", "data"),
+    Output("rs-modal-pct-basis", "data", allow_duplicate=True),
     Input("rs-table", "active_cell"),
     Input("rs-player-modal-close", "n_clicks"),
     Input("rs-player-modal", "is_open"),
@@ -2715,21 +2722,21 @@ def open_player_modal(
     if ctx.triggered_id == "rs-player-modal":
         # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
         if not is_open:
-            return False, no_update, no_update, None, None
-        return no_update, no_update, no_update, no_update, no_update
+            return False, no_update, no_update, None, None, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     if ctx.triggered_id == "rs-player-modal-close":
-        return False, no_update, no_update, None, None
+        return False, no_update, no_update, None, None, no_update
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     row_idx = active_cell.get("row")
     if not isinstance(viewport, list) or row_idx is None:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     try:
         row_idx = int(row_idx)
     except (TypeError, ValueError):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     if row_idx < 0 or row_idx >= len(viewport):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
     name = str(row.get("Name") or "").strip()
     unique_id = str(row.get("Unique ID") or "").strip()
@@ -2745,6 +2752,7 @@ def open_player_modal(
             ),
             None,
             None,
+            "current",
         )
     if pack_id:
         rc.load_pack(pack_id)
@@ -2783,15 +2791,18 @@ def open_player_modal(
             theme,
             position_eligible=position_eligible,
             role_growth_column=growth_col,
+            pct_basis="current",
         ),
         None,
         player_key,
+        "current",
     )
 
 
 @callback(
     Output("rs-player-modal-body", "children", allow_duplicate=True),
     Input("rs-modal-bottom-mode", "value"),
+    Input("rs-modal-pct-basis", "data"),
     State("rs-player-key", "data"),
     State("rs-parsed", "data"),
     State("rs-rows", "data"),
@@ -2799,7 +2810,11 @@ def open_player_modal(
     State("theme", "data"),
     prevent_initial_call=True,
 )
-def switch_role_modal_bottom(mode, player_key, parsed, payload, settings, theme):
+def switch_role_modal_bottom(
+    mode, pct_basis, player_key, parsed, payload, settings, theme
+):
+    from components.multi_year_ui import normalize_pct_basis
+
     if not player_key:
         return no_update
     name = str(player_key.get("name") or "").strip()
@@ -2818,7 +2833,24 @@ def switch_role_modal_bottom(mode, player_key, parsed, payload, settings, theme)
         mode=mode or "roles",
         position_eligible=player_key.get("position_eligible"),
         role_growth_column=player_key.get("role_growth_column"),
+        pct_basis=normalize_pct_basis(pct_basis),
     )
+
+
+@callback(
+    Output("rs-modal-pct-basis", "data", allow_duplicate=True),
+    Input({"type": "rs-modal-pct-basis", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_role_modal_pct_basis(n_clicks):
+    from components.multi_year_ui import normalize_pct_basis
+
+    if not ctx.triggered_id or not _clicked(n_clicks):
+        return no_update
+    view = (ctx.triggered_id or {}).get("view")
+    if view in (None, "", "_"):
+        return no_update
+    return normalize_pct_basis(view)
 
 
 @callback(

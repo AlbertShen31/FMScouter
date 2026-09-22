@@ -470,20 +470,41 @@ def build_player_modal_body(
     always_minutes_styles: bool = False,
     stats_missing_message: str | None = None,
     role_growth_column: str | None = None,
+    pct_basis: str | None = None,
 ) -> html.Div:
     """Shared player modal body for Role scores, Player stats, and Profiles.
 
     Pages resolve their own player/cohort/flags, then pass them here.
     ``role_growth_column`` enables a standalone multi-year role-score growth
     section (Profiles / Role scores only — omit on Player stats).
+    ``pct_basis`` selects Current vs Multi-year rates when ``by_year`` exists
+    (default Current).
     """
+    from components.multi_year_ui import (
+        normalize_pct_basis,
+        pct_basis_switcher,
+        player_supports_pct_basis,
+        stats_player_for_pct_basis,
+    )
+
     settings = us.normalize(settings)
     mode = mode or "roles"
+    pct_basis = normalize_pct_basis(pct_basis)
     if stats_player is None and file_id:
         stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
     stats_player = _enrich_stats_player(
         stats_player, player, pos_group=force_pos_group or eval_group
     )
+    # Carry year maps from the identity player onto the stats blob when needed.
+    if isinstance(stats_player, dict) and isinstance(player, dict):
+        for key in ("by_year", "years_present", "multi_year", "multi_year_status"):
+            if stats_player.get(key) in (None, "", {}, []) and player.get(key) not in (
+                None,
+                "",
+                {},
+                [],
+            ):
+                stats_player[key] = player.get(key)
 
     has_stats_payload = bool(stats_player and stats_player.get("stats"))
     if upload_has_stats is None:
@@ -538,6 +559,21 @@ def build_player_modal_body(
         if forced:
             display_player["pos_group"] = forced
 
+    basis_source = stats_player or display_player
+    show_pct_toggle = player_supports_pct_basis(basis_source)
+    chart_player = (
+        stats_player_for_pct_basis(basis_source, pct_basis=pct_basis)
+        if show_pct_toggle
+        else basis_source
+    )
+    if not isinstance(chart_player, dict):
+        chart_player = basis_source if isinstance(basis_source, dict) else display_player
+    # Identity minutes / club follow the active year basis when toggled.
+    if show_pct_toggle and isinstance(chart_player, dict):
+        for key in ("minutes", "effective_minutes", "club", "division"):
+            if chart_player.get(key) not in (None, "", "-", "—"):
+                display_player[key] = chart_player.get(key)
+
     minutes_req = (
         float(minutes_required)
         if minutes_required is not None
@@ -559,8 +595,9 @@ def build_player_modal_body(
         )
 
     after_identity: list = []
+    toggle_row: list = []
     if show_mode_toggle:
-        after_identity.append(
+        toggle_row.append(
             dmc.SegmentedControl(
                 id=modal_mode_id or f"{id_prefix}-modal-bottom-mode",
                 size="sm",
@@ -571,12 +608,32 @@ def build_player_modal_body(
                 ],
             )
         )
+    if show_pct_toggle:
+        toggle_row.append(
+            html.Div(
+                [
+                    html.Span("Year", className="st-player-switch-label"),
+                    pct_basis_switcher(
+                        pct_basis,
+                        control_id=f"{id_prefix}-modal-pct-basis",
+                    ),
+                ],
+                className="my-modal-pct-basis",
+            )
+        )
+    if toggle_row:
+        after_identity.append(
+            html.Div(toggle_row, className="my-modal-toggles")
+        )
     from components.multi_year_ui import by_year_section
 
-    year_section = by_year_section(display_player)
+    # By-year cards need the full multi-year blob (not Current-overlaid rates).
+    year_section = by_year_section(
+        basis_source if show_pct_toggle and isinstance(basis_source, dict) else display_player,
+        pct_basis=pct_basis if show_pct_toggle else None,
+    )
     growth_section = _role_growth_for(display_player)
 
-    chart_player = stats_player or display_player
     resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")
 
     if mode == "roles" and not show_stats_controls:
@@ -754,6 +811,7 @@ def scout_player_modal_body(
     upload_has_stats: bool = False,
     role_growth_column: str | None = None,
     banding_ctx=None,
+    pct_basis: str | None = None,
 ) -> html.Div:
     """Role-scores modal body (thin wrapper around ``build_player_modal_body``)."""
     return build_player_modal_body(
@@ -772,6 +830,7 @@ def scout_player_modal_body(
         upload_has_stats=upload_has_stats,
         role_growth_column=role_growth_column,
         banding_ctx=banding_ctx,
+        pct_basis=pct_basis,
     )
 
 

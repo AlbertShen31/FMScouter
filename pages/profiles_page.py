@@ -931,46 +931,37 @@ def _depth_stats_view_switcher(active=None, *, group: str | None = None) -> html
 
 
 def _normalize_depth_pct_basis(value) -> str:
+    """Depth chart Year toggle — defaults to multi-year combined rates."""
+    from components.multi_year_ui import normalize_pct_basis
+
     raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if raw in ("current", "current_year", "latest", "newest", "year"):
-        return "current"
-    if raw in ("multiyear", "multi_year", "combined", "merged", "all"):
+    if raw in ("", "none", "null", "undefined"):
         return "multiyear"
-    return "multiyear"
+    basis = normalize_pct_basis(value)
+    # Shared helper defaults unknown → current; depth keeps multiyear as fallback.
+    if raw not in (
+        "current",
+        "current_year",
+        "latest",
+        "newest",
+        "year",
+        "multiyear",
+        "multi_year",
+        "combined",
+        "merged",
+        "all",
+    ):
+        return "multiyear"
+    return basis
 
 
 def _depth_pct_basis_switcher(active=None) -> html.Div:
-    current = _normalize_depth_pct_basis(active)
-    options = (
-        (
-            "current",
-            "Current",
-            "Percentiles and category rates from the newest season only",
-        ),
-        (
-            "multiyear",
-            "Multi-year",
-            "Percentiles and category rates from recency-weighted multi-year stats",
-        ),
-    )
-    buttons = []
-    for value, label, title in options:
-        buttons.append(
-            html.Button(
-                label,
-                id={"type": "pf-depth-pct-basis", "view": value},
-                n_clicks=0,
-                type="button",
-                title=title,
-                className="st-player-seg-btn"
-                + (" active" if value == current else ""),
-            )
-        )
-    return html.Div(
-        buttons,
-        className="st-player-seg pf-depth-pct-basis-seg",
-        role="group",
-        **{"aria-label": "Depth chart percentile year basis"},
+    from components.multi_year_ui import pct_basis_switcher
+
+    return pct_basis_switcher(
+        _normalize_depth_pct_basis(active),
+        control_id="pf-depth-pct-basis",
+        className="pf-depth-pct-basis-seg",
     )
 
 
@@ -2255,17 +2246,9 @@ def _newest_year_key(
     by_year: dict | None,
     years_present=None,
 ) -> str | None:
-    from services.export_library import YEAR_KEYS
+    from components.multi_year_ui import newest_year_key
 
-    by_year = by_year if isinstance(by_year, dict) else {}
-    present: list[str] = []
-    if years_present is not None:
-        present = [str(y) for y in (years_present or []) if str(y) in by_year]
-    if not present:
-        present = [y for y in YEAR_KEYS if y in by_year]
-    else:
-        present = [y for y in YEAR_KEYS if y in present] or present
-    return present[-1] if present else None
+    return newest_year_key(by_year, years_present)
 
 
 def _stats_player_for_pct_basis(
@@ -2274,37 +2257,9 @@ def _stats_player_for_pct_basis(
     pct_basis: str = "multiyear",
 ) -> dict | None:
     """Overlay newest-year rates when depth chart Year is Current."""
-    if not isinstance(stats_player, dict):
-        return None
-    if _normalize_depth_pct_basis(pct_basis) != "current":
-        return stats_player
-    by_year = stats_player.get("by_year")
-    if not isinstance(by_year, dict) or not by_year:
-        return stats_player
-    year = _newest_year_key(by_year, stats_player.get("years_present"))
-    if not year:
-        return stats_player
-    snap = by_year.get(year)
-    if not isinstance(snap, dict):
-        return stats_player
-    out = dict(stats_player)
-    if isinstance(snap.get("stats"), dict):
-        out["stats"] = dict(snap["stats"])
-    if isinstance(snap.get("set_piece_stats"), dict):
-        out["set_piece_stats"] = dict(snap["set_piece_stats"])
-    if snap.get("minutes") not in (None, "", "-", "—"):
-        out["minutes"] = snap["minutes"]
-        if snap.get("effective_minutes") not in (None, "", "-", "—"):
-            out["effective_minutes"] = snap["effective_minutes"]
-        else:
-            out["effective_minutes"] = snap["minutes"]
-    if "stats_unavailable" in snap:
-        out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
-    if "stats_limited_tracking" in snap:
-        out["stats_limited_tracking"] = bool(snap.get("stats_limited_tracking"))
-    if "limited_division_tracking" in snap:
-        out["limited_division_tracking"] = bool(snap.get("limited_division_tracking"))
-    return out
+    from components.multi_year_ui import stats_player_for_pct_basis
+
+    return stats_player_for_pct_basis(stats_player, pct_basis=pct_basis)
 
 
 def _resolve_depth_stats_player(
@@ -4996,6 +4951,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-sort-memory", data=None),
             dcc.Store(id="pf-table-row-cache", data=None),
             dcc.Store(id="pf-player-key", data=None),
+            dcc.Store(id="pf-modal-pct-basis", data="current"),
             dcc.Store(id="pf-compare-keys", data=None),
             dcc.Store(id="pf-selected-order", data=[]),
             dcc.Store(id="pf-depth-compare-order", data=[]),
@@ -5007,6 +4963,7 @@ def layout(**_kwargs):
                     {"type": "compare-view", "view": "_"},
                     {"type": "compare-group", "group": "_"},
                     {"type": "depth-name", "id": "_", "src": "_", "slot": "_"},
+                    {"type": "modal-pct-basis", "view": "_"},
                 ],
             ),
             player_modal(prefix="pf"),
@@ -7684,23 +7641,27 @@ def clear_depth_undo(n_clicks, settings):
     Output("pf-player-modal-title", "children", allow_duplicate=True),
     Output("pf-player-modal-body", "children", allow_duplicate=True),
     Output("pf-player-key", "data", allow_duplicate=True),
+    Output("pf-modal-pct-basis", "data", allow_duplicate=True),
     Input({"type": "pf-depth-name", "id": ALL, "src": ALL, "slot": ALL}, "n_clicks"),
     State("ui-settings", "data"),
     State("theme", "data"),
     State("pf-focus-role", "data"),
+    State("pf-depth-pct-basis", "data"),
     prevent_initial_call=True,
 )
-def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
+def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role, depth_pct_basis):
     if not _pattern_click_triggered() or not clicked(n_clicks):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     profile_id = str(ctx.triggered_id.get("id") or "").strip()
     profile = profiles.get_profile(profile_id) if profile_id else None
     if not profile:
-        return True, "Player", html.Div("Profile not found."), None
+        return True, "Player", html.Div("Profile not found."), None, "current"
     player = profile.get("player")
     name = (player or {}).get("name") or profiles.profile_identity(profile)[0] or "Player"
     role = profile.get("role_column") or (profile.get("row") or {}).get("Role") or ""
     title = f"{name} · {role}" if role else name
+    # Inherit depth chart Year when opening from the depth chart.
+    pct_basis = _normalize_depth_pct_basis(depth_pct_basis)
     if not isinstance(player, dict) or not player:
         return (
             True,
@@ -7711,6 +7672,7 @@ def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
                 className="rs-player-missing",
             ),
             {"id": profile_id, "role_growth_column": None},
+            pct_basis,
         )
     settings = us.normalize(settings)
     # Prefer the clicked formation slot's role when the button carries a slot index.
@@ -7737,12 +7699,14 @@ def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role):
         mode="roles",
         pos_group=slot_group or _profile_stats_group(profile),
         role_growth_column=growth_col,
+        pct_basis=pct_basis,
     )
     return (
         True,
         title,
         body,
         {"id": profile_id, "role_growth_column": growth_col},
+        pct_basis,
     )
 
 
@@ -7750,20 +7714,44 @@ def _resolve_stats_player_for_profile(
     profile: dict, player: dict
 ) -> tuple[dict | None, list[dict] | None]:
     """Return (stats player, cohort) for the Profiles modal if available."""
+    from scoring.stats_scorer import player_key as stats_player_key
+
     file_id = str(profile.get("file_id") or "").strip()
     embedded = profile.get("stats_player")
     preferred = None
     if isinstance(embedded, dict) and embedded.get("stats"):
-        preferred = embedded
+        preferred = dict(embedded)
     elif isinstance(player, dict) and player.get("stats"):
-        preferred = player
+        preferred = dict(player)
+    cohort = None
+    if file_id:
+        try:
+            cohort = profiles.load_stats_players_for_file(file_id) or None
+        except Exception:
+            cohort = None
     if preferred is not None:
-        cohort = None
-        if file_id:
-            try:
-                cohort = profiles.load_stats_players_for_file(file_id) or None
-            except Exception:
-                cohort = None
+        # Prefer richer by_year from the upload cohort (old profile snaps may
+        # omit GK / category metrics needed for Current-year modal charts).
+        if cohort:
+            target = stats_player_key(preferred) or str(
+                profile.get("player_key") or ""
+            ).strip()
+            if target:
+                for sp in cohort:
+                    if stats_player_key(sp) == target:
+                        preferred["by_year"] = _prefer_richer_by_year(
+                            preferred.get("by_year"), sp.get("by_year")
+                        )
+                        for key in (
+                            "years_present",
+                            "multi_year",
+                            "multi_year_status",
+                        ):
+                            if preferred.get(key) in (None, "", {}, []) and sp.get(
+                                key
+                            ) not in (None, "", {}, []):
+                                preferred[key] = sp.get(key)
+                        break
         return preferred, cohort
     return resolve_stats_player_for_file(file_id, player)
 
@@ -7805,8 +7793,11 @@ def _build_profile_modal_body(
     mode: str = "roles",
     pos_group: str | None = None,
     role_growth_column: str | None = None,
+    pct_basis: str | None = None,
 ) -> html.Div:
     """Profiles modal: resolve slot phase + stats cohort, then shared body."""
+    from components.multi_year_ui import normalize_pct_basis
+
     eval_group = pos_group or _profile_stats_group(profile)
     player = _enrich_player_multi_year(player, profile)
     stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
@@ -7847,6 +7838,7 @@ def _build_profile_modal_body(
         role_growth_column=growth_col,
         banding_ctx=banding_ctx,
         file_id=file_id,
+        pct_basis=normalize_pct_basis(pct_basis),
         stats_missing_message=(
             "Player stats not available. This profile was saved from an "
             "attribute-only export. To see charts, re-save from a combined "
@@ -7862,6 +7854,7 @@ def _build_profile_modal_body(
     Output("pf-player-modal-body", "children"),
     Output("pf-player-key", "data"),
     Output("pf-table", "active_cell"),
+    Output("pf-modal-pct-basis", "data", allow_duplicate=True),
     Input("pf-table", "active_cell"),
     Input("pf-player-modal", "is_open"),
     Input("pf-player-modal-close", "n_clicks"),
@@ -7886,21 +7879,21 @@ def open_profile_modal(
     if triggered == "pf-player-modal":
         # Backdrop / Escape / header X — keep Dash in sync when the modal closes itself.
         if not is_open:
-            return False, no_update, no_update, None, None
-        return no_update, no_update, no_update, no_update, no_update
+            return False, no_update, no_update, None, None, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     if triggered == "pf-player-modal-close":
-        return False, no_update, no_update, None, None
+        return False, no_update, no_update, None, None, no_update
     if not active_cell or active_cell.get("column_id") != "Name":
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     row_idx = active_cell.get("row")
     if not isinstance(viewport, list) or row_idx is None:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     try:
         row_idx = int(row_idx)
     except (TypeError, ValueError):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     if row_idx < 0 or row_idx >= len(viewport):
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     row = viewport[row_idx] or {}
     profile_id = str(
         row.get("_profile_id") or _resolve_profile_id(row.get("id") or row.get("_key"))
@@ -7913,6 +7906,7 @@ def open_profile_modal(
             html.Div("Profile not found.", className="rs-player-missing"),
             None,
             None,
+            "current",
         )
     player = profile.get("player")
     name = (player or {}).get("name") or profiles.profile_identity(profile)[0] or "Player"
@@ -7929,6 +7923,7 @@ def open_profile_modal(
             ),
             {"id": profile_id, "role_growth_column": None},
             None,
+            "current",
         )
     settings = us.normalize(settings)
     focus = _focus_slot(focus_role)
@@ -7948,6 +7943,7 @@ def open_profile_modal(
             profile, role_column=str(row.get("_role_column") or role or "")
         ),
         role_growth_column=growth_col,
+        pct_basis="current",
     )
     return (
         True,
@@ -7955,19 +7951,25 @@ def open_profile_modal(
         body,
         {"id": profile_id, "role_growth_column": growth_col},
         None,
+        "current",
     )
 
 
 @callback(
     Output("pf-player-modal-body", "children", allow_duplicate=True),
     Input("pf-modal-bottom-mode", "value"),
+    Input("pf-modal-pct-basis", "data"),
     State("pf-player-key", "data"),
     State("pf-focus-role", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
-def switch_profile_modal_bottom(mode, player_key, focus_role, settings, theme):
+def switch_profile_modal_bottom(
+    mode, pct_basis, player_key, focus_role, settings, theme
+):
+    from components.multi_year_ui import normalize_pct_basis
+
     profile_id = ""
     stored_growth = None
     if isinstance(player_key, dict):
@@ -8000,7 +8002,24 @@ def switch_profile_modal_bottom(mode, player_key, focus_role, settings, theme):
         mode=mode or "roles",
         pos_group=_profile_stats_group(profile),
         role_growth_column=growth_col,
+        pct_basis=normalize_pct_basis(pct_basis),
     )
+
+
+@callback(
+    Output("pf-modal-pct-basis", "data", allow_duplicate=True),
+    Input({"type": "pf-modal-pct-basis", "view": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def set_profile_modal_pct_basis(n_clicks):
+    from components.multi_year_ui import normalize_pct_basis
+
+    if not _pattern_click_triggered() or not clicked(n_clicks):
+        return no_update
+    view = (ctx.triggered_id or {}).get("view")
+    if view in (None, "", "_"):
+        return no_update
+    return normalize_pct_basis(view)
 
 
 def _enrich_stats_player(

@@ -9,6 +9,144 @@ import plotly.graph_objects as go
 from scoring.multi_year import YEAR_KEYS, status_label
 from scoring.stats_scorer import metric_defs
 
+PCT_BASIS_VALUES = ("current", "multiyear")
+
+
+def normalize_pct_basis(value: Any) -> str:
+    """``current`` (newest season) or ``multiyear`` (recency-weighted combined)."""
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in ("current", "current_year", "latest", "newest", "year"):
+        return "current"
+    if raw in ("multiyear", "multi_year", "combined", "merged", "all"):
+        return "multiyear"
+    return "current"
+
+
+def newest_year_key(
+    by_year: dict | None,
+    years_present=None,
+) -> str | None:
+    """Newest configured year key present in ``by_year``."""
+    by_year = by_year if isinstance(by_year, dict) else {}
+    present: list[str] = []
+    if years_present is not None:
+        present = [str(y) for y in (years_present or []) if str(y) in by_year]
+    if not present:
+        present = [y for y in YEAR_KEYS if y in by_year]
+    else:
+        present = [y for y in YEAR_KEYS if y in present] or present
+    return present[-1] if present else None
+
+
+def player_supports_pct_basis(player: dict | None) -> bool:
+    """True when a Current / Multi-year stats toggle is meaningful."""
+    if not isinstance(player, dict):
+        return False
+    by_year = player.get("by_year")
+    if not isinstance(by_year, dict) or not by_year:
+        return False
+    # Need at least one year snap with minutes or rates (not empty stubs).
+    for snap in by_year.values():
+        if not isinstance(snap, dict):
+            continue
+        mins = snap.get("minutes")
+        try:
+            if mins is not None and float(mins) > 0:
+                return True
+        except (TypeError, ValueError):
+            pass
+        stats = snap.get("stats")
+        if isinstance(stats, dict) and any(v is not None for v in stats.values()):
+            return True
+    return False
+
+
+def stats_player_for_pct_basis(
+    stats_player: dict | None,
+    *,
+    pct_basis: str = "current",
+) -> dict | None:
+    """Overlay newest-year rates when Year is Current; else keep combined stats."""
+    if not isinstance(stats_player, dict):
+        return None
+    if normalize_pct_basis(pct_basis) != "current":
+        return stats_player
+    by_year = stats_player.get("by_year")
+    if not isinstance(by_year, dict) or not by_year:
+        return stats_player
+    year = newest_year_key(by_year, stats_player.get("years_present"))
+    if not year:
+        return stats_player
+    snap = by_year.get(year)
+    if not isinstance(snap, dict):
+        return stats_player
+    out = dict(stats_player)
+    if isinstance(snap.get("stats"), dict):
+        out["stats"] = dict(snap["stats"])
+    if isinstance(snap.get("set_piece_stats"), dict):
+        out["set_piece_stats"] = dict(snap["set_piece_stats"])
+    if snap.get("minutes") not in (None, "", "-", "—"):
+        out["minutes"] = snap["minutes"]
+        if snap.get("effective_minutes") not in (None, "", "-", "—"):
+            out["effective_minutes"] = snap["effective_minutes"]
+        else:
+            out["effective_minutes"] = snap["minutes"]
+    if "stats_unavailable" in snap:
+        out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
+    if "stats_limited_tracking" in snap:
+        out["stats_limited_tracking"] = bool(snap.get("stats_limited_tracking"))
+    if "limited_division_tracking" in snap:
+        out["limited_division_tracking"] = bool(snap.get("limited_division_tracking"))
+    if snap.get("division") not in (None, "", "-", "—"):
+        out["division"] = snap["division"]
+    if snap.get("club") not in (None, "", "-", "—"):
+        out["club"] = snap["club"]
+    return out
+
+
+def pct_basis_switcher(
+    active: Any = None,
+    *,
+    control_id: str,
+    className: str | None = None,
+) -> html.Div:
+    """Current / Multi-year segmented control for modal or depth chrome."""
+    current = normalize_pct_basis(active)
+    options = (
+        (
+            "current",
+            "Current",
+            "Rates and percentiles from the newest season only",
+        ),
+        (
+            "multiyear",
+            "Multi-year",
+            "Recency-weighted multi-year combined rates and percentiles",
+        ),
+    )
+    buttons = []
+    for value, label, title in options:
+        buttons.append(
+            html.Button(
+                label,
+                id={"type": control_id, "view": value},
+                n_clicks=0,
+                type="button",
+                title=title,
+                className="st-player-seg-btn"
+                + (" active" if value == current else ""),
+            )
+        )
+    classes = "st-player-seg my-pct-basis-seg"
+    if className:
+        classes = f"{classes} {className}"
+    return html.Div(
+        buttons,
+        className=classes,
+        role="group",
+        **{"aria-label": "Stats year basis"},
+    )
+
 _ROLE_GROWTH_CHART_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
@@ -671,7 +809,11 @@ _KEY_STAT_IDS = (
 )
 
 
-def by_year_section(player: dict[str, Any]) -> html.Div | None:
+def by_year_section(
+    player: dict[str, Any],
+    *,
+    pct_basis: str | None = None,
+) -> html.Div | None:
     """Modal section showing original per-year stats (no role-score growth)."""
     if not player.get("multi_year"):
         return None
@@ -729,9 +871,22 @@ def by_year_section(player: dict[str, Any]) -> html.Div | None:
     ]
     # Combined vs per-year note for stats
     if player.get("stats"):
+        basis = normalize_pct_basis(pct_basis) if pct_basis is not None else None
+        if basis == "current":
+            note = (
+                "Charts use the newest season’s rates; cards above are each season’s originals."
+            )
+        elif basis == "multiyear":
+            note = (
+                "Charts use recency-weighted combined rates; cards above are each season’s originals."
+            )
+        else:
+            note = (
+                "Tables use the recency-weighted combined rates; cards above are each season’s originals."
+            )
         children.append(
             html.Div(
-                "Tables use the recency-weighted combined rates; cards above are each season’s originals.",
+                note,
                 className="text-muted small mt-2",
             )
         )
