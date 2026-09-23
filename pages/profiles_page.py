@@ -15,7 +15,7 @@ from components.player_detail import (
     build_player_modal_body,
     resolve_stats_player_for_file,
 )
-from components.player_modal import player_modal
+from components.player_modal import player_modal, register_archetype_group_callbacks
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     default_page_size_value,
@@ -116,6 +116,7 @@ import services.player_profiles as profiles
 import services.ui_settings as us
 
 register_page(__name__, path="/profiles", name="Profiles")
+register_archetype_group_callbacks("pf")
 
 PF_PAGE_TIP = (
     "Each profile library holds its own saved players and depth chart. Create a profile with a "
@@ -7939,7 +7940,8 @@ def open_profile_modal(
         settings=settings,
         theme=theme,
         mode="roles",
-        pos_group=_profile_stats_group(
+        pos_group=_stats_group_for_focus(focus_role)
+        or _profile_stats_group(
             profile, role_column=str(row.get("_role_column") or role or "")
         ),
         role_growth_column=growth_col,
@@ -8000,7 +8002,8 @@ def switch_profile_modal_bottom(
         settings=settings,
         theme=theme,
         mode=mode or "roles",
-        pos_group=_profile_stats_group(profile),
+        pos_group=_stats_group_for_focus(focus_role)
+        or _profile_stats_group(profile, focus_role=focus_role),
         role_growth_column=growth_col,
         pct_basis=normalize_pct_basis(pct_basis),
     )

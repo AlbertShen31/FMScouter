@@ -32,7 +32,7 @@ from components.player_filters import (
     archetype_filter_control,
     register_archetype_filter_callbacks,
 )
-from components.player_modal import player_modal
+from components.player_modal import player_modal, register_archetype_group_callbacks
 from components.stats_compare import (
     compare_title,
     compare_control_state,
@@ -170,6 +170,7 @@ register_library_select_callbacks(
 )
 register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
 register_archetype_filter_callbacks("st")
+register_archetype_group_callbacks("st")
 register_marks_callbacks(
     "st",
     marked_store="st-marked",

@@ -21,6 +21,7 @@ import dash_mantine_components as dmc
 
 from components.pack_picker import section_card_header
 from components.player_filters import help_icon, player_filters, archetype_filter_control, register_archetype_filter_callbacks
+from components.player_modal import player_modal, register_archetype_group_callbacks
 from components.scouting_shell import (
     as_list,
     clicked,
@@ -85,7 +86,6 @@ from components.player_detail import (
     resolve_stats_player_for_file,
     scout_player_modal_body,
 )
-from components.player_modal import player_modal
 from components.player_table import (
     IDENTITY_LEFT_COLS,
     IDENTITY_TEXT_COLS,
@@ -151,6 +151,7 @@ register_pos_foot_callbacks(
     pos_id_attr="pos",
 )
 register_archetype_filter_callbacks("rs")
+register_archetype_group_callbacks("rs")
 register_marks_callbacks(
     "rs",
     marked_store="rs-squad-marked",

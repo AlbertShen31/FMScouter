@@ -6,8 +6,9 @@ and optional `after_identity` children.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
-from dash import html
+from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
 import dash_bootstrap_components as dbc
 from dash_iconify import DashIconify
 
@@ -18,7 +19,11 @@ from scoring.personality_tiers import (
     tier_description,
     tier_label,
 )
-from scoring.player_archetypes import evaluate_archetypes
+from scoring.player_archetypes import (
+    archetype_pos_group_options,
+    evaluate_archetypes,
+    resolve_archetype_pos_group,
+)
 import services.ui_settings as us
 
 # FM26 Moneyball export: star ratings are unreliable — never show in the UI.
@@ -594,52 +599,32 @@ def player_personality_section(
     return html.Div(children, className="rs-player-id-section rs-personality-section")
 
 
-def player_archetypes_section(
-    player: dict,
+def _archetype_chip_elements(
+    awards: Sequence[Mapping[str, Any]],
     *,
-    id_prefix: str = "rs",
-    settings=None,
-    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
-    cohort_players: list[dict] | None = None,
-    banding_ctx=None,
-    value_mode: str = "raw",
-) -> html.Div | None:
-    """Icon chips for earned archetypes (Bronze / Silver / Gold × position group)."""
-    if not player or not (player.get("stats") or player.get("minutes")):
-        return None
+    id_prefix: str,
+    pos_group: str | None,
+) -> list:
+    """Build archetype chips for one position group (or empty-state note)."""
+    group = str(pos_group or "").strip().lower()
+    filtered = [
+        award
+        for award in awards
+        if str(award.get("group") or "").strip().lower() == group
+    ]
+    if not filtered:
+        from scoring.player_archetypes import group_abbr
 
-    settings = us.normalize(settings)
-    threshold_overrides = None
-    metric_p0 = None
-    metric_p100 = None
-    if banding_ctx is not None:
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player, settings=settings
-        )
-    elif cohort_players is not None:
-        banding_ctx = us.build_stats_banding_context(
-            settings,
-            cohort_players,
-            limited_divisions=limited_divisions,
-        )
-        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-            banding_ctx, player, settings=settings
-        )
-
-    awards = evaluate_archetypes(
-        player,
-        settings=settings,
-        threshold_overrides=threshold_overrides,
-        metric_p0=metric_p0,
-        metric_p100=metric_p100,
-        limited_divisions=limited_divisions,
-        value_mode=value_mode,
-    )
-    if not awards:
-        return None
+        label = group_abbr(group) if group else "—"
+        return [
+            html.Div(
+                f"No {label} archetypes earned.",
+                className="rs-arch-empty text-muted small",
+            )
+        ]
 
     chips = []
-    for i, award in enumerate(awards):
+    for i, award in enumerate(filtered):
         chip_id = (
             f"{id_prefix}-arch-{award.get('id')}-{award.get('group')}-"
             f"{award.get('tier')}-{i}"
@@ -691,14 +676,188 @@ def player_archetypes_section(
                 className=f"rs-arch-chip is-{tier} is-{polarity}",
             )
         )
+    return chips
 
+
+def _archetype_group_buttons(
+    *,
+    id_prefix: str,
+    options: Sequence[tuple[str, str]],
+    active: str | None,
+) -> list:
+    return [
+        html.Button(
+            label,
+            id={"type": f"{id_prefix}-arch-group", "group": key},
+            n_clicks=0,
+            type="button",
+            className="st-player-seg-btn"
+            + (" active" if key == active else ""),
+        )
+        for key, label in options
+    ]
+
+
+def _archetype_group_switcher(
+    *,
+    id_prefix: str,
+    options: Sequence[tuple[str, str]],
+    active: str | None,
+) -> html.Div | None:
+    if len(options) <= 1:
+        return None
     return html.Div(
         [
-            html.Div("Archetypes", className="rs-player-id-section-title"),
-            html.Div(chips, className="rs-arch-chip-row"),
+            html.Span("Group", className="st-player-switch-label"),
+            html.Div(
+                _archetype_group_buttons(
+                    id_prefix=id_prefix, options=options, active=active
+                ),
+                id=f"{id_prefix}-arch-group-btns",
+                className="st-player-seg",
+            ),
+        ],
+        className="rs-arch-group-filter",
+    )
+
+
+def player_archetypes_section(
+    player: dict,
+    *,
+    id_prefix: str = "rs",
+    settings=None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    cohort_players: list[dict] | None = None,
+    banding_ctx=None,
+    value_mode: str = "raw",
+    pos_group: str | None = None,
+) -> html.Div | None:
+    """Icon chips for earned archetypes, filtered by position group.
+
+    Default group is Best Pos (via ``pos_group`` / player ``pos_group``). Profiles
+    pass the depth-slot phase so the filter opens on that group.
+    """
+    if not player or not (player.get("stats") or player.get("minutes")):
+        return None
+
+    settings = us.normalize(settings)
+    threshold_overrides = None
+    metric_p0 = None
+    metric_p100 = None
+    if banding_ctx is not None:
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player, settings=settings
+        )
+    elif cohort_players is not None:
+        banding_ctx = us.build_stats_banding_context(
+            settings,
+            cohort_players,
+            limited_divisions=limited_divisions,
+        )
+        threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
+            banding_ctx, player, settings=settings
+        )
+
+    options = archetype_pos_group_options(player, preferred=pos_group)
+    awards = evaluate_archetypes(
+        player,
+        settings=settings,
+        threshold_overrides=threshold_overrides,
+        metric_p0=metric_p0,
+        metric_p100=metric_p100,
+        limited_divisions=limited_divisions,
+        value_mode=value_mode,
+        include_groups=[key for key, _ in options] or None,
+    )
+    if not awards and not options:
+        return None
+
+    active = resolve_archetype_pos_group(player, preferred=pos_group)
+    if active is None and options:
+        active = options[0][0]
+    chips = _archetype_chip_elements(
+        awards, id_prefix=id_prefix, pos_group=active
+    )
+    switcher = _archetype_group_switcher(
+        id_prefix=id_prefix, options=options, active=active
+    )
+    header_children: list = [
+        html.Div("Archetypes", className="rs-player-id-section-title"),
+    ]
+    if switcher is not None:
+        header_children.append(switcher)
+    else:
+        # Keep a stable target for the group-switch callback when only one group.
+        header_children.append(
+            html.Div(id=f"{id_prefix}-arch-group-btns", style={"display": "none"})
+        )
+    return html.Div(
+        [
+            html.Div(header_children, className="rs-arch-section-header"),
+            html.Div(
+                chips,
+                id=f"{id_prefix}-arch-chips",
+                className="rs-arch-chip-row",
+            ),
+            dcc.Store(id=f"{id_prefix}-arch-awards", data=list(awards)),
+            dcc.Store(id=f"{id_prefix}-arch-group", data=active),
+            dcc.Store(
+                id=f"{id_prefix}-arch-group-opts",
+                data=[{"id": key, "label": label} for key, label in options],
+            ),
         ],
         className="rs-player-id-section rs-archetypes-section",
     )
+
+
+def register_archetype_group_callbacks(prefix: str) -> None:
+    """Switch archetype position-group filter inside the player modal."""
+    from components.scouting_shell import clicked
+
+    awards_id = f"{prefix}-arch-awards"
+    group_id = f"{prefix}-arch-group"
+    opts_id = f"{prefix}-arch-group-opts"
+    chips_id = f"{prefix}-arch-chips"
+    btns_id = f"{prefix}-arch-group-btns"
+    btn_type = f"{prefix}-arch-group"
+
+    @callback(
+        Output(chips_id, "children"),
+        Output(group_id, "data"),
+        Output(btns_id, "children"),
+        Input({"type": btn_type, "group": ALL}, "n_clicks"),
+        State(awards_id, "data"),
+        State(group_id, "data"),
+        State(opts_id, "data"),
+        prevent_initial_call=True,
+    )
+    def _switch_archetype_group(n_clicks, awards, current, opts):
+        if not ctx.triggered_id or not clicked(n_clicks):
+            return no_update, no_update, no_update
+        group = str(ctx.triggered_id.get("group") or "").strip().lower()
+        if not group or group == "_":
+            return no_update, no_update, no_update
+        if group == str(current or "").strip().lower():
+            return no_update, no_update, no_update
+        award_rows = awards if isinstance(awards, list) else []
+        options: list[tuple[str, str]] = []
+        for item in opts or []:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or "").strip().lower()
+            if not key:
+                continue
+            label = str(item.get("label") or key).strip() or key.upper()
+            options.append((key, label))
+        if group not in {key for key, _ in options}:
+            return no_update, no_update, no_update
+        chips = _archetype_chip_elements(
+            award_rows, id_prefix=prefix, pos_group=group
+        )
+        buttons = _archetype_group_buttons(
+            id_prefix=prefix, options=options, active=group
+        )
+        return chips, group, buttons
 
 
 def player_detail_body(
@@ -719,6 +878,7 @@ def player_detail_body(
     banding_ctx=None,
     value_mode: str = "raw",
     show_archetypes: bool = True,
+    arch_pos_group: str | None = None,
 ) -> html.Div:
     """Shared modal body: identity → international → finance → career → season stats → discipline → personality → page content."""
     effective_theme = theme
@@ -757,6 +917,7 @@ def player_detail_body(
                 cohort_players=cohort_players,
                 banding_ctx=banding_ctx,
                 value_mode=value_mode,
+                pos_group=arch_pos_group,
             )
         )
     if after_identity is not None:

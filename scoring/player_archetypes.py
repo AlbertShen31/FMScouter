@@ -155,6 +155,47 @@ def group_abbr(group: str | None) -> str:
     return GROUP_ABBR.get(str(group or "").strip().lower(), str(group or "").upper() or "—")
 
 
+def resolve_archetype_pos_group(
+    player: dict[str, Any] | None,
+    preferred: str | None = None,
+) -> str | None:
+    """Pick the archetype position group to show (gk/def/mid/fwd).
+
+    Prefers ``preferred`` (e.g. Profiles slot) when valid for the player type,
+    then Best Pos / stored ``pos_group``, then the first eligible stats group.
+    """
+    primary = resolve_player_pos_group(player)
+    if is_gk_group(primary):
+        return "gk"
+    forced = coerce_stats_pos_group(preferred)
+    if forced and forced != "gk":
+        return forced
+    eligible = eligible_stats_groups(player)
+    if primary in eligible:
+        return primary
+    if primary in GROUP_ORDER and primary != "gk":
+        return primary
+    if eligible:
+        return eligible[0]
+    return "mid"
+
+
+def archetype_pos_group_options(
+    player: dict[str, Any] | None,
+    *,
+    preferred: str | None = None,
+) -> list[tuple[str, str]]:
+    """Ordered (id, label) options for the archetype position-group filter.
+
+    Matches Evaluate-as: GK only for keepers, DEF/MID/FWD for outfield.
+    """
+    forced = coerce_stats_pos_group(preferred)
+    primary = resolve_player_pos_group(player)
+    if is_gk_group(forced or primary):
+        return [("gk", GROUP_ABBR["gk"])]
+    return [(g, GROUP_ABBR[g]) for g in ("def", "mid", "fwd")]
+
+
 def archetype_filter_options() -> list[dict[str, str]]:
     """MultiSelect options for high-tier archetype filters."""
     return [
@@ -566,8 +607,14 @@ def evaluate_archetypes(
     tier_floors: dict[str, float] | None = None,
     tier_ceilings: dict[str, float] | None = None,
     min_minutes: float | None = None,
+    pos_group: str | None = None,
+    include_groups: list[str] | tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return earned archetypes tagged by group (high and/or low tiers)."""
+    """Return earned archetypes tagged by group (high and/or low tiers).
+
+    ``include_groups`` adds stats phases beyond natural eligibility (e.g. a
+    Profiles slot). When ``pos_group`` is set, only that phase is evaluated.
+    """
     if not player:
         return []
 
@@ -611,7 +658,16 @@ def evaluate_archetypes(
     awards: list[dict[str, Any]] = []
     defs = metric_defs()
 
-    for group in eligible_stats_groups(player):
+    groups = list(eligible_stats_groups(player))
+    for raw in include_groups or ():
+        extra = coerce_stats_pos_group(raw)
+        if extra and extra not in groups:
+            groups.append(extra)
+    forced = coerce_stats_pos_group(pos_group)
+    if forced:
+        groups = [forced]
+
+    for group in groups:
         for arch in archetype_defs():
             allowed = {str(g).strip().lower() for g in (arch.get("groups") or [])}
             if group not in allowed:

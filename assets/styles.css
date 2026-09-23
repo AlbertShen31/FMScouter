@@ -5202,6 +5202,29 @@ body[data-theme="light"] .st-pizza-legend-pct {
     color: var(--app-danger, #c45c5c);
 }
 
+.rs-arch-section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem 1rem;
+    margin-bottom: 0.45rem;
+}
+
+.rs-arch-section-header .rs-player-id-section-title {
+    margin-bottom: 0;
+}
+
+.rs-arch-group-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.rs-arch-empty {
+    margin: 0;
+}
+
 .rs-archetypes-section .rs-arch-chip-row {
     display: flex;
     flex-wrap: wrap;

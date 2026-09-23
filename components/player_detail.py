@@ -792,6 +792,8 @@ def build_player_modal_body(
         banding_ctx=banding_ctx,
         value_mode=value_mode,
         show_archetypes=has_stats_payload,
+        # Profiles force_pos_group / Evaluate-as; else Best Pos via player.pos_group.
+        arch_pos_group=resolved_eval,
     )
 
 
