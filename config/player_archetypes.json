@@ -264,7 +264,7 @@
     {
       "id": "dribbler",
       "label": "Dribbler",
-      "description": "Beats opponents regularly with a high dribble rate.",
+      "description": "Dribbles often while keeping possession losses low.",
       "icon": "game-icons:boots",
       "category": "possession",
       "groups": [
@@ -273,7 +273,8 @@
         "fwd"
       ],
       "metrics": [
-        "dribbles"
+        "dribbles",
+        "possession_lost"
       ]
     },
     {
