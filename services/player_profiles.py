@@ -2,7 +2,8 @@
 
 Each library lives under ``data/profiles/packs/<id>/`` with ``meta.json``,
 ``index.json``, ``slot_depth.json``, ``depth_undo.json``, and ``export_staging.json``.
-``active.json`` points at the current library. Legacy flat ``index.json`` /
+``active.json`` points at the current library. Timestamped backups of a whole
+library live under ``data/profiles/backups/``. Legacy flat ``index.json`` /
 ``slot_depth.json`` are migrated once into a Default library.
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import Any
 
 from config.paths import (
     PROFILES_ACTIVE_PATH,
+    PROFILES_BACKUPS_DIR,
     PROFILES_DIR,
     PROFILES_INDEX_PATH,
     PROFILES_PACKS_DIR,
@@ -395,6 +397,195 @@ def delete_library(library_id: str) -> bool:
         if remaining:
             set_active_library(remaining[0])
     return True
+
+
+_BACKUP_FORMAT = "fmscouter-profile-library"
+_BACKUP_VERSION = 1
+_BACKUP_PACK_FILES = (
+    "meta.json",
+    "index.json",
+    "slot_depth.json",
+    "depth_undo.json",
+    "export_staging.json",
+)
+
+
+def _ensure_backups_dir() -> Path:
+    PROFILES_BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    return PROFILES_BACKUPS_DIR
+
+
+def _backup_path(filename: str) -> Path:
+    name = Path(str(filename or "").strip()).name
+    if not name or name != str(filename or "").strip() or ".." in name:
+        raise ValueError("Invalid backup file.")
+    if not name.endswith(".json"):
+        raise ValueError("Backup must be a .json file.")
+    return _ensure_backups_dir() / name
+
+
+def _default_pack_payload(key: str) -> Any:
+    if key == "meta.json":
+        return {}
+    if key == "index.json":
+        return []
+    if key == "slot_depth.json":
+        return {}
+    if key == "depth_undo.json":
+        return []
+    if key == "export_staging.json":
+        return {"pending": []}
+    return None
+
+
+def build_library_backup_payload(library_id: str | None = None) -> dict[str, Any]:
+    """Snapshot one library into a single JSON-serializable dict."""
+    ensure_dirs()
+    lid = _resolve_library_id(library_id)
+    meta = get_library(lid)
+    if not meta:
+        raise ValueError("Profile library not found.")
+    pack: dict[str, Any] = {}
+    for filename in _BACKUP_PACK_FILES:
+        path = _library_dir(lid) / filename
+        pack[filename] = _read_json(path, _default_pack_payload(filename))
+    # Prefer the live meta helper so id/name stay normalized.
+    pack["meta.json"] = meta
+    return {
+        "format": _BACKUP_FORMAT,
+        "version": _BACKUP_VERSION,
+        "backed_up_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "library_id": lid,
+        "files": pack,
+    }
+
+
+def backup_library(library_id: str | None = None) -> dict[str, Any]:
+    """Write a timestamped backup JSON under ``data/profiles/backups/``.
+
+    Returns ``{path, filename, library_id, name, backed_up_at, player_count}``.
+    """
+    payload = build_library_backup_payload(library_id)
+    lid = str(payload["library_id"])
+    meta = payload["files"].get("meta.json") or {}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    filename = f"{lid}_{stamp}.json"
+    path = _backup_path(filename)
+    _write_json(path, payload)
+    index = payload["files"].get("index.json") or []
+    player_count = len(index) if isinstance(index, list) else 0
+    return {
+        "path": str(path),
+        "filename": filename,
+        "library_id": lid,
+        "name": str(meta.get("name") or lid),
+        "backed_up_at": payload["backed_up_at"],
+        "player_count": player_count,
+    }
+
+
+def list_backups() -> list[dict[str, Any]]:
+    """Newest-first list of backup files with labels for a select control."""
+    _ensure_backups_dir()
+    items: list[dict[str, Any]] = []
+    for path in sorted(PROFILES_BACKUPS_DIR.glob("*.json"), reverse=True):
+        if not path.is_file():
+            continue
+        raw = _read_json(path, {})
+        if not isinstance(raw, dict) or raw.get("format") != _BACKUP_FORMAT:
+            # Still list unknown JSON dumps so older manual copies can be picked.
+            label = path.name
+            items.append(
+                {
+                    "label": label,
+                    "value": path.name,
+                    "library_id": "",
+                    "backed_up_at": "",
+                    "name": path.stem,
+                }
+            )
+            continue
+        files = raw.get("files") if isinstance(raw.get("files"), dict) else {}
+        meta = files.get("meta.json") if isinstance(files.get("meta.json"), dict) else {}
+        lid = str(raw.get("library_id") or meta.get("id") or path.stem).strip()
+        name = str(meta.get("name") or lid).strip() or lid
+        backed_up_at = str(raw.get("backed_up_at") or "").strip()
+        when = backed_up_at.replace("T", " ").replace("+00:00", " UTC")
+        index = files.get("index.json") or []
+        count = len(index) if isinstance(index, list) else 0
+        suffix = f" · {count} players" if count else ""
+        label = f"{name} · {when}{suffix}" if when else f"{name} · {path.name}{suffix}"
+        items.append(
+            {
+                "label": label,
+                "value": path.name,
+                "library_id": lid,
+                "backed_up_at": backed_up_at,
+                "name": name,
+            }
+        )
+    return items
+
+
+def backup_options() -> list[dict[str, str]]:
+    return [{"label": item["label"], "value": item["value"]} for item in list_backups()]
+
+
+def restore_library_backup(
+    filename: str,
+    *,
+    target_library_id: str | None = None,
+    activate: bool = True,
+) -> dict[str, Any]:
+    """Restore a backup JSON into a library pack directory.
+
+    Overwrites ``meta`` / ``index`` / ``slot_depth`` / ``depth_undo`` /
+    ``export_staging`` for the target library. Creates the pack folder if
+    needed. Returns the restored library meta.
+    """
+    ensure_dirs()
+    path = _backup_path(filename)
+    if not path.is_file():
+        raise ValueError("Backup file not found.")
+    raw = _read_json(path, {})
+    if not isinstance(raw, dict):
+        raise ValueError("Backup file is not valid JSON.")
+    files = raw.get("files")
+    # Allow a raw pack dump (keys are filenames) or the wrapped format.
+    if isinstance(files, dict) and "meta.json" in files:
+        pack_files = files
+        source_id = str(raw.get("library_id") or "").strip()
+    elif "meta.json" in raw and isinstance(raw.get("meta.json"), dict):
+        pack_files = {key: raw[key] for key in _BACKUP_PACK_FILES if key in raw}
+        source_id = str((raw.get("meta.json") or {}).get("id") or "").strip()
+    else:
+        raise ValueError("Unrecognized profile backup format.")
+    meta_raw = pack_files.get("meta.json")
+    if not isinstance(meta_raw, dict):
+        raise ValueError("Backup is missing meta.json.")
+    lid = str(target_library_id or source_id or meta_raw.get("id") or "").strip()
+    if not lid:
+        raise ValueError("Backup has no library id to restore into.")
+    safe_lid = "".join(ch for ch in lid if ch.isalnum() or ch in "-_")
+    if not safe_lid or safe_lid != lid:
+        raise ValueError("Invalid library id in backup.")
+    dest = _library_dir(lid)
+    dest.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    meta = _normalize_meta(meta_raw, library_id=lid)
+    meta["id"] = lid
+    meta["updated_at"] = now
+    if not meta.get("created_at"):
+        meta["created_at"] = now
+    for filename_key in _BACKUP_PACK_FILES:
+        if filename_key == "meta.json":
+            _write_json(dest / "meta.json", meta)
+            continue
+        payload = pack_files.get(filename_key, _default_pack_payload(filename_key))
+        _write_json(dest / filename_key, payload)
+    if activate or not PROFILES_ACTIVE_PATH.is_file():
+        set_active_library(lid)
+    return meta
 
 
 def _read_slot_depth(library_id: str | None = None) -> dict[str, Any]:

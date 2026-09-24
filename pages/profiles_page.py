@@ -126,6 +126,11 @@ PF_PAGE_TIP = (
 PF_NEW_PROFILE_TIP = (
     "Name and formation are required. Formation sets the Squad depth layout for the new library."
 )
+PF_BACKUP_TIP = (
+    "Backup writes the active library (players, depth, staging, undo) to a JSON file under "
+    "data/profiles/backups/. Restore overwrites that library from a chosen backup — useful "
+    "before testing features that touch Profiles."
+)
 PF_REPLACE_TIP = (
     "Replaces personal info, role scores, and percentiles for saved profiles that match by "
     "Unique ID (name is kept in the player key). Club changes are fine. Depth ranking and "
@@ -5005,17 +5010,60 @@ def layout(**_kwargs):
                                         ],
                                         className="pf-library-field",
                                     ),
-                                    dmc.Button(
-                                        "Delete",
-                                        id="pf-library-delete",
-                                        size="sm",
-                                        variant="light",
-                                        color="red",
-                                        n_clicks=0,
-                                        disabled=len(profiles.list_library_ids()) <= 1,
+                                    html.Div(
+                                        [
+                                            dmc.Button(
+                                                "Backup",
+                                                id="pf-library-backup",
+                                                size="sm",
+                                                variant="light",
+                                                n_clicks=0,
+                                            ),
+                                            dmc.Button(
+                                                "Delete",
+                                                id="pf-library-delete",
+                                                size="sm",
+                                                variant="light",
+                                                color="red",
+                                                n_clicks=0,
+                                                disabled=len(profiles.list_library_ids()) <= 1,
+                                            ),
+                                        ],
+                                        className="pf-library-action-btns",
                                     ),
                                 ],
                                 className="pf-library-active-row mb-3",
+                            ),
+                            html.Div(
+                                _depth_heading(
+                                    "Backup / restore",
+                                    PF_BACKUP_TIP,
+                                    "pf-help-backup",
+                                ),
+                                className="rs-depth-heading-copy mb-2",
+                            ),
+                            html.Div(
+                                [
+                                    dmc.Select(
+                                        id="pf-library-backup-select",
+                                        label="Restore from",
+                                        data=profiles.backup_options(),
+                                        value=None,
+                                        clearable=True,
+                                        searchable=True,
+                                        placeholder="Choose a backup JSON",
+                                        size="sm",
+                                    ),
+                                    dmc.Button(
+                                        "Restore",
+                                        id="pf-library-restore",
+                                        size="sm",
+                                        variant="light",
+                                        n_clicks=0,
+                                        disabled=True,
+                                    ),
+                                ],
+                                className="pf-library-backup-row mb-3",
                             ),
                             html.Div(
                                 _depth_heading(
@@ -5661,6 +5709,14 @@ def toggle_library_create(name, formation_id):
 
 
 @callback(
+    Output("pf-library-restore", "disabled"),
+    Input("pf-library-backup-select", "value"),
+)
+def toggle_library_restore(backup_filename):
+    return not bool(str(backup_filename or "").strip())
+
+
+@callback(
     Output("pf-library-select", "data"),
     Output("pf-library-select", "value"),
     Output("pf-library-status", "children"),
@@ -5774,6 +5830,94 @@ def delete_profile_library(n_clicks, library_id, rev):
     return (
         options,
         active,
+        msg,
+        len(profiles.list_library_ids()) <= 1,
+        int(rev or 0) + 1,
+        fid or no_update,
+        fid or no_update,
+        [],
+    )
+
+
+@callback(
+    Output("pf-library-backup-select", "data"),
+    Output("pf-library-backup-select", "value"),
+    Output("pf-library-status", "children", allow_duplicate=True),
+    Input("pf-library-backup", "n_clicks"),
+    State("pf-library-select", "value"),
+    prevent_initial_call=True,
+)
+def backup_profile_library(n_clicks, library_id):
+    if not n_clicks:
+        return no_update, no_update, no_update
+    try:
+        result = profiles.backup_library(str(library_id or "") or None)
+    except Exception as exc:
+        return (
+            no_update,
+            no_update,
+            html.Div(str(exc), className="text-danger small"),
+        )
+    options = profiles.backup_options()
+    count = int(result.get("player_count") or 0)
+    noun = "player" if count == 1 else "players"
+    msg = html.Div(
+        [
+            html.Span("✓ ", className="rs-upload-ok"),
+            html.Span(
+                f"Backed up “{result.get('name')}” ({count} {noun}) → "
+                f"data/profiles/backups/{result.get('filename')}"
+            ),
+        ],
+        className="up-save-row",
+    )
+    return options, result.get("filename"), msg
+
+
+@callback(
+    Output("pf-library-select", "data", allow_duplicate=True),
+    Output("pf-library-select", "value", allow_duplicate=True),
+    Output("pf-library-status", "children", allow_duplicate=True),
+    Output("pf-library-delete", "disabled", allow_duplicate=True),
+    Output("pf-rev", "data", allow_duplicate=True),
+    Output("pf-formation-select", "value", allow_duplicate=True),
+    Output("pf-formation", "data", allow_duplicate=True),
+    Output("pf-focus-role", "data", allow_duplicate=True),
+    Input("pf-library-restore", "n_clicks"),
+    State("pf-library-backup-select", "value"),
+    State("pf-rev", "data"),
+    prevent_initial_call=True,
+)
+def restore_profile_library(n_clicks, backup_filename, rev):
+    if not n_clicks:
+        return (no_update,) * 8
+    try:
+        meta = profiles.restore_library_backup(str(backup_filename or ""))
+    except Exception as exc:
+        return (
+            no_update,
+            no_update,
+            html.Div(str(exc), className="text-danger small"),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+    options = profiles.library_options()
+    fid = str(meta.get("formation_id") or "")
+    if fid and fm.exists(fid):
+        fm.load(fid, persist=True)
+    msg = html.Div(
+        [
+            html.Span("✓ ", className="rs-upload-ok"),
+            html.Span(f"Restored profile “{meta.get('name')}” from backup."),
+        ],
+        className="up-save-row",
+    )
+    return (
+        options,
+        meta["id"],
         msg,
         len(profiles.list_library_ids()) <= 1,
         int(rev or 0) + 1,

@@ -44,6 +44,7 @@ PROFILES_DIR = DATA_DIR / "profiles"
 PROFILES_INDEX_PATH = PROFILES_DIR / "index.json"  # legacy (migrated into packs/)
 PROFILES_PACKS_DIR = PROFILES_DIR / "packs"
 PROFILES_ACTIVE_PATH = PROFILES_DIR / "active.json"
+PROFILES_BACKUPS_DIR = PROFILES_DIR / "backups"
 
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"

@@ -8944,6 +8944,20 @@ body[data-theme="light"] .pf-depth-undo-row {
     max-width: 28rem;
 }
 
+.pf-library-action-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.pf-library-backup-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) auto;
+    gap: 0.75rem 1rem;
+    align-items: end;
+}
+
 .pf-library-create-row {
     display: grid;
     grid-template-columns: minmax(10rem, 1.2fr) minmax(10rem, 1fr) auto;
@@ -8952,7 +8966,8 @@ body[data-theme="light"] .pf-depth-undo-row {
 }
 
 @media (max-width: 720px) {
-    .pf-library-create-row {
+    .pf-library-create-row,
+    .pf-library-backup-row {
         grid-template-columns: 1fr;
     }
 }
