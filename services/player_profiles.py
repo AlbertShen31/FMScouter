@@ -1862,8 +1862,17 @@ def _load_role_players_from_library(
     return parse_export(text), None
 
 
-def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
-    """Best-effort stats players for enriching role-score saves with percentiles."""
+def load_stats_players_for_file(
+    file_id: str,
+    *,
+    compute_if_missing: bool = True,
+) -> list[dict[str, Any]]:
+    """Best-effort stats players for enriching role-score saves with percentiles.
+
+    When ``compute_if_missing`` is False, skip synchronous multi-year recompute
+    (Profiles depth/auto-rank hot paths) and return [] if the upload cache is
+    cold — callers fall back to embedded ``stats_player`` snapshots.
+    """
     if not file_id:
         return []
     try:
@@ -1877,6 +1886,8 @@ def load_stats_players_for_file(file_id: str) -> list[dict[str, Any]]:
         if not entry:
             return []
         if lib.is_multi_year(entry):
+            if not compute_if_missing:
+                return []
             upload_cache.compute_file(file_id)
             hit = upload_cache.try_stats_players(file_id)
             return hit[0] if hit else []
@@ -1950,7 +1961,9 @@ def refresh_profile_percentiles(settings=None) -> int:
         file_id: str,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if file_id not in cohort_cache:
-            players = load_stats_players_for_file(file_id)
+            players = load_stats_players_for_file(
+                file_id, compute_if_missing=False
+            )
             cohort_cache[file_id] = players
             limited = lib.list_limited_tracking_divisions(file_id=file_id)
             banding_cache[file_id] = us.build_stats_banding_context(

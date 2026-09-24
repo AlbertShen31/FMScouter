@@ -2288,7 +2288,9 @@ def _resolve_depth_stats_player(
             return None
         cache = file_cache if file_cache is not None else {}
         if file_id not in cache:
-            cache[file_id] = profiles.load_stats_players_for_file(file_id)
+            cache[file_id] = profiles.load_stats_players_for_file(
+                file_id, compute_if_missing=False
+            )
         cohort = cache.get(file_id) or []
         row = entry.get("row") or {}
         name = (player.get("name") or row.get("Name") or "").strip()
@@ -2370,7 +2372,9 @@ def _depth_banding_for_entry(
         fcache = file_cache if file_cache is not None else {}
         if file_id:
             if file_id not in fcache:
-                fcache[file_id] = profiles.load_stats_players_for_file(file_id)
+                fcache[file_id] = profiles.load_stats_players_for_file(
+                    file_id, compute_if_missing=False
+                )
             cohort = list(fcache.get(file_id) or [])
         else:
             cohort = [stats_player]
@@ -6636,6 +6640,10 @@ def refresh_profiles_depth_chart(
     profile_cache = _PfProfileCache()
     # Stable mount id per rev — a fresh uuid every refresh remounts the
     # sortable depth list and can stack with sort_by echo into a React loop.
+    # Include a short focus token so slot changes remount after Auto-rank.
+    focus_token = ""
+    if focus:
+        focus_token = f"-{focus.get('slot', '')}-{focus.get('role', '')}"
     chart = _mount_depth_chart(
         _build_depth_chart(
             focus_roles=focus_role,
@@ -6650,7 +6658,7 @@ def refresh_profiles_depth_chart(
             status_filter=status_filter,
             pct_basis=pct_basis,
         ),
-        epoch=f"r{int(_rev or 0)}",
+        epoch=f"r{int(_rev or 0)}{focus_token}",
     )
     chart_hidden = not formation_slots and not focus
     return chart, chart_hidden
@@ -7157,40 +7165,25 @@ def apply_depth_chart_drag(
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
-    Output("pf-depth-chart-body", "children", allow_duplicate=True),
     Output("pf-depth-order-guard", "data"),
     Input({"type": "pf-depth-auto-role", "role": ALL, "slot": ALL}, "n_clicks"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
-    State("pf-focus-role", "data"),
-    State("pf-xi-view", "data"),
-    State("pf-depth-minutes-required", "value"),
-    State("pf-depth-stats-view", "data"),
-    State("pf-depth-pct-basis", "data"),
-    State("pf-status-filter", "data"),
-    State("ui-settings", "data"),
-    State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_role(
-    n_clicks,
-    rev,
-    formation_id,
-    focus_role,
-    xi_view,
-    depth_minutes,
-    stats_view,
-    pct_basis,
-    status_filter,
-    settings,
-    theme,
-):
+def auto_rank_depth_role(n_clicks, rev, formation_id):
+    """Persist score order; let refresh_profiles_depth_chart rebuild the body.
+
+    Writing pf-depth-chart-body here *and* bumping pf-rev made two callbacks
+    update the same output in one chain — Dash left the busy overlay stuck and
+    Auto-rank looked like a no-op.
+    """
     if not _pattern_click_triggered() or not clicked(n_clicks):
-        return no_update, no_update, no_update
+        return no_update, no_update
     role = str(ctx.triggered_id.get("role") or "").strip()
     slot_raw = ctx.triggered_id.get("slot")
     if not role:
-        return no_update, no_update, no_update
+        return no_update, no_update
     try:
         slot_index = int(slot_raw)
     except (TypeError, ValueError):
@@ -7199,27 +7192,8 @@ def auto_rank_depth_role(
         profiles.auto_rank_slot_by_score(formation_id, slot_index, role)
     else:
         profiles.auto_rank_role_by_score(role)
-    formation_slots = _formation_slots(formation_id)
-    next_rev = int(rev or 0) + 1
-    profile_cache = _PfProfileCache()
-    chart = _mount_depth_chart(
-        _build_depth_chart(
-            focus_roles=focus_role,
-            formation_id=formation_id,
-            formation_slots=formation_slots,
-            settings=settings,
-            theme=theme,
-            minutes_required=depth_minutes,
-            xi_view=xi_view,
-            cache=profile_cache,
-            stats_view=stats_view,
-            status_filter=status_filter,
-            pct_basis=pct_basis,
-        ),
-        epoch=f"auto-{next_rev}-{uuid.uuid4().hex[:10]}",
-    )
     # Invalidate in-flight drag publishes (ts is Date.now() from the browser).
-    return next_rev, chart, int(time.time() * 1000)
+    return int(rev or 0) + 1, int(time.time() * 1000)
 
 
 _PF_SQUAD_DEPTH_REFRESH_CLASS = (
@@ -7248,92 +7222,34 @@ def refresh_export_staging_notice(
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
-    Output("pf-depth-chart-body", "children", allow_duplicate=True),
     Output("pf-depth-order-guard", "data", allow_duplicate=True),
     Input("pf-squad-depth-refresh", "n_clicks"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
-    State("pf-focus-role", "data"),
-    State("pf-xi-view", "data"),
-    State("pf-depth-minutes-required", "value"),
-    State("pf-depth-stats-view", "data"),
-    State("pf-depth-pct-basis", "data"),
-    State("pf-status-filter", "data"),
-    State("ui-settings", "data"),
-    State("theme", "data"),
     prevent_initial_call=True,
 )
-def refresh_depth_from_role_exports(
-    n_clicks,
-    rev,
-    formation_id,
-    focus_role,
-    xi_view,
-    depth_minutes,
-    stats_view,
-    pct_basis,
-    status_filter,
-    settings,
-    theme,
-):
-    """Load staged Role-score exports into formation slots, then rebuild charts."""
+def refresh_depth_from_role_exports(n_clicks, rev, formation_id):
+    """Load staged Role-score exports into formation slots, then rebuild via pf-rev."""
     if not n_clicks:
-        return no_update, no_update, no_update
+        return no_update, no_update
     slots = _formation_slots(formation_id)
     if slots:
         profiles.sync_formation_depth_from_exports(formation_id, slots)
-    next_rev = int(rev or 0) + 1
-    chart = _mount_depth_chart(
-        _build_depth_chart(
-            focus_roles=focus_role,
-            formation_id=formation_id,
-            formation_slots=slots,
-            settings=settings,
-            theme=theme,
-            minutes_required=depth_minutes,
-            xi_view=xi_view,
-            cache=_PfProfileCache(),
-            stats_view=stats_view,
-            status_filter=status_filter,
-            pct_basis=pct_basis,
-        ),
-        epoch=f"sync-{next_rev}-{uuid.uuid4().hex[:10]}",
-    )
-    return next_rev, chart, int(time.time() * 1000)
+    return int(rev or 0) + 1, int(time.time() * 1000)
 
 
 @callback(
     Output("pf-rev", "data", allow_duplicate=True),
-    Output("pf-depth-chart-body", "children", allow_duplicate=True),
     Output("pf-depth-order-guard", "data", allow_duplicate=True),
     Input("pf-depth-auto-all", "n_clicks"),
     State("pf-rev", "data"),
     State("pf-formation-select", "value"),
-    State("pf-focus-role", "data"),
-    State("pf-xi-view", "data"),
-    State("pf-depth-minutes-required", "value"),
-    State("pf-depth-stats-view", "data"),
-    State("pf-depth-pct-basis", "data"),
-    State("pf-status-filter", "data"),
-    State("ui-settings", "data"),
-    State("theme", "data"),
     prevent_initial_call=True,
 )
-def auto_rank_depth_all(
-    n_clicks,
-    rev,
-    formation_id,
-    focus_role,
-    xi_view,
-    depth_minutes,
-    stats_view,
-    pct_basis,
-    status_filter,
-    settings,
-    theme,
-):
+def auto_rank_depth_all(n_clicks, rev, formation_id):
+    """Rank every formation slot by Score; chart rebuilds from pf-rev alone."""
     if not n_clicks:
-        return no_update, no_update, no_update
+        return no_update, no_update
     slots = _formation_slots(formation_id)
     if slots:
         for slot in slots:
@@ -7342,24 +7258,7 @@ def auto_rank_depth_all(
             )
     else:
         profiles.auto_rank_all_roles_by_score()
-    next_rev = int(rev or 0) + 1
-    chart = _mount_depth_chart(
-        _build_depth_chart(
-            focus_roles=focus_role,
-            formation_id=formation_id,
-            formation_slots=slots,
-            settings=settings,
-            theme=theme,
-            minutes_required=depth_minutes,
-            xi_view=xi_view,
-            cache=_PfProfileCache(),
-            stats_view=stats_view,
-            status_filter=status_filter,
-            pct_basis=pct_basis,
-        ),
-        epoch=f"auto-all-{next_rev}-{uuid.uuid4().hex[:10]}",
-    )
-    return next_rev, chart, int(time.time() * 1000)
+    return int(rev or 0) + 1, int(time.time() * 1000)
 
 
 def _slot_role_and_label(formation_id, slot_index, focus_role=None) -> tuple[str, str]:
