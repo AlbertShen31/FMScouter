@@ -32,6 +32,10 @@ _ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 _CACHE_LRU_MAX = 4
 _CACHE_LRU: dict[str, tuple[tuple[int, int], dict[str, Any]]] = {}
 
+# Settings signature used by is_fresh / try_*_players. Rebuilding it reloads the
+# role pack + stats tree (~0.5s); Profiles slot switches hit this every chart rebuild.
+_SIG_MEMO: dict[str, Any] = {"fp": None, "sig": None, "key": None}
+
 
 def ensure_cache_dir() -> None:
     UPLOAD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -78,20 +82,80 @@ def _sha(value: Any) -> str:
     return hashlib.sha256(raw).hexdigest()[:24]
 
 
+def _path_fp(path: Path) -> tuple[str, int, int]:
+    try:
+        st = path.stat()
+        return (str(path), int(st.st_mtime_ns), int(st.st_size))
+    except OSError:
+        return (str(path), 0, 0)
+
+
+def _signature_inputs_fp() -> tuple[Any, ...]:
+    """Cheap mtime fingerprint so we can memoize ``current_signature``."""
+    from config.paths import (
+        ROLE_WEIGHTS_ACTIVE_PATH,
+        ROLE_WEIGHTS_DEFAULTS_PATH,
+        SETTINGS_ACTIVE_PATH,
+        SETTINGS_DIR,
+        STATS_THRESHOLDS_ACTIVE_PATH,
+        STATS_THRESHOLDS_DEFAULTS_PATH,
+    )
+
+    paths = [
+        SETTINGS_ACTIVE_PATH,
+        SETTINGS_DIR / "default-overrides.json",
+        ROLE_WEIGHTS_ACTIVE_PATH,
+        ROLE_WEIGHTS_DEFAULTS_PATH,
+        STATS_THRESHOLDS_ACTIVE_PATH,
+        STATS_THRESHOLDS_DEFAULTS_PATH,
+        _BENCHMARKS_PATH,
+        _ARCHETYPES_PATH,
+    ]
+    # Active settings / role / stats pack payloads (when not builtin).
+    for active_path, packs_dir in (
+        (SETTINGS_ACTIVE_PATH, SETTINGS_DIR / "packs"),
+        (ROLE_WEIGHTS_ACTIVE_PATH, ROLE_WEIGHTS_ACTIVE_PATH.parent / "packs"),
+        (STATS_THRESHOLDS_ACTIVE_PATH, STATS_THRESHOLDS_ACTIVE_PATH.parent / "packs"),
+    ):
+        try:
+            payload = json.loads(active_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        pack_id = str(
+            payload.get("id") or payload.get("pack") or ""
+        ).strip()
+        if pack_id and pack_id not in ("builtin", "default"):
+            paths.append(packs_dir / f"{pack_id}.json")
+    return (FORMULA_VERSION, tuple(_path_fp(p) for p in paths))
+
+
+def invalidate_signature_cache() -> None:
+    """Drop memoized upload-cache settings signature (call after formula inputs change)."""
+    _SIG_MEMO["fp"] = None
+    _SIG_MEMO["sig"] = None
+    _SIG_MEMO["key"] = None
+
+
 def current_signature() -> dict[str, Any]:
     """Fingerprint of settings that affect precomputed numbers."""
     import services.ui_settings as us
+
+    fp = _signature_inputs_fp()
+    cached = _SIG_MEMO.get("sig")
+    if cached is not None and _SIG_MEMO.get("fp") == fp:
+        return cached
 
     settings = us.load()
     pack_id = rc.active_pack_id()
     rc.load_pack(pack_id, persist=False)
     role_snap = rc.snapshot()
     stats_id = stp.active_id()
-    raw_tree = stp.load_tree(stats_id)
+    # load_tree(pack_id) would call _set_active and rewrite active.json every time.
+    raw_tree = stp.load_tree()
     full_detail_divisions = us.normalize_stats_full_detail_divisions(
         settings.get("stats_full_detail_divisions")
     )
-    return {
+    sig = {
         "formula_version": FORMULA_VERSION,
         "role_pack_id": pack_id,
         "role_pack_sha": _sha(role_snap),
@@ -115,10 +179,20 @@ def current_signature() -> dict[str, Any]:
             settings
         ),
     }
+    _SIG_MEMO["fp"] = fp
+    _SIG_MEMO["sig"] = sig
+    _SIG_MEMO["key"] = _sha(sig)
+    return sig
 
 
 def signature_key(sig: dict[str, Any] | None = None) -> str:
-    return _sha(sig or current_signature())
+    if sig is None:
+        current_signature()
+        key = _SIG_MEMO.get("key")
+        if isinstance(key, str) and key:
+            return key
+        return _sha(current_signature())
+    return _sha(sig)
 
 
 def _write_cache(file_id: str, payload: dict[str, Any]) -> Path:

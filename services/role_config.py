@@ -344,6 +344,12 @@ def _write_active_id(pack_id: str) -> None:
     global _ACTIVE
     _ACTIVE = pack_id
     _atomic_write(ACTIVE_PATH, {"pack": pack_id})
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.invalidate_signature_cache()
+    except Exception:
+        pass
 
 
 def _pack_label(pack_id: str, fallback: str = "") -> str:

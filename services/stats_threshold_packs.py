@@ -139,7 +139,16 @@ def _active_id() -> str:
 
 
 def _set_active(pack_id: str) -> None:
+    current = _active_id()
+    if current == pack_id:
+        return
     _write_json(ACTIVE_PATH, {"id": pack_id})
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.invalidate_signature_cache()
+    except Exception:
+        pass
 
 
 def active_id() -> str:

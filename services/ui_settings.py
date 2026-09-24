@@ -887,8 +887,31 @@ def normalize_depth_undo_max(value) -> int:
     return max(1, min(50, number))
 
 
+def _looks_normalized(raw: dict[str, Any] | None) -> bool:
+    """True when ``raw`` is already a full ``normalize()`` result.
+
+    Hot paths (Profiles depth chart rows, banding) call ``normalize`` per cell;
+    rebuilding threshold trees every time dominated slot-switch latency.
+    """
+    if not isinstance(raw, dict):
+        return False
+    trees = raw.get("stats_threshold_trees")
+    return (
+        isinstance(trees, dict)
+        and bool(trees)
+        and raw.get("stats_thresholds") is not None
+        and isinstance(raw.get("bands"), dict)
+        and isinstance(raw.get("colors"), dict)
+        and isinstance(raw.get("page_size_options"), list)
+        and "default_minutes_required" in raw
+    )
+
+
 def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) -> dict[str, Any]:
     raw = raw or {}
+    # Already-normalized settings: return as-is (no deepcopy / tree rebuild).
+    if pack_id is None and name is None and _looks_normalized(raw):
+        return raw
     ages = parse_number_list(raw.get("age_tiers", DEFAULTS["age_tiers"]), integer=True)
     ages = [int(age) for age in ages if 1 <= age <= 99]
     if not ages:
@@ -1194,7 +1217,15 @@ def _active_id() -> str:
 
 
 def _set_active(pack_id: str) -> None:
+    if _active_id() == pack_id:
+        return
     _write_json(ACTIVE_PATH, {"id": pack_id})
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.invalidate_signature_cache()
+    except Exception:
+        pass
 
 
 def _pack_payload(settings: dict[str, Any]) -> dict[str, Any]:
@@ -1335,12 +1366,24 @@ def save(raw, pack_id: str | None = None) -> dict[str, Any]:
         settings["name"] = "Default"
         _write_json(DEFAULT_OVERRIDES_PATH, _pack_payload(settings))
         _set_active(BUILTIN)
+        try:
+            import services.upload_cache as upload_cache
+
+            upload_cache.invalidate_signature_cache()
+        except Exception:
+            pass
         return settings
     settings = normalize(raw, pack_id=current, name=raw.get("name"))
     settings["id"] = current
     to_write = {"id": settings["id"], "name": settings["name"], **_pack_payload(settings)}
     _write_json(_pack_path(current), to_write)
     _set_active(current)
+    try:
+        import services.upload_cache as upload_cache
+
+        upload_cache.invalidate_signature_cache()
+    except Exception:
+        pass
     return settings
 
 

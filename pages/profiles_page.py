@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from html import escape as html_escape
+from typing import Any
 
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
@@ -2184,9 +2185,48 @@ def _apply_profile_division(
     item["PersonalityTier"] = pers_row.get("PersonalityTier") or ""
 
 
-def _depth_stats_file_caches():
-    """Per-build caches for file cohorts and banding contexts."""
-    return {}, {}
+_DEPTH_STATS_SHARED: dict[str, Any] = {
+    "sig": None,
+    "minutes": None,
+    "file_cache": {},
+    "banding_cache": {},
+}
+
+
+def _depth_stats_file_caches(
+    *,
+    minutes_required=None,
+    settings=None,
+):
+    """Reuse file cohorts + banding across slot switches in this process.
+
+    Fresh empty dicts per build forced a ~0.5s upload-cache freshness check on
+    every Squad depth click. Keyed by formula signature + minutes floor.
+    """
+    try:
+        import services.upload_cache as upload_cache
+
+        sig = upload_cache.signature_key()
+    except Exception:
+        sig = None
+    mins = None
+    if minutes_required is not None or settings is not None:
+        mins = _resolve_minutes_required(minutes_required, settings)
+    shared = _DEPTH_STATS_SHARED
+    if (
+        shared.get("sig") == sig
+        and shared.get("minutes") == mins
+        and isinstance(shared.get("file_cache"), dict)
+        and isinstance(shared.get("banding_cache"), dict)
+    ):
+        return shared["file_cache"], shared["banding_cache"]
+    file_cache: dict = {}
+    banding_cache: dict = {}
+    shared["sig"] = sig
+    shared["minutes"] = mins
+    shared["file_cache"] = file_cache
+    shared["banding_cache"] = banding_cache
+    return file_cache, banding_cache
 
 
 def _by_year_metric_count(by_year: dict | None) -> int:
@@ -3344,7 +3384,10 @@ def _build_formation_xi_chart(
         )
         is not None
     )
-    file_cache, banding_cache = _depth_stats_file_caches()
+    file_cache, banding_cache = _depth_stats_file_caches(
+        minutes_required=mins_limit,
+        settings=settings,
+    )
     rows = []
     for index, slot in enumerate(slots):
         entry = _formation_xi_entry(
@@ -4067,7 +4110,10 @@ def _build_depth_chart(
     )
     n_metric_cols = 4 if stats_view == "percentiles" else 1 + len(metric_ids)
     grid_style = _depth_chart_grid_style(n_metric_cols=n_metric_cols)
-    file_cache, banding_cache = _depth_stats_file_caches()
+    file_cache, banding_cache = _depth_stats_file_caches(
+        minutes_required=mins_limit,
+        settings=settings,
+    )
     rows = [
         _depth_chart_player_row(
             entry,
@@ -6297,12 +6343,29 @@ clientside_callback(
     prevent_initial_call=True,
 )
 
-# Table: spinner for hydrate / library / formation / focus rebuilds (not XI toggle).
+# Table: spinner for hydrate / library / formation / rev (not slot focus —
+# formation view hides the table; focus only filters when no formation).
 clientside_callback(
     """
     function(rev, hydrated, formation, focus) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        var host = document.getElementById("pf-table-host");
+        if (host && host.hidden) {
+            return window.dash_clientside.no_update;
+        }
+        // Slot focus with a formation active does not rebuild the table.
+        var onlyFocus = true;
+        for (var i = 0; i < trig.length; i += 1) {
+            var prop = trig[i].prop_id || "";
+            if (prop.indexOf("pf-focus-role") === -1) {
+                onlyFocus = false;
+                break;
+            }
+        }
+        if (onlyFocus && formation) {
             return window.dash_clientside.no_update;
         }
         return "rs-shortlist-busy is-on t-" + String(Date.now());
