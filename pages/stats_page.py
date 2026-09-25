@@ -311,6 +311,21 @@ def _merge_export_players(squad_parsed, scout_parsed) -> tuple[list[dict], list[
     return merged, limited
 
 
+def _squad_has_shortlist_finance(parsed: dict | None) -> bool:
+    """True when the squad export has Transfer Value and/or Salary columns."""
+    store = _unpack_parsed(parsed) or {}
+    if lib.has_shortlist_finance(store.get("file_id")):
+        return True
+    for player in store.get("players") or []:
+        if not isinstance(player, dict):
+            continue
+        for key in ("transfer_value", "salary", "Transfer Value", "Salary"):
+            text = str(player.get(key) or "").strip()
+            if text and text not in ("-", "—"):
+                return True
+    return False
+
+
 def _find_stats_player(
     squad_parsed,
     scout_parsed,
@@ -1225,6 +1240,7 @@ def _table_columns(
     *,
     include_status: bool = False,
     highlight_source: bool = False,
+    finance_available: bool = True,
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
@@ -1233,6 +1249,7 @@ def _table_columns(
         us.shortlist_columns_for("player_stats", settings),
         settings,
         page="player_stats",
+        available=finance_available,
     ):
         spec = {"name": identity_header_name(col), "id": col}
         if col in ("Feet", "Injury", "Status") or (
@@ -1505,12 +1522,14 @@ def _build_rows(
     value_mode: str = "raw",
     banding_full_detail: set[str] | frozenset[str] | list[str] | None = None,
     banding_limited: set[str] | frozenset[str] | list[str] | None = None,
+    finance_available: bool = True,
 ) -> list[dict]:
     settings = us.normalize(settings)
     identity_cols = us.with_shortlist_finance_columns(
         list(us.shortlist_columns_for("player_stats", settings)),
         settings,
         page="player_stats",
+        available=finance_available,
     )
     include_status = any(
         isinstance(p, dict) and p.get("multi_year_status") for p in (players or [])
@@ -2054,7 +2073,9 @@ def layout(**_kwargs):
                                                         className="st-show-finance-switch",
                                                     ),
                                                 ],
+                                                id="st-filter-finance",
                                                 className="st-filter-finance",
+                                                hidden=True,
                                             ),
                                         ],
                                         className="rs-shortlist-filters-row",
@@ -2224,20 +2245,28 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
 
 
 @callback(
+    Output("st-filter-finance", "hidden"),
     Output("st-show-finance", "checked"),
+    Input("st-parsed", "data"),
     Input("ui-settings", "data"),
 )
-def sync_st_show_finance_from_settings(settings):
-    return us.shortlist_show_finance(settings, page="player_stats")
+def sync_st_show_finance_controls(parsed, settings):
+    available = _squad_has_shortlist_finance(parsed)
+    if not available:
+        return True, no_update
+    return False, us.shortlist_show_finance(settings, page="player_stats")
 
 
 @callback(
     Output("ui-settings", "data", allow_duplicate=True),
     Input("st-show-finance", "checked"),
     State("ui-settings", "data"),
+    State("st-parsed", "data"),
     prevent_initial_call=True,
 )
-def persist_st_show_finance(checked, settings):
+def persist_st_show_finance(checked, settings, parsed):
+    if not _squad_has_shortlist_finance(parsed):
+        return no_update
     enabled = bool(checked)
     if enabled == us.shortlist_show_finance(settings, page="player_stats"):
         return no_update
@@ -2357,6 +2386,7 @@ def refresh_table(
         limited_divisions=limited_divisions,
         archetype_keys=archetype_keys,
     )
+    finance_available = _squad_has_shortlist_finance(parsed)
     rows = _build_rows(
         filtered,
         group=pos,
@@ -2369,6 +2399,7 @@ def refresh_table(
         value_mode=value_mode,
         banding_full_detail=band_settings.get("stats_full_detail_divisions"),
         banding_limited=band_limited,
+        finance_available=finance_available,
     )
     cols = _table_columns(
         pos,
@@ -2379,6 +2410,7 @@ def refresh_table(
             isinstance(p, dict) and p.get("multi_year_status") for p in filtered
         ),
         highlight_source=has_scouting_rows(filtered),
+        finance_available=finance_available,
     )
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(

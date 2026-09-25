@@ -1422,7 +1422,9 @@ def layout():
                                                                     className="rs-show-finance-switch",
                                                                 ),
                                                             ],
+                                                            id="rs-filter-finance",
                                                             className="rs-filter-finance",
+                                                            hidden=True,
                                                         ),
                                                     ],
                                                     className="rs-filter-group-fields",
@@ -1758,6 +1760,20 @@ def _upload_has_stats(parsed: dict | None) -> bool:
         return False
     entry = lib.get_file(file_id)
     return bool(entry and entry.get("stats"))
+
+
+def _squad_has_shortlist_finance(parsed: dict | None) -> bool:
+    """True when the squad export has Transfer Value and/or Salary columns."""
+    if lib.has_shortlist_finance((parsed or {}).get("file_id")):
+        return True
+    for player in (parsed or {}).get("players") or []:
+        if not isinstance(player, dict):
+            continue
+        for key in ("transfer_value", "salary", "Transfer Value", "Salary"):
+            text = str(player.get(key) or "").strip()
+            if text and text not in ("-", "—"):
+                return True
+    return False
 
 
 def _find_player_in_exports(
@@ -3359,20 +3375,28 @@ def sync_rs_page_size_from_settings(settings, page_size):
 
 
 @callback(
+    Output("rs-filter-finance", "hidden"),
     Output("rs-show-finance", "checked"),
+    Input("rs-parsed", "data"),
     Input("ui-settings", "data"),
 )
-def sync_rs_show_finance_from_settings(settings):
-    return us.shortlist_show_finance(settings, page="role_scores")
+def sync_rs_show_finance_controls(parsed, settings):
+    available = _squad_has_shortlist_finance(parsed)
+    if not available:
+        return True, no_update
+    return False, us.shortlist_show_finance(settings, page="role_scores")
 
 
 @callback(
     Output("ui-settings", "data", allow_duplicate=True),
     Input("rs-show-finance", "checked"),
     State("ui-settings", "data"),
+    State("rs-parsed", "data"),
     prevent_initial_call=True,
 )
-def persist_rs_show_finance(checked, settings):
+def persist_rs_show_finance(checked, settings, parsed):
+    if not _squad_has_shortlist_finance(parsed):
+        return no_update
     enabled = bool(checked)
     if enabled == us.shortlist_show_finance(settings, page="role_scores"):
         return no_update
@@ -3571,6 +3595,7 @@ def _visible_shortlist_cols(
     combos,
     hybrids_only: bool,
     set_pieces,
+    finance_available: bool = True,
 ) -> tuple[list[str], list[str], list[str]]:
     """Return (visible_cols, visible_score_cols, piece_cols)."""
     table_role_cols = _table_role_columns(view_roles, combos, hybrids_only)
@@ -3583,7 +3608,10 @@ def _visible_shortlist_cols(
     ] + table_role_cols
     table_cols = list(us.shortlist_columns_for("role_scores", settings))
     table_cols = us.with_shortlist_finance_columns(
-        table_cols, settings, page="role_scores"
+        table_cols,
+        settings,
+        page="role_scores",
+        available=finance_available,
     )
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
@@ -3596,6 +3624,7 @@ def _data_shortlist_cols(
     payload: dict,
     combos,
     set_pieces,
+    finance_available: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Wide data columns: identity + all set-piece scores + all scored roles."""
     all_role_cols = _all_scored_role_columns(payload, combos)
@@ -3608,7 +3637,10 @@ def _data_shortlist_cols(
     ] + all_role_cols
     table_cols = list(us.shortlist_columns_for("role_scores", settings))
     table_cols = us.with_shortlist_finance_columns(
-        table_cols, settings, page="role_scores"
+        table_cols,
+        settings,
+        page="role_scores",
+        available=finance_available,
     )
     table_cols.extend(piece_cols)
     table_cols.extend(all_role_cols)
@@ -3847,6 +3879,9 @@ def render_shortlist(
             combos=combos,
             hybrids_only=hybrids_only,
             set_pieces=set_pieces,
+            finance_available=lib.has_shortlist_finance(
+                (payload or {}).get("file_id")
+            ),
         )
         visible_cols = _inject_multi_year_status_col(
             visible_cols, payload.get("rows")
@@ -4225,11 +4260,13 @@ def render_shortlist(
 
     # Wide row payload (all roles + all set-piece scores) so later focus / set-piece /
     # hybrids toggles can change `columns` without rebuilding markdown cells.
+    finance_available = lib.has_shortlist_finance((payload or {}).get("file_id"))
     data_cols, data_score_cols = _data_shortlist_cols(
         settings=settings,
         payload=payload,
         combos=combos,
         set_pieces=set_pieces,
+        finance_available=finance_available,
     )
     visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
         settings=settings,
@@ -4237,6 +4274,7 @@ def render_shortlist(
         combos=combos,
         hybrids_only=hybrids_only,
         set_pieces=set_pieces,
+        finance_available=finance_available,
     )
     data_cols = _inject_multi_year_status_col(data_cols, filtered)
     visible_cols = _inject_multi_year_status_col(visible_cols, filtered)

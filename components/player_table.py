@@ -948,9 +948,12 @@ def identity_data_styles(
         {
             "if": {"column_id": "Transfer Value"},
             "textAlign": "right",
-            "minWidth": "72px",
-            "width": "88px",
-            "maxWidth": "110px",
+            # ~14 characters of body text (+ cell padding); ellipsis beyond that.
+            "minWidth": "14ch",
+            "width": "15ch",
+            "maxWidth": "16ch",
+            "paddingLeft": "6px",
+            "paddingRight": "6px",
             "overflow": "hidden",
             "textOverflow": "ellipsis",
             "whiteSpace": "nowrap",
@@ -959,9 +962,12 @@ def identity_data_styles(
         {
             "if": {"column_id": "Salary"},
             "textAlign": "right",
-            "minWidth": "64px",
-            "width": "80px",
-            "maxWidth": "96px",
+            # ~10 characters of body text (+ cell padding); ellipsis beyond that.
+            "minWidth": "10ch",
+            "width": "11ch",
+            "maxWidth": "12ch",
+            "paddingLeft": "6px",
+            "paddingRight": "6px",
             "overflow": "hidden",
             "textOverflow": "ellipsis",
             "whiteSpace": "nowrap",

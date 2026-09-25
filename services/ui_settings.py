@@ -228,7 +228,7 @@ DEFAULTS: dict[str, Any] = {
     "page_size": 50,
     "page_size_options": [25, 50, 100],
     "preferred_theme": "dark",
-    "shortlist_show_finance": {"role_scores": False, "player_stats": False},
+    "shortlist_show_finance": {"role_scores": True, "player_stats": True},
     "modal_identity_fields": {
         "order": list(DEFAULT_MODAL_IDENTITY_ORDER),
         "scopes": dict(DEFAULT_MODAL_IDENTITY_SCOPES),
@@ -664,8 +664,8 @@ SHORTLIST_FINANCE_PAGES = ("role_scores", "player_stats")
 def normalize_shortlist_show_finance(raw=None) -> dict[str, bool]:
     """Per-page finance-column toggles for Role scores / Player stats."""
     defaults = {
-        "role_scores": False,
-        "player_stats": False,
+        "role_scores": True,
+        "player_stats": True,
     }
     if isinstance(raw, bool):
         return {page: bool(raw) for page in SHORTLIST_FINANCE_PAGES}
@@ -691,10 +691,11 @@ def with_shortlist_finance_columns(
     settings=None,
     *,
     page: str = "role_scores",
+    available: bool = True,
 ) -> list[str]:
-    """Append finance columns when that page's finance toggle is on."""
+    """Append finance columns when that page's finance toggle is on and data has them."""
     out = [col for col in cols if col not in SHORTLIST_FINANCE_COLS]
-    if not shortlist_show_finance(settings, page=page):
+    if not available or not shortlist_show_finance(settings, page=page):
         return out
     for col in SHORTLIST_FINANCE_COLS:
         if col not in out:

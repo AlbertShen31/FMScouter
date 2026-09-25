@@ -110,6 +110,12 @@ def _has_salary(header: list[str]) -> bool:
     return _has_aliases(header, FINANCE_CSV.get("salary", ["Salary"]))
 
 
+def _has_transfer_value(header: list[str]) -> bool:
+    return _has_aliases(
+        header, FINANCE_CSV.get("transfer_value", ["Transfer Value"])
+    )
+
+
 def _has_fees(header: list[str]) -> bool:
     return _has_aliases(
         header, FINANCE_CSV.get("appearance_fee", ["Appearance Fee"])
@@ -126,6 +132,7 @@ def classify_eligibility(text: str) -> dict[str, Any]:
     has_stats = _has_stats_columns(header)
     has_info = _has_player_info(header)
     has_sal = _has_salary(header)
+    has_tv = _has_transfer_value(header)
     has_fee = _has_fees(header)
 
     role_ok = has_name and has_attrs and has_info
@@ -149,6 +156,7 @@ def classify_eligibility(text: str) -> dict[str, Any]:
         "has_stats": has_stats,
         "has_player_info": has_info,
         "has_salary": has_sal,
+        "has_transfer_value": has_tv,
         "has_fees": has_fee,
         "notes": notes,
         "pages": [
@@ -161,6 +169,24 @@ def classify_eligibility(text: str) -> dict[str, Any]:
             if ok
         ],
     }
+
+
+def has_shortlist_finance(file_id: str | None) -> bool:
+    """Whether a saved export has Transfer Value and/or Salary for shortlists."""
+    fid = str(file_id or "").strip()
+    if not fid:
+        return False
+    entry = get_file(fid)
+    if not entry:
+        return False
+    if is_multi_year(entry):
+        return any(
+            has_shortlist_finance(src) for src in configured_years(entry).values()
+        )
+    if entry.get("has_transfer_value") or entry.get("has_salary"):
+        return True
+    # Legacy library rows predate has_transfer_value; Salary alone is enough.
+    return bool(entry.get("has_salary"))
 
 
 def display_label(entry: dict[str, Any] | None) -> str:
@@ -496,6 +522,7 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
         "has_attributes": eligibility["has_attributes"],
         "has_stats": eligibility["has_stats"],
         "has_salary": eligibility["has_salary"],
+        "has_transfer_value": eligibility["has_transfer_value"],
         "has_fees": eligibility["has_fees"],
         "has_player_info": eligibility["has_player_info"],
         "eligibility_notes": eligibility["notes"],

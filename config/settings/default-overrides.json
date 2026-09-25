@@ -193,7 +193,7 @@
   "preferred_theme": "dark",
   "shortlist_show_finance": {
     "role_scores": true,
-    "player_stats": false
+    "player_stats": true
   },
   "tier_badge_colors": {
     "key": "#3dff88",
