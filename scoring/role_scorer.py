@@ -1852,6 +1852,7 @@ def score_players(
             "Club": player["club"] or "-",
             "Division": player["division"] or "-",
             "Nation": player["nation"] or "-",
+            "Second Nation": player.get("second_nation") or "-",
             "Based In": player.get("based_in") or "-",
             "Position": player["position"] or "-",
             "Best Pos": player["best_pos"] or "-",

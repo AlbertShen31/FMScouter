@@ -31,6 +31,9 @@ from components.player_table import (
     injury_tooltip_entry,
     injury_tooltip_text,
     is_dark_theme,
+    name_sort_text,
+    nation_cell,
+    nation_flags_text,
     page_size_select_data,
     player_data_table,
     rec_grade_style,
@@ -41,6 +44,7 @@ from components.player_table import (
     style_header,
     style_header_conditional,
     table_css,
+    with_nation_flags,
 )
 from components.scouting_shell import (
     append_ordered_keys,
@@ -475,7 +479,11 @@ def _profile_sort_key(column_id: str, row: dict) -> tuple:
         if column_id == "Rec":
             return rec_sort_key(row.get(column_id))
         if column_id in TABLE_TEXT_COLS:
-            text = _strip_cell(row.get(column_id)).strip()
+            text = (
+                name_sort_text(row.get(column_id))
+                if column_id in ("Name", "Nation")
+                else _strip_cell(row.get(column_id)).strip()
+            )
             if not text or text in ("-", "—"):
                 return (1, "\uffff")
             return (0, text.casefold())
@@ -632,6 +640,40 @@ def _blank(value) -> str:
     if value in (None, "", "-", "—"):
         return "—"
     return str(value)
+
+
+def _entry_nation_flags(entry: dict | None, row: dict | None = None) -> str:
+    """Primary-then-second flag emoji for depth / set-piece name cells."""
+    record = row if isinstance(row, dict) else {}
+    player = {}
+    if isinstance(entry, dict) and isinstance(entry.get("player"), dict):
+        player = entry["player"]
+    return nation_flags_text(
+        nation=record.get("Nation") or player.get("nation"),
+        second_nation=record.get("Second Nation") or player.get("second_nation"),
+    )
+
+
+def _depth_name_label(
+    name: str | None,
+    *,
+    entry: dict | None = None,
+    row: dict | None = None,
+    status=None,
+):
+    """Name with nationality flags (primary left); optional multi-year status pill."""
+    label = name or "Player"
+    flags = _entry_nation_flags(entry, row)
+    if flags:
+        label = f"{flags}\u00a0{label}"
+    if not status:
+        return label
+    from components.multi_year_ui import status_pill
+
+    return html.Span(
+        [label, status_pill(status)],
+        className="pf-depth-chart-name-inner",
+    )
 
 
 _PHASE_DISPLAY_SUFFIXES = ("-IP", "-OOP", "-GK")
@@ -3077,15 +3119,8 @@ def _depth_chart_player_row(
         row.get("Division"), _limited_tracking_divisions()
     )
     my_status = _profile_multi_year_status(entry)
-    name_children: list = [name or "Player"]
-    if my_status:
-        from components.multi_year_ui import status_pill
-
-        name_children.append(status_pill(my_status))
-    name_label = (
-        html.Span(name_children, className="pf-depth-chart-name-inner")
-        if my_status
-        else (name or "Player")
+    name_label = _depth_name_label(
+        name, entry=entry, row=row, status=my_status
     )
     if removable and profile_id and slot_index is not None:
         remove_cell = html.Button(
@@ -3598,7 +3633,7 @@ def _setpiece_chart_player_row(
         html.Span(str(index + 1), className="pf-depth-chart-rank"),
         (
             html.Button(
-                name or "Player",
+                _depth_name_label(name, entry=entry, row=row),
                 id={
                     "type": "pf-depth-name",
                     "id": profile_id,
@@ -4554,12 +4589,28 @@ def _entry_to_role_table_row(
         **{f"_{pct}_raw": pct_raw[pct] for pct in PCT_COLS},
     }
     for col in identity:
-        if col == "Feet":
+        if col == "Name":
+            item[col] = with_nation_flags(
+                _blank(raw.get(col)),
+                row=raw,
+                nation=raw.get("Nation") or player.get("nation"),
+                second_nation=raw.get("Second Nation")
+                or player.get("second_nation"),
+            )
+        elif col == "Nation":
+            item[col] = nation_cell(
+                raw.get("Nation") or player.get("nation"),
+                raw.get("Second Nation") or player.get("second_nation"),
+            )
+        elif col == "Feet":
             item[col] = feet_cell(raw)
         elif col == "Injury":
             item[col] = injury_cell(raw.get("Injury"))
         else:
             item[col] = _blank(raw.get(col))
+    item["Second Nation"] = _blank(
+        raw.get("Second Nation") or player.get("second_nation")
+    )
     _apply_profile_division(item, raw)
     my_status = _profile_multi_year_status(entry)
     growth_row = _growth_fields_from_row(raw, role_column)

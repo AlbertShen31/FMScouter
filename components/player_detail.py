@@ -632,7 +632,6 @@ def build_player_modal_body(
         basis_source if show_pct_toggle and isinstance(basis_source, dict) else display_player,
         pct_basis=pct_basis if show_pct_toggle else None,
     )
-    growth_section = _role_growth_for(display_player)
 
     resolved_eval = eval_group or force_pos_group or chart_player.get("pos_group")
 
@@ -643,7 +642,7 @@ def build_player_modal_body(
                 player_role_fit_section(display_player, settings),
                 player_set_piece_scores_section(display_player, settings),
                 player_attributes(display_player, settings),
-                growth_section,
+                _role_growth_for(display_player),
             )
             if section is not None
         ]
@@ -767,8 +766,7 @@ def build_player_modal_body(
         if set_piece_metrics:
             bottom.append(set_piece_metrics)
         bottom.append(player_stats_modal_section(stats_content))
-        if growth_section is not None:
-            bottom.append(growth_section)
+        # Role score growth only on the Role scores pane (mode == "roles").
         if year_section is not None:
             bottom.append(year_section)
         fields_page = identity_fields_page or "player_stats"

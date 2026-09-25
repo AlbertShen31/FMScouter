@@ -29,6 +29,88 @@ IDENTITY_TEXT_COLS = frozenset(
 )
 IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Division", "Nation", "Inf")
 
+
+def _blank_nation(value) -> str:
+    text = str(value or "").strip()
+    if not text or text in ("-", "—"):
+        return ""
+    return text
+
+
+def nation_fields(row: dict | None = None, *, nation=None, second_nation=None) -> tuple[str, str]:
+    """Primary and second nationality from a table/player row."""
+    record = row if isinstance(row, dict) else {}
+    primary = _blank_nation(
+        nation
+        if nation is not None
+        else record.get("Nation")
+        or record.get("nation")
+    )
+    second = _blank_nation(
+        second_nation
+        if second_nation is not None
+        else record.get("Second Nation")
+        or record.get("second_nation")
+        or record.get("SecondNation")
+    )
+    return primary, second
+
+
+def nation_flags_text(
+    row: dict | None = None,
+    *,
+    nation=None,
+    second_nation=None,
+) -> str:
+    """Primary-then-second flag emoji string (no trailing space)."""
+    from services.nation_flags import nation_flag_emojis
+
+    primary, second = nation_fields(row, nation=nation, second_nation=second_nation)
+    return nation_flag_emojis(primary, second)
+
+
+def with_nation_flags(
+    name_html,
+    row: dict | None = None,
+    *,
+    nation=None,
+    second_nation=None,
+) -> str:
+    """Prefix a Name cell with nationality flags (primary furthest left)."""
+    flags = nation_flags_text(row, nation=nation, second_nation=second_nation)
+    text = str(name_html or "")
+    if not flags:
+        return text
+    if not text:
+        return flags
+    return f"{flags}\u00a0{text}"
+
+
+def name_sort_text(value) -> str:
+    """Plain name for sorting after stripping flags and markdown HTML."""
+    from services.nation_flags import strip_nation_flags
+
+    text = strip_nation_flags(value)
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()
+
+
+def nation_cell(
+    value=None,
+    second=None,
+    *,
+    row: dict | None = None,
+) -> str:
+    """Nation column: flags (primary left) then primary label."""
+    primary, second_nat = nation_fields(row, nation=value, second_nation=second)
+    flags = nation_flags_text(nation=primary, second_nation=second_nat)
+    label = primary or "—"
+    if flags and primary:
+        return f"{flags}\u00a0{label}"
+    if flags:
+        return flags
+    return label
+
 # Short table headers → full tooltip label (column id stays the key).
 IDENTITY_HEADER_ABBR = {
     "Height": "Ht",
@@ -323,9 +405,11 @@ def injury_tooltip_entry(
 
 def division_league_nation(row: dict | None) -> str:
     """Prefer Based In (league country); fall back to Nation / nationality."""
+    from services.nation_flags import strip_nation_flags
+
     record = row if isinstance(row, dict) else {}
     for key in ("Based In", "based_in", "Nation", "nation"):
-        text = str(record.get(key) or "").strip()
+        text = strip_nation_flags(str(record.get(key) or "")).strip()
         if text and text not in ("-", "—"):
             return text
     return ""

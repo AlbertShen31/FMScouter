@@ -111,6 +111,8 @@ from components.player_table import (
     injury_cell,
     injury_tooltip_entry,
     is_dark_theme,
+    name_sort_text,
+    nation_cell,
     player_data_table,
     rec_sort_key,
     style_cell,
@@ -120,6 +122,7 @@ from components.player_table import (
     style_table,
     table_caption_row,
     table_css,
+    with_nation_flags,
 )
 import services.export_library as lib
 import services.formations as fm
@@ -1917,6 +1920,12 @@ def _column_sort_key(
     blank = value in (None, "", "-")
     if column_id not in TABLE_TEXT_COLS:
         return (1, float("inf")) if blank else (0, _cell_number(value))
+    if column_id == "Name":
+        text = name_sort_text(value)
+        return (1, "\uffff") if not text or text in ("-", "—") else (0, text.casefold())
+    if column_id == "Nation":
+        text = name_sort_text(value)
+        return (1, "\uffff") if not text or text in ("-", "—") else (0, text.casefold())
     return (1, "\uffff") if blank else (0, str(value).casefold())
 
 
@@ -4368,11 +4377,16 @@ def render_shortlist(
                 )
             else:
                 if key == "Name":
-                    item[key] = name_with_source_html(
-                        row.get(key, "-"),
-                        row.get("_export_source"),
-                        highlight=highlight_source,
+                    item[key] = with_nation_flags(
+                        name_with_source_html(
+                            row.get(key, "-"),
+                            row.get("_export_source"),
+                            highlight=highlight_source,
+                        ),
+                        row,
                     )
+                elif key == "Nation":
+                    item[key] = nation_cell(row=row)
                 elif key == "Feet":
                     item[key] = feet_cell(row)
                 elif key == "Injury":
@@ -4399,6 +4413,7 @@ def render_shortlist(
                     )
                 else:
                     item[key] = row.get(key, "-")
+        item["Second Nation"] = row.get("Second Nation") or row.get("second_nation") or ""
         item["transfer_value_numeric"] = row.get("transfer_value_numeric")
         item["transfer_value_min"] = row.get("transfer_value_min")
         item["transfer_value_max"] = row.get("transfer_value_max")

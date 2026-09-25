@@ -59,6 +59,8 @@ from components.player_table import (
     injury_cell,
     injury_tooltip_entry,
     limited_league_metric_highlight_styles,
+    name_sort_text,
+    nation_cell,
     player_data_table,
     rec_sort_key,
     resolve_division_highlight,
@@ -68,6 +70,7 @@ from components.player_table import (
     style_header_conditional,
     table_caption_row,
     table_css,
+    with_nation_flags,
 )
 from scoring.role_scorer import (
     POS_CARDS,
@@ -917,7 +920,11 @@ def _column_sort_key(
     if column_id in ("Salary", "Transfer Value"):
         return finance_sort_key(row, column_id, desc=desc)
     if column_id in TABLE_TEXT_COLS:
-        text = _strip_cell(value).strip()
+        text = (
+            name_sort_text(value)
+            if column_id in ("Name", "Nation")
+            else _strip_cell(value).strip()
+        )
         if not text or text in ("-", "—"):
             return (1, "\uffff")
         return (0, text.casefold())
@@ -1336,10 +1343,14 @@ def _identity_cells(
     right = player.get("right_foot") or ""
     foot_row = {"Left Foot": left, "Right Foot": right}
     getters = {
-        "Name": lambda: name_with_source_html(
-            player.get("name") or "",
-            player.get("_export_source"),
-            highlight=highlight_source,
+        "Name": lambda: with_nation_flags(
+            name_with_source_html(
+                player.get("name") or "",
+                player.get("_export_source"),
+                highlight=highlight_source,
+            ),
+            nation=player.get("nation"),
+            second_nation=player.get("second_nation"),
         ),
         "Age": lambda: player.get("age") or "—",
         "Height": lambda: _display_blank(player.get("height")),
@@ -1348,7 +1359,10 @@ def _identity_cells(
         "Rec": lambda: _display_blank(player.get("rec")),
         "Injury": lambda: injury_cell(player.get("injury")),
         "Division": lambda: _display_blank(player.get("division")),
-        "Nation": lambda: _display_blank(player.get("nation")),
+        "Nation": lambda: nation_cell(
+            player.get("nation"),
+            player.get("second_nation"),
+        ),
         "Inf": lambda: _display_blank(player.get("inf")),
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
@@ -1365,6 +1379,7 @@ def _identity_cells(
     row: dict = {
         "Division": _display_blank(player.get("division")),
         "Nation": _display_blank(player.get("nation")),
+        "Second Nation": _display_blank(player.get("second_nation")),
         "based_in": str(player.get("based_in") or "").strip(),
         "Based In": str(player.get("based_in") or "").strip(),
         "Unique ID": str(player.get("unique_id") or "").strip(),
