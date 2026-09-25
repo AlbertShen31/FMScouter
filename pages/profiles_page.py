@@ -4331,11 +4331,11 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Status": "72px",
     "Position": "72px",
     "Club": "88px",
-    "Division": "88px",
-    "Age": "42px",
+    "Division": "21ch",
+    "Age": "36px",
     "Height": "44px",
     "Feet": "72px",
-    "Rec": "42px",
+    "Rec": "36px",
     "Injury": "40px",
     "Nation": "64px",
     "Inf": "40px",
@@ -4343,7 +4343,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Slot": "56px",
     "Role": "56px",
     "Rank": "48px",
-    "Score": "72px",
+    "Score": "48px",
     "Minutes": "48px",
     "overall": "44px",
     "defending": "44px",
@@ -4379,9 +4379,10 @@ def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
             box["whiteSpace"] = "nowrap"
             box["overflow"] = "hidden"
             box["textOverflow"] = "ellipsis"
-            box["maxWidth"] = "100px"
-            box["width"] = "88px"
-            box["minWidth"] = "72px"
+            box["minWidth"] = "20ch"
+            box["width"] = "21ch"
+            box["maxWidth"] = "22ch"
+            box["padding"] = "6px"
     if header:
         if column_id in _PF_LEFT_COLS:
             box["padding"] = "8px 14px 8px 6px"

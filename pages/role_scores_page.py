@@ -2097,43 +2097,25 @@ def _table_columns(col_ids: list[str], *, name_markdown: bool = False) -> list[d
 
 
 def _score_column_styles(role_labels: list[str]) -> list[dict]:
-    """Center score cells; give short role/score cols a stable min width."""
+    """Center score cells; size for values like 99.9 (and stacked deltas)."""
     rules = []
     for label in role_labels:
-        if _is_hybrid_column(label):
-            rules.append(
-                {
-                    "if": {"column_id": label},
-                    "textAlign": "center",
-                    "verticalAlign": "middle",
-                    "minWidth": "64px",
-                    "width": "72px",
-                    "maxWidth": "80px",
-                    "paddingLeft": "4px",
-                    "paddingRight": "4px",
-                    "paddingTop": "6px",
-                    "paddingBottom": "6px",
-                    "whiteSpace": "normal",
-                    "lineHeight": "1.2",
-                }
-            )
-        else:
-            rules.append(
-                {
-                    "if": {"column_id": label},
-                    "textAlign": "center",
-                    "verticalAlign": "middle",
-                    "minWidth": "64px",
-                    "width": "72px",
-                    "maxWidth": "80px",
-                    "paddingLeft": "4px",
-                    "paddingRight": "4px",
-                    "paddingTop": "6px",
-                    "paddingBottom": "6px",
-                    "whiteSpace": "normal",
-                    "lineHeight": "1.2",
-                }
-            )
+        rules.append(
+            {
+                "if": {"column_id": label},
+                "textAlign": "center",
+                "verticalAlign": "middle",
+                "minWidth": "48px",
+                "width": "48px",
+                "maxWidth": "52px",
+                "paddingLeft": "2px",
+                "paddingRight": "2px",
+                "paddingTop": "6px",
+                "paddingBottom": "6px",
+                "whiteSpace": "normal",
+                "lineHeight": "1.2",
+            }
+        )
     return rules
 
 
