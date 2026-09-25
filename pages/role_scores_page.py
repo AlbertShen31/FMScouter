@@ -99,6 +99,7 @@ from components.player_table import (
     IDENTITY_LEFT_COLS,
     IDENTITY_TEXT_COLS,
     apply_division_limited_flag,
+    division_tooltip_entry,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -4284,6 +4285,16 @@ def render_shortlist(
         item["_export_source"] = normalize_export_source(row.get("_export_source"))
         item["_source_file_id"] = str(row.get("_source_file_id") or "").strip()
         _attach_division_style_fields(item, row, limited_divisions)
+        tip_row.update(
+            division_tooltip_entry(
+                row={
+                    **item,
+                    "based_in": row.get("based_in") or row.get("Based In") or "",
+                    "Based In": row.get("Based In") or row.get("based_in") or "",
+                    "Nation": row.get("Nation") or item.get("Nation") or "",
+                }
+            )
+        )
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()
         if row_key:

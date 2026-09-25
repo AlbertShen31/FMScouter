@@ -46,6 +46,9 @@ PROFILES_PACKS_DIR = PROFILES_DIR / "packs"
 PROFILES_ACTIVE_PATH = PROFILES_DIR / "active.json"
 PROFILES_BACKUPS_DIR = PROFILES_DIR / "backups"
 
+# Leagues with no known tier (filled while browsing; used to extend division_tiers).
+UNKNOWN_DIVISIONS_PATH = DATA_DIR / "unknown_divisions.json"
+
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"
 LEGACY_ROLE_ACTIVE_PATH = CONFIG_DIR / "active_pack.json"

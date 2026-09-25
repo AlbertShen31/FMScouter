@@ -41,7 +41,8 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Injury": "Injury",
     "Division": (
         "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur. "
-        "Striped = league with incomplete advanced match stats in FM."
+        "Striped = league with incomplete advanced match stats in FM. "
+        "Hover a cell for the full name, nation, and tier."
     ),
 }
 
@@ -272,6 +273,78 @@ def injury_tooltip_entry(
         value, injured_on=injured_on, time_missed=time_missed, row=row
     )
     return {"Injury": text} if text else {}
+
+
+def division_league_nation(row: dict | None) -> str:
+    """Prefer Based In (league country); fall back to Nation / nationality."""
+    record = row if isinstance(row, dict) else {}
+    for key in ("Based In", "based_in", "Nation", "nation"):
+        text = str(record.get(key) or "").strip()
+        if text and text not in ("-", "—"):
+            return text
+    return ""
+
+
+def division_tooltip_text(
+    division=None,
+    *,
+    nation=None,
+    tier=None,
+    limited: bool | None = None,
+    row: dict | None = None,
+) -> str:
+    """Full division name plus nation / tier / limited-stats note for hover."""
+    from scoring.division_tiers import TIER_LABELS, classify_division
+    from services.division_catalog import normalize_nation_label
+
+    record = row if isinstance(row, dict) else {}
+    name = str(
+        division
+        if division is not None
+        else record.get("Division") or record.get("division") or ""
+    ).strip()
+    if not name or name in ("-", "—"):
+        return ""
+
+    nat_raw = str(
+        nation if nation is not None else division_league_nation(record) or ""
+    ).strip()
+    if nat_raw in ("-", "—"):
+        nat_raw = ""
+    nat_label = normalize_nation_label(nat_raw) if nat_raw else ""
+
+    if tier is None:
+        tier = record.get("DivisionTier")
+        if not tier:
+            tier = classify_division(name, nat_raw)
+    tier_key = str(tier or "").strip()
+    tier_label = TIER_LABELS.get(tier_key, TIER_LABELS[""])
+
+    if limited is None:
+        limited = str(record.get("DivisionLimited") or "").strip().lower() == "yes"
+
+    parts = [name]
+    if nat_label:
+        parts.append(nat_label)
+    parts.append(tier_label)
+    if limited:
+        parts.append("Limited advanced stats")
+    return " · ".join(parts)
+
+
+def division_tooltip_entry(
+    division=None,
+    *,
+    nation=None,
+    tier=None,
+    limited: bool | None = None,
+    row: dict | None = None,
+) -> dict[str, str]:
+    """DataTable tooltip_data row fragment for the Division column."""
+    text = division_tooltip_text(
+        division, nation=nation, tier=tier, limited=limited, row=row
+    )
+    return {"Division": text} if text else {}
 
 
 def feet_sort_key(row: dict) -> tuple:
@@ -786,9 +859,13 @@ def identity_data_styles(
         {
             "if": {"column_id": "Division"},
             "textAlign": "left",
-            "minWidth": "110px",
-            "maxWidth": "200px",
+            "minWidth": "72px",
+            "width": "88px",
+            "maxWidth": "100px",
             "fontWeight": "600",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis",
+            "whiteSpace": "nowrap",
         },
         {
             "if": {"column_id": "Feet"},

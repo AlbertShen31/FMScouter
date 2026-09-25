@@ -20,6 +20,8 @@ from components.player_modal import player_modal, register_archetype_group_callb
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     default_page_size_value,
+    division_tooltip_entry,
+    division_tooltip_text,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -2167,6 +2169,8 @@ def _apply_profile_division(
         "Division": raw.get("Division") if raw.get("Division") not in (None, "", "-", "—")
         else item.get("Division"),
         "Nation": raw.get("Nation"),
+        "Based In": raw.get("Based In") or raw.get("based_in") or "",
+        "based_in": raw.get("based_in") or raw.get("Based In") or "",
     }
     apply_division_tier(tier_row)
     apply_division_limited_flag(
@@ -2174,6 +2178,10 @@ def _apply_profile_division(
     )
     item["DivisionTier"] = tier_row.get("DivisionTier") or ""
     item["DivisionLimited"] = tier_row.get("DivisionLimited") or "no"
+    item["based_in"] = str(
+        raw.get("Based In") or raw.get("based_in") or ""
+    ).strip()
+    item["Based In"] = item["based_in"]
 
     pers = item.get("Personality")
     if pers in (None, "", "-", "—"):
@@ -2793,6 +2801,8 @@ def _depth_division_cell(
     tier: str | None = None,
     limited: bool = False,
     limited_title: str = "",
+    nation: str | None = None,
+    row: dict | None = None,
 ) -> html.Span:
     """Narrow 2-line Division cell; pill hugs each text line; full name on hover."""
     text = division if division not in (None, "", "-", "—") else "—"
@@ -2803,9 +2813,19 @@ def _depth_division_cell(
         classes = f"{classes} pf-div-limited"
     tip = None
     if text != "—":
-        tip = (
-            f"{text} — {limited_title}" if limited and limited_title else text
+        tip = division_tooltip_text(
+            text,
+            nation=nation,
+            tier=tier,
+            limited=limited,
+            row=row,
         )
+        if limited and limited_title and tip and limited_title not in tip:
+            tip = f"{tip} · {limited_title}"
+        elif not tip:
+            tip = (
+                f"{text} — {limited_title}" if limited and limited_title else text
+            )
     return html.Span(
         html.Span(text, className=classes),
         className="pf-depth-chart-div-cell",
@@ -3153,6 +3173,8 @@ def _depth_chart_player_row(
             tier=tier,
             limited=limited,
             limited_title=LIMITED_DIVISION_TITLE,
+            nation=row.get("Based In") or row.get("based_in") or row.get("Nation"),
+            row=row,
         ),
         _depth_rec_cell(row.get("Rec"), theme=theme),
         _depth_injury_cell(row, player),
@@ -3627,6 +3649,12 @@ def _setpiece_chart_player_row(
                 tier=tier,
                 limited=limited,
                 limited_title=LIMITED_DIVISION_TITLE,
+                nation=row.get("Based In")
+                or row.get("based_in")
+                or row.get("Nation")
+                or (player.get("based_in") if player else None)
+                or (player.get("nation") if player else None),
+                row=row,
             ),
             _depth_rec_cell(row.get("Rec"), theme=theme),
             _depth_injury_cell(row, player),
@@ -4303,7 +4331,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Status": "72px",
     "Position": "72px",
     "Club": "88px",
-    "Division": "80px",
+    "Division": "88px",
     "Age": "42px",
     "Height": "44px",
     "Feet": "72px",
@@ -4324,7 +4352,7 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
 }
 
 
-_PF_NOWRAP_COLS = ("Name", "Position", "Club", "Division", "Slot")
+_PF_NOWRAP_COLS = ("Name", "Position", "Club", "Slot")
 
 
 def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
@@ -4347,6 +4375,13 @@ def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
     else:
         box["width"] = _PF_COL_MIN_WIDTHS.get(column_id, "44px")
         box["maxWidth"] = _PF_COL_MIN_WIDTHS.get(column_id, "44px")
+        if column_id == "Division":
+            box["whiteSpace"] = "nowrap"
+            box["overflow"] = "hidden"
+            box["textOverflow"] = "ellipsis"
+            box["maxWidth"] = "100px"
+            box["width"] = "88px"
+            box["minWidth"] = "72px"
     if header:
         if column_id in _PF_LEFT_COLS:
             box["padding"] = "8px 14px 8px 6px"
@@ -4559,11 +4594,24 @@ def _entry_to_role_table_row(
     )
     for pct in PCT_COLS:
         item[pct] = _pct_markdown(raw.get(pct), raw.get(f"{pct}_color"))
-    return item, injury_tooltip_entry(
+    tip_row = injury_tooltip_entry(
         raw.get("Injury") or player.get("injury"),
         injured_on=raw.get("Injured On") or player.get("injured_on"),
         time_missed=raw.get("Time Missed") or player.get("time_missed"),
     )
+    tip_row.update(
+        division_tooltip_entry(
+            row={
+                **item,
+                "based_in": item.get("based_in")
+                or player.get("based_in")
+                or raw.get("Based In")
+                or "",
+                "Nation": item.get("Nation") or raw.get("Nation") or player.get("nation") or "",
+            }
+        )
+    )
+    return item, tip_row
 
 
 def _empty_slot_table_row(

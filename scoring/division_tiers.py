@@ -793,5 +793,19 @@ def division_tier_colors(theme: str | None = None) -> dict[str, tuple[str, str]]
 
 
 def apply_division_tier(row: dict) -> None:
-    """Set ``DivisionTier`` on a table row from Division + Nation."""
-    row["DivisionTier"] = classify_division(row.get("Division"), row.get("Nation"))
+    """Set ``DivisionTier`` on a table row from Division + Based In / Nation."""
+    division = row.get("Division")
+    nation = (
+        row.get("Based In")
+        or row.get("based_in")
+        or row.get("Nation")
+        or row.get("nation")
+    )
+    tier = classify_division(division, nation)
+    row["DivisionTier"] = tier
+    if not tier:
+        raw = str(division or "").strip()
+        if raw and raw not in ("-", "—"):
+            from services.unknown_divisions import record_unknown_division
+
+            record_unknown_division(division, nation)

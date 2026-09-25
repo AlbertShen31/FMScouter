@@ -47,6 +47,7 @@ from components.stats_compare import (
 from components.stats_player_pane import _normalize_player_view
 from components.player_table import (
     IDENTITY_TEXT_COLS,
+    division_tooltip_entry,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -1313,6 +1314,8 @@ def _identity_cells(
     row: dict = {
         "Division": _display_blank(player.get("division")),
         "Nation": _display_blank(player.get("nation")),
+        "based_in": str(player.get("based_in") or "").strip(),
+        "Based In": str(player.get("based_in") or "").strip(),
         "Unique ID": str(player.get("unique_id") or "").strip(),
         "_export_source": normalize_export_source(player.get("_export_source")),
         "_source_file_id": str(player.get("_source_file_id") or "").strip(),
@@ -2348,6 +2351,8 @@ def refresh_table(
         item = {col: row.get(col, "—") for col in col_ids}
         item["DivisionTier"] = row.get("DivisionTier") or ""
         item["DivisionLimited"] = row.get("DivisionLimited") or "no"
+        item["based_in"] = row.get("based_in") or row.get("Based In") or ""
+        item["Based In"] = item["based_in"]
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["_export_source"] = row.get("_export_source") or SOURCE_SQUAD
         item["_source_file_id"] = str(row.get("_source_file_id") or "").strip()
@@ -2356,7 +2361,9 @@ def refresh_table(
             item["id"] = key  # DataTable row id (stable across refreshes)
             item["_key"] = key
         table_rows.append(item)
-        tooltip_data.append(injury_tooltip_entry(row=injury_by_key.get(key)))
+        tip_row = injury_tooltip_entry(row=injury_by_key.get(key))
+        tip_row.update(division_tooltip_entry(row=item))
+        tooltip_data.append(tip_row)
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]
     page_size_i = int(page_size or 50)

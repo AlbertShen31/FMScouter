@@ -2491,6 +2491,28 @@ body[data-theme="light"] .rs-injury-icon {
     background-color: var(--table-hover-bg) !important;
 }
 
+/* Compact Division: ellipsis; full name / nation / tier on hover tooltip. */
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
+#st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
+    min-width: 72px !important;
+    width: 88px !important;
+    max-width: 100px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value,
+#st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
 .rs-set-piece-line {
     display: grid;
     grid-template-columns: 88px minmax(0, 1fr) minmax(0, 1.35fr);
@@ -8131,9 +8153,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
 #pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"],
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"],
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] {
     white-space: nowrap !important;
     max-width: none !important;
     overflow: visible !important;
@@ -8142,8 +8162,7 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 
 #pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"] .dash-cell-value,
 #pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"] .dash-cell-value,
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] .dash-cell-value,
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value {
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] .dash-cell-value {
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: clip !important;
@@ -8167,7 +8186,20 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
 #pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
-    min-width: 80px !important;
+    min-width: 72px !important;
+    width: 88px !important;
+    max-width: 100px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
 }
 
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
