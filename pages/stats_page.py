@@ -48,6 +48,8 @@ from components.stats_player_pane import _normalize_player_view
 from components.player_table import (
     IDENTITY_TEXT_COLS,
     division_tooltip_entry,
+    finance_display,
+    finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -1227,7 +1229,11 @@ def _table_columns(
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
     cols = []
-    for col in us.shortlist_columns_for("player_stats", settings):
+    for col in us.with_shortlist_finance_columns(
+        us.shortlist_columns_for("player_stats", settings),
+        settings,
+        page="player_stats",
+    ):
         spec = {"name": identity_header_name(col), "id": col}
         if col in ("Feet", "Injury", "Status") or (
             highlight_source and col == "Name"
@@ -1310,6 +1316,8 @@ def _identity_cells(
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
         "Status": lambda: status_markdown(player.get("multi_year_status")),
+        "Transfer Value": lambda: finance_display(player.get("transfer_value")),
+        "Salary": lambda: finance_display(player.get("salary")),
     }
     row: dict = {
         "Division": _display_blank(player.get("division")),
@@ -1499,7 +1507,11 @@ def _build_rows(
     banding_limited: set[str] | frozenset[str] | list[str] | None = None,
 ) -> list[dict]:
     settings = us.normalize(settings)
-    identity_cols = list(us.shortlist_columns_for("player_stats", settings))
+    identity_cols = us.with_shortlist_finance_columns(
+        list(us.shortlist_columns_for("player_stats", settings)),
+        settings,
+        page="player_stats",
+    )
     include_status = any(
         isinstance(p, dict) and p.get("multi_year_status") for p in (players or [])
     )
@@ -2026,6 +2038,24 @@ def layout(**_kwargs):
                                                 ],
                                                 className="st-filter-value-mode",
                                             ),
+                                            html.Div(
+                                                [
+                                                    html.Label(
+                                                        "Finance",
+                                                        className="rs-field-label",
+                                                    ),
+                                                    dmc.Switch(
+                                                        id="st-show-finance",
+                                                        label="Show Value / Wage",
+                                                        checked=us.shortlist_show_finance(
+                                                            settings,
+                                                            page="player_stats",
+                                                        ),
+                                                        className="st-show-finance-switch",
+                                                    ),
+                                                ],
+                                                className="st-filter-finance",
+                                            ),
                                         ],
                                         className="rs-shortlist-filters-row",
                                     ),
@@ -2191,6 +2221,27 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
         us.clamp_choice(page_size, size_data, default_size),
         minutes_required if minutes_required is not None else default_mins,
     )
+
+
+@callback(
+    Output("st-show-finance", "checked"),
+    Input("ui-settings", "data"),
+)
+def sync_st_show_finance_from_settings(settings):
+    return us.shortlist_show_finance(settings, page="player_stats")
+
+
+@callback(
+    Output("ui-settings", "data", allow_duplicate=True),
+    Input("st-show-finance", "checked"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def persist_st_show_finance(checked, settings):
+    enabled = bool(checked)
+    if enabled == us.shortlist_show_finance(settings, page="player_stats"):
+        return no_update
+    return us.set_shortlist_show_finance("player_stats", enabled)
 
 
 @callback(
@@ -2363,6 +2414,7 @@ def refresh_table(
         table_rows.append(item)
         tip_row = injury_tooltip_entry(row=injury_by_key.get(key))
         tip_row.update(division_tooltip_entry(row=item))
+        tip_row.update(finance_tooltip_entry(item))
         tooltip_data.append(tip_row)
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]

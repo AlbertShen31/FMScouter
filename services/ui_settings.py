@@ -185,6 +185,7 @@ PACK_DATA_KEYS = (
     "page_size",
     "page_size_options",
     "preferred_theme",
+    "shortlist_show_finance",
     "tier_badge_colors",
     "personality_tier_colors",
     "archetype_tier_floors",
@@ -227,6 +228,7 @@ DEFAULTS: dict[str, Any] = {
     "page_size": 50,
     "page_size_options": [25, 50, 100],
     "preferred_theme": "dark",
+    "shortlist_show_finance": {"role_scores": False, "player_stats": False},
     "modal_identity_fields": {
         "order": list(DEFAULT_MODAL_IDENTITY_ORDER),
         "scopes": dict(DEFAULT_MODAL_IDENTITY_SCOPES),
@@ -655,6 +657,65 @@ def shortlist_columns_for(page: str, settings=None) -> list[str]:
     return out or ["Name"]
 
 
+SHORTLIST_FINANCE_COLS = ("Transfer Value", "Salary")
+SHORTLIST_FINANCE_PAGES = ("role_scores", "player_stats")
+
+
+def normalize_shortlist_show_finance(raw=None) -> dict[str, bool]:
+    """Per-page finance-column toggles for Role scores / Player stats."""
+    defaults = {
+        "role_scores": False,
+        "player_stats": False,
+    }
+    if isinstance(raw, bool):
+        return {page: bool(raw) for page in SHORTLIST_FINANCE_PAGES}
+    if isinstance(raw, dict):
+        return {
+            page: bool(raw.get(page, defaults[page]))
+            for page in SHORTLIST_FINANCE_PAGES
+        }
+    return dict(defaults)
+
+
+def shortlist_show_finance(settings=None, *, page: str = "role_scores") -> bool:
+    """Whether Transfer Value / Salary appear on a shortlist page."""
+    page_key = "role_scores" if page == "role_scores" else "player_stats"
+    cfg = normalize_shortlist_show_finance(
+        normalize(settings).get("shortlist_show_finance")
+    )
+    return bool(cfg.get(page_key))
+
+
+def with_shortlist_finance_columns(
+    cols: list[str],
+    settings=None,
+    *,
+    page: str = "role_scores",
+) -> list[str]:
+    """Append finance columns when that page's finance toggle is on."""
+    out = [col for col in cols if col not in SHORTLIST_FINANCE_COLS]
+    if not shortlist_show_finance(settings, page=page):
+        return out
+    for col in SHORTLIST_FINANCE_COLS:
+        if col not in out:
+            out.append(col)
+    return out
+
+
+def set_shortlist_show_finance(
+    page: str,
+    enabled: bool,
+    pack_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist a page finance-column toggle on the active settings pack."""
+    current = load(pack_id)
+    cfg = normalize_shortlist_show_finance(current.get("shortlist_show_finance"))
+    page_key = "role_scores" if page == "role_scores" else "player_stats"
+    cfg[page_key] = bool(enabled)
+    current["shortlist_show_finance"] = cfg
+    return save(current, current.get("id"))
+
+
 def _modal_field_catalog() -> list[tuple[str, str, str]]:
     from components.player_modal import iter_modal_field_defs
 
@@ -984,6 +1045,9 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "page_size": normalize_page_size(raw.get("page_size"), page_opts),
         "page_size_options": page_opts,
         "preferred_theme": normalize_preferred_theme(raw.get("preferred_theme")),
+        "shortlist_show_finance": normalize_shortlist_show_finance(
+            raw.get("shortlist_show_finance")
+        ),
         "modal_identity_fields": normalize_modal_identity_fields(),
         "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
         "personality_tier_colors": normalize_personality_tier_colors(

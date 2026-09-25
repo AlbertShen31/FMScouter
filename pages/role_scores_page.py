@@ -100,6 +100,8 @@ from components.player_table import (
     IDENTITY_TEXT_COLS,
     apply_division_limited_flag,
     division_tooltip_entry,
+    finance_display,
+    finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
     identity_data_styles,
@@ -1404,6 +1406,24 @@ def layout():
                                                             hidden=True,
                                                         ),
                                                         archetype_filter_control(prefix="rs"),
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Finance",
+                                                                    className="rs-field-label",
+                                                                ),
+                                                                dmc.Switch(
+                                                                    id="rs-show-finance",
+                                                                    label="Show Value / Wage",
+                                                                    checked=us.shortlist_show_finance(
+                                                                        settings,
+                                                                        page="role_scores",
+                                                                    ),
+                                                                    className="rs-show-finance-switch",
+                                                                ),
+                                                            ],
+                                                            className="rs-filter-finance",
+                                                        ),
                                                     ],
                                                     className="rs-filter-group-fields",
                                                 ),
@@ -3339,6 +3359,27 @@ def sync_rs_page_size_from_settings(settings, page_size):
 
 
 @callback(
+    Output("rs-show-finance", "checked"),
+    Input("ui-settings", "data"),
+)
+def sync_rs_show_finance_from_settings(settings):
+    return us.shortlist_show_finance(settings, page="role_scores")
+
+
+@callback(
+    Output("ui-settings", "data", allow_duplicate=True),
+    Input("rs-show-finance", "checked"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def persist_rs_show_finance(checked, settings):
+    enabled = bool(checked)
+    if enabled == us.shortlist_show_finance(settings, page="role_scores"):
+        return no_update
+    return us.set_shortlist_show_finance("role_scores", enabled)
+
+
+@callback(
     Output("rs-rows", "data"),
     Output("rs-focus-role", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
@@ -3541,6 +3582,9 @@ def _visible_shortlist_cols(
         if profile["id"] in chosen and profile.get("score")
     ] + table_role_cols
     table_cols = list(us.shortlist_columns_for("role_scores", settings))
+    table_cols = us.with_shortlist_finance_columns(
+        table_cols, settings, page="role_scores"
+    )
     table_cols.extend(piece_cols)
     table_cols.extend(table_role_cols)
     return table_cols, score_cols, piece_cols
@@ -3563,6 +3607,9 @@ def _data_shortlist_cols(
         if profile.get("score")
     ] + all_role_cols
     table_cols = list(us.shortlist_columns_for("role_scores", settings))
+    table_cols = us.with_shortlist_finance_columns(
+        table_cols, settings, page="role_scores"
+    )
     table_cols.extend(piece_cols)
     table_cols.extend(all_role_cols)
     return table_cols, score_cols
@@ -4252,6 +4299,13 @@ def render_shortlist(
                     injury_raw = row.get(key)
                     item[key] = injury_cell(injury_raw)
                     tip_row = injury_tooltip_entry(injury_raw, row=row)
+                elif key in ("Transfer Value", "Salary"):
+                    item[key] = finance_display(
+                        row.get(key)
+                        or row.get(
+                            "transfer_value" if key == "Transfer Value" else "salary"
+                        )
+                    )
                 elif key == "Status":
                     item[key] = status_markdown(
                         _row_multi_year_status(row, row_years)
@@ -4277,6 +4331,7 @@ def render_shortlist(
                 }
             )
         )
+        tip_row.update(finance_tooltip_entry(item))
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()
         if row_key:

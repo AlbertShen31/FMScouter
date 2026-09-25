@@ -23,6 +23,8 @@ IDENTITY_TEXT_COLS = frozenset(
         "Nation",
         "Inf",
         "Best Pos",
+        "Transfer Value",
+        "Salary",
     }
 )
 IDENTITY_LEFT_COLS = ("Name", "Position", "Club", "Division", "Nation", "Inf")
@@ -32,6 +34,8 @@ IDENTITY_HEADER_ABBR = {
     "Height": "Ht",
     "Best Pos": "BP",
     "Injury": "INJ",
+    "Transfer Value": "Value",
+    "Salary": "Wage",
 }
 IDENTITY_HEADER_TOOLTIPS = {
     "Height": "Height",
@@ -39,6 +43,8 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Best Pos": "Best position",
     "Inf": "Information / status",
     "Injury": "Injury",
+    "Transfer Value": "Transfer value",
+    "Salary": "Salary (wage)",
     "Division": (
         "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur. "
         "Striped = league with incomplete advanced match stats in FM. "
@@ -347,6 +353,28 @@ def division_tooltip_entry(
     return {"Division": text} if text else {}
 
 
+def finance_display(value) -> str:
+    """FM Transfer Value / Salary cell text (export string as-is)."""
+    text = str(value or "").strip()
+    if not text or text in ("-", "—"):
+        return "—"
+    return text
+
+
+def finance_tooltip_entry(row: dict | None = None) -> dict[str, str]:
+    """Hover tips for finance columns when the displayed cell may be truncated."""
+    record = row if isinstance(row, dict) else {}
+    tip: dict[str, str] = {}
+    for col, key in (
+        ("Transfer Value", "transfer_value"),
+        ("Salary", "salary"),
+    ):
+        text = finance_display(record.get(col) if col in record else record.get(key))
+        if text != "—":
+            tip[col] = text
+    return tip
+
+
 def feet_sort_key(row: dict) -> tuple:
     left = foot_strength(row.get("Left Foot") or "")
     right = foot_strength(row.get("Right Foot") or "")
@@ -582,7 +610,8 @@ def _center_non_identity_css() -> list[dict]:
     skip = (
         ':not([data-dash-column="Name"]):not([data-dash-column="Position"])'
         ':not([data-dash-column="Club"]):not([data-dash-column="Injury"])'
-        ':not([data-dash-column="Feet"])'
+        ':not([data-dash-column="Feet"]):not([data-dash-column="Transfer Value"])'
+        ':not([data-dash-column="Salary"])'
     )
     return [
         {
@@ -622,6 +651,8 @@ def _center_non_identity_css() -> list[dict]:
                 ':not([data-dash-column="Position"])'
                 ':not([data-dash-column="Club"])'
                 ':not([data-dash-column="Injury"])'
+                ':not([data-dash-column="Transfer Value"])'
+                ':not([data-dash-column="Salary"])'
             ),
             "rule": "text-align: center !important; vertical-align: middle !important;",
         },
@@ -913,6 +944,28 @@ def identity_data_styles(
             "maxWidth": "56px",
             "paddingLeft": "4px",
             "paddingRight": "4px",
+        },
+        {
+            "if": {"column_id": "Transfer Value"},
+            "textAlign": "right",
+            "minWidth": "72px",
+            "width": "88px",
+            "maxWidth": "110px",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis",
+            "whiteSpace": "nowrap",
+            "fontVariantNumeric": "tabular-nums",
+        },
+        {
+            "if": {"column_id": "Salary"},
+            "textAlign": "right",
+            "minWidth": "64px",
+            "width": "80px",
+            "maxWidth": "96px",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis",
+            "whiteSpace": "nowrap",
+            "fontVariantNumeric": "tabular-nums",
         },
         {
             "if": {"column_id": "Injury"},
