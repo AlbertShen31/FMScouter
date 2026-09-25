@@ -431,14 +431,17 @@ def finance_display(
 
 
 def finance_sort_number(row: dict | None, column_id: str) -> float:
-    """Numeric sort value for Transfer Value / Salary (NaN when missing)."""
+    """Numeric sort value for Salary (NaN when missing).
+
+    Prefer ``finance_sort_key`` for Transfer Value (max, then min).
+    """
+    if column_id == "Transfer Value":
+        key = finance_sort_key(row, column_id)
+        if key[0]:
+            return float("nan")
+        return float(key[1])
     record = row if isinstance(row, dict) else {}
-    key = (
-        "salary_numeric"
-        if column_id == "Salary"
-        else "transfer_value_numeric"
-    )
-    raw = record.get(key)
+    raw = record.get("salary_numeric")
     if raw is not None and raw != "":
         try:
             return float(raw)
@@ -450,16 +453,71 @@ def finance_sort_number(row: dict | None, column_id: str) -> float:
         salary_to_annual,
     )
 
-    text = record.get(column_id)
+    text = record.get("Salary")
     if text in (None, ""):
-        alt = "salary" if column_id == "Salary" else "transfer_value"
-        text = record.get(alt)
+        text = record.get("salary")
     amount = parse_money(text)
     if amount is None:
         return float("nan")
-    if column_id == "Salary":
-        return salary_to_annual(amount, detect_salary_period(text))
-    return float(amount)
+    return salary_to_annual(amount, detect_salary_period(text))
+
+
+def finance_sort_key(
+    row: dict | None,
+    column_id: str,
+    *,
+    desc: bool = False,
+) -> tuple:
+    """Sort key for finance columns. Missing values always sort last.
+
+    Transfer Value: primary = range max, tie-break = range min (single value
+    uses that amount for both). Salary: annual amount.
+    """
+    record = row if isinstance(row, dict) else {}
+    if column_id == "Transfer Value":
+        lo = record.get("transfer_value_min")
+        hi = record.get("transfer_value_max")
+        if lo is None and hi is None:
+            mid = record.get("transfer_value_numeric")
+            if mid is not None and mid != "":
+                try:
+                    value = float(mid)
+                    lo, hi = value, value
+                except (TypeError, ValueError):
+                    pass
+            if lo is None and hi is None:
+                from scoring.squad_finance import parse_money_bounds
+
+                text = record.get("Transfer Value")
+                if text in (None, ""):
+                    text = record.get("transfer_value")
+                lo, hi = parse_money_bounds(text)
+        try:
+            lo_f = float(lo) if lo is not None else None
+        except (TypeError, ValueError):
+            lo_f = None
+        try:
+            hi_f = float(hi) if hi is not None else None
+        except (TypeError, ValueError):
+            hi_f = None
+        if lo_f is None and hi_f is None:
+            return (1, 0.0, 0.0)
+        if lo_f is None:
+            lo_f = hi_f
+        if hi_f is None:
+            hi_f = lo_f
+        primary, secondary = float(hi_f), float(lo_f)
+        if desc:
+            return (0, -primary, -secondary)
+        return (0, primary, secondary)
+
+    number = finance_sort_number(record, "Salary")
+    if number != number:  # NaN
+        return (1, 0.0, 0.0)
+    primary = float(number)
+    if desc:
+        return (0, -primary, 0.0)
+    return (0, primary, 0.0)
 
 
 def finance_tooltip_entry(

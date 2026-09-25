@@ -704,8 +704,9 @@ def extract_injury_fields(row: dict[str, str]) -> dict[str, str]:
 def extract_finance_fields(row: dict[str, str]) -> dict[str, Any]:
     """Contract, transfer, wage, and release-clause columns when present.
 
-    Also stamps ``salary_numeric`` (annual) and ``transfer_value_numeric`` for
-    sorting / period conversion on shortlists.
+    Also stamps ``salary_numeric`` (annual) and transfer-value
+    ``transfer_value_min`` / ``transfer_value_max`` (plus ``transfer_value_numeric``
+    = max) for sorting / period conversion on shortlists.
     """
     out: dict[str, Any] = {}
     status_keys = {"transfer_status", "loan_status"}
@@ -729,11 +730,15 @@ def extract_finance_fields(row: dict[str, str]) -> dict[str, Any]:
             out["salary_numeric"] = salary_to_annual(amount, period)
             out["salary_currency"] = money_currency_symbol(out["salary"])
     if out.get("transfer_value"):
-        from scoring.squad_finance import parse_money
+        from scoring.squad_finance import parse_money_bounds
 
-        amount = parse_money(out["transfer_value"])
-        if amount is not None:
-            out["transfer_value_numeric"] = amount
+        low, high = parse_money_bounds(out["transfer_value"])
+        if low is not None or high is not None:
+            lo = low if low is not None else high
+            hi = high if high is not None else low
+            out["transfer_value_min"] = lo
+            out["transfer_value_max"] = hi
+            out["transfer_value_numeric"] = hi
     return out
 
 
@@ -1863,6 +1868,8 @@ def score_players(
             "Transfer Value": player.get("transfer_value") or "-",
             "Salary": player.get("salary") or "-",
             "transfer_value_numeric": player.get("transfer_value_numeric"),
+            "transfer_value_min": player.get("transfer_value_min"),
+            "transfer_value_max": player.get("transfer_value_max"),
             "salary_numeric": player.get("salary_numeric"),
             "salary_currency": player.get("salary_currency"),
             "PosGroups": player.get("pos_groups")

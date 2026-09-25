@@ -75,34 +75,55 @@ _CLAUSE_KEYS = (
 def parse_money(text: str | None) -> float | None:
     """Parse FM money strings like ``$21.07M p/a``, ``£68K``, ``1,250,000``.
 
-    ``N/A`` (any casing) is treated as ``0``. Blank / ``-`` / ``—`` stay missing.
+    Ranges (``$1K - $9K``) return the midpoint. ``N/A`` (any casing) is ``0``.
+    Blank / ``-`` / ``—`` stay missing.
+    """
+    low, high = parse_money_bounds(text)
+    if low is None and high is None:
+        return None
+    if low is None:
+        return high
+    if high is None:
+        return low
+    return (low + high) / 2.0
+
+
+def parse_money_bounds(
+    text: str | None,
+) -> tuple[float | None, float | None]:
+    """Parse FM money as ``(min, max)``.
+
+    Single values return ``(v, v)``. Ranges use the lower and upper ends
+    (order-independent). ``N/A`` → ``(0, 0)``. Missing → ``(None, None)``.
     """
     if text is None:
-        return None
+        return None, None
     raw = str(text).strip()
     if not raw or raw in {"-", "—"}:
-        return None
+        return None, None
     if raw.casefold() in {"n/a", "na", "n.a.", "n.a"}:
-        return 0.0
+        return 0.0, 0.0
     if " - " in raw or "–" in raw:
         low_s, high_s = re.split(r"\s*[-–]\s*", raw, maxsplit=1)
-        low, high = parse_money(low_s), parse_money(high_s)
+        low, _ = parse_money_bounds(low_s)
+        high, _ = parse_money_bounds(high_s)
         if low is None and high is None:
-            return None
+            return None, None
         if low is None:
-            return high
+            return high, high
         if high is None:
-            return low
-        return (low + high) / 2.0
+            return low, low
+        return (min(low, high), max(low, high))
 
     cleaned = raw.replace(",", "")
     match = _MONEY_TOKEN.search(cleaned)
     if not match:
-        return None
+        return None, None
     number = float(match.group("num").replace(",", "."))
     suffix = (match.group("suffix") or "").lower()
     mult = {"": 1.0, "k": 1_000.0, "m": 1_000_000.0, "b": 1_000_000_000.0}[suffix]
-    return number * mult
+    amount = number * mult
+    return amount, amount
 
 
 SALARY_PERIODS = ("annual", "monthly", "weekly")

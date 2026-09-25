@@ -49,7 +49,7 @@ from components.player_table import (
     IDENTITY_TEXT_COLS,
     division_tooltip_entry,
     finance_display,
-    finance_sort_number,
+    finance_sort_key,
     finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
@@ -903,13 +903,19 @@ def _numeric_sort_key(number: float, *, desc: bool = False) -> tuple:
     return (0, primary, tie)
 
 
-def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
+def _column_sort_key(
+    column_id: str,
+    value,
+    row: dict | None = None,
+    *,
+    desc: bool = False,
+) -> tuple:
     if column_id == "Feet" and row is not None:
         return feet_sort_key(row)
     if column_id == "Rec":
         return rec_sort_key(value)
     if column_id in ("Salary", "Transfer Value"):
-        return _numeric_sort_key(finance_sort_number(row, column_id), desc=False)
+        return finance_sort_key(row, column_id, desc=desc)
     if column_id in TABLE_TEXT_COLS:
         text = _strip_cell(value).strip()
         if not text or text in ("-", "—"):
@@ -939,6 +945,11 @@ def _sort_table_rows(rows: list[dict], sort_by) -> None:
     item = sort_by[0]
     column = item.get("column_id")
     reverse = item.get("direction") == "desc"
+    if column in ("Salary", "Transfer Value"):
+        rows.sort(
+            key=lambda row: finance_sort_key(row, column, desc=reverse)
+        )
+        return
     if _is_percentile_sort_column(column):
         # Encode direction in the key so missing (—) values always sort last.
         def pct_key(row, *, _col=column, _desc=reverse):
@@ -1362,6 +1373,8 @@ def _identity_cells(
         "transfer_value": player.get("transfer_value"),
         "salary": player.get("salary"),
         "transfer_value_numeric": player.get("transfer_value_numeric"),
+        "transfer_value_min": player.get("transfer_value_min"),
+        "transfer_value_max": player.get("transfer_value_max"),
         "salary_numeric": player.get("salary_numeric"),
         "salary_currency": player.get("salary_currency"),
     }

@@ -101,7 +101,7 @@ from components.player_table import (
     apply_division_limited_flag,
     division_tooltip_entry,
     finance_display,
-    finance_sort_number,
+    finance_sort_key,
     finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
@@ -1901,16 +1901,19 @@ def _attach_division_style_fields(
     item["DivisionLimited"] = item.get("DivisionLimited") or "no"
 
 
-def _column_sort_key(column_id: str, value, row: dict | None = None):
+def _column_sort_key(
+    column_id: str,
+    value,
+    row: dict | None = None,
+    *,
+    desc: bool = False,
+):
     if column_id == "Feet" and row is not None:
         return feet_sort_key(row)
     if column_id == "Rec":
         return rec_sort_key(value)
     if column_id in ("Salary", "Transfer Value"):
-        number = finance_sort_number(row, column_id)
-        if number != number:  # NaN
-            return (1, float("inf"))
-        return (0, number)
+        return finance_sort_key(row, column_id, desc=desc)
     blank = value in (None, "", "-")
     if column_id not in TABLE_TEXT_COLS:
         return (1, float("inf")) if blank else (0, _cell_number(value))
@@ -1943,13 +1946,15 @@ def _reorder_built_rows(
         item = sort_by[0]
         column = item.get("column_id")
         reverse = item.get("direction") == "desc"
+        finance_col = column in ("Salary", "Transfer Value")
         paired.sort(
             key=lambda pair: _column_sort_key(
                 column,
                 raw_for(pair[0]).get(column),
                 raw_for(pair[0]),
+                desc=reverse if finance_col else False,
             ),
-            reverse=reverse,
+            reverse=False if finance_col else reverse,
         )
     else:
         quantifier = _normalize_min_score_quantifier(min_score_quantifier)
@@ -1974,9 +1979,15 @@ def _sort_table_rows(
         item = sort_by[0]
         column = item.get("column_id")
         reverse = item.get("direction") == "desc"
+        finance_col = column in ("Salary", "Transfer Value")
         rows.sort(
-            key=lambda row: _column_sort_key(column, row.get(column), row),
-            reverse=reverse,
+            key=lambda row: _column_sort_key(
+                column,
+                row.get(column),
+                row,
+                desc=reverse if finance_col else False,
+            ),
+            reverse=False if finance_col else reverse,
         )
         return
     quantifier = _normalize_min_score_quantifier(min_score_quantifier)
@@ -4389,6 +4400,8 @@ def render_shortlist(
                 else:
                     item[key] = row.get(key, "-")
         item["transfer_value_numeric"] = row.get("transfer_value_numeric")
+        item["transfer_value_min"] = row.get("transfer_value_min")
+        item["transfer_value_max"] = row.get("transfer_value_max")
         item["salary_numeric"] = row.get("salary_numeric")
         item["salary_currency"] = row.get("salary_currency")
         item["salary"] = row.get("salary") or row.get("Salary")
