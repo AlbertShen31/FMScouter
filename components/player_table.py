@@ -379,6 +379,10 @@ def finance_display(
     text = str(value or "").strip()
     if not text or text in ("-", "—"):
         return "—"
+    if text.casefold() in {"n/a", "na", "n.a.", "n.a"}:
+        from scoring.squad_finance import format_money
+
+        return format_money(0.0, currency=currency or "$")
     return text
 
 

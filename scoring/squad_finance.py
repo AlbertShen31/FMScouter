@@ -73,12 +73,17 @@ _CLAUSE_KEYS = (
 
 
 def parse_money(text: str | None) -> float | None:
-    """Parse FM money strings like ``$21.07M p/a``, ``£68K``, ``1,250,000``."""
+    """Parse FM money strings like ``$21.07M p/a``, ``£68K``, ``1,250,000``.
+
+    ``N/A`` (any casing) is treated as ``0``. Blank / ``-`` / ``—`` stay missing.
+    """
     if text is None:
         return None
     raw = str(text).strip()
-    if not raw or raw in {"-", "—", "N/A", "n/a"}:
+    if not raw or raw in {"-", "—"}:
         return None
+    if raw.casefold() in {"n/a", "na", "n.a.", "n.a"}:
+        return 0.0
     if " - " in raw or "–" in raw:
         low_s, high_s = re.split(r"\s*[-–]\s*", raw, maxsplit=1)
         low, high = parse_money(low_s), parse_money(high_s)
