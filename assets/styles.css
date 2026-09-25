@@ -841,13 +841,13 @@ body {
     pointer-events: none;
 }
 
-/* Hybrid columns: wrapped header (IP+\\nOOP) — keep the column narrow.
+/* Hybrid columns: wrapped header (XXX+\\nYYY) — first line fits 3 letters + plus.
    Header-only: pre-line + extra right padding for the sort chevron.
    Body cells match IP/OOP (centered; no pre-line / asymmetric padding). */
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] {
-    min-width: 56px !important;
-    max-width: 60px !important;
-    width: 56px !important;
+    min-width: 64px !important;
+    max-width: 72px !important;
+    width: 64px !important;
     text-align: center !important;
     padding-left: 4px !important;
     padding-right: 14px !important;
@@ -857,9 +857,9 @@ body {
 }
 
 #rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column*="+"] {
-    min-width: 56px !important;
-    max-width: 60px !important;
-    width: 56px !important;
+    min-width: 64px !important;
+    max-width: 72px !important;
+    width: 64px !important;
     text-align: center !important;
     vertical-align: middle !important;
     white-space: normal !important;
@@ -871,7 +871,8 @@ body {
     white-space: pre-line !important;
     text-align: center;
     max-width: 100%;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -934,21 +935,21 @@ body {
     box-sizing: border-box;
 }
 
-/* Role score values are XX.X; keep IP/OOP columns equally tight + sort room. */
+/* Role score values are XX.X; headers need room for XXX / XXX+ (+ sort). */
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"]:not([data-dash-column*="+"]),
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"]:not([data-dash-column*="+"]) {
-    min-width: 56px !important;
-    width: 56px !important;
-    max-width: 60px !important;
+    min-width: 64px !important;
+    width: 64px !important;
+    max-width: 72px !important;
     padding-left: 4px !important;
     padding-right: 14px !important;
 }
 
 #rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column$="-IP"]:not([data-dash-column*="+"]),
 #rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column$="-OOP"]:not([data-dash-column*="+"]) {
-    min-width: 56px !important;
-    width: 56px !important;
-    max-width: 60px !important;
+    min-width: 64px !important;
+    width: 64px !important;
+    max-width: 72px !important;
     padding-left: 4px !important;
     padding-right: 4px !important;
 }

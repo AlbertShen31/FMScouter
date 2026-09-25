@@ -2097,7 +2097,7 @@ def _table_columns(col_ids: list[str], *, name_markdown: bool = False) -> list[d
 
 
 def _score_column_styles(role_labels: list[str]) -> list[dict]:
-    """Center score cells; size for values like 99.9 + sort-chevron room."""
+    """Center score cells; wide enough for ``XXX+`` hybrid first-line headers."""
     rules = []
     for label in role_labels:
         rules.append(
@@ -2105,9 +2105,9 @@ def _score_column_styles(role_labels: list[str]) -> list[dict]:
                 "if": {"column_id": label},
                 "textAlign": "center",
                 "verticalAlign": "middle",
-                "minWidth": "56px",
-                "width": "56px",
-                "maxWidth": "60px",
+                "minWidth": "64px",
+                "width": "64px",
+                "maxWidth": "72px",
                 "paddingLeft": "4px",
                 "paddingRight": "4px",
                 "paddingTop": "6px",
