@@ -1,7 +1,10 @@
 """Squad vs scouting export merge helpers."""
 from __future__ import annotations
 
+import html as html_lib
 from typing import Any, Callable
+
+from dash import html
 
 SOURCE_SQUAD = "squad"
 SOURCE_SCOUTING = "scouting"
@@ -23,11 +26,45 @@ def source_label(source: Any) -> str:
     return SOURCE_LABELS.get(normalize_export_source(source), SOURCE_LABELS[SOURCE_SQUAD])
 
 
-def source_markdown(source: Any) -> str:
-    """Markdown-friendly Source pill for Dash DataTable cells."""
+def name_with_source_html(
+    name: Any,
+    source: Any = SOURCE_SQUAD,
+    *,
+    highlight: bool = False,
+) -> str:
+    """Player name cell; when ``highlight``, wrap with squad/scouting color class."""
+    text = str(name or "").strip() or "—"
+    if not highlight:
+        return text
     kind = normalize_export_source(source)
-    label = SOURCE_LABELS[kind]
-    return f'<span class="src-pill src-pill-{kind}">{label}</span>'
+    return f'<span class="src-name src-name-{kind}">{html_lib.escape(text)}</span>'
+
+
+def export_source_legend(*, active: bool = True) -> html.Div | None:
+    """Legend chips explaining Name-column colors. Empty when inactive."""
+    if not active:
+        return None
+    chips = []
+    for kind, note in (
+        (SOURCE_SQUAD, "Club / international roster"),
+        (SOURCE_SCOUTING, "Transfer targets"),
+    ):
+        chips.append(
+            html.Span(
+                [
+                    html.Span(SOURCE_LABELS[kind], className="rs-legend-name"),
+                    html.Span(note, className="rs-legend-op"),
+                ],
+                className=f"rs-legend-chip src-legend-chip {kind}",
+            )
+        )
+    return html.Div(
+        [
+            html.Span("Name colors", className="rs-phase-legend-label"),
+            html.Div(chips, className="rs-depth-legend"),
+        ],
+        className="rs-source-legend",
+    )
 
 
 def _tag_row(

@@ -7645,34 +7645,51 @@ body[data-theme="light"] .my-status-pill.partial {
     color: #b45309;
     border-color: #fbbf24;
 }
-.src-pill {
-    display: inline-block;
-    padding: 0.1rem 0.45rem;
-    border-radius: 0.35rem;
-    font-size: 0.75rem;
+.src-name {
     font-weight: 650;
-    border: 1px solid var(--app-line);
-    background: var(--app-input);
-    color: var(--app-text);
-    white-space: nowrap;
 }
-.src-pill-squad {
-    border-color: #38bdf8;
+.src-name-squad {
     color: #7dd3fc;
 }
-.src-pill-scouting {
-    border-color: #fb923c;
+.src-name-scouting {
     color: #fdba74;
 }
-html[data-theme="light"] .src-pill-squad,
-body[data-theme="light"] .src-pill-squad {
+html[data-theme="light"] .src-name-squad,
+body[data-theme="light"] .src-name-squad {
+    color: #0369a1;
+}
+html[data-theme="light"] .src-name-scouting,
+body[data-theme="light"] .src-name-scouting {
+    color: #c2410c;
+}
+.rs-source-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.75rem;
+    margin-top: 0.35rem;
+}
+.rs-legend-chip.src-legend-chip.squad {
+    border-color: #38bdf8;
+    color: #7dd3fc;
+    background: color-mix(in srgb, #38bdf8 12%, var(--app-card));
+}
+.rs-legend-chip.src-legend-chip.scouting {
+    border-color: #fb923c;
+    color: #fdba74;
+    background: color-mix(in srgb, #fb923c 12%, var(--app-card));
+}
+html[data-theme="light"] .rs-legend-chip.src-legend-chip.squad,
+body[data-theme="light"] .rs-legend-chip.src-legend-chip.squad {
     color: #0369a1;
     border-color: #7dd3fc;
+    background: color-mix(in srgb, #7dd3fc 18%, #fff);
 }
-html[data-theme="light"] .src-pill-scouting,
-body[data-theme="light"] .src-pill-scouting {
+html[data-theme="light"] .rs-legend-chip.src-legend-chip.scouting,
+body[data-theme="light"] .rs-legend-chip.src-legend-chip.scouting {
     color: #c2410c;
     border-color: #fdba74;
+    background: color-mix(in srgb, #fdba74 18%, #fff);
 }
 .my-year-section {
     margin-top: 0.75rem;

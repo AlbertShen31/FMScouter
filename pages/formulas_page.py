@@ -285,7 +285,8 @@ def _faq_panel() -> html.Div:
                 "On Role scores and Player stats, load a Squad export (players already on your club "
                 "or international team) and optionally a Scouting export (transfer targets). "
                 "The shortlist merges both files; when the same Unique ID appears in both, the "
-                "squad row wins. A Source column marks Squad vs Scouting. Single-year and "
+                "squad row wins. Name colors mark Squad vs Scouting (see the legend). "
+                "Single-year and "
                 "multi-year packs both work. Squad finance still uses a historical compare slot "
                 "for wage deltas.",
             ),

@@ -37,10 +37,11 @@ from components.scouting_shell import (
 from scoring.comparison import score_display
 from scoring.export_sources import (
     SOURCE_SQUAD,
+    export_source_legend,
     has_scouting_rows,
     merge_squad_and_scouting,
+    name_with_source_html,
     normalize_export_source,
-    source_markdown,
 )
 from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
@@ -1301,6 +1302,7 @@ def layout():
                                             className="rs-depth-heading-title-row",
                                         ),
                                         html.Div(_band_legend(settings), id="rs-band-legend"),
+                                        html.Div(id="rs-source-legend", className="rs-source-legend"),
                                     ],
                                     className="rs-depth-heading",
                                 ),
@@ -1653,7 +1655,7 @@ def _cell_number(value) -> float:
 
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
-TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status", "Source"}
+TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status"}
 
 
 def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> list[str]:
@@ -1668,21 +1670,6 @@ def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> l
         out.insert(idx, "Status")
     else:
         out.insert(0, "Status")
-    return out
-
-
-def _inject_source_col(cols: list[str], rows: list[dict] | None) -> list[str]:
-    """Insert Source after Name when scouting rows are present."""
-    if not rows or "Source" in cols:
-        return cols
-    if not has_scouting_rows(rows):
-        return cols
-    out = list(cols)
-    if "Name" in out:
-        idx = out.index("Name") + 1
-        out.insert(idx, "Source")
-    else:
-        out.insert(0, "Source")
     return out
 
 
@@ -2094,11 +2081,14 @@ def _header_phase_colors(theme: str | None = None) -> dict[str, str]:
     }
 
 
-def _table_columns(col_ids: list[str]) -> list[dict]:
+def _table_columns(col_ids: list[str], *, name_markdown: bool = False) -> list[dict]:
     columns = []
+    markdown_cols = set(TABLE_MARKDOWN_COLS)
+    if name_markdown:
+        markdown_cols.add("Name")
     for col in col_ids:
         spec = {"name": _column_display_name(col), "id": col}
-        if col in TABLE_MARKDOWN_COLS or col not in TABLE_TEXT_COLS:
+        if col in markdown_cols or col not in TABLE_TEXT_COLS:
             # Score / set-piece cells may include HTML deltas; Feet uses colored HTML.
             spec["presentation"] = "markdown"
         columns.append(spec)
@@ -3630,6 +3620,17 @@ def _subset_table_data_by_keys(
 
 
 @callback(
+    Output("rs-source-legend", "children"),
+    Input("rs-rows", "data"),
+)
+def sync_rs_source_legend(payload):
+    active = bool((payload or {}).get("has_scouting")) or has_scouting_rows(
+        (payload or {}).get("rows")
+    )
+    return export_source_legend(active=active) or []
+
+
+@callback(
     Output("rs-pos-bar", "children"),
     Output("rs-summary", "children"),
     Output("rs-depth-wrap", "hidden"),
@@ -3820,7 +3821,6 @@ def render_shortlist(
         visible_cols = _inject_multi_year_status_col(
             visible_cols, payload.get("rows")
         )
-        visible_cols = _inject_source_col(visible_cols, payload.get("rows"))
         if view_roles and cache_rows and _table_data_has_columns(
             cache_rows, visible_score_cols
         ):
@@ -3917,12 +3917,11 @@ def render_shortlist(
                 str(row.get("id") or row.get("_key") or "").strip()
                 for row in (table_data or [])
             ]
-            columns = _table_columns(visible_cols)
+            columns = _table_columns(
+                visible_cols,
+                name_markdown=has_scouting_rows(payload.get("rows")),
+            )
             header_tips = _header_tooltips(visible_cols, combos=combos)
-            if "Source" in visible_cols:
-                header_tips["Source"] = (
-                    "Squad export vs scouting (transfer targets)"
-                )
             page_current, new_sig = _table_page_state(columns, cols_sig)
             style_data, style_header, table_css_rules = _cached_table_chrome(
                 visible_score_cols, settings, theme
@@ -4211,13 +4210,14 @@ def render_shortlist(
     )
     data_cols = _inject_multi_year_status_col(data_cols, filtered)
     visible_cols = _inject_multi_year_status_col(visible_cols, filtered)
-    data_cols = _inject_source_col(data_cols, filtered)
-    visible_cols = _inject_source_col(visible_cols, filtered)
+    highlight_source = has_scouting_rows(filtered)
     score_cols = visible_score_cols
-    columns = _table_columns(visible_cols)
+    columns = _table_columns(visible_cols, name_markdown=highlight_source)
     header_tips = _header_tooltips(visible_cols, combos=combos)
-    if "Source" in visible_cols:
-        header_tips["Source"] = "Squad export vs scouting (transfer targets)"
+    if highlight_source:
+        header_tips["Name"] = (
+            "Colored by export: Squad (club/international) vs Scouting (transfer targets)"
+        )
     table_rows = []
     tooltip_data = []
     data_score_set = set(data_score_cols)
@@ -4257,7 +4257,13 @@ def render_shortlist(
                     else cell
                 )
             else:
-                if key == "Feet":
+                if key == "Name":
+                    item[key] = name_with_source_html(
+                        row.get(key, "-"),
+                        row.get("_export_source"),
+                        highlight=highlight_source,
+                    )
+                elif key == "Feet":
                     item[key] = feet_cell(row)
                 elif key == "Injury":
                     injury_raw = row.get(key)
@@ -4267,8 +4273,6 @@ def render_shortlist(
                     item[key] = status_markdown(
                         _row_multi_year_status(row, row_years)
                     )
-                elif key == "Source":
-                    item[key] = source_markdown(row.get("_export_source"))
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"

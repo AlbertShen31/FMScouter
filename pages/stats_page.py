@@ -86,10 +86,11 @@ from components.scouting_shell import (
 )
 from scoring.export_sources import (
     SOURCE_SQUAD,
+    export_source_legend,
     has_scouting_rows,
     merge_squad_and_scouting,
+    name_with_source_html,
     normalize_export_source,
-    source_markdown,
 )
 from scoring.comparison import delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
@@ -1220,44 +1221,25 @@ def _table_columns(
     settings=None,
     *,
     include_status: bool = False,
-    include_source: bool = False,
+    highlight_source: bool = False,
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
     cols = []
     for col in us.shortlist_columns_for("player_stats", settings):
         spec = {"name": identity_header_name(col), "id": col}
-        if col in ("Feet", "Injury", "Status", "Source"):
+        if col in ("Feet", "Injury", "Status") or (
+            highlight_source and col == "Name"
+        ):
             spec["presentation"] = "markdown"
         cols.append(spec)
         if include_status and col == "Name":
             cols.append(
                 {"name": "Status", "id": "Status", "presentation": "markdown"}
             )
-        if include_source and col == "Name":
-            # After Status when both inject after Name in column order.
-            if include_status and cols and cols[-1].get("id") == "Status":
-                cols.append(
-                    {"name": "Source", "id": "Source", "presentation": "markdown"}
-                )
-            else:
-                cols.append(
-                    {"name": "Source", "id": "Source", "presentation": "markdown"}
-                )
     if include_status and not any(c.get("id") == "Status" for c in cols):
         cols.insert(
             1, {"name": "Status", "id": "Status", "presentation": "markdown"}
-        )
-    if include_source and not any(c.get("id") == "Source" for c in cols):
-        insert_at = 1
-        for i, c in enumerate(cols):
-            if c.get("id") == "Status":
-                insert_at = i + 1
-                break
-            if c.get("id") == "Name":
-                insert_at = i + 1
-        cols.insert(
-            insert_at, {"name": "Source", "id": "Source", "presentation": "markdown"}
         )
     cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     if cat == "all":
@@ -1299,6 +1281,7 @@ def _identity_cells(
     identity_cols: list[str],
     *,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    highlight_source: bool = False,
 ) -> dict:
     """Build shortlist identity cells for one stats player row."""
     from scoring.division_tiers import apply_division_tier
@@ -1309,7 +1292,11 @@ def _identity_cells(
     right = player.get("right_foot") or ""
     foot_row = {"Left Foot": left, "Right Foot": right}
     getters = {
-        "Name": lambda: player.get("name") or "",
+        "Name": lambda: name_with_source_html(
+            player.get("name") or "",
+            player.get("_export_source"),
+            highlight=highlight_source,
+        ),
         "Age": lambda: player.get("age") or "—",
         "Height": lambda: _display_blank(player.get("height")),
         "Position": lambda: player.get("position") or "—",
@@ -1322,7 +1309,6 @@ def _identity_cells(
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
         "Status": lambda: status_markdown(player.get("multi_year_status")),
-        "Source": lambda: source_markdown(player.get("_export_source")),
     }
     row: dict = {
         "Division": _display_blank(player.get("division")),
@@ -1357,7 +1343,9 @@ def _header_tooltips(
     identity_cols = us.shortlist_columns_for("player_stats", settings)
     tips = identity_header_tooltips(*identity_cols, "Minutes")
     tips["Status"] = "Multi-year presence (new / returned / departed / continuous)"
-    tips["Source"] = "Squad export vs scouting (transfer targets)"
+    tips["Name"] = (
+        "Colored by export when scouting is loaded: Squad vs Scouting"
+    )
     if cat == "all":
         tips[OVERALL_COL["id"]] = OVERALL_COL["label"]
         for section in _avg_category_columns(group):
@@ -1512,19 +1500,12 @@ def _build_rows(
     include_status = any(
         isinstance(p, dict) and p.get("multi_year_status") for p in (players or [])
     )
-    include_source = has_scouting_rows(players)
+    highlight_source = has_scouting_rows(players)
     if include_status and "Status" not in identity_cols:
         if "Name" in identity_cols:
             identity_cols.insert(identity_cols.index("Name") + 1, "Status")
         else:
             identity_cols.insert(0, "Status")
-    if include_source and "Source" not in identity_cols:
-        if "Status" in identity_cols:
-            identity_cols.insert(identity_cols.index("Status") + 1, "Source")
-        elif "Name" in identity_cols:
-            identity_cols.insert(identity_cols.index("Name") + 1, "Source")
-        else:
-            identity_cols.insert(0, "Source")
     g, cat = _resolve_category(group, category)
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
@@ -1561,7 +1542,12 @@ def _build_rows(
         status = minutes_status(p.get("minutes"), minutes_required)
         mins = p.get("minutes")
         mins_text = "—" if mins is None else f"{mins:.0f}"
-        row = _identity_cells(p, identity_cols, limited_divisions=stripe_limited)
+        row = _identity_cells(
+            p,
+            identity_cols,
+            limited_divisions=stripe_limited,
+            highlight_source=highlight_source,
+        )
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
         row["_key"] = pkey
@@ -2044,6 +2030,10 @@ def layout(**_kwargs):
                                         id="st-detail-levels",
                                         className="st-detail-levels-wrap",
                                     ),
+                                    html.Div(
+                                        id="st-source-legend",
+                                        className="rs-source-legend",
+                                    ),
                                     player_data_table(
                                         prefix="st",
                                         columns=_table_columns("all", "all", settings=settings),
@@ -2201,6 +2191,16 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
 
 
 @callback(
+    Output("st-source-legend", "children"),
+    Input("st-parsed", "data"),
+    Input("st-parsed-scouting", "data"),
+)
+def sync_st_source_legend(parsed, scout_parsed):
+    players, _ = _merge_export_players(parsed, scout_parsed)
+    return export_source_legend(active=has_scouting_rows(players)) or []
+
+
+@callback(
     Output("st-filters", "children"),
     Output("st-table", "columns"),
     Output("st-table", "data"),
@@ -2324,7 +2324,7 @@ def refresh_table(
         include_status=any(
             isinstance(p, dict) and p.get("multi_year_status") for p in filtered
         ),
-        include_source=has_scouting_rows(filtered),
+        highlight_source=has_scouting_rows(filtered),
     )
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(
