@@ -885,49 +885,52 @@ body {
     padding-right: 4px;
 }
 
-/* Short identity cols: room for label + sort chevron. */
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] {
-    min-width: 48px !important;
-    padding-left: 4px !important;
-    padding-right: 14px !important;
-    text-align: center !important;
-}
-
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] {
-    width: 48px !important;
-    max-width: 52px !important;
-}
-
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] {
-    width: 52px !important;
-    max-width: 56px !important;
-}
-
-#rs-table .dash-spreadsheet-inner td[data-dash-column="Age"],
-#rs-table .dash-spreadsheet-inner td[data-dash-column="Rec"] {
+/* Short identity cols (Age / Rec / Height): shared Role scores + Player stats.
+   Room for label + sort chevron; header name stays on one line. */
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Age"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Rec"] {
     min-width: 48px !important;
     width: 48px !important;
     max-width: 52px !important;
     text-align: center !important;
     padding-left: 4px !important;
-    padding-right: 4px !important;
+    overflow: hidden !important;
 }
 
-#rs-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Height"] {
     min-width: 52px !important;
     width: 52px !important;
     max-width: 56px !important;
     text-align: center !important;
     padding-left: 4px !important;
+    overflow: hidden !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] {
+    padding-right: 14px !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Age"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Rec"],
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Height"] {
     padding-right: 4px !important;
 }
 
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name,
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name,
-#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name,
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name,
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name,
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name {
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    padding-right: 10px !important;
+    box-sizing: border-box;
+}
+
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-IP"] .column-header-name,
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column$="-OOP"] .column-header-name,
 #rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column*="+"] .column-header-name {
@@ -6027,32 +6030,6 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     z-index: 2;
 }
 
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-#st-table .dash-spreadsheet-inner td[data-dash-column="Age"] {
-    min-width: 48px !important;
-    width: 48px !important;
-    max-width: 52px !important;
-    text-align: center !important;
-    padding-left: 4px !important;
-    overflow: hidden !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] {
-    padding-right: 14px !important;
-}
-
-#st-table .dash-spreadsheet-inner td[data-dash-column="Age"] {
-    padding-right: 4px !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name {
-    overflow: hidden !important;
-    text-overflow: clip !important;
-    white-space: nowrap !important;
-    padding-right: 10px !important;
-    box-sizing: border-box;
-}
-
 #st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]),
 #st-table .dash-spreadsheet-inner td.dash-cell:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]):not([data-dash-column="Feet"]) {
     text-align: center !important;
@@ -6069,50 +6046,6 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 #st-table .dash-spreadsheet-inner th.dash-header:not([data-dash-column="Name"]):not([data-dash-column="Position"]):not([data-dash-column="Club"]):not([data-dash-column="Injury"]) .column-header-name {
     text-align: center !important;
     width: 100%;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"],
-#st-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    min-width: 52px !important;
-    width: 52px !important;
-    max-width: 56px !important;
-    text-align: center !important;
-    padding-left: 4px !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] {
-    padding-right: 14px !important;
-}
-
-#st-table .dash-spreadsheet-inner td[data-dash-column="Height"] {
-    padding-right: 4px !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
-#st-table .dash-spreadsheet-inner td[data-dash-column="Rec"] {
-    min-width: 48px !important;
-    width: 48px !important;
-    max-width: 52px !important;
-    text-align: center !important;
-    padding-left: 4px !important;
-    overflow: hidden !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] {
-    padding-right: 14px !important;
-}
-
-#st-table .dash-spreadsheet-inner td[data-dash-column="Rec"] {
-    padding-right: 4px !important;
-}
-
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name,
-#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name {
-    overflow: hidden !important;
-    text-overflow: clip !important;
-    white-space: nowrap !important;
-    padding-right: 10px !important;
-    box-sizing: border-box;
 }
 
 /* Uniform All-category percentile columns (abbr headers: Ovr / Def / F3 / Poss). */
