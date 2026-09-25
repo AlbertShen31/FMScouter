@@ -6095,6 +6095,7 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
     max-width: 52px !important;
     text-align: center !important;
     padding-left: 4px !important;
+    overflow: hidden !important;
 }
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] {
@@ -6107,6 +6108,9 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name,
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name {
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
     padding-right: 10px !important;
     box-sizing: border-box;
 }
