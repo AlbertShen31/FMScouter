@@ -532,6 +532,7 @@ def _edit_modal() -> dbc.Modal:
                     dcc.Store(id="up-edit-id"),
                     dcc.Store(id="up-edit-kind", data="single"),
                     dcc.Store(id="up-edit-last-clicks", data={}),
+                    dcc.Store(id="up-edit-recompute"),
                     html.Label("Name", className="rs-field-label"),
                     dmc.TextInput(
                         id="up-edit-name",
@@ -878,6 +879,7 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
     Output("up-edit-year-3", "value"),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-edit-last-clicks", "data"),
+    Output("up-edit-recompute", "data"),
     Input({"type": "up-edit", "id": ALL}, "n_clicks"),
     Input("up-edit-cancel", "n_clicks"),
     Input("up-edit-save", "n_clicks"),
@@ -908,7 +910,7 @@ def edit_modal(
 ):
     triggered = ctx.triggered_id
     if not triggered:
-        return tuple([no_update] * 16)
+        return tuple([no_update] * 17)
 
     years_hidden = {"display": "none"}
     years_shown = {"display": "block"}
@@ -932,6 +934,7 @@ def edit_modal(
             "",
             no_update,
             last_clicks,
+            no_update,
         )
 
     if triggered == "up-edit-save":
@@ -953,15 +956,21 @@ def edit_modal(
                 "",
                 no_update,
                 last_clicks,
+                no_update,
             )
+        pending_recompute = None
         try:
             if edit_kind == lib.KIND_MULTI_YEAR:
+                # Metadata only here so the modal can close immediately; pack
+                # cache recompute runs in recompute_after_multi_year_edit.
                 lib.save_multi_year_pack(
                     display_name=name or "",
                     years={"1": y1 or "", "2": y2 or "", "3": y3 or ""},
                     user_note=note or "",
                     pack_id=edit_id,
+                    recompute=False,
                 )
+                pending_recompute = edit_id
             else:
                 lib.update_file_meta(
                     edit_id, display_name=name or "", user_note=note or ""
@@ -985,6 +994,7 @@ def edit_modal(
                 no_update,
                 int(rev or 0) + 1,
                 last_clicks,
+                no_update,
             )
         return (
             False,
@@ -1001,14 +1011,16 @@ def edit_modal(
             "",
             "",
             "",
+            # Keep busy on for multi-year until deferred recompute finishes.
             no_update,
             last_clicks,
+            pending_recompute if pending_recompute else no_update,
         )
 
     if isinstance(triggered, dict) and triggered.get("type") == "up-edit":
         file_id = triggered.get("id")
         if not file_id or file_id == "_":
-            return tuple([no_update] * 16)
+            return tuple([no_update] * 17)
         # Table rebuild after save remounts Edit buttons and re-fires this Input
         # with the same n_clicks — ignore unless the user actually clicked again.
         try:
@@ -1017,10 +1029,10 @@ def edit_modal(
         except (TypeError, ValueError):
             clicks = 0
         if clicks <= int(last_clicks.get(file_id) or 0):
-            return tuple([no_update] * 16)
+            return tuple([no_update] * 17)
         entry = lib.get_file(file_id)
         if not entry:
-            return tuple([no_update] * 16)
+            return tuple([no_update] * 17)
         last_clicks[file_id] = clicks
         if lib.is_multi_year(entry):
             years = lib.configured_years(entry)
@@ -1042,6 +1054,7 @@ def edit_modal(
                 years.get("3") or "",
                 no_update,
                 last_clicks,
+                no_update,
             )
         return (
             True,
@@ -1060,22 +1073,54 @@ def edit_modal(
             "",
             no_update,
             last_clicks,
+            no_update,
         )
 
-    return tuple([no_update] * 16)
+    return tuple([no_update] * 17)
+
+@callback(
+    Output("up-files-table", "children", allow_duplicate=True),
+    Input("up-edit-modal", "is_open"),
+    prevent_initial_call=True,
+)
+def refresh_table_after_edit(is_open):
+    # Refresh when the edit modal closes after a save/cancel.
+    # Do not bump up-rev here: multi-year save keeps the busy overlay on until
+    # recompute_after_multi_year_edit finishes and bumps rev itself.
+    if is_open:
+        return no_update
+    return _files_table()
+
 
 @callback(
     Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
-    Input("up-edit-modal", "is_open"),
+    Output("up-edit-recompute", "data", allow_duplicate=True),
+    Output("up-upload-status", "children", allow_duplicate=True),
+    Input("up-edit-recompute", "data"),
     State("up-rev", "data"),
     prevent_initial_call=True,
 )
-def refresh_table_after_edit(is_open, rev):
-    # Refresh when the edit modal closes after a save/cancel.
-    if is_open:
-        return no_update, no_update
-    return _files_table(), int(rev or 0) + 1
+def recompute_after_multi_year_edit(pack_id, rev):
+    """Finish multi-year edit: recompute cache after the modal already closed."""
+    if not pack_id:
+        return no_update, no_update, no_update, no_update
+    entry = lib.get_file(pack_id)
+    label = lib.display_label(entry) if entry else pack_id
+    try:
+        upload_cache.compute_file(pack_id)
+        status = upload_cache.cache_status(pack_id)
+        msg = html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(f"Updated {label}"),
+                html.Span(f" · {status['detail']}", className="text-muted"),
+            ],
+            className="up-save-row",
+        )
+    except Exception as exc:
+        msg = upload_error(f"Update failed: {exc}")
+    return _files_table(), int(rev or 0) + 1, None, msg
 
 
 

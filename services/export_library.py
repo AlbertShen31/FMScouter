@@ -383,8 +383,13 @@ def save_multi_year_pack(
     years: dict[str, str] | None,
     user_note: str = "",
     pack_id: str | None = None,
+    recompute: bool = True,
 ) -> dict[str, Any]:
-    """Create or update a multi-year pack entry (metadata only; no CSV on disk)."""
+    """Create or update a multi-year pack entry (metadata only; no CSV on disk).
+
+    When ``recompute`` is False, only the index entry is written — callers can
+    close a modal first, then call ``upload_cache.compute_file`` separately.
+    """
     ensure_dirs()
     name = str(display_name or "").strip()
     if not name:
@@ -473,6 +478,9 @@ def save_multi_year_pack(
     else:
         index.append(entry)
     _write_index(index)
+
+    if not recompute:
+        return entry
 
     try:
         import services.upload_cache as upload_cache

@@ -192,7 +192,7 @@
   ],
   "preferred_theme": "dark",
   "shortlist_show_finance": {
-    "role_scores": true,
+    "role_scores": false,
     "player_stats": true
   },
   "salary_period": "annual",
