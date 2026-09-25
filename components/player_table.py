@@ -1126,10 +1126,10 @@ def identity_data_styles(
         {
             "if": {"column_id": "Transfer Value"},
             "textAlign": "right",
-            # ~14 characters of body text (+ cell padding); ellipsis beyond that.
+            # Fixed ~14 characters (+ cell padding); ellipsis beyond that.
             "minWidth": "14ch",
-            "width": "15ch",
-            "maxWidth": "16ch",
+            "width": "14ch",
+            "maxWidth": "14ch",
             "paddingLeft": "6px",
             "paddingRight": "6px",
             "overflow": "hidden",
@@ -1140,10 +1140,10 @@ def identity_data_styles(
         {
             "if": {"column_id": "Salary"},
             "textAlign": "right",
-            # ~10 characters of body text (+ cell padding); ellipsis beyond that.
+            # Fixed ~10 characters (+ cell padding); ellipsis beyond that.
             "minWidth": "10ch",
-            "width": "11ch",
-            "maxWidth": "12ch",
+            "width": "10ch",
+            "maxWidth": "10ch",
             "paddingLeft": "6px",
             "paddingRight": "6px",
             "overflow": "hidden",

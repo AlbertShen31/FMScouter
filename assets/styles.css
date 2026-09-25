@@ -2593,20 +2593,21 @@ body[data-theme="light"] .rs-injury-icon {
     white-space: nowrap !important;
 }
 
-/* Finance: Transfer Value / Salary — ch widths + padding; ellipsis; tip on hover. */
+/* Finance: Transfer Value / Salary — fixed ch widths + padding; ellipsis; tip on hover. */
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"],
 .rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Transfer Value"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"],
 #st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Transfer Value"] {
     min-width: 14ch !important;
-    width: 15ch !important;
-    max-width: 16ch !important;
+    width: 14ch !important;
+    max-width: 14ch !important;
     padding-left: 6px !important;
     padding-right: 6px !important;
     text-align: right !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
+    box-sizing: border-box !important;
 }
 
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"],
@@ -2614,14 +2615,33 @@ body[data-theme="light"] .rs-injury-icon {
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"],
 #st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Salary"] {
     min-width: 10ch !important;
-    width: 11ch !important;
-    max-width: 12ch !important;
+    width: 10ch !important;
+    max-width: 10ch !important;
     padding-left: 6px !important;
     padding-right: 6px !important;
     text-align: right !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
+    box-sizing: border-box !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"],
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"] {
+    padding-right: 14px !important;
+}
+
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"] .column-header-name,
+.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"] .column-header-name,
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Transfer Value"] .column-header-name,
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Salary"] .column-header-name {
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    padding-right: 10px !important;
+    box-sizing: border-box;
 }
 
 .rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Transfer Value"] .dash-cell-value,
