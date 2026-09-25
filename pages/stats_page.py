@@ -49,6 +49,7 @@ from components.player_table import (
     IDENTITY_TEXT_COLS,
     division_tooltip_entry,
     finance_display,
+    finance_sort_number,
     finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
@@ -907,6 +908,8 @@ def _column_sort_key(column_id: str, value, row: dict | None = None) -> tuple:
         return feet_sort_key(row)
     if column_id == "Rec":
         return rec_sort_key(value)
+    if column_id in ("Salary", "Transfer Value"):
+        return _numeric_sort_key(finance_sort_number(row, column_id), desc=False)
     if column_id in TABLE_TEXT_COLS:
         text = _strip_cell(value).strip()
         if not text or text in ("-", "—"):
@@ -1306,6 +1309,7 @@ def _identity_cells(
     *,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
     highlight_source: bool = False,
+    salary_period: str = "annual",
 ) -> dict:
     """Build shortlist identity cells for one stats player row."""
     from scoring.division_tiers import apply_division_tier
@@ -1334,7 +1338,13 @@ def _identity_cells(
         "Feet": lambda: feet_cell(foot_row),
         "Status": lambda: status_markdown(player.get("multi_year_status")),
         "Transfer Value": lambda: finance_display(player.get("transfer_value")),
-        "Salary": lambda: finance_display(player.get("salary")),
+        "Salary": lambda: finance_display(
+            player.get("salary"),
+            numeric=player.get("salary_numeric"),
+            currency=player.get("salary_currency"),
+            salary_period=salary_period,
+            is_salary=True,
+        ),
     }
     row: dict = {
         "Division": _display_blank(player.get("division")),
@@ -1344,6 +1354,11 @@ def _identity_cells(
         "Unique ID": str(player.get("unique_id") or "").strip(),
         "_export_source": normalize_export_source(player.get("_export_source")),
         "_source_file_id": str(player.get("_source_file_id") or "").strip(),
+        "transfer_value": player.get("transfer_value"),
+        "salary": player.get("salary"),
+        "transfer_value_numeric": player.get("transfer_value_numeric"),
+        "salary_numeric": player.get("salary_numeric"),
+        "salary_currency": player.get("salary_currency"),
     }
     for col in identity_cols:
         getter = getters.get(col)
@@ -1525,6 +1540,7 @@ def _build_rows(
     finance_available: bool = True,
 ) -> list[dict]:
     settings = us.normalize(settings)
+    salary_period = us.salary_period(settings)
     identity_cols = us.with_shortlist_finance_columns(
         list(us.shortlist_columns_for("player_stats", settings)),
         settings,
@@ -1581,6 +1597,7 @@ def _build_rows(
             identity_cols,
             limited_divisions=stripe_limited,
             highlight_source=highlight_source,
+            salary_period=salary_period,
         )
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
@@ -2446,7 +2463,9 @@ def refresh_table(
         table_rows.append(item)
         tip_row = injury_tooltip_entry(row=injury_by_key.get(key))
         tip_row.update(division_tooltip_entry(row=item))
-        tip_row.update(finance_tooltip_entry(item))
+        tip_row.update(
+            finance_tooltip_entry(row, salary_period=us.salary_period(settings))
+        )
         tooltip_data.append(tip_row)
     marked_set = set(marked or [])
     selected_ids = [row["id"] for row in table_rows if row.get("id") in marked_set]

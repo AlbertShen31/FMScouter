@@ -701,9 +701,13 @@ def extract_injury_fields(row: dict[str, str]) -> dict[str, str]:
     }
 
 
-def extract_finance_fields(row: dict[str, str]) -> dict[str, str]:
-    """Contract, transfer, wage, and release-clause columns when present."""
-    out: dict[str, str] = {}
+def extract_finance_fields(row: dict[str, str]) -> dict[str, Any]:
+    """Contract, transfer, wage, and release-clause columns when present.
+
+    Also stamps ``salary_numeric`` (annual) and ``transfer_value_numeric`` for
+    sorting / period conversion on shortlists.
+    """
+    out: dict[str, Any] = {}
     status_keys = {"transfer_status", "loan_status"}
     for key, aliases in FINANCE_CSV.items():
         value = _present_csv_text(
@@ -711,6 +715,25 @@ def extract_finance_fields(row: dict[str, str]) -> dict[str, str]:
         )
         if value:
             out[key] = value
+    if out.get("salary"):
+        from scoring.squad_finance import (
+            detect_salary_period,
+            money_currency_symbol,
+            parse_money,
+            salary_to_annual,
+        )
+
+        amount = parse_money(out["salary"])
+        if amount is not None:
+            period = detect_salary_period(out["salary"])
+            out["salary_numeric"] = salary_to_annual(amount, period)
+            out["salary_currency"] = money_currency_symbol(out["salary"])
+    if out.get("transfer_value"):
+        from scoring.squad_finance import parse_money
+
+        amount = parse_money(out["transfer_value"])
+        if amount is not None:
+            out["transfer_value_numeric"] = amount
     return out
 
 
@@ -1839,6 +1862,9 @@ def score_players(
             "Squad": player["squad"] or "-",
             "Transfer Value": player.get("transfer_value") or "-",
             "Salary": player.get("salary") or "-",
+            "transfer_value_numeric": player.get("transfer_value_numeric"),
+            "salary_numeric": player.get("salary_numeric"),
+            "salary_currency": player.get("salary_currency"),
             "PosGroups": player.get("pos_groups")
             or player.get("pos_cards")
             or player_pos_groups(player.get("positions") or []),

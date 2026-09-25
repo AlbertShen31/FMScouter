@@ -101,6 +101,7 @@ from components.player_table import (
     apply_division_limited_flag,
     division_tooltip_entry,
     finance_display,
+    finance_sort_number,
     finance_tooltip_entry,
     feet_cell,
     feet_sort_key,
@@ -1905,6 +1906,11 @@ def _column_sort_key(column_id: str, value, row: dict | None = None):
         return feet_sort_key(row)
     if column_id == "Rec":
         return rec_sort_key(value)
+    if column_id in ("Salary", "Transfer Value"):
+        number = finance_sort_number(row, column_id)
+        if number != number:  # NaN
+            return (1, float("inf"))
+        return (0, number)
     blank = value in (None, "", "-")
     if column_id not in TABLE_TEXT_COLS:
         return (1, float("inf")) if blank else (0, _cell_number(value))
@@ -4338,18 +4344,30 @@ def render_shortlist(
                     item[key] = injury_cell(injury_raw)
                     tip_row = injury_tooltip_entry(injury_raw, row=row)
                 elif key in ("Transfer Value", "Salary"):
-                    item[key] = finance_display(
-                        row.get(key)
-                        or row.get(
-                            "transfer_value" if key == "Transfer Value" else "salary"
-                        )
+                    raw = row.get(key) or row.get(
+                        "transfer_value" if key == "Transfer Value" else "salary"
                     )
+                    if key == "Salary":
+                        item[key] = finance_display(
+                            raw,
+                            numeric=row.get("salary_numeric"),
+                            currency=row.get("salary_currency"),
+                            salary_period=us.salary_period(settings),
+                            is_salary=True,
+                        )
+                    else:
+                        item[key] = finance_display(raw)
                 elif key == "Status":
                     item[key] = status_markdown(
                         _row_multi_year_status(row, row_years)
                     )
                 else:
                     item[key] = row.get(key, "-")
+        item["transfer_value_numeric"] = row.get("transfer_value_numeric")
+        item["salary_numeric"] = row.get("salary_numeric")
+        item["salary_currency"] = row.get("salary_currency")
+        item["salary"] = row.get("salary") or row.get("Salary")
+        item["transfer_value"] = row.get("transfer_value") or row.get("Transfer Value")
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["multi_year_status"] = (
             _row_multi_year_status(row, row_years)
@@ -4369,7 +4387,9 @@ def render_shortlist(
                 }
             )
         )
-        tip_row.update(finance_tooltip_entry(item))
+        tip_row.update(
+            finance_tooltip_entry(item, salary_period=us.salary_period(settings))
+        )
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()
         if row_key:

@@ -44,7 +44,7 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Inf": "Information / status",
     "Injury": "Injury",
     "Transfer Value": "Transfer value",
-    "Salary": "Salary (wage)",
+    "Salary": "Salary (wage); period from Settings → Wage period",
     "Division": (
         "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur. "
         "Striped = league with incomplete advanced match stats in FM. "
@@ -353,15 +353,72 @@ def division_tooltip_entry(
     return {"Division": text} if text else {}
 
 
-def finance_display(value) -> str:
-    """FM Transfer Value / Salary cell text (export string as-is)."""
+def finance_display(
+    value,
+    *,
+    numeric=None,
+    currency: str | None = None,
+    salary_period: str | None = None,
+    is_salary: bool = False,
+) -> str:
+    """FM Transfer Value / Salary cell text.
+
+    Salary can be reformatted from a precomputed annual ``numeric`` using
+    ``salary_period`` (annual / monthly / weekly). Transfer Value stays as the
+    export string (ranges included).
+    """
+    if is_salary and numeric is not None and salary_period:
+        from scoring.squad_finance import format_salary_for_period
+
+        return format_salary_for_period(
+            float(numeric),
+            period=salary_period,
+            currency=currency or "$",
+            source_text=str(value or "") or None,
+        )
     text = str(value or "").strip()
     if not text or text in ("-", "—"):
         return "—"
     return text
 
 
-def finance_tooltip_entry(row: dict | None = None) -> dict[str, str]:
+def finance_sort_number(row: dict | None, column_id: str) -> float:
+    """Numeric sort value for Transfer Value / Salary (NaN when missing)."""
+    record = row if isinstance(row, dict) else {}
+    key = (
+        "salary_numeric"
+        if column_id == "Salary"
+        else "transfer_value_numeric"
+    )
+    raw = record.get(key)
+    if raw is not None and raw != "":
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            pass
+    from scoring.squad_finance import (
+        detect_salary_period,
+        parse_money,
+        salary_to_annual,
+    )
+
+    text = record.get(column_id)
+    if text in (None, ""):
+        alt = "salary" if column_id == "Salary" else "transfer_value"
+        text = record.get(alt)
+    amount = parse_money(text)
+    if amount is None:
+        return float("nan")
+    if column_id == "Salary":
+        return salary_to_annual(amount, detect_salary_period(text))
+    return float(amount)
+
+
+def finance_tooltip_entry(
+    row: dict | None = None,
+    *,
+    salary_period: str | None = None,
+) -> dict[str, str]:
     """Hover tips for finance columns when the displayed cell may be truncated."""
     record = row if isinstance(row, dict) else {}
     tip: dict[str, str] = {}
@@ -369,9 +426,24 @@ def finance_tooltip_entry(row: dict | None = None) -> dict[str, str]:
         ("Transfer Value", "transfer_value"),
         ("Salary", "salary"),
     ):
-        text = finance_display(record.get(col) if col in record else record.get(key))
-        if text != "—":
-            tip[col] = text
+        raw = record.get(col) if col in record else record.get(key)
+        if col == "Salary":
+            text = finance_display(
+                raw,
+                numeric=record.get("salary_numeric"),
+                currency=record.get("salary_currency"),
+                salary_period=salary_period,
+                is_salary=True,
+            )
+            export = str(raw or "").strip()
+            if export and export not in ("-", "—") and text != export:
+                tip[col] = f"{text} (export: {export})"
+            elif text != "—":
+                tip[col] = text
+        else:
+            text = finance_display(raw)
+            if text != "—":
+                tip[col] = text
     return tip
 
 

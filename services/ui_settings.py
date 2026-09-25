@@ -186,6 +186,7 @@ PACK_DATA_KEYS = (
     "page_size_options",
     "preferred_theme",
     "shortlist_show_finance",
+    "salary_period",
     "tier_badge_colors",
     "personality_tier_colors",
     "archetype_tier_floors",
@@ -229,6 +230,7 @@ DEFAULTS: dict[str, Any] = {
     "page_size_options": [25, 50, 100],
     "preferred_theme": "dark",
     "shortlist_show_finance": {"role_scores": True, "player_stats": True},
+    "salary_period": "annual",
     "modal_identity_fields": {
         "order": list(DEFAULT_MODAL_IDENTITY_ORDER),
         "scopes": dict(DEFAULT_MODAL_IDENTITY_SCOPES),
@@ -816,6 +818,22 @@ def normalize_preferred_theme(value) -> str:
     return "light" if text == "light" else "dark"
 
 
+def normalize_salary_period(value) -> str:
+    from scoring.squad_finance import normalize_salary_period as _norm
+
+    return _norm(value)
+
+
+def salary_period(settings=None) -> str:
+    return normalize_salary_period(normalize(settings).get("salary_period"))
+
+
+def set_salary_period(period: str, pack_id: str | None = None) -> dict[str, Any]:
+    current = load(pack_id)
+    current["salary_period"] = normalize_salary_period(period)
+    return save(current, current.get("id"))
+
+
 def normalize_modal_extra_fields(raw=None) -> list[str]:
     allowed = set(ALLOWED_MODAL_EXTRA_FIELDS)
     if isinstance(raw, str):
@@ -1049,6 +1067,7 @@ def normalize(raw=None, *, pack_id: str | None = None, name: str | None = None) 
         "shortlist_show_finance": normalize_shortlist_show_finance(
             raw.get("shortlist_show_finance")
         ),
+        "salary_period": normalize_salary_period(raw.get("salary_period")),
         "modal_identity_fields": normalize_modal_identity_fields(),
         "tier_badge_colors": normalize_tier_badge_colors(raw.get("tier_badge_colors")),
         "personality_tier_colors": normalize_personality_tier_colors(

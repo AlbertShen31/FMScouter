@@ -64,6 +64,7 @@ SECTION_SAVE_KEYS: dict[str, tuple[str, ...]] = {
         "page_size",
         "page_size_options",
         "depth_undo_max",
+        "salary_period",
         "age_tiers",
         "foot_thresholds",
         "default_minutes_required",
@@ -488,8 +489,10 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                     "Appearance & tables",
                     "Preferred theme stays in sync with the navbar Light/Dark button "
                     "(also applied on Save and when loading a pack). Page size options are "
-                    "comma-separated; the default must be one of them. Recently removed limit "
-                    "is how many Profiles depth/shortlist deletes stay available to restore (1–50).",
+                    "comma-separated; the default must be one of them. Wage period converts "
+                    "Salary for Role scores / Player stats shortlists (exports are usually "
+                    "annual / p/a). Recently removed limit is how many Profiles depth/"
+                    "shortlist deletes stay available to restore (1–50).",
                     help_id="st-help-appearance",
                 ),
                 dbc.CardBody(
@@ -548,6 +551,26 @@ def _app_filters_panel(settings: dict, *, full_detail_division_options: list) ->
                                 ),
                             ],
                             className="g-3",
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    dmc.Select(
+                                        id="st-salary-period",
+                                        label="Wage period",
+                                        data=[
+                                            {"label": "Annual", "value": "annual"},
+                                            {"label": "Monthly", "value": "monthly"},
+                                            {"label": "Weekly", "value": "weekly"},
+                                        ],
+                                        value=us.salary_period(settings),
+                                        clearable=False,
+                                        searchable=False,
+                                    ),
+                                    md=3,
+                                ),
+                            ],
+                            className="g-3 mt-1",
                         ),
                     ]
                 ),
@@ -1515,6 +1538,7 @@ def _role_form_values(
         us.format_page_size_options(settings),
         settings["default_minutes_required"],
         settings["depth_undo_max"],
+        settings["salary_period"],
         settings["exclude_limited_leagues_adaptive_bounds"],
         full_detail_values,
         settings["archetype_tier_floors"]["bronze"],
@@ -1762,6 +1786,7 @@ def _ui_draft_from_state(
     page_size_options,
     default_minutes,
     depth_undo_max,
+    salary_period,
     exclude_limited_adaptive,
     full_detail_divisions,
     archetype_bronze,
@@ -1801,6 +1826,7 @@ def _ui_draft_from_state(
         "page_size_options": page_size_options,
         "default_minutes_required": default_minutes,
         "depth_undo_max": depth_undo_max,
+        "salary_period": us.normalize_salary_period(salary_period),
         "exclude_limited_leagues_adaptive_bounds": bool(exclude_limited_adaptive),
         "stats_full_detail_divisions": us.normalize_stats_full_detail_divisions(
             full_detail_divisions
@@ -1833,6 +1859,20 @@ def apply_preferred_theme_select(preferred_values, current):
         return no_update, no_update
     settings = us.set_preferred_theme(theme)
     return theme, settings
+
+
+@callback(
+    Output("ui-settings", "data", allow_duplicate=True),
+    Input("st-salary-period", "value"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def apply_salary_period_select(period, settings):
+    """Apply wage period immediately so shortlists refresh without Save."""
+    normalized = us.normalize_salary_period(period)
+    if normalized == us.salary_period(settings):
+        return no_update
+    return us.set_salary_period(normalized)
 
 
 @callback(
@@ -1876,6 +1916,7 @@ def clear_full_detail_divisions(_n_clicks):
     Output("st-page-size-options", "value"),
     Output("st-default-minutes", "value"),
     Output("st-depth-undo-max", "value"),
+    Output("st-salary-period", "value"),
     Output("st-exclude-limited-adaptive", "checked"),
     Output("st-full-detail-divisions", "value"),
     Output("st-archetype-bronze", "value"),
@@ -1924,6 +1965,7 @@ def clear_full_detail_divisions(_n_clicks):
     State("st-page-size-options", "value"),
     State("st-default-minutes", "value"),
     State("st-depth-undo-max", "value"),
+    State("st-salary-period", "value"),
     State("st-exclude-limited-adaptive", "checked"),
     State("st-full-detail-divisions", "value"),
     State("st-archetype-bronze", "value"),
@@ -1969,6 +2011,7 @@ def handle_ui_settings(
     page_size_options,
     default_minutes,
     depth_undo_max,
+    salary_period,
     exclude_limited_adaptive,
     full_detail_divisions,
     archetype_bronze,
@@ -1978,7 +2021,7 @@ def handle_ui_settings(
     role_weights_pack,
 ):
     triggered = ctx.triggered_id
-    n_out = 45
+    n_out = 46
     if not triggered:
         return (no_update,) * n_out
 
@@ -2028,6 +2071,7 @@ def handle_ui_settings(
         page_size_options,
         default_minutes,
         depth_undo_max,
+        salary_period,
         exclude_limited_adaptive,
         full_detail_divisions,
         archetype_bronze,

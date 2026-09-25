@@ -100,6 +100,64 @@ def parse_money(text: str | None) -> float | None:
     return number * mult
 
 
+SALARY_PERIODS = ("annual", "monthly", "weekly")
+_SALARY_PERIOD_LABELS = {
+    "annual": "Annual",
+    "monthly": "Monthly",
+    "weekly": "Weekly",
+}
+
+
+def detect_salary_period(text: str | None) -> str:
+    """Infer export period from FM wage text. Defaults to annual (``p/a``)."""
+    raw = str(text or "").casefold()
+    if not raw:
+        return "annual"
+    if "p/w" in raw or "per week" in raw or "pw" in raw.split():
+        return "weekly"
+    if "p/m" in raw or "per month" in raw or "pm" in raw.split():
+        return "monthly"
+    return "annual"
+
+
+def money_currency_symbol(text: str | None) -> str:
+    raw = str(text or "")
+    if "£" in raw:
+        return "£"
+    if "€" in raw:
+        return "€"
+    return "$"
+
+
+def salary_to_annual(amount: float, period: str) -> float:
+    key = str(period or "annual").strip().lower()
+    if key == "weekly":
+        return float(amount) * 52.0
+    if key == "monthly":
+        return float(amount) * 12.0
+    return float(amount)
+
+
+def salary_from_annual(amount: float, period: str) -> float:
+    key = str(period or "annual").strip().lower()
+    if key == "weekly":
+        return float(amount) / 52.0
+    if key == "monthly":
+        return float(amount) / 12.0
+    return float(amount)
+
+
+def normalize_salary_period(value) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in SALARY_PERIODS else "annual"
+
+
+def salary_period_options() -> list[dict[str, str]]:
+    return [
+        {"label": _SALARY_PERIOD_LABELS[key], "value": key} for key in SALARY_PERIODS
+    ]
+
+
 def parse_salary_clause(text: str | None) -> tuple[str, float] | None:
     """Parse a raise/drop clause as ``("pct", fraction)`` or ``("money", amount)``.
 
@@ -265,6 +323,23 @@ def format_money(value: float | None, *, currency: str = "$") -> str:
     else:
         body = f"{amount:,.0f}"
     return f"{sign}{currency}{body}"
+
+
+def format_salary_for_period(
+    annual_amount: float | None,
+    *,
+    period: str = "annual",
+    currency: str = "$",
+    source_text: str | None = None,
+) -> str:
+    """Format an annual wage for the chosen display period."""
+    if annual_amount is None:
+        return "—"
+    symbol = money_currency_symbol(source_text) if source_text else (currency or "$")
+    return format_money(
+        salary_from_annual(float(annual_amount), period),
+        currency=symbol,
+    )
 
 
 def format_signed_money(value: float | None, *, currency: str = "$") -> str:
