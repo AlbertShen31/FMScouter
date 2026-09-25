@@ -474,6 +474,34 @@ def _band_legend(settings=None) -> html.Div:
     return html.Div(chips, className="rs-depth-legend")
 
 
+def _phase_legend() -> html.Div:
+    """Explain score-header colors: IP green / OOP red / hybrid purple / GK amber."""
+    chips = []
+    for tone, label, text in (
+        ("ip", "IP", "In possession"),
+        ("oop", "OOP", "Out of possession"),
+        ("combo", "Hybrid", "IP + OOP"),
+        ("gk", "GK", "Goalkeeper"),
+    ):
+        chips.append(
+            html.Span(
+                [
+                    html.Span(label, className="rs-legend-name"),
+                    html.Span(text, className="rs-legend-op"),
+                ],
+                className=f"rs-legend-chip rs-phase-legend-chip {tone}",
+            )
+        )
+    return html.Div(
+        [
+            html.Span("Column colors", className="rs-phase-legend-label"),
+            html.Div(chips, className="rs-depth-legend"),
+        ],
+        className="rs-phase-legend",
+        id="rs-phase-legend",
+    )
+
+
 def _is_dark(theme) -> bool:
     return is_dark_theme(theme)
 
@@ -1550,6 +1578,7 @@ def layout():
                         html.Div(_set_piece_panel(settings), className="rs-special-scores"),
                         html.Div(
                             [
+                                _phase_legend(),
                                 html.Div(
                                     id="rs-table-empty",
                                     className="rs-table-empty",

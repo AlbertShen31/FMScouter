@@ -2023,6 +2023,65 @@ body[data-theme="dark"] .rs-phase-tag.combo {
     min-width: 0;
 }
 
+.rs-phase-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0 0 10px;
+}
+
+/* Hide with the table when the shortlist is empty. */
+.rs-table-area:has(#rs-table-shell[hidden]) .rs-phase-legend {
+    display: none;
+}
+
+.rs-phase-legend-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--app-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.rs-legend-chip.rs-phase-legend-chip {
+    background: var(--app-input);
+    border: 1px solid var(--app-line);
+    color: var(--app-text);
+}
+
+.rs-legend-chip.rs-phase-legend-chip .rs-legend-name {
+    font-weight: 800;
+}
+
+.rs-legend-chip.rs-phase-legend-chip .rs-legend-op {
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+/* Match shortlist header colors (dark default). */
+.rs-legend-chip.rs-phase-legend-chip.ip .rs-legend-name { color: #3dff88; }
+.rs-legend-chip.rs-phase-legend-chip.oop .rs-legend-name { color: #f87171; }
+.rs-legend-chip.rs-phase-legend-chip.combo .rs-legend-name { color: #c4b5fd; }
+.rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name { color: #fbbf24; }
+
+html[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.ip .rs-legend-name,
+body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.ip .rs-legend-name {
+    color: #15803d;
+}
+html[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.oop .rs-legend-name,
+body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.oop .rs-legend-name {
+    color: #b91c1c;
+}
+html[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.combo .rs-legend-name,
+body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.combo .rs-legend-name {
+    color: #6d28d9;
+}
+html[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name,
+body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name {
+    color: #b45309;
+}
+
 .rs-table-empty {
     border: 1px dashed var(--app-line);
     border-radius: 12px;
