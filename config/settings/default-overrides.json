@@ -195,6 +195,7 @@
     "role_scores": true,
     "player_stats": true
   },
+  "salary_period": "annual",
   "tier_badge_colors": {
     "key": "#3dff88",
     "preferred": "#c6e35b",
