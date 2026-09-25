@@ -885,34 +885,34 @@ def identity_data_styles(
             "letterSpacing": "0.03em",
             "fontWeight": "700",
             "textAlign": "center",
-            # Fits "A+" / header "Rec".
-            "minWidth": "36px",
-            "width": "36px",
-            "maxWidth": "36px",
-            "paddingLeft": "2px",
-            "paddingRight": "2px",
+            # Fits "A+" / header "Rec" + sort chevron.
+            "minWidth": "48px",
+            "width": "48px",
+            "maxWidth": "52px",
+            "paddingLeft": "4px",
+            "paddingRight": "4px",
         },
         {
             "if": {"column_id": "Age"},
             "color": plain,
             "textAlign": "center",
-            # Fits 2-digit age / header "Age".
-            "minWidth": "36px",
-            "width": "36px",
-            "maxWidth": "36px",
-            "paddingLeft": "2px",
-            "paddingRight": "2px",
+            # Fits 2-digit age / header "Age" + sort chevron.
+            "minWidth": "48px",
+            "width": "48px",
+            "maxWidth": "52px",
+            "paddingLeft": "4px",
+            "paddingRight": "4px",
         },
         {
             "if": {"column_id": "Height"},
             "color": plain,
             "textAlign": "center",
-            # Fits values like 6'11" / header "Ht".
-            "minWidth": "44px",
-            "width": "44px",
-            "maxWidth": "44px",
-            "paddingLeft": "2px",
-            "paddingRight": "2px",
+            # Fits values like 6'11" / header "Ht" + sort chevron.
+            "minWidth": "52px",
+            "width": "52px",
+            "maxWidth": "56px",
+            "paddingLeft": "4px",
+            "paddingRight": "4px",
         },
         {
             "if": {"column_id": "Injury"},
