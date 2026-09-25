@@ -44,13 +44,28 @@ IDENTITY_HEADER_TOOLTIPS = {
     "Inf": "Information / status",
     "Injury": "Injury",
     "Transfer Value": "Transfer value",
-    "Salary": "Salary (wage); period from Settings → Wage period",
+    "Salary": "Salary (wage)",
     "Division": (
         "Green = top tier · Yellow = professional lower · Red = semi-pro / amateur. "
         "Striped = league with incomplete advanced match stats in FM. "
         "Hover a cell for the full name, nation, and tier."
     ),
 }
+_SALARY_PERIOD_HEADER = {
+    "annual": "p/a",
+    "monthly": "p/m",
+    "weekly": "p/w",
+}
+_SALARY_PERIOD_TIP = {
+    "annual": "Annual salary (p/a)",
+    "monthly": "Monthly salary (p/m)",
+    "weekly": "Weekly salary (p/w)",
+}
+# Strip FM period suffixes from wage cell text (period lives on the column header).
+_SALARY_PERIOD_LABEL = re.compile(
+    r"\s*(?:p/[amw]|per\s+(?:annum|year|month|week)|/?\s*(?:pa|pw|pm))\b.*$",
+    re.IGNORECASE,
+)
 
 _REC_SUFFIX = {"+": 0, "": 1, "-": 2}
 _REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
@@ -89,19 +104,44 @@ def is_dark_theme(theme: str | None) -> bool:
     return (theme or "dark") != "light"
 
 
-def identity_header_name(column_id: str) -> str:
+def identity_header_name(
+    column_id: str,
+    *,
+    salary_period: str | None = None,
+) -> str:
     """Display name for identity columns (abbreviations when configured)."""
+    if column_id == "Salary":
+        from scoring.squad_finance import normalize_salary_period
+
+        period = normalize_salary_period(salary_period)
+        return f"Wage {_SALARY_PERIOD_HEADER[period]}"
     return IDENTITY_HEADER_ABBR.get(column_id, column_id)
 
 
-def identity_header_tooltips(*column_ids: str) -> dict[str, str]:
+def identity_header_tooltips(
+    *column_ids: str,
+    salary_period: str | None = None,
+) -> dict[str, str]:
     """tooltip_header entries for abbreviated identity columns present in `column_ids`."""
     tips: dict[str, str] = {}
     wanted = set(column_ids) if column_ids else set(IDENTITY_HEADER_TOOLTIPS)
     for col_id, label in IDENTITY_HEADER_TOOLTIPS.items():
         if col_id in wanted:
             tips[col_id] = label
+    if "Salary" in tips:
+        from scoring.squad_finance import normalize_salary_period
+
+        period = normalize_salary_period(salary_period)
+        tips["Salary"] = _SALARY_PERIOD_TIP[period]
     return tips
+
+
+def strip_salary_period_label(text: str | None) -> str:
+    """Remove ``p/a`` / ``p/m`` / ``p/w`` (and similar) from wage display text."""
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    return _SALARY_PERIOD_LABEL.sub("", raw).strip()
 
 
 def foot_color(level: FootStrength | None) -> str:
@@ -364,8 +404,9 @@ def finance_display(
     """FM Transfer Value / Salary cell text.
 
     Salary can be reformatted from a precomputed annual ``numeric`` using
-    ``salary_period`` (annual / monthly / weekly). Transfer Value stays as the
-    export string (ranges included).
+    ``salary_period`` (annual / monthly / weekly). Period labels (p/a etc.) are
+    stripped from cells — they belong on the Wage column header instead.
+    Transfer Value stays as the export string (ranges included).
     """
     if is_salary and numeric is not None and salary_period:
         from scoring.squad_finance import format_salary_for_period
@@ -383,6 +424,9 @@ def finance_display(
         from scoring.squad_finance import format_money
 
         return format_money(0.0, currency=currency or "$")
+    if is_salary:
+        cleaned = strip_salary_period_label(text)
+        return cleaned or "—"
     return text
 
 

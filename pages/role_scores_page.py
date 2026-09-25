@@ -2013,12 +2013,12 @@ def _column_header_abbr(col_id: str) -> str:
     return column_display_abbr(col_id)
 
 
-def _column_display_name(col_id: str) -> str:
+def _column_display_name(col_id: str, *, salary_period: str | None = None) -> str:
     """Short headers: CF not CF-IP; hybrids wrap as CF+\\nCM; set pieces as COR/AER/…"""
     if col_id == "Status":
         return "Status"
     if col_id in TABLE_TEXT_COLS:
-        return identity_header_name(col_id)
+        return identity_header_name(col_id, salary_period=salary_period)
     piece = set_piece_header(col_id)
     if piece != col_id:
         return piece
@@ -2079,9 +2079,14 @@ def _column_full_name(col_id: str, *, combos=None) -> str | None:
     return _role_column_full_names().get(col_id)
 
 
-def _header_tooltips(col_ids: list[str], *, combos=None) -> dict[str, str]:
+def _header_tooltips(
+    col_ids: list[str],
+    *,
+    combos=None,
+    salary_period: str | None = None,
+) -> dict[str, str]:
     """tooltip_header map for abbreviated identity + score columns."""
-    tips = identity_header_tooltips(*col_ids)
+    tips = identity_header_tooltips(*col_ids, salary_period=salary_period)
     for col in col_ids:
         full = _column_full_name(col, combos=combos)
         if full:
@@ -2124,13 +2129,21 @@ def _header_phase_colors(theme: str | None = None) -> dict[str, str]:
     }
 
 
-def _table_columns(col_ids: list[str], *, name_markdown: bool = False) -> list[dict]:
+def _table_columns(
+    col_ids: list[str],
+    *,
+    name_markdown: bool = False,
+    salary_period: str | None = None,
+) -> list[dict]:
     columns = []
     markdown_cols = set(TABLE_MARKDOWN_COLS)
     if name_markdown:
         markdown_cols.add("Name")
     for col in col_ids:
-        spec = {"name": _column_display_name(col), "id": col}
+        spec = {
+            "name": _column_display_name(col, salary_period=salary_period),
+            "id": col,
+        }
         if col in markdown_cols or col not in TABLE_TEXT_COLS:
             # Score / set-piece cells may include HTML deltas; Feet uses colored HTML.
             spec["presentation"] = "markdown"
@@ -3991,8 +4004,13 @@ def render_shortlist(
             columns = _table_columns(
                 visible_cols,
                 name_markdown=has_scouting_rows(payload.get("rows")),
+                salary_period=us.salary_period(settings),
             )
-            header_tips = _header_tooltips(visible_cols, combos=combos)
+            header_tips = _header_tooltips(
+                visible_cols,
+                combos=combos,
+                salary_period=us.salary_period(settings),
+            )
             page_current, new_sig = _table_page_state(columns, cols_sig)
             style_data, style_header, table_css_rules = _cached_table_chrome(
                 visible_score_cols, settings, theme
@@ -4286,8 +4304,15 @@ def render_shortlist(
     visible_cols = _inject_multi_year_status_col(visible_cols, filtered)
     highlight_source = has_scouting_rows(filtered)
     score_cols = visible_score_cols
-    columns = _table_columns(visible_cols, name_markdown=highlight_source)
-    header_tips = _header_tooltips(visible_cols, combos=combos)
+    wage_period = us.salary_period(settings)
+    columns = _table_columns(
+        visible_cols,
+        name_markdown=highlight_source,
+        salary_period=wage_period,
+    )
+    header_tips = _header_tooltips(
+        visible_cols, combos=combos, salary_period=wage_period
+    )
     if highlight_source:
         header_tips["Name"] = (
             "Colored by export: Squad (club/international) vs Scouting (transfer targets)"

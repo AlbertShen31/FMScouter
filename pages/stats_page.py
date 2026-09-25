@@ -1254,7 +1254,12 @@ def _table_columns(
         page="player_stats",
         available=finance_available,
     ):
-        spec = {"name": identity_header_name(col), "id": col}
+        spec = {
+            "name": identity_header_name(
+                col, salary_period=us.salary_period(settings)
+            ),
+            "id": col,
+        }
         if col in ("Feet", "Injury", "Status") or (
             highlight_source and col == "Name"
         ):
@@ -1384,7 +1389,11 @@ def _header_tooltips(
     """Full names for abbreviated Mins / Ht / percentile / metric headers."""
     g, cat = _resolve_category(group, category)
     identity_cols = us.shortlist_columns_for("player_stats", settings)
-    tips = identity_header_tooltips(*identity_cols, "Minutes")
+    tips = identity_header_tooltips(
+        *identity_cols,
+        "Minutes",
+        salary_period=us.salary_period(settings),
+    )
     tips["Status"] = "Multi-year presence (new / returned / departed / continuous)"
     tips["Name"] = (
         "Colored by export when scouting is loaded: Squad vs Scouting"
