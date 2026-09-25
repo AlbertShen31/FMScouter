@@ -537,7 +537,9 @@ def _center_non_identity_css() -> list[dict]:
             "selector": (
                 "td.dash-cell .dash-cell-value, "
                 "td.dash-cell .markdown, "
-                "td.dash-cell .markdown p"
+                "td.dash-cell .markdown p, "
+                "td.dash-cell .dash-cell-value p, "
+                "td.dash-cell .cell-markdown p"
             ),
             "rule": "margin: 0 !important; padding: 0 !important; line-height: 1.2 !important;",
         },

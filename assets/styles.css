@@ -2335,7 +2335,9 @@ body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name
 
 .rs-table-shell .dash-spreadsheet-inner td.dash-cell .dash-cell-value,
 .rs-table-shell .dash-spreadsheet-inner td.dash-cell .markdown,
-.rs-table-shell .dash-spreadsheet-inner td.dash-cell .markdown p {
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .markdown p,
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .dash-cell-value p,
+.rs-table-shell .dash-spreadsheet-inner td.dash-cell .cell-markdown p {
     margin: 0 !important;
     padding: 0 !important;
     line-height: 1.2 !important;
@@ -5824,7 +5826,9 @@ body[data-theme="light"] .rs-role-fit-phase.is-oop {
 
 #st-table .dash-spreadsheet-inner td.dash-cell .dash-cell-value,
 #st-table .dash-spreadsheet-inner td.dash-cell .markdown,
-#st-table .dash-spreadsheet-inner td.dash-cell .markdown p {
+#st-table .dash-spreadsheet-inner td.dash-cell .markdown p,
+#st-table .dash-spreadsheet-inner td.dash-cell .dash-cell-value p,
+#st-table .dash-spreadsheet-inner td.dash-cell .cell-markdown p {
     margin: 0 !important;
     padding: 0 !important;
     line-height: 1.2 !important;
