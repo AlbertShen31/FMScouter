@@ -7586,6 +7586,35 @@ body[data-theme="light"] .my-status-pill.partial {
     color: #b45309;
     border-color: #fbbf24;
 }
+.src-pill {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 650;
+    border: 1px solid var(--app-line);
+    background: var(--app-input);
+    color: var(--app-text);
+    white-space: nowrap;
+}
+.src-pill-squad {
+    border-color: #38bdf8;
+    color: #7dd3fc;
+}
+.src-pill-scouting {
+    border-color: #fb923c;
+    color: #fdba74;
+}
+html[data-theme="light"] .src-pill-squad,
+body[data-theme="light"] .src-pill-squad {
+    color: #0369a1;
+    border-color: #7dd3fc;
+}
+html[data-theme="light"] .src-pill-scouting,
+body[data-theme="light"] .src-pill-scouting {
+    color: #c2410c;
+    border-color: #fdba74;
+}
 .my-year-section {
     margin-top: 0.75rem;
 }

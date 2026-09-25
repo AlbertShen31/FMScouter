@@ -74,8 +74,8 @@ from scoring.role_scorer import (
 )
 from components.scouting_shell import (
     clicked,
-    parsed_historical_players,
     parsed_players,
+    parsed_scouting_players,
     pattern_matching_stubs,
     register_library_select_callbacks,
     register_marks_callbacks,
@@ -84,7 +84,14 @@ from components.scouting_shell import (
     unpack_parsed,
     upload_card,
 )
-from scoring.comparison import compare_name_key, delta_html, wrap_cell_with_delta
+from scoring.export_sources import (
+    SOURCE_SQUAD,
+    has_scouting_rows,
+    merge_squad_and_scouting,
+    normalize_export_source,
+    source_markdown,
+)
+from scoring.comparison import delta_html, wrap_cell_with_delta
 from scoring.stats_scorer import (
     POS_GROUPS,
     adaptive_bound_options,
@@ -167,6 +174,7 @@ register_library_select_callbacks(
     reveal_ids=["st-main"],
     catch_exceptions=True,
     library_only=True,
+    secondary="scouting",
 )
 register_pos_foot_callbacks("st", pos_store="st-pos", foot_store="st-foot", pos_id_attr="key")
 register_archetype_filter_callbacks("st")
@@ -258,7 +266,7 @@ def _unpack_parsed(data) -> dict | None:
 def _limited_divisions_for_parsed(parsed, players: list[dict]) -> list[str]:
     store = _unpack_parsed(parsed) or {}
     file_id = str(store.get("file_id") or "").strip()
-    limited = lib.list_limited_tracking_divisions(file_id=file_id or None)
+    limited = list(lib.list_limited_tracking_divisions(file_id=file_id or None))
     if not limited and players:
         limited = sorted(
             {
@@ -269,6 +277,80 @@ def _limited_divisions_for_parsed(parsed, players: list[dict]) -> list[str]:
             }
         )
     return limited
+
+
+def _merge_export_players(squad_parsed, scout_parsed) -> tuple[list[dict], list[str]]:
+    """Combine squad + scouting players; return (merged, limited_divisions)."""
+    squad_store = _unpack_parsed(squad_parsed) or {}
+    scout_store = _unpack_parsed(scout_parsed) or {}
+    squad_players = list(squad_store.get("players") or [])
+    scout_players = parsed_scouting_players(scout_parsed)
+    squad_file_id = str(squad_store.get("file_id") or "").strip()
+    scout_file_id = str(scout_store.get("file_id") or "").strip()
+    merged = merge_squad_and_scouting(
+        squad_players,
+        scout_players,
+        key_fn=player_key,
+        squad_file_id=squad_file_id,
+        scouting_file_id=scout_file_id,
+    )
+    limited: list[str] = []
+    seen: set[str] = set()
+    for store, players in (
+        (squad_store, squad_players),
+        (scout_store, scout_players),
+    ):
+        for div in _limited_divisions_for_parsed(store, players):
+            if div and div not in seen:
+                seen.add(div)
+                limited.append(div)
+    return merged, limited
+
+
+def _find_stats_player(
+    squad_parsed,
+    scout_parsed,
+    *,
+    name: str = "",
+    club: str = "",
+    unique_id: str = "",
+    key: str = "",
+    preferred_file_id: str = "",
+):
+    """Find a stats player across squad and scouting stores."""
+    from components.player_detail import find_parsed_player
+
+    preferred = str(preferred_file_id or "").strip()
+    key = str(key or "").strip()
+    stores = []
+    for raw in (squad_parsed, scout_parsed):
+        store = _unpack_parsed(raw) or raw
+        if store:
+            stores.append(store)
+    if key:
+        for store in stores:
+            for player in store.get("players") or []:
+                if player_key(player) == key:
+                    if preferred and str(store.get("file_id") or "").strip() != preferred:
+                        continue
+                    return player, store
+        for store in stores:
+            for player in store.get("players") or []:
+                if player_key(player) == key:
+                    return player, store
+        return None, None
+    candidates = []
+    for store in stores:
+        hit = find_parsed_player(store, name, club, unique_id=unique_id)
+        if hit:
+            candidates.append((hit, store))
+    if not candidates:
+        return None, None
+    if preferred:
+        for hit, store in candidates:
+            if str(store.get("file_id") or "").strip() == preferred:
+                return hit, store
+    return candidates[0]
 
 
 DETAIL_LEVEL_ORDER = ("full_detail", "no_detail", "inactive")
@@ -498,23 +580,50 @@ def _page_banding_bundle(
     settings,
     detail_map,
     minutes_required: float,
+    *,
+    export_limited: list[str] | None = None,
 ) -> tuple[dict, list[str], list[str], dict]:
     """Return (band_settings, band_limited, export_limited, banding_ctx)."""
     settings = us.normalize(settings)
-    export_limited = _limited_divisions_for_parsed(parsed, players)
+    if export_limited is None:
+        export_limited = _limited_divisions_for_parsed(parsed, players)
     band_settings, band_limited = _banding_settings_and_limited(
         settings, export_limited, detail_map
     )
     band_limited_list = list(band_limited or [])
     file_id = str((parsed or {}).get("file_id") or "").strip()
+    scout_ids = sorted(
+        {
+            str(p.get("_source_file_id") or "").strip()
+            for p in (players or [])
+            if str(p.get("_source_file_id") or "").strip()
+        }
+    )
+    cache_bits = [file_id, *scout_ids] if scout_ids else [file_id]
+    cache_key = "st:" + "+".join(b for b in cache_bits if b) if any(cache_bits) else None
     banding_ctx = us.build_stats_banding_context(
         band_settings,
         players,
         limited_divisions=band_limited_list,
         min_minutes=minutes_required,
-        cache_key=f"st:{file_id}" if file_id else None,
+        cache_key=cache_key,
     )
     return band_settings, band_limited_list, list(export_limited or []), banding_ctx
+
+
+def _lookup_modal_player(parsed, player_key_value, scout_parsed=None):
+    players, _ = _merge_export_players(parsed, scout_parsed)
+    return next((p for p in players if player_key(p) == player_key_value), None)
+
+
+def _lookup_compare_players(parsed, compare_keys, scout_parsed=None):
+    keys = [str(k) for k in (compare_keys or []) if k]
+    if len(keys) != 2:
+        return None, None
+    players, _ = _merge_export_players(parsed, scout_parsed)
+    player_a = next((p for p in players if player_key(p) == keys[0]), None)
+    player_b = next((p for p in players if player_key(p) == keys[1]), None)
+    return player_a, player_b
 
 
 def _group_rows_by_assignments(
@@ -1105,23 +1214,50 @@ _KEY_COLUMN_HIDE = [
 
 
 def _table_columns(
-    group: str, category: str, threshold_overrides=None, settings=None, *, include_status: bool = False
+    group: str,
+    category: str,
+    threshold_overrides=None,
+    settings=None,
+    *,
+    include_status: bool = False,
+    include_source: bool = False,
 ) -> list[dict]:
     g, cat = _resolve_category(group, category)
     settings = us.normalize(settings)
     cols = []
     for col in us.shortlist_columns_for("player_stats", settings):
         spec = {"name": identity_header_name(col), "id": col}
-        if col in ("Feet", "Injury", "Status"):
+        if col in ("Feet", "Injury", "Status", "Source"):
             spec["presentation"] = "markdown"
         cols.append(spec)
         if include_status and col == "Name":
             cols.append(
                 {"name": "Status", "id": "Status", "presentation": "markdown"}
             )
+        if include_source and col == "Name":
+            # After Status when both inject after Name in column order.
+            if include_status and cols and cols[-1].get("id") == "Status":
+                cols.append(
+                    {"name": "Source", "id": "Source", "presentation": "markdown"}
+                )
+            else:
+                cols.append(
+                    {"name": "Source", "id": "Source", "presentation": "markdown"}
+                )
     if include_status and not any(c.get("id") == "Status" for c in cols):
         cols.insert(
             1, {"name": "Status", "id": "Status", "presentation": "markdown"}
+        )
+    if include_source and not any(c.get("id") == "Source" for c in cols):
+        insert_at = 1
+        for i, c in enumerate(cols):
+            if c.get("id") == "Status":
+                insert_at = i + 1
+                break
+            if c.get("id") == "Name":
+                insert_at = i + 1
+        cols.insert(
+            insert_at, {"name": "Source", "id": "Source", "presentation": "markdown"}
         )
     cols.append({"name": "Mins", "id": "Minutes", "presentation": "markdown"})
     if cat == "all":
@@ -1186,11 +1322,14 @@ def _identity_cells(
         "Best Pos": lambda: _display_blank(player.get("best_pos")),
         "Feet": lambda: feet_cell(foot_row),
         "Status": lambda: status_markdown(player.get("multi_year_status")),
+        "Source": lambda: source_markdown(player.get("_export_source")),
     }
     row: dict = {
         "Division": _display_blank(player.get("division")),
         "Nation": _display_blank(player.get("nation")),
         "Unique ID": str(player.get("unique_id") or "").strip(),
+        "_export_source": normalize_export_source(player.get("_export_source")),
+        "_source_file_id": str(player.get("_source_file_id") or "").strip(),
     }
     for col in identity_cols:
         getter = getters.get(col)
@@ -1218,6 +1357,7 @@ def _header_tooltips(
     identity_cols = us.shortlist_columns_for("player_stats", settings)
     tips = identity_header_tooltips(*identity_cols, "Minutes")
     tips["Status"] = "Multi-year presence (new / returned / departed / continuous)"
+    tips["Source"] = "Squad export vs scouting (transfer targets)"
     if cat == "all":
         tips[OVERALL_COL["id"]] = OVERALL_COL["label"]
         for section in _avg_category_columns(group):
@@ -1359,8 +1499,6 @@ def _build_rows(
     minutes_required,
     threshold_overrides=None,
     settings=None,
-    compare: bool = False,
-    hist_percentiles: dict[str, dict[str, float | None]] | None = None,
     metric_p100=None,
     metric_p0=None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
@@ -1374,11 +1512,19 @@ def _build_rows(
     include_status = any(
         isinstance(p, dict) and p.get("multi_year_status") for p in (players or [])
     )
+    include_source = has_scouting_rows(players)
     if include_status and "Status" not in identity_cols:
         if "Name" in identity_cols:
             identity_cols.insert(identity_cols.index("Name") + 1, "Status")
         else:
             identity_cols.insert(0, "Status")
+    if include_source and "Source" not in identity_cols:
+        if "Status" in identity_cols:
+            identity_cols.insert(identity_cols.index("Status") + 1, "Source")
+        elif "Name" in identity_cols:
+            identity_cols.insert(identity_cols.index("Name") + 1, "Source")
+        else:
+            identity_cols.insert(0, "Source")
     g, cat = _resolve_category(group, category)
     metric_ids = (
         [] if cat == "all" else metrics_for(g, cat, threshold_overrides)
@@ -1397,7 +1543,6 @@ def _build_rows(
     limited = frozenset(stripe_limited)
     mode = normalize_value_mode(value_mode)
     rows = []
-    hist_percentiles = hist_percentiles or {}
     for p in players:
         if banding_ctx is not None:
             threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
@@ -1420,7 +1565,6 @@ def _build_rows(
         row["Minutes"] = _colored_cell(mins_text, minutes_color(status))
         pkey = player_key(p)
         row["_key"] = pkey
-        hist_map = hist_percentiles.get(compare_name_key(p)) or {}
         export_level = engine_detail_level_for_player(
             p,
             full_detail_divisions=full_detail,
@@ -1452,11 +1596,7 @@ def _build_rows(
                 metric_p100=metric_p100,
                 metric_p0=metric_p0,
             )
-            row[OVERALL_COL["id"]] = _percentile_cell(
-                overall_band,
-                hist_pct=hist_map.get(OVERALL_COL["id"]),
-                compare=compare,
-            )
+            row[OVERALL_COL["id"]] = _percentile_cell(overall_band)
             _set_sort_value(row, OVERALL_COL["id"], overall_band.get("percentile"))
             for section in avg_cats:
                 col_id = section["id"]
@@ -1468,11 +1608,7 @@ def _build_rows(
                     metric_p100=metric_p100,
                     metric_p0=metric_p0,
                 )
-                row[col_id] = _percentile_cell(
-                    band,
-                    hist_pct=hist_map.get(col_id),
-                    compare=compare,
-                )
+                row[col_id] = _percentile_cell(band)
                 _set_sort_value(row, col_id, band.get("percentile"))
             rows.append(row)
             continue
@@ -1501,11 +1637,7 @@ def _build_rows(
             metric_p100=metric_p100,
             metric_p0=metric_p0,
         )
-        row[CATEGORY_AVG_COL["id"]] = _percentile_cell(
-            cat_band,
-            hist_pct=hist_map.get(CATEGORY_AVG_COL["id"]),
-            compare=compare,
-        )
+        row[CATEGORY_AVG_COL["id"]] = _percentile_cell(cat_band)
         _set_sort_value(row, CATEGORY_AVG_COL["id"], cat_band.get("percentile"))
         for mid in metric_ids:
             abbr = metric_defs()[mid]["abbr"]
@@ -1527,11 +1659,7 @@ def _build_rows(
                 metric_p100=metric_p100,
                 metric_p0=metric_p0,
             )
-            row[abbr] = _metric_cell(
-                band,
-                hist_pct=hist_map.get(abbr),
-                compare=compare,
-            )
+            row[abbr] = _metric_cell(band)
             _set_sort_value(row, abbr, band.get("value"))
         rows.append(row)
     return rows
@@ -1738,6 +1866,7 @@ def layout(**_kwargs):
                 header_help_id="st-help-upload",
                 library_page="stats",
                 library_only=True,
+                secondary="scouting",
             ),
             html.Div(
                 [
@@ -1971,17 +2100,17 @@ def layout(**_kwargs):
 @callback(
     Output("st-detail-level-map", "data"),
     Input("st-parsed", "data"),
+    Input("st-parsed-scouting", "data"),
     Input("st-data-rev", "data"),
     Input("ui-settings", "data"),
     Input("st-detail-level-drop", "data"),
     State("st-detail-level-map", "data"),
 )
-def sync_detail_level_map(parsed, _data_rev, settings, drop, current_map):
-    players = _parsed_players(parsed)
+def sync_detail_level_map(parsed, scout_parsed, _data_rev, settings, drop, current_map):
+    players, limited = _merge_export_players(parsed, scout_parsed)
     settings = us.normalize(settings)
     if not players:
         return None
-    limited = _limited_divisions_for_parsed(parsed, players)
     file_id = _parsed_file_id(parsed)
     triggered = ctx.triggered_id
     if triggered == "st-detail-level-drop" and isinstance(current_map, dict):
@@ -2000,10 +2129,11 @@ def sync_detail_level_map(parsed, _data_rev, settings, drop, current_map):
     Output("st-detail-levels", "children"),
     Input("st-detail-level-map", "data"),
     Input("st-parsed", "data"),
+    Input("st-parsed-scouting", "data"),
     Input("st-data-rev", "data"),
 )
-def refresh_detail_levels(detail_map, parsed, _data_rev):
-    players = _parsed_players(parsed)
+def refresh_detail_levels(detail_map, parsed, scout_parsed, _data_rev):
+    players, _limited = _merge_export_players(parsed, scout_parsed)
     if not players:
         return None
     assignments = _normalize_detail_assignments((detail_map or {}).get("assignments"))
@@ -2102,7 +2232,7 @@ def sync_st_controls_from_settings(settings, page_size, minutes_required):
     Input("st-archetypes", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
-    Input("st-parsed-historical", "data"),
+    Input("st-parsed-scouting", "data"),
     Input("st-detail-level-map", "data"),
     State("st-sort-memory", "data"),
 )
@@ -2125,12 +2255,11 @@ def refresh_table(
     archetypes,
     settings,
     theme,
-    hist_parsed,
+    scout_parsed,
     detail_map,
     sort_memory,
 ):
-    players = _parsed_players(parsed)
-    limited_divisions = _limited_divisions_for_parsed(parsed, players)
+    players, limited_divisions = _merge_export_players(parsed, scout_parsed)
     pos = pos or "all"
     settings = us.normalize(settings)
     band_settings, band_limited = _banding_settings_and_limited(
@@ -2159,32 +2288,6 @@ def refresh_table(
         limited_divisions=band_limited,
         value_mode=value_mode,
     )
-    compare = bool(parsed_historical_players(hist_parsed))
-    hist_percentiles: dict[str, dict[str, float | None]] = {}
-    if compare:
-        hist_players = parsed_historical_players(hist_parsed)
-        hist_limited = _limited_divisions_for_parsed(hist_parsed, hist_players)
-        hist_band_settings, hist_band_limited = _banding_settings_and_limited(
-            settings, hist_limited, detail_map
-        )
-        hist_banding_ctx = us.build_stats_banding_context(
-            hist_band_settings,
-            hist_players,
-            limited_divisions=hist_band_limited,
-            min_minutes=minutes_required,
-        )
-        for hp in hist_players:
-            pkey = compare_name_key(hp)
-            if pkey:
-                hist_percentiles[pkey] = _player_percentile_map(
-                    hp,
-                    group=pos,
-                    category=category,
-                    banding_ctx=hist_banding_ctx,
-                    value_mode=value_mode,
-                    settings=hist_band_settings,
-                    limited_divisions=hist_band_limited,
-                )
 
     filtered = _filter_players(
         players,
@@ -2207,8 +2310,6 @@ def refresh_table(
         minutes_required=minutes_required,
         threshold_overrides=thresh,
         settings=band_settings,
-        compare=compare,
-        hist_percentiles=hist_percentiles,
         limited_divisions=limited_divisions,
         banding_ctx=banding_ctx,
         value_mode=value_mode,
@@ -2223,6 +2324,7 @@ def refresh_table(
         include_status=any(
             isinstance(p, dict) and p.get("multi_year_status") for p in filtered
         ),
+        include_source=has_scouting_rows(filtered),
     )
     col_ids = {c["id"] for c in cols}
     sort_by = _coerce_sort_by(
@@ -2247,6 +2349,8 @@ def refresh_table(
         item["DivisionTier"] = row.get("DivisionTier") or ""
         item["DivisionLimited"] = row.get("DivisionLimited") or "no"
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
+        item["_export_source"] = row.get("_export_source") or SOURCE_SQUAD
+        item["_source_file_id"] = str(row.get("_source_file_id") or "").strip()
         key = str(row.get("_key") or "").strip()
         if key:
             item["id"] = key  # DataTable row id (stable across refreshes)
@@ -2287,7 +2391,9 @@ def refresh_table(
             caption,
             not bool(marked_set),
         )
-    reset_page = bool(triggered & {"st-parsed", "st-data-rev"})
+    reset_page = bool(
+        triggered & {"st-parsed", "st-parsed-scouting", "st-data-rev"}
+    )
     return (
         _filters_bar(
             players,
@@ -2324,6 +2430,7 @@ def refresh_table(
     Input("st-player-modal-close", "n_clicks"),
     State("st-table", "derived_viewport_data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("st-player-view", "data"),
@@ -2338,6 +2445,7 @@ def open_player(
     _close,
     viewport,
     parsed,
+    scout_parsed,
     minutes_required,
     theme,
     view,
@@ -2384,7 +2492,7 @@ def open_player(
             no_update,
         )
     key = _row_mark_key(rows[idx])
-    players = _parsed_players(parsed)
+    players, export_limited = _merge_export_players(parsed, scout_parsed)
     player = next((p for p in players if player_key(p) == key), None)
     view = _normalize_player_view(view)
     if not player:
@@ -2397,7 +2505,12 @@ def open_player(
     )
     eval_group = _normalize_eval_group(player.get("pos_group"), "mid", player=player)
     band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
-        parsed, players, settings, detail_map, minutes_required
+        parsed,
+        players,
+        settings,
+        detail_map,
+        minutes_required,
+        export_limited=export_limited,
     )
     return (
         True,
@@ -2422,11 +2535,6 @@ def open_player(
     )
 
 
-def _lookup_modal_player(parsed, player_key_value):
-    players = _parsed_players(parsed)
-    return next((p for p in players if player_key(p) == player_key_value), None)
-
-
 @callback(
     Output("st-player-view", "data", allow_duplicate=True),
     Output("st-player-modal-body", "children", allow_duplicate=True),
@@ -2435,6 +2543,7 @@ def _lookup_modal_player(parsed, player_key_value):
     State("st-player-group", "data"),
     State("st-player-key", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("ui-settings", "data"),
@@ -2449,6 +2558,7 @@ def switch_player_view(
     eval_group,
     player_key_value,
     parsed,
+    scout_parsed,
     minutes_required,
     theme,
     settings,
@@ -2463,18 +2573,23 @@ def switch_player_view(
         return no_update, no_update
     if view == current:
         return no_update, no_update
-    player = _lookup_modal_player(parsed, player_key_value)
+    player = _lookup_modal_player(parsed, player_key_value, scout_parsed)
     if not player:
         return view, html.Div("Player not found.")
     settings = us.normalize(settings)
-    players = _parsed_players(parsed)
+    players, export_limited = _merge_export_players(parsed, scout_parsed)
     mins_req = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
     band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
-        parsed, players, settings, detail_map, mins_req
+        parsed,
+        players,
+        settings,
+        detail_map,
+        mins_req,
+        export_limited=export_limited,
     )
     return (
         view,
@@ -2502,6 +2617,7 @@ def switch_player_view(
     State("st-player-view", "data"),
     State("st-player-key", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("ui-settings", "data"),
@@ -2516,6 +2632,7 @@ def switch_player_group(
     view,
     player_key_value,
     parsed,
+    scout_parsed,
     minutes_required,
     theme,
     settings,
@@ -2526,7 +2643,7 @@ def switch_player_group(
     if not ctx.triggered_id or not _clicked(n_clicks):
         return no_update, no_update
     group = ctx.triggered_id.get("group")
-    player = _lookup_modal_player(parsed, player_key_value)
+    player = _lookup_modal_player(parsed, player_key_value, scout_parsed)
     if not player:
         return no_update, no_update
     allowed = {key for key, _ in _eval_groups_for_player(player)}
@@ -2535,14 +2652,19 @@ def switch_player_group(
     if group == current:
         return no_update, no_update
     settings = us.normalize(settings)
-    players = _parsed_players(parsed)
+    players, export_limited = _merge_export_players(parsed, scout_parsed)
     mins_req = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
     band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
-        parsed, players, settings, detail_map, mins_req
+        parsed,
+        players,
+        settings,
+        detail_map,
+        mins_req,
+        export_limited=export_limited,
     )
     return (
         group,
@@ -2572,6 +2694,7 @@ def switch_player_group(
     State("st-player-view", "data"),
     State("st-player-group", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("st-minutes-required", "value"),
     State("theme", "data"),
     State("ui-settings", "data"),
@@ -2586,24 +2709,30 @@ def refresh_player_modal_value_mode(
     view,
     eval_group,
     parsed,
+    scout_parsed,
     minutes_required,
     theme,
     settings,
 ):
     if not is_open or not player_key_value:
         return no_update
-    player = _lookup_modal_player(parsed, player_key_value)
+    player = _lookup_modal_player(parsed, player_key_value, scout_parsed)
     if not player:
         return no_update
     settings = us.normalize(settings)
-    players = _parsed_players(parsed)
+    players, export_limited = _merge_export_players(parsed, scout_parsed)
     mins_req = float(
         minutes_required
         if minutes_required is not None
         else us.default_minutes_required(settings)
     )
     band_settings, band_limited, _export_limited, banding_ctx = _page_banding_bundle(
-        parsed, players, settings, detail_map, mins_req
+        parsed,
+        players,
+        settings,
+        detail_map,
+        mins_req,
+        export_limited=export_limited,
     )
     return _player_modal_body(
         player,
@@ -2711,6 +2840,7 @@ def _build_stats_compare_body(
     Input("st-compare-modal-close", "n_clicks"),
     State("st-marked", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("st-compare-view", "data"),
     State("st-compare-group", "data"),
     State("theme", "data"),
@@ -2725,6 +2855,7 @@ def open_stats_compare(
     _close,
     marked,
     parsed,
+    scout_parsed,
     view,
     eval_group,
     theme,
@@ -2742,14 +2873,14 @@ def open_stats_compare(
     keys = [str(k) for k in (marked or []) if k]
     if len(keys) != 2:
         return no_update, no_update, no_update, no_update, no_update
-    players = _parsed_players(parsed)
+    players, _limited = _merge_export_players(parsed, scout_parsed)
     player_a = next((p for p in players if player_key(p) == keys[0]), None)
     player_b = next((p for p in players if player_key(p) == keys[1]), None)
     if not player_a or not player_b:
         return (
             True,
             "Compare players",
-            html.Div("One or both marked players were not found in the current export."),
+            html.Div("One or both marked players were not found in the loaded exports."),
             keys,
             no_update,
         )
@@ -2780,16 +2911,6 @@ def open_stats_compare(
     )
 
 
-def _lookup_compare_players(parsed, compare_keys):
-    keys = [str(k) for k in (compare_keys or []) if k]
-    if len(keys) != 2:
-        return None, None
-    players = _parsed_players(parsed)
-    player_a = next((p for p in players if player_key(p) == keys[0]), None)
-    player_b = next((p for p in players if player_key(p) == keys[1]), None)
-    return player_a, player_b
-
-
 @callback(
     Output("st-compare-view", "data", allow_duplicate=True),
     Output("st-compare-modal-body", "children", allow_duplicate=True),
@@ -2798,6 +2919,7 @@ def _lookup_compare_players(parsed, compare_keys):
     State("st-compare-group", "data"),
     State("st-compare-keys", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
@@ -2810,6 +2932,7 @@ def switch_compare_view(
     eval_group,
     compare_keys,
     parsed,
+    scout_parsed,
     theme,
     settings,
     value_mode,
@@ -2822,7 +2945,7 @@ def switch_compare_view(
         return no_update, no_update
     if view == current:
         return no_update, no_update
-    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys, scout_parsed)
     if not player_a or not player_b:
         return normalize_compare_view(view), html.Div("Players not found.")
     settings = us.normalize(settings)
@@ -2835,7 +2958,7 @@ def switch_compare_view(
             eval_group=eval_group,
             theme=theme,
             settings=settings,
-            players=_parsed_players(parsed),
+            players=_merge_export_players(parsed, scout_parsed)[0],
             value_mode=value_mode,
             detail_map=detail_map,
             parsed=parsed,
@@ -2851,6 +2974,7 @@ def switch_compare_view(
     State("st-compare-view", "data"),
     State("st-compare-keys", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
     State("st-value-mode", "value"),
@@ -2863,6 +2987,7 @@ def switch_compare_group(
     view,
     compare_keys,
     parsed,
+    scout_parsed,
     theme,
     settings,
     value_mode,
@@ -2873,7 +2998,7 @@ def switch_compare_group(
     group = ctx.triggered_id.get("group")
     if group == "_":
         return no_update, no_update
-    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys, scout_parsed)
     if not player_a or not player_b:
         return no_update, no_update
     from components.stats_compare import compare_eval_groups
@@ -2893,7 +3018,7 @@ def switch_compare_group(
             eval_group=group,
             theme=theme,
             settings=settings,
-            players=_parsed_players(parsed),
+            players=_merge_export_players(parsed, scout_parsed)[0],
             value_mode=value_mode,
             detail_map=detail_map,
             parsed=parsed,
@@ -2910,6 +3035,7 @@ def switch_compare_group(
     State("st-compare-view", "data"),
     State("st-compare-group", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
     State("theme", "data"),
     State("ui-settings", "data"),
     prevent_initial_call=True,
@@ -2922,12 +3048,13 @@ def refresh_compare_modal_value_mode(
     view,
     eval_group,
     parsed,
+    scout_parsed,
     theme,
     settings,
 ):
     if not is_open:
         return no_update
-    player_a, player_b = _lookup_compare_players(parsed, compare_keys)
+    player_a, player_b = _lookup_compare_players(parsed, compare_keys, scout_parsed)
     if not player_a or not player_b:
         return no_update
     settings = us.normalize(settings)
@@ -2938,7 +3065,7 @@ def refresh_compare_modal_value_mode(
         eval_group=eval_group,
         theme=theme,
         settings=settings,
-        players=_parsed_players(parsed),
+        players=_merge_export_players(parsed, scout_parsed)[0],
         value_mode=value_mode,
         detail_map=detail_map,
         parsed=parsed,
@@ -2950,19 +3077,20 @@ def refresh_compare_modal_value_mode(
     Output("st-compare-status", "children"),
     Input("st-marked", "data"),
     State("st-parsed", "data"),
+    State("st-parsed-scouting", "data"),
 )
-def update_stats_compare_controls(marked, parsed):
+def update_stats_compare_controls(marked, parsed, scout_parsed):
     keys = [str(k) for k in (marked or []) if k]
     count = len(keys)
     if count != 2:
         disabled, message = compare_control_state(count)
         return disabled, compare_status_children(message)
-    players = _parsed_players(parsed)
+    players, _ = _merge_export_players(parsed, scout_parsed)
     player_a = next((p for p in players if player_key(p) == keys[0]), None)
     player_b = next((p for p in players if player_key(p) == keys[1]), None)
     if not player_a or not player_b:
         return True, compare_status_children(
-            "Marked players not found in the current export."
+            "Marked players not found in the loaded exports."
         )
     disabled, message = compare_control_state(
         2, player_a=player_a, player_b=player_b

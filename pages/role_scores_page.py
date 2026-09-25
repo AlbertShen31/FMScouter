@@ -25,15 +25,23 @@ from components.player_modal import player_modal, register_archetype_group_callb
 from components.scouting_shell import (
     as_list,
     clicked,
-    parsed_historical_players,
+    parsed_scouting_players,
     pattern_matching_stubs,
     register_library_select_callbacks,
     register_marks_callbacks,
     register_pos_foot_callbacks,
     shortlist_busy_overlay,
+    unpack_parsed,
     upload_card,
 )
-from scoring.comparison import compare_name_key, score_display
+from scoring.comparison import score_display
+from scoring.export_sources import (
+    SOURCE_SQUAD,
+    has_scouting_rows,
+    merge_squad_and_scouting,
+    normalize_export_source,
+    source_markdown,
+)
 from scoring.role_scorer import (
     COMBO_IP_WEIGHT,
     COMBO_OOP_WEIGHT,
@@ -143,6 +151,7 @@ register_library_select_callbacks(
     pack_store=False,
     reveal_ids=[],
     library_only=True,
+    secondary="scouting",
 )
 register_pos_foot_callbacks(
     "rs",
@@ -361,6 +370,41 @@ def _normalize_status_filter(value) -> str:
     return text if text in STATUS_FILTER_VALUES else "active"
 
 
+def _configured_years_for_file(file_id: str | None) -> list[str] | None:
+    fid = str(file_id or "").strip()
+    if not fid:
+        return None
+    try:
+        entry = lib.get_file(fid)
+        if not entry or not lib.is_multi_year(entry):
+            return None
+        years = list(lib.configured_years(entry).keys())
+        return years or None
+    except Exception:
+        return None
+
+
+def _configured_years_for_payload(payload: dict | None) -> list[str] | None:
+    """Years from the squad file (primary). Prefer per-row via ``_row_configured_years``."""
+    return _configured_years_for_file(str((payload or {}).get("file_id") or "").strip())
+
+
+def _row_configured_years(row: dict | None, payload: dict | None) -> list[str] | None:
+    fid = str((row or {}).get("_source_file_id") or "").strip()
+    if not fid:
+        fid = str((payload or {}).get("file_id") or "").strip()
+    return _configured_years_for_file(fid)
+
+
+def _payload_file_ids(payload: dict | None) -> list[str]:
+    ids: list[str] = []
+    for key in ("file_id", "scouting_file_id"):
+        fid = str((payload or {}).get(key) or "").strip()
+        if fid and fid not in ids:
+            ids.append(fid)
+    return ids
+
+
 def _row_multi_year_status(row: dict, configured: list[str] | None) -> str:
     """Prefer live presence classification from years_present when available."""
     present = row.get("years_present")
@@ -371,22 +415,6 @@ def _row_multi_year_status(row: dict, configured: list[str] | None) -> str:
         if status:
             return status
     return str(row.get("multi_year_status") or "").strip()
-
-
-def _configured_years_for_payload(payload: dict | None) -> list[str] | None:
-    file_id = str((payload or {}).get("file_id") or "").strip()
-    if not file_id:
-        return None
-    try:
-        import services.export_library as lib
-
-        entry = lib.get_file(file_id)
-        if not entry or not lib.is_multi_year(entry):
-            return None
-        years = list(lib.configured_years(entry).keys())
-        return years or None
-    except Exception:
-        return None
 
 
 def _passes_status_filter(
@@ -1022,7 +1050,13 @@ def layout():
         ),
         dcc.Store(id="rs-config", data=rc.active_pack_id()),
         html.H1("FM26 role scores", className="mt-2 mb-3"),
-        upload_card("rs", "1. Saved export", library_page="role_scores", library_only=True),
+        upload_card(
+            "rs",
+            "1. Saved export",
+            library_page="role_scores",
+            library_only=True,
+            secondary="scouting",
+        ),
         html.Div(
             [
         dbc.Card(
@@ -1590,7 +1624,7 @@ def _cell_number(value) -> float:
 
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
-TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status"}
+TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status", "Source"}
 
 
 def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> list[str]:
@@ -1608,9 +1642,26 @@ def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> l
     return out
 
 
+def _inject_source_col(cols: list[str], rows: list[dict] | None) -> list[str]:
+    """Insert Source after Name when scouting rows are present."""
+    if not rows or "Source" in cols:
+        return cols
+    if not has_scouting_rows(rows):
+        return cols
+    out = list(cols)
+    if "Name" in out:
+        idx = out.index("Name") + 1
+        out.insert(idx, "Source")
+    else:
+        out.insert(0, "Source")
+    return out
+
+
 def _limited_tracking_divisions(payload: dict | None) -> set[str]:
-    file_id = str((payload or {}).get("file_id") or "").strip()
-    return set(lib.list_limited_tracking_divisions(file_id=file_id or None))
+    out: set[str] = set()
+    for file_id in _payload_file_ids(payload):
+        out.update(lib.list_limited_tracking_divisions(file_id=file_id or None))
+    return out
 
 
 def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] | None:
@@ -1624,8 +1675,16 @@ def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] 
 
     if not normalize_archetype_filter(selected):
         return None
-    file_id = str((payload or {}).get("file_id") or "").strip()
-    stats_players = load_stats_players_for_file(file_id) if file_id else []
+    stats_players: list = []
+    seen_keys: set[str] = set()
+    for file_id in _payload_file_ids(payload):
+        for player in load_stats_players_for_file(file_id) or []:
+            key = stats_player_key(player)
+            if key and key in seen_keys:
+                continue
+            if key:
+                seen_keys.add(key)
+            stats_players.append(player)
     if not stats_players:
         return set()
     settings = us.normalize(settings)
@@ -1664,6 +1723,32 @@ def _upload_has_stats(parsed: dict | None) -> bool:
     return bool(entry and entry.get("stats"))
 
 
+def _find_player_in_exports(
+    squad_parsed,
+    scout_parsed,
+    name: str,
+    club: str,
+    *,
+    unique_id: str = "",
+    preferred_file_id: str = "",
+):
+    """Look up a player in squad first, then scouting. Prefer matching file id."""
+    preferred = str(preferred_file_id or "").strip()
+    candidates = []
+    for store in (squad_parsed, scout_parsed):
+        hit = find_parsed_player(store, name, club, unique_id=unique_id)
+        if hit:
+            candidates.append((store, hit))
+    if not candidates:
+        return None, None
+    if preferred:
+        for store, hit in candidates:
+            fid = str((store or {}).get("file_id") or "").strip()
+            if fid == preferred:
+                return hit, store
+    return candidates[0][1], candidates[0][0]
+
+
 def _build_role_modal_body(
     player: dict,
     parsed: dict | None,
@@ -1678,7 +1763,11 @@ def _build_role_modal_body(
 ) -> html.Div:
     from components.multi_year_ui import normalize_pct_basis
 
-    file_id = str((parsed or {}).get("file_id") or "").strip()
+    file_id = str(
+        (player or {}).get("_source_file_id")
+        or (parsed or {}).get("file_id")
+        or ""
+    ).strip()
     parsed_players = list((parsed or {}).get("players") or [])
     # Prefer in-memory cohort when players already carry stats (multiyear /
     # combined caches) so modal open does not re-gunzip the upload cache.
@@ -2699,6 +2788,7 @@ def toggle_multi_year_status_filter(payload):
     Input("rs-player-modal", "is_open"),
     State("rs-table", "derived_viewport_data"),
     State("rs-parsed", "data"),
+    State("rs-parsed-scouting", "data"),
     State("rs-rows", "data"),
     State("rs-focus-role", "data"),
     State("rs-hybrids-only", "checked"),
@@ -2713,6 +2803,7 @@ def open_player_modal(
     is_open,
     viewport,
     parsed,
+    scout_parsed,
     payload,
     focus_role,
     hybrids_only,
@@ -2742,7 +2833,15 @@ def open_player_modal(
     name = str(row.get("Name") or "").strip()
     unique_id = str(row.get("Unique ID") or "").strip()
     club = str(row.get("Club") or "").strip()
-    player = find_parsed_player(parsed, name, club, unique_id=unique_id)
+    preferred_file = str(row.get("_source_file_id") or "").strip()
+    player, source_store = _find_player_in_exports(
+        parsed,
+        scout_parsed,
+        name,
+        club,
+        unique_id=unique_id,
+        preferred_file_id=preferred_file,
+    )
     if not player:
         return (
             True,
@@ -2755,6 +2854,9 @@ def open_player_modal(
             None,
             "current",
         )
+    if preferred_file:
+        player = dict(player)
+        player["_source_file_id"] = preferred_file
     if pack_id:
         rc.load_pack(pack_id)
     view_roles = _hybrid_only_roles(
@@ -2780,13 +2882,15 @@ def open_player_modal(
         "club": club,
         "position_eligible": position_eligible,
         "role_growth_column": growth_col,
+        "source_file_id": preferred_file
+        or str((source_store or {}).get("file_id") or "").strip(),
     }
     return (
         True,
         title,
         _build_role_modal_body(
             player,
-            parsed,
+            source_store or parsed,
             payload,
             settings,
             theme,
@@ -2806,13 +2910,14 @@ def open_player_modal(
     Input("rs-modal-pct-basis", "data"),
     State("rs-player-key", "data"),
     State("rs-parsed", "data"),
+    State("rs-parsed-scouting", "data"),
     State("rs-rows", "data"),
     State("ui-settings", "data"),
     State("theme", "data"),
     prevent_initial_call=True,
 )
 def switch_role_modal_bottom(
-    mode, pct_basis, player_key, parsed, payload, settings, theme
+    mode, pct_basis, player_key, parsed, scout_parsed, payload, settings, theme
 ):
     from components.multi_year_ui import normalize_pct_basis
 
@@ -2821,13 +2926,24 @@ def switch_role_modal_bottom(
     name = str(player_key.get("name") or "").strip()
     unique_id = str(player_key.get("unique_id") or "").strip()
     club = str(player_key.get("club") or "").strip()
-    player = find_parsed_player(parsed, name, club, unique_id=unique_id)
+    preferred_file = str(player_key.get("source_file_id") or "").strip()
+    player, source_store = _find_player_in_exports(
+        parsed,
+        scout_parsed,
+        name,
+        club,
+        unique_id=unique_id,
+        preferred_file_id=preferred_file,
+    )
     if not player:
         return no_update
+    if preferred_file:
+        player = dict(player)
+        player["_source_file_id"] = preferred_file
     settings = us.normalize(settings)
     return _build_role_modal_body(
         player,
-        parsed,
+        source_store or parsed,
         payload,
         settings,
         theme,
@@ -3225,7 +3341,7 @@ def sync_rs_page_size_from_settings(settings, page_size):
     Output("rs-focus-role", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
     Input("rs-parsed", "data"),
-    Input("rs-parsed-historical", "data"),
+    Input("rs-parsed-scouting", "data"),
     Input("rs-roles", "value"),
     Input("rs-combos", "data"),
     Input("rs-config", "data"),
@@ -3233,7 +3349,7 @@ def sync_rs_page_size_from_settings(settings, page_size):
     State("rs-focus-role", "data"),
     prevent_initial_call="initial_duplicate",
 )
-def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_focus):
+def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_focus):
     if pack_id:
         rc.load_pack(pack_id)
     if not parsed or not parsed.get("players"):
@@ -3252,19 +3368,72 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
                 needed.append(role_id)
     if not needed:
         return None, no_update, no_update
-    scored = None
-    file_id = (parsed or {}).get("file_id")
-    bucket_refs = has_bucket_role_refs(needed)
-    if file_id and (parsed or {}).get("from_cache") and not bucket_refs:
-        try:
-            import services.upload_cache as upload_cache
 
-            scored = upload_cache.cached_role_rows(file_id)
-        except Exception:
-            scored = None
+    squad_file_id = str((parsed or {}).get("file_id") or "").strip()
+    scout_store = unpack_parsed(scout_parsed) if scout_parsed else None
+    if scout_store is None and isinstance(scout_parsed, dict):
+        scout_store = scout_parsed
+    scout_players = parsed_scouting_players(scout_parsed)
+    scout_file_id = str(
+        (scout_store or {}).get("file_id")
+        or (scout_parsed or {}).get("file_id")
+        or ""
+    ).strip()
+    merged_players = merge_squad_and_scouting(
+        list(parsed.get("players") or []),
+        scout_players,
+        squad_file_id=squad_file_id,
+        scouting_file_id=scout_file_id,
+    )
+    source_by_key = {
+        player_row_key(p): {
+            "_export_source": p.get("_export_source") or SOURCE_SQUAD,
+            "_source_file_id": str(p.get("_source_file_id") or "").strip(),
+        }
+        for p in merged_players
+        if player_row_key(p)
+    }
+
+    scored = None
+    bucket_refs = has_bucket_role_refs(needed)
+    scout_from_cache = bool((scout_parsed or {}).get("from_cache")) or bool(
+        (scout_store or {}).get("from_cache")
+    )
+    try:
+        import services.upload_cache as upload_cache
+    except Exception:
+        upload_cache = None  # type: ignore[assignment]
+
+    if upload_cache is not None and not bucket_refs:
+        if not scout_players and squad_file_id and (parsed or {}).get("from_cache"):
+            try:
+                scored = upload_cache.cached_role_rows(squad_file_id)
+            except Exception:
+                scored = None
+        elif scout_players and squad_file_id and scout_file_id:
+            squad_cached = None
+            scout_cached = None
+            if (parsed or {}).get("from_cache"):
+                try:
+                    squad_cached = upload_cache.cached_role_rows(squad_file_id)
+                except Exception:
+                    squad_cached = None
+            if scout_from_cache:
+                try:
+                    scout_cached = upload_cache.cached_role_rows(scout_file_id)
+                except Exception:
+                    scout_cached = None
+            if squad_cached is not None and scout_cached is not None:
+                scored = merge_squad_and_scouting(
+                    squad_cached,
+                    scout_cached,
+                    squad_file_id=squad_file_id,
+                    scouting_file_id=scout_file_id,
+                )
+
     if scored is None:
         scored = score_players(
-            parsed["players"],
+            merged_players,
             needed,
             tier_weights=tier_w,
             set_piece_profiles=profiles,
@@ -3272,9 +3441,7 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
         )
         # Preserve multi-year growth fields from merged players onto scored rows.
         by_key = {
-            player_row_key(p): p
-            for p in (parsed.get("players") or [])
-            if player_row_key(p)
+            player_row_key(p): p for p in merged_players if player_row_key(p)
         }
         for row in scored:
             src = by_key.get(player_row_key(row)) or by_key.get(
@@ -3292,30 +3459,25 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
             row["years_present"] = list(src.get("years_present") or [])
             row["role_scores_by_year"] = src.get("role_scores_by_year") or {}
             row["role_scores_combined"] = src.get("role_scores_combined") or {}
+
+    for row in scored:
+        meta = source_by_key.get(player_row_key(row)) or {}
+        row["_export_source"] = meta.get("_export_source") or SOURCE_SQUAD
+        row["_source_file_id"] = (
+            meta.get("_source_file_id")
+            or (
+                scout_file_id
+                if normalize_export_source(row.get("_export_source")) != SOURCE_SQUAD
+                else squad_file_id
+            )
+        )
+
     rows = apply_combos(
         scored,
         combos,
         ip_weight=hybrid_w["ip"],
         oop_weight=hybrid_w["oop"],
     )
-    historical_by_key: dict[str, dict] = {}
-    hist_players = parsed_historical_players(hist_parsed)
-    if hist_players:
-        hist_rows = apply_combos(
-            score_players(
-                hist_players,
-                needed,
-                tier_weights=tier_w,
-                set_piece_profiles=profiles,
-                partial_adjacency=partial_adj,
-            ),
-            combos,
-            ip_weight=hybrid_w["ip"],
-            oop_weight=hybrid_w["oop"],
-        )
-        historical_by_key = {
-            compare_name_key(row): row for row in hist_rows if compare_name_key(row)
-        }
     labels = combo_score_labels(needed, combos)
     selected = _focus_roles(current_focus)
     kept = [role for role in selected if role in labels]
@@ -3332,12 +3494,13 @@ def rescore(parsed, hist_parsed, role_ids, combos, pack_id, settings, current_fo
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
-            "file_id": file_id or "",
+            "file_id": squad_file_id or "",
+            "scouting_file_id": scout_file_id or "",
+            "has_scouting": bool(scout_players),
             "rows": rows,
             "roles": labels,
             "role_ids": needed,
             "combos": combos,
-            "historical_by_key": historical_by_key,
         },
         focus,
         sort,
@@ -3625,6 +3788,10 @@ def render_shortlist(
             hybrids_only=hybrids_only,
             set_pieces=set_pieces,
         )
+        visible_cols = _inject_multi_year_status_col(
+            visible_cols, payload.get("rows")
+        )
+        visible_cols = _inject_source_col(visible_cols, payload.get("rows"))
         if view_roles and cache_rows and _table_data_has_columns(
             cache_rows, visible_score_cols
         ):
@@ -3658,7 +3825,7 @@ def render_shortlist(
                 if not _passes_status_filter(
                     row,
                     status_filter,
-                    configured=configured_years,
+                    configured=_row_configured_years(row, payload),
                     multi_year=multi_year,
                 ):
                     continue
@@ -3723,6 +3890,10 @@ def render_shortlist(
             ]
             columns = _table_columns(visible_cols)
             header_tips = _header_tooltips(visible_cols, combos=combos)
+            if "Source" in visible_cols:
+                header_tips["Source"] = (
+                    "Squad export vs scouting (transfer targets)"
+                )
             page_current, new_sig = _table_page_state(columns, cols_sig)
             style_data, style_header, table_css_rules = _cached_table_chrome(
                 visible_score_cols, settings, theme
@@ -3849,8 +4020,6 @@ def render_shortlist(
     settings = us.normalize(settings)
     bands = settings["bands"]
     foot_thresholds = settings["foot_thresholds"]
-    historical_by_key = (payload or {}).get("historical_by_key") or {}
-    compare = bool(historical_by_key)
     empty_cols = [{"name": "Name", "id": "Name"}]
     empty_style = _score_styles([], settings, theme)
     empty_header = _score_header_styles([], theme)
@@ -3932,8 +4101,7 @@ def render_shortlist(
     marked_keys = set(_as_list(squad_marked))
     combo_by_col = _combo_columns_by_label(combos)
     archetype_keys = _archetype_match_keys(payload, archetypes, settings)
-    configured_years = _configured_years_for_payload(payload)
-    multi_year = bool(configured_years) or any(
+    multi_year = any(
         (r or {}).get("multi_year_status") or (r or {}).get("years_present")
         for r in rows
     )
@@ -3947,10 +4115,11 @@ def render_shortlist(
             continue
         if not _passes_club_filter(row, club_filter):
             continue
+        row_years = _row_configured_years(row, payload)
         if not _passes_status_filter(
             row,
             status_filter,
-            configured=configured_years,
+            configured=row_years,
             multi_year=multi_year,
         ):
             continue
@@ -4013,9 +4182,13 @@ def render_shortlist(
     )
     data_cols = _inject_multi_year_status_col(data_cols, filtered)
     visible_cols = _inject_multi_year_status_col(visible_cols, filtered)
+    data_cols = _inject_source_col(data_cols, filtered)
+    visible_cols = _inject_source_col(visible_cols, filtered)
     score_cols = visible_score_cols
     columns = _table_columns(visible_cols)
     header_tips = _header_tooltips(visible_cols, combos=combos)
+    if "Source" in visible_cols:
+        header_tips["Source"] = "Squad export vs scouting (transfer targets)"
     table_rows = []
     tooltip_data = []
     data_score_set = set(data_score_cols)
@@ -4026,9 +4199,7 @@ def render_shortlist(
 
     for row in filtered:
         row_key = player_row_key(row)
-        hist_row = (
-            historical_by_key.get(compare_name_key(row)) if compare else None
-        )
+        row_years = _row_configured_years(row, payload)
         item = {}
         tip_row: dict[str, str] = {}
         for key in data_cols:
@@ -4042,8 +4213,6 @@ def render_shortlist(
                     band = None
                 cell = score_display(
                     raw,
-                    hist_row.get(key) if hist_row else None,
-                    enabled=compare,
                     color=band_colors.get(band) if band else None,
                 )
                 suffix = score_year_suffix_html(
@@ -4067,16 +4236,20 @@ def render_shortlist(
                     tip_row = injury_tooltip_entry(injury_raw, row=row)
                 elif key == "Status":
                     item[key] = status_markdown(
-                        _row_multi_year_status(row, configured_years)
+                        _row_multi_year_status(row, row_years)
                     )
+                elif key == "Source":
+                    item[key] = source_markdown(row.get("_export_source"))
                 else:
                     item[key] = row.get(key, "-")
         item["PosEligible"] = row.get("_PosEligible") or "no"
         item["multi_year_status"] = (
-            _row_multi_year_status(row, configured_years)
+            _row_multi_year_status(row, row_years)
             or row.get("multi_year_status")
             or ""
         )
+        item["_export_source"] = normalize_export_source(row.get("_export_source"))
+        item["_source_file_id"] = str(row.get("_source_file_id") or "").strip()
         _attach_division_style_fields(item, row, limited_divisions)
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()

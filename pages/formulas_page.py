@@ -198,7 +198,7 @@ def _overview_panel() -> html.Div:
             [
                 "Upload attribute, Moneyball stats, and/or salary CSVs on Uploads.",
                 "Role scores — pick roles or load a formation, score, shortlist, save to a profile library.",
-                "Player stats — percentile tables vs Mustermann benchmarks; compare two exports historically.",
+                "Player stats — percentile tables vs Mustermann benchmarks; merge squad + scouting exports.",
                 "Squad finance — model wages, clauses, and club sustainability.",
                 "Profiles — depth chart, starting XI, and set-piece takers from saved exports.",
             ]
@@ -280,11 +280,14 @@ def _faq_panel() -> html.Div:
             ),
         ),
         _faq_item(
-            "How does historical compare work?",
+            "How do squad and scouting exports work?",
             _para(
-                "When a historical export is loaded alongside the current one, Player stats and ",
-                "Role scores show deltas between the two files. Players are matched by name + Unique ID ",
-                "(stable across club transfers). Comparison is on whenever a historical file is present.",
+                "On Role scores and Player stats, load a Squad export (players already on your club "
+                "or international team) and optionally a Scouting export (transfer targets). "
+                "The shortlist merges both files; when the same Unique ID appears in both, the "
+                "squad row wins. A Source column marks Squad vs Scouting. Single-year and "
+                "multi-year packs both work. Squad finance still uses a historical compare slot "
+                "for wage deltas.",
             ),
         ),
         _faq_item(

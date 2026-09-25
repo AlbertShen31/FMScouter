@@ -8,9 +8,11 @@ Typical IDs (``prefix`` e.g. ``rs`` / ``st``):
 - ``{prefix}-upload``, ``{prefix}-upload-replace``, ``{prefix}-upload-wrap``,
   ``{prefix}-upload-replace-wrap``, ``{prefix}-upload-status``
 - ``{prefix}-parsed`` (often declared in ``app.py`` as a session store)
-- ``{prefix}-parsed-historical`` (optional comparison export; page logic uses current only)
-- ``{prefix}-upload-hist``, ``{prefix}-upload-hist-replace`` (historical slot)
+- Secondary slot (optional):
+  - ``historical`` → ``{prefix}-parsed-historical``, ``*-upload-hist*`` (compare)
+  - ``scouting`` → ``{prefix}-parsed-scouting``, ``*-upload-scout*`` (merge)
 - ``{prefix}-table``, ``{prefix}-hist``, ``{prefix}-hist-wrap``, ``{prefix}-hist-toggle``
+  (score-distribution chart — unrelated to the historical export slot)
 - Pos/foot stores and pattern-matching buttons (configurable names)
 - Marked-rows store + clear button (configurable)
 
@@ -26,7 +28,9 @@ import base64
 import json
 import zlib
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Literal
+
+SecondaryKind = Literal["historical", "scouting"]
 
 from dash import (
     ALL,
@@ -163,6 +167,82 @@ def parsed_historical_players(data) -> list:
     return parsed_players(data)
 
 
+def parsed_scouting_players(data) -> list:
+    """Players from the scouting (transfer-target) slot (if uploaded)."""
+    return parsed_players(data)
+
+
+def _normalize_secondary(
+    secondary: SecondaryKind | None | object = ...,
+    *,
+    include_historical: bool | None = None,
+) -> SecondaryKind | None:
+    """Resolve secondary slot kind.
+
+    Prefer ``secondary``. Legacy ``include_historical=False`` disables the slot;
+    ``True`` / omitted maps to ``\"historical\"`` when ``secondary`` is not passed.
+    """
+    if secondary is not ...:
+        if secondary is None:
+            return None
+        if secondary not in ("historical", "scouting"):
+            raise ValueError(f"Unknown secondary slot: {secondary!r}")
+        return secondary  # type: ignore[return-value]
+    if include_historical is False:
+        return None
+    return "historical"
+
+
+def _secondary_meta(kind: SecondaryKind) -> dict[str, str]:
+    """DOM suffix, store suffix, status tag, and copy for a secondary slot."""
+    if kind == "scouting":
+        return {
+            "dom": "scout",
+            "store": "scouting",
+            "status_tag": "Scouting",
+            "title": "Scouting export",
+            "subtitle": (
+                "Transfer targets — merged into the shortlist. "
+                "Duplicates keep the squad row."
+            ),
+            "subtitle_library": (
+                "Transfer targets — merged into the shortlist (squad wins on "
+                "duplicates). Choose a saved file below."
+            ),
+            "primary_title": "Squad export",
+            "primary_subtitle": (
+                "Players already on your club or international squad."
+            ),
+            "primary_subtitle_library": (
+                "Players already on your club or international squad. "
+                "Choose a saved file below."
+            ),
+        }
+    return {
+        "dom": "hist",
+        "store": "historical",
+        "status_tag": "Historical",
+        "title": "Historical export",
+        "subtitle": "Comparison only — does not replace current.",
+        "subtitle_library": (
+            "Comparison only — does not replace current. Choose a saved file below."
+        ),
+        "primary_title": "Current export",
+        "primary_subtitle": "Active data used by this page.",
+        "primary_subtitle_library": (
+            "Active data used by this page. Choose a saved file below."
+        ),
+    }
+
+
+def secondary_parsed_id(prefix: str, kind: SecondaryKind) -> str:
+    return f"{prefix}-parsed-{_secondary_meta(kind)['store']}"
+
+
+def secondary_dom_suffix(kind: SecondaryKind) -> str:
+    return _secondary_meta(kind)["dom"]
+
+
 def upload_status_bar(
     count: int,
     filename: str,
@@ -214,8 +294,9 @@ def _upload_slot(
     upload_label: Any,
     library_page: str | None = None,
     library_only: bool = False,
+    secondary_kind: SecondaryKind | None = None,
 ) -> html.Div:
-    """One upload dropzone + status row. ``slot`` is ``current`` or ``hist``.
+    """One upload dropzone + status row. ``slot`` is ``current`` or a secondary kind.
 
     When ``library_only`` is True, the dropzone/replace controls stay hidden
     (stub Upload components remain so Clear callbacks still have targets).
@@ -229,13 +310,17 @@ def _upload_slot(
         lib_select_id = f"{prefix}-lib-select"
         lib_clear_id = f"{prefix}-lib-clear"
     else:
-        upload_id = f"{prefix}-upload-hist"
-        replace_id = f"{prefix}-upload-hist-replace"
-        wrap_id = f"{prefix}-upload-hist-wrap"
-        replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
-        status_id = f"{prefix}-upload-hist-status"
-        lib_select_id = f"{prefix}-lib-select-hist"
-        lib_clear_id = f"{prefix}-lib-clear-hist"
+        kind: SecondaryKind = secondary_kind or (
+            slot if slot in ("historical", "scouting") else "historical"
+        )  # type: ignore[assignment]
+        dom = secondary_dom_suffix(kind)
+        upload_id = f"{prefix}-upload-{dom}"
+        replace_id = f"{prefix}-upload-{dom}-replace"
+        wrap_id = f"{prefix}-upload-{dom}-wrap"
+        replace_wrap_id = f"{prefix}-upload-{dom}-replace-wrap"
+        status_id = f"{prefix}-upload-{dom}-status"
+        lib_select_id = f"{prefix}-lib-select-{dom}"
+        lib_clear_id = f"{prefix}-lib-clear-{dom}"
     children: list = [
         html.Div(title, className="rs-upload-slot-title"),
         html.P(subtitle, className="rs-upload-slot-note"),
@@ -342,11 +427,16 @@ def upload_card(
     header_help_id: str | None = None,
     class_name: str = "mb-3 rs-section-card",
     include_data_rev: bool = True,
-    include_historical: bool = True,
+    secondary: SecondaryKind | None | object = ...,
+    include_historical: bool | None = None,
     library_page: str | None = None,
     library_only: bool = False,
 ) -> dbc.Card:
-    """Standard current + optional historical upload controls.
+    """Standard primary + optional secondary upload controls.
+
+    ``secondary`` is ``\"historical\"`` (compare), ``\"scouting\"`` (merge transfer
+    targets), or ``None``. Legacy ``include_historical`` still works when
+    ``secondary`` is omitted.
 
     Set ``include_data_rev=False`` when ``{prefix}-data-rev`` already lives in the
     app layout (needed if another always-mounted store shares a callback with it).
@@ -357,9 +447,12 @@ def upload_card(
     When ``library_only`` is True, manual CSV dropzones are hidden and the page
     only loads files from the Uploads library (``library_page`` is required).
 
-    Page logic should read ``{prefix}-parsed`` (current). Historical data is stored
-    in ``{prefix}-parsed-historical`` for future comparison features.
+    Page logic should read ``{prefix}-parsed`` (primary / squad). Secondary data
+    lives in ``{prefix}-parsed-historical`` or ``{prefix}-parsed-scouting``.
     """
+    secondary_kind = _normalize_secondary(
+        secondary, include_historical=include_historical
+    )
     if library_only and not library_page:
         raise ValueError("library_only=True requires library_page")
     if upload_label is None:
@@ -370,18 +463,19 @@ def upload_card(
             dcc.Store(id=f"{prefix}-data-rev", data={"n": 0, "replaced": False})
         )
     body_children.append(html.Div(id=f"{prefix}-pulse-token", hidden=True))
-    if include_historical:
+    if secondary_kind:
+        meta = _secondary_meta(secondary_kind)
         body_children.append(
             html.Div(
                 [
                     _upload_slot(
                         prefix,
                         "current",
-                        title="Current export",
+                        title=meta["primary_title"],
                         subtitle=(
-                            "Active data used by this page. Choose a saved file below."
+                            meta["primary_subtitle_library"]
                             if library_only
-                            else "Active data used by this page."
+                            else meta["primary_subtitle"]
                         ),
                         upload_label=upload_label,
                         library_page=library_page,
@@ -389,16 +483,17 @@ def upload_card(
                     ),
                     _upload_slot(
                         prefix,
-                        "hist",
-                        title="Historical export",
+                        secondary_kind,
+                        title=meta["title"],
                         subtitle=(
-                            "Comparison only — does not replace current. Choose a saved file below."
+                            meta["subtitle_library"]
                             if library_only
-                            else "Comparison only — does not replace current."
+                            else meta["subtitle"]
                         ),
                         upload_label=upload_label,
                         library_page=library_page,
                         library_only=library_only,
+                        secondary_kind=secondary_kind,
                     ),
                 ],
                 className="rs-upload-dual",
@@ -443,21 +538,41 @@ def upload_card(
     if hint is not None:
         body_children.append(hint)
     if library_page:
+        if secondary_kind == "scouting":
+            dual_tip = (
+                "Choose a saved file for each slot (Ready = fast load from precompute). "
+                "Scouting players merge into the shortlist; squad wins on Unique ID "
+                "duplicates. Clear removes only that side from the page cache. Add or "
+                "compute files on the Uploads page."
+            )
+            dual_tip_manual = (
+                "Selecting a saved file loads that slot. Scouting merges into the "
+                "shortlist (squad wins on duplicates). Labels show cache status "
+                "(Ready / Stale / Not computed). Clear removes only that side's export "
+                "from the page cache. Manage files on the Uploads page."
+            )
+        else:
+            dual_tip = (
+                "Choose a saved file for each slot (Ready = fast load from precompute). "
+                "Clear removes only that side from the page cache. Add or compute files on "
+                "the Uploads page."
+            )
+            dual_tip_manual = (
+                "Selecting a saved file loads that slot. Labels show cache status "
+                "(Ready / Stale / Not computed). Clear removes only that side's export "
+                "from the page cache. Manage files on the Uploads page."
+            )
         library_tip = (
-            "Choose a saved file for each slot (Ready = fast load from precompute). "
-            "Clear removes only that side from the page cache. Add or compute files on "
-            "the Uploads page."
-            if library_only and include_historical
+            dual_tip
+            if library_only and secondary_kind
             else (
                 "Choose a saved file to load (Ready = fast load from precompute). "
                 "Clear removes it from this page's cache. Add or compute files on "
                 "the Uploads page."
                 if library_only
                 else (
-                    "Selecting a saved file loads that slot. Labels show cache status "
-                    "(Ready / Stale / Not computed). Clear removes only that side's export "
-                    "from the page cache. Manage files on the Uploads page."
-                    if include_historical
+                    dual_tip_manual
+                    if secondary_kind
                     else (
                         "Selecting a saved file loads it. Labels show cache status "
                         "(Ready / Stale / Not computed). Clear removes the export from "
@@ -572,7 +687,8 @@ def register_upload_callbacks(
     bad_file_message: str = "Upload a CSV export from Football Manager.",
     decode_strict: bool = False,
     catch_exceptions: bool = False,
-    include_historical: bool = True,
+    secondary: SecondaryKind | None | object = ...,
+    include_historical: bool | None = None,
 ) -> None:
     """Parse Upload / Replace into ``{prefix}-parsed`` and toggle upload UI.
 
@@ -585,10 +701,14 @@ def register_upload_callbacks(
     updating. ``busy_ready_id`` / ``busy_ready_prop`` name the component that
     signals the shortlist is done (default: ``{prefix}-table`` ``data``).
 
-    With ``include_historical`` (default), also wires a second slot into
-    ``{prefix}-parsed-historical`` for comparison exports. Page callbacks should
-    keep using ``parsed_players({prefix}-parsed)`` for active data.
+    With a secondary slot (default ``historical``), also wires that slot into
+    ``{prefix}-parsed-historical`` or ``{prefix}-parsed-scouting``. Page callbacks
+    should keep using ``parsed_players({prefix}-parsed)`` for the primary/squad
+    export.
     """
+    secondary_kind = _normalize_secondary(
+        secondary, include_historical=include_historical
+    )
     _register_upload_slot(
         prefix,
         slot="current",
@@ -603,10 +723,11 @@ def register_upload_callbacks(
         catch_exceptions=catch_exceptions,
         track_data_rev=True,
     )
-    if include_historical:
+    if secondary_kind:
+        meta = _secondary_meta(secondary_kind)
         _register_upload_slot(
             prefix,
-            slot="hist",
+            slot=secondary_kind,
             parse_fn=parse_fn,
             pack_store=pack_store,
             reveal_ids=None,
@@ -615,7 +736,8 @@ def register_upload_callbacks(
             decode_strict=decode_strict,
             catch_exceptions=catch_exceptions,
             track_data_rev=False,
-            status_tag="Historical",
+            status_tag=meta["status_tag"],
+            secondary_kind=secondary_kind,
         )
 
 
@@ -627,7 +749,8 @@ def register_library_select_callbacks(
     pack_store: bool = False,
     reveal_ids: Sequence[str] | None = None,
     catch_exceptions: bool = False,
-    include_historical: bool = True,
+    secondary: SecondaryKind | None | object = ...,
+    include_historical: bool | None = None,
     library_only: bool = False,
 ) -> None:
     """Load saved library files on select; Clear wipes page session stores.
@@ -635,6 +758,9 @@ def register_library_select_callbacks(
     When ``library_only`` is True, dropzone/replace wraps stay hidden after load
     and clear (manual upload UI is not used on the page).
     """
+    secondary_kind = _normalize_secondary(
+        secondary, include_historical=include_historical
+    )
     reveal_ids = list(reveal_ids or [])
 
     def _wire_load(slot: str) -> None:
@@ -647,13 +773,16 @@ def register_library_select_callbacks(
             track_rev = True
             status_tag = None
         else:
-            parsed_id = f"{prefix}-parsed-historical"
-            select_id = f"{prefix}-lib-select-hist"
-            status_id = f"{prefix}-upload-hist-status"
-            wrap_id = f"{prefix}-upload-hist-wrap"
-            replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
+            kind: SecondaryKind = secondary_kind or "historical"
+            meta = _secondary_meta(kind)
+            dom = meta["dom"]
+            parsed_id = secondary_parsed_id(prefix, kind)
+            select_id = f"{prefix}-lib-select-{dom}"
+            status_id = f"{prefix}-upload-{dom}-status"
+            wrap_id = f"{prefix}-upload-{dom}-wrap"
+            replace_wrap_id = f"{prefix}-upload-{dom}-replace-wrap"
             track_rev = False
-            status_tag = "Historical"
+            status_tag = meta["status_tag"]
 
         slot_reveal = reveal_ids if slot == "current" else []
         load_outputs = [
@@ -906,8 +1035,8 @@ def register_library_select_callbacks(
         return bool(parsed.get("players") or parsed.get("payload") or parsed.get("n"))
 
     _wire_load("current")
-    if include_historical:
-        _wire_load("hist")
+    if secondary_kind:
+        _wire_load(secondary_kind)
 
     def _wire_clear(slot: str) -> None:
         if slot == "current":
@@ -922,14 +1051,17 @@ def register_library_select_callbacks(
             track_rev = True
             slot_reveal = reveal_ids
         else:
-            clear_id = f"{prefix}-lib-clear-hist"
-            parsed_id = f"{prefix}-parsed-historical"
-            status_id = f"{prefix}-upload-hist-status"
-            wrap_id = f"{prefix}-upload-hist-wrap"
-            replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
-            select_id = f"{prefix}-lib-select-hist"
-            upload_id = f"{prefix}-upload-hist"
-            replace_id = f"{prefix}-upload-hist-replace"
+            kind: SecondaryKind = secondary_kind or "historical"
+            meta = _secondary_meta(kind)
+            dom = meta["dom"]
+            clear_id = f"{prefix}-lib-clear-{dom}"
+            parsed_id = secondary_parsed_id(prefix, kind)
+            status_id = f"{prefix}-upload-{dom}-status"
+            wrap_id = f"{prefix}-upload-{dom}-wrap"
+            replace_wrap_id = f"{prefix}-upload-{dom}-replace-wrap"
+            select_id = f"{prefix}-lib-select-{dom}"
+            upload_id = f"{prefix}-upload-{dom}"
+            replace_id = f"{prefix}-upload-{dom}-replace"
             track_rev = False
             slot_reveal = []
 
@@ -995,8 +1127,8 @@ def register_library_select_callbacks(
             return not _has_players(parsed)
 
     _wire_clear("current")
-    if include_historical:
-        _wire_clear("hist")
+    if secondary_kind:
+        _wire_clear(secondary_kind)
 
     if library_only:
         # Upload callbacks normally own the busy overlay; library-only pages need it here.
@@ -1006,19 +1138,20 @@ def register_library_select_callbacks(
     # matches Uploads even if layout was built before a recent Compute.
     if library_page in {"role_scores", "stats"}:
         refresh_outputs = [Output(f"{prefix}-lib-select", "data")]
-        if include_historical:
-            refresh_outputs.append(Output(f"{prefix}-lib-select-hist", "data"))
+        if secondary_kind:
+            dom = secondary_dom_suffix(secondary_kind)
+            refresh_outputs.append(Output(f"{prefix}-lib-select-{dom}", "data"))
 
         @callback(
             *refresh_outputs,
             Input(f"{prefix}-lib-options-tick", "n_intervals"),
             prevent_initial_call=False,
         )
-        def _refresh_lib_options(_n, _page=library_page, _hist=include_historical):
+        def _refresh_lib_options(_n, _page=library_page, _secondary=secondary_kind):
             import services.export_library as lib
 
             opts = lib.select_options(page=_page)
-            if _hist:
+            if _secondary:
                 return opts, opts
             return (opts,)
 
@@ -1038,6 +1171,7 @@ def _register_upload_slot(
     status_tag: str | None = None,
     busy_ready_id: str | None = None,
     busy_ready_prop: str = "data",
+    secondary_kind: SecondaryKind | None = None,
 ) -> None:
     reveal_ids = list(reveal_ids or [])
     pulse_ids = list(pulse_ids or [])
@@ -1049,12 +1183,17 @@ def _register_upload_slot(
         replace_wrap_id = f"{prefix}-upload-replace-wrap"
         status_id = f"{prefix}-upload-status"
     else:
-        parsed_id = f"{prefix}-parsed-historical"
-        upload_id = f"{prefix}-upload-hist"
-        replace_id = f"{prefix}-upload-hist-replace"
-        wrap_id = f"{prefix}-upload-hist-wrap"
-        replace_wrap_id = f"{prefix}-upload-hist-replace-wrap"
-        status_id = f"{prefix}-upload-hist-status"
+        kind: SecondaryKind = secondary_kind or (
+            slot if slot in ("historical", "scouting") else "historical"
+        )  # type: ignore[assignment]
+        meta = _secondary_meta(kind)
+        dom = meta["dom"]
+        parsed_id = secondary_parsed_id(prefix, kind)
+        upload_id = f"{prefix}-upload-{dom}"
+        replace_id = f"{prefix}-upload-{dom}-replace"
+        wrap_id = f"{prefix}-upload-{dom}-wrap"
+        replace_wrap_id = f"{prefix}-upload-{dom}-replace-wrap"
+        status_id = f"{prefix}-upload-{dom}-status"
 
     outputs = [
         Output(parsed_id, "data"),
