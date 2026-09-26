@@ -113,6 +113,7 @@ from components.player_table import (
     is_dark_theme,
     name_sort_text,
     nation_cell,
+    nation_tooltip_entry,
     player_data_table,
     rec_sort_key,
     style_cell,
@@ -4440,6 +4441,7 @@ def render_shortlist(
                 }
             )
         )
+        tip_row.update(nation_tooltip_entry(row=row))
         tip_row.update(
             finance_tooltip_entry(item, salary_period=us.salary_period(settings))
         )

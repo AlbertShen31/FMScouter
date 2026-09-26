@@ -111,6 +111,42 @@ def nation_cell(
         return flags
     return label
 
+
+def nation_tooltip_text(
+    value=None,
+    second=None,
+    *,
+    row: dict | None = None,
+) -> str:
+    """Primary [/ second] nationality labels for Name cell hover."""
+    from services.division_catalog import normalize_nation_label
+    from services.nation_flags import strip_nation_flags
+
+    primary, second_nat = nation_fields(row, nation=value, second_nation=second)
+    labels: list[str] = []
+    seen: set[str] = set()
+    for raw in (primary, second_nat):
+        text = strip_nation_flags(raw).strip()
+        if not text or text in ("-", "—"):
+            continue
+        label = normalize_nation_label(text) or text
+        if label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+    return " / ".join(labels)
+
+
+def nation_tooltip_entry(
+    value=None,
+    second=None,
+    *,
+    row: dict | None = None,
+) -> dict[str, str]:
+    """DataTable tooltip_data row fragment for the Name column (nations)."""
+    text = nation_tooltip_text(value, second, row=row)
+    return {"Name": text} if text else {}
+
 # Short table headers → full tooltip label (column id stays the key).
 IDENTITY_HEADER_ABBR = {
     "Height": "Ht",

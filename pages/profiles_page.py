@@ -34,6 +34,8 @@ from components.player_table import (
     name_sort_text,
     nation_cell,
     nation_flags_text,
+    nation_tooltip_entry,
+    nation_tooltip_text,
     page_size_select_data,
     player_data_table,
     rec_grade_style,
@@ -651,6 +653,18 @@ def _entry_nation_flags(entry: dict | None, row: dict | None = None) -> str:
     return nation_flags_text(
         nation=record.get("Nation") or player.get("nation"),
         second_nation=record.get("Second Nation") or player.get("second_nation"),
+    )
+
+
+def _entry_nation_tooltip(entry: dict | None, row: dict | None = None) -> str:
+    """Primary [/ second] nationality labels for depth / set-piece name hover."""
+    record = row if isinstance(row, dict) else {}
+    player = {}
+    if isinstance(entry, dict) and isinstance(entry.get("player"), dict):
+        player = entry["player"]
+    return nation_tooltip_text(
+        record.get("Nation") or player.get("nation"),
+        record.get("Second Nation") or player.get("second_nation"),
     )
 
 
@@ -3178,7 +3192,11 @@ def _depth_chart_player_row(
                 n_clicks=0,
                 className="pf-depth-chart-name",
                 **_depth_tip_attrs(
-                    _depth_hover_title(name, "Open player details")
+                    _depth_hover_title(
+                        name,
+                        _entry_nation_tooltip(entry, row),
+                        "Open player details",
+                    )
                     or "Open player details"
                 ),
                 draggable="false",
@@ -3643,7 +3661,11 @@ def _setpiece_chart_player_row(
                 n_clicks=0,
                 className="pf-setpiece-chart-name",
                 **_depth_tip_attrs(
-                    _depth_hover_title(name, "Open player details")
+                    _depth_hover_title(
+                        name,
+                        _entry_nation_tooltip(entry, row),
+                        "Open player details",
+                    )
                     or "Open player details"
                 ),
                 type="button",
@@ -4661,6 +4683,13 @@ def _entry_to_role_table_row(
                 or "",
                 "Nation": item.get("Nation") or raw.get("Nation") or player.get("nation") or "",
             }
+        )
+    )
+    tip_row.update(
+        nation_tooltip_entry(
+            raw.get("Nation") or player.get("nation"),
+            raw.get("Second Nation") or player.get("second_nation"),
+            row=raw,
         )
     )
     return item, tip_row

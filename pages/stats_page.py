@@ -61,6 +61,7 @@ from components.player_table import (
     limited_league_metric_highlight_styles,
     name_sort_text,
     nation_cell,
+    nation_tooltip_entry,
     player_data_table,
     rec_sort_key,
     resolve_division_highlight,
@@ -2500,6 +2501,7 @@ def refresh_table(
         table_rows.append(item)
         tip_row = injury_tooltip_entry(row=injury_by_key.get(key))
         tip_row.update(division_tooltip_entry(row=item))
+        tip_row.update(nation_tooltip_entry(row=row))
         tip_row.update(
             finance_tooltip_entry(row, salary_period=us.salary_period(settings))
         )
