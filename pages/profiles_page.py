@@ -147,8 +147,12 @@ PF_REPLACE_TIP = (
     "listed. Compute the file on Uploads first when the label says Stale."
 )
 PF_STATUS_FILTER_TIP = (
-    "Multi-year packs only. Continuous + New keeps players in every assigned season or only "
-    "the most recent year. All includes returned, departed, and partial."
+    "Multi-year packs only (2+ seasons). Year 1 is oldest, Year 3 newest. "
+    "Continuous = every assigned season. New = only the most recent year. "
+    "Departed = missing from the newest year. Returned = newest year plus a gap "
+    "(e.g. Y1+Y3). Partial = contiguous stretch that is not all years and not new-only "
+    "(e.g. Y2+Y3). Continuous + New keeps current-looking players; All includes "
+    "returned, departed, and partial."
 )
 
 STATUS_FILTER_VALUES = frozenset({"active", "all"})
@@ -198,8 +202,8 @@ FILTER_SORT_RESET_IDS = frozenset(
 
 
 def _normalize_status_filter(value) -> str:
-    text = str(value or "active").strip().lower()
-    return text if text in STATUS_FILTER_VALUES else "active"
+    text = str(value or "all").strip().lower()
+    return text if text in STATUS_FILTER_VALUES else "all"
 
 
 def _profile_multi_year_status(entry: dict | None) -> str:
@@ -4074,7 +4078,7 @@ def _build_depth_chart(
     xi_view=None,
     cache: _PfProfileCache | None = None,
     stats_view: str = "percentiles",
-    status_filter: str = "active",
+    status_filter: str = "all",
     pct_basis: str = "multiyear",
 ) -> html.Div:
     settings = us.normalize(settings)
@@ -5129,7 +5133,7 @@ def layout(**_kwargs):
             dcc.Store(id="pf-xi-view", storage_type="local", data="first"),
             dcc.Store(id="pf-depth-stats-view", storage_type="local", data="percentiles"),
             dcc.Store(id="pf-depth-pct-basis", storage_type="local", data="multiyear"),
-            dcc.Store(id="pf-status-filter", storage_type="local", data="active"),
+            dcc.Store(id="pf-status-filter", storage_type="local", data="all"),
             dcc.Store(id="pf-setpiece-view", storage_type="local", data="corners"),
             dcc.Store(id="pf-setpiece-show-gk", storage_type="local", data=True),
             dcc.Store(id="pf-formation", storage_type="local", data=None),
@@ -5337,7 +5341,7 @@ def layout(**_kwargs):
                                                     dmc.Select(
                                                         id="pf-status-filter-select",
                                                         data=STATUS_FILTER_OPTIONS,
-                                                        value="active",
+                                                        value="all",
                                                         clearable=False,
                                                         searchable=False,
                                                     ),
