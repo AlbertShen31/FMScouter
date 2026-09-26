@@ -149,10 +149,9 @@ PF_REPLACE_TIP = (
 PF_STATUS_FILTER_TIP = (
     "Multi-year packs only (2+ seasons). Year 1 is oldest, Year 3 newest. "
     "Continuous = every assigned season. New = only the most recent year. "
-    "Departed = missing from the newest year. Returned = newest year plus a gap "
-    "(e.g. Y1+Y3). Partial = contiguous stretch that is not all years and not new-only "
-    "(e.g. Y2+Y3). Continuous + New keeps current-looking players; All includes "
-    "returned, departed, and partial."
+    "Departed = missing from the newest year (includes middle-only, e.g. Y2). "
+    "Partial = newest year plus one previous year (e.g. Y2+Y3 or Y1+Y3). "
+    "Continuous + New keeps current-looking players; All includes departed and partial."
 )
 
 STATUS_FILTER_VALUES = frozenset({"active", "all"})

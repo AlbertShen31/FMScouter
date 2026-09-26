@@ -992,7 +992,7 @@ def _no_match_placeholder(
     elif club_filter == "club":
         tips.append("Set Club to Any club or Free agents.")
     if status_filter == "active":
-        tips.append("Set Status to All — Continuous + New hides returned / departed / partial.")
+        tips.append("Set Status to All — Continuous + New hides departed / partial.")
     if pos_filter != "all":
         tips.append("Select All in the position bar above.")
     if foot_filter:
@@ -1390,11 +1390,16 @@ def layout():
                                                                 _field_label(
                                                                     "Status",
                                                                     tip=(
-                                                                        "Multi-year packs only. "
-                                                                        "Continuous + New keeps players "
-                                                                        "in every assigned season or only "
-                                                                        "the most recent year. All includes "
-                                                                        "returned, departed, and partial."
+                                                                        "Multi-year packs only (2+ seasons). "
+                                                                        "Year 1 is oldest, Year 3 newest. "
+                                                                        "Continuous = every assigned season. "
+                                                                        "New = only the most recent year. "
+                                                                        "Departed = missing from the newest year "
+                                                                        "(includes middle-only, e.g. Y2). "
+                                                                        "Partial = newest year plus one previous "
+                                                                        "year (e.g. Y2+Y3 or Y1+Y3). "
+                                                                        "Continuous + New keeps current-looking "
+                                                                        "players; All includes departed and partial."
                                                                     ),
                                                                     help_id="rs-help-status-filter",
                                                                 ),

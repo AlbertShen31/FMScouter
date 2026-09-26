@@ -1423,7 +1423,7 @@ def _header_tooltips(
         "Minutes",
         salary_period=us.salary_period(settings),
     )
-    tips["Status"] = "Multi-year presence (new / returned / departed / continuous)"
+    tips["Status"] = "Multi-year presence (new / departed / continuous / partial)"
     tips["Name"] = (
         "Colored by export when scouting is loaded: Squad vs Scouting"
     )

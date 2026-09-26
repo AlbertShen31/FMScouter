@@ -7747,10 +7747,6 @@ body[data-theme="light"] .up-elig.yes {
     border-color: #34d399;
     color: #6ee7b7;
 }
-.my-status-pill.returned {
-    border-color: #a78bfa;
-    color: #c4b5fd;
-}
 .my-status-pill.departed {
     border-color: #f87171;
     color: #fca5a5;
@@ -7767,11 +7763,6 @@ html[data-theme="light"] .my-status-pill.new,
 body[data-theme="light"] .my-status-pill.new {
     color: #15803d;
     border-color: #6ee7b7;
-}
-html[data-theme="light"] .my-status-pill.returned,
-body[data-theme="light"] .my-status-pill.returned {
-    color: #6d28d9;
-    border-color: #c4b5fd;
 }
 html[data-theme="light"] .my-status-pill.departed,
 body[data-theme="light"] .my-status-pill.departed {

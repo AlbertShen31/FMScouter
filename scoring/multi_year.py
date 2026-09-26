@@ -34,7 +34,6 @@ RATIO_PAIRS: dict[str, tuple[str, str]] = {
 STATUS_LABELS = {
     "continuous": "Continuous",
     "new": "New",
-    "returned": "Returned",
     "departed": "Departed",
     "partial": "Partial",
 }
@@ -133,7 +132,13 @@ def presence_status(
     configured: list[str],
     present: set[str] | list[str],
 ) -> str | None:
-    """Classify a player's multi-year presence pattern."""
+    """Classify a player's multi-year presence pattern.
+
+    Continuous = every configured year. New = only the newest. Departed =
+    missing from the newest (includes middle-only seasons like Y2). Partial =
+    newest year plus at least one older year, but not all years (e.g. Y2+Y3
+    or Y1+Y3).
+    """
     years = [y for y in YEAR_KEYS if y in configured]
     if len(years) <= 1:
         return None
@@ -145,19 +150,9 @@ def presence_status(
         return "continuous"
     if newest not in present_set:
         return "departed"
-    older = years[:-1]
-    older_present = [y for y in older if y in present_set]
-    # New = present only in the most recent configured year.
-    if not older_present:
+    older = [y for y in years[:-1] if y in present_set]
+    if not older:
         return "new"
-    first_idx = next(i for i, y in enumerate(years) if y in present_set)
-    last_idx = next(
-        len(years) - 1 - i for i, y in enumerate(reversed(years)) if y in present_set
-    )
-    span = years[first_idx : last_idx + 1]
-    if any(y not in present_set for y in span):
-        return "returned"
-    # Contiguous mid-pack arrival (e.g. Y2+Y3, missing Y1) — not New.
     return "partial"
 
 
