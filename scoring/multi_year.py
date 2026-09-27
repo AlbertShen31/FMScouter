@@ -185,6 +185,7 @@ def _year_snapshot(player: dict[str, Any]) -> dict[str, Any]:
         if mid in sp_stats and sp_stats[mid] is not None
     }
     out: dict[str, Any] = {
+        "appearances": player.get("appearances"),
         "minutes": player.get("minutes"),
         "stats": key_stats,
         "club": player.get("club"),

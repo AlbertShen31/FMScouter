@@ -292,6 +292,11 @@ def list_single_files(*, page: str | None = None) -> list[dict[str, Any]]:
     return [e for e in list_files(page=page) if not is_multi_year(e)]
 
 
+def list_multi_year_packs(*, page: str | None = None) -> list[dict[str, Any]]:
+    """Multi-year pack rows only (for roll-forward / pack pickers)."""
+    return [e for e in list_files(page=page) if is_multi_year(e)]
+
+
 def get_file(file_id: str) -> dict[str, Any] | None:
     for entry in list_files():
         if entry.get("id") == file_id:
@@ -375,6 +380,59 @@ def _normalize_year_map(years: dict[str, str] | None) -> dict[str, str | None]:
     if not any(out.values()):
         raise ValueError("Assign at least one season (Year 3 = most recent).")
     return out
+
+
+def planned_roll_forward_years(
+    years: dict[str, str] | None,
+    new_year_file_id: str,
+) -> dict[str, str | None]:
+    """Shift seasons forward: new → Y3, old Y3 → Y2, old Y2 → Y1, drop old Y1."""
+    current = configured_years({"years": years or {}})
+    new_id = str(new_year_file_id or "").strip()
+    if not new_id:
+        raise ValueError("Pick the new latest season file.")
+    kept = {fid for key in ("3", "2") if (fid := current.get(key))}
+    if new_id in kept:
+        raise ValueError(
+            "That season is already Year 3 or Year 2 on this pack. "
+            "Pick a different CSV (or Edit the pack to swap seasons)."
+        )
+    return {
+        "3": new_id,
+        "2": current.get("3"),
+        "1": current.get("2"),
+    }
+
+
+def add_latest_year_to_pack(
+    *,
+    pack_id: str,
+    new_year_file_id: str,
+    display_name: str,
+    user_note: str = "",
+    recompute: bool = True,
+) -> dict[str, Any]:
+    """Create a new multi-year pack by rolling a latest season onto an existing pack.
+
+    The source pack is left unchanged. On the new pack: new CSV → Year 3, former
+    Year 3 → Year 2, Year 2 → Year 1, and former Year 1 is dropped.
+    """
+    pid = str(pack_id or "").strip()
+    if not pid:
+        raise ValueError("Select a multi-year pack to base the new pack on.")
+    pack = get_file(pid)
+    if not pack:
+        raise FileNotFoundError("Multi-year pack not found.")
+    if not is_multi_year(pack):
+        raise ValueError("Select a multi-year pack.")
+    year_map = planned_roll_forward_years(configured_years(pack), new_year_file_id)
+    return save_multi_year_pack(
+        display_name=display_name,
+        years={k: (v or "") for k, v in year_map.items()},
+        user_note=user_note,
+        pack_id=None,
+        recompute=recompute,
+    )
 
 
 def save_multi_year_pack(

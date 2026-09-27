@@ -139,7 +139,12 @@ UP_MULTI_YEAR_TIP = (
     "(weight 1.0), Year 2 mid (0.75), Year 1 oldest (0.5). Stats are pooled from "
     "raw totals with those weights; identity and attributes come from the newest "
     "year each player appears in. A pack with only Year 3 behaves like a single season. "
-    "To swap a season later, Edit the pack in the saved-files table and change that year."
+    "To swap a season later, Edit the pack in the saved-files table."
+)
+UP_ROLL_YEAR_TIP = (
+    "Build a new multi-year pack from an existing one plus a newer season CSV. "
+    "The source pack stays unchanged. On the new pack: new CSV → Year 3, former "
+    "Year 3 → Year 2, Year 2 → Year 1, and former Year 1 is dropped."
 )
 
 
@@ -161,6 +166,85 @@ def _source_select_data(*, page: str | None = None) -> list[dict[str, str]]:
             }
         )
     return opts
+
+
+def _pack_select_data(*, page: str | None = None) -> list[dict[str, str]]:
+    opts = [{"value": "", "label": "— Select a multi-year pack —"}]
+    for entry in lib.list_multi_year_packs(page=page):
+        years = lib.configured_years(entry)
+        slots = "+".join(f"Y{k}" for k in lib.YEAR_KEYS if k in years)
+        when = (entry.get("updated_at") or entry.get("saved_at") or "")[:10]
+        label = lib.display_label(entry)
+        suffix = f" · {slots}" + (f" · {when}" if when else "")
+        opts.append({"value": entry["id"], "label": f"{label}{suffix}"})
+    return opts
+
+
+def _year_slot_label(file_id: str | None) -> str:
+    if not file_id:
+        return "— empty —"
+    entry = lib.get_file(file_id)
+    return lib.display_label(entry) if entry else f"(missing {file_id})"
+
+
+def _roll_preview(pack_id: str | None, new_year_id: str | None) -> html.Div:
+    if not pack_id:
+        return html.Div(
+            "Pick a source multi-year pack to preview the year shift.",
+            className="text-muted small",
+        )
+    pack = lib.get_file(pack_id)
+    if not pack or not lib.is_multi_year(pack):
+        return html.Div("That pack was not found.", className="text-muted small")
+    current = lib.configured_years(pack)
+    rows = [
+        html.Div(
+            [
+                html.Strong("Source: "),
+                html.Span(
+                    f"Y3 {_year_slot_label(current.get('3'))} · "
+                    f"Y2 {_year_slot_label(current.get('2'))} · "
+                    f"Y1 {_year_slot_label(current.get('1'))}"
+                ),
+            ],
+            className="up-roll-preview-row",
+        )
+    ]
+    if not new_year_id:
+        rows.append(
+            html.Div(
+                "Pick the new latest season CSV to see the new pack layout.",
+                className="text-muted small mt-1",
+            )
+        )
+        return html.Div(rows, className="up-roll-preview")
+    try:
+        planned = lib.planned_roll_forward_years(current, new_year_id)
+    except ValueError as exc:
+        rows.append(html.Div(str(exc), className="rs-upload-error mt-1"))
+        return html.Div(rows, className="up-roll-preview")
+    dropped = current.get("1")
+    rows.append(
+        html.Div(
+            [
+                html.Strong("New pack: "),
+                html.Span(
+                    f"Y3 {_year_slot_label(planned.get('3'))} · "
+                    f"Y2 {_year_slot_label(planned.get('2'))} · "
+                    f"Y1 {_year_slot_label(planned.get('1'))}"
+                ),
+            ],
+            className="up-roll-preview-row mt-1",
+        )
+    )
+    if dropped:
+        rows.append(
+            html.Div(
+                f"Dropped from source Year 1: {_year_slot_label(dropped)}",
+                className="text-muted small mt-1",
+            )
+        )
+    return html.Div(rows, className="up-roll-preview")
 
 
 def _kind_cell(entry: dict) -> html.Span:
@@ -366,6 +450,70 @@ def _multi_year_panel() -> html.Div:
                 className="up-my-actions",
             ),
             html.Div(id="up-my-status", className="mt-2"),
+        ]
+    )
+
+
+def _roll_year_panel() -> html.Div:
+    src = _source_select_data()
+    packs = _pack_select_data()
+    return html.Div(
+        [
+            html.P(
+                "Creates a new multi-year pack. The source pack is left as-is. "
+                "New CSV → Year 3, former Year 3 → Year 2, Year 2 → Year 1; "
+                "former Year 1 is not included.",
+                className="text-muted small mb-3",
+            ),
+            html.Label("Source multi-year pack", className="rs-field-label"),
+            dmc.Select(
+                id="up-roll-pack",
+                data=packs,
+                value="",
+                clearable=True,
+                searchable=True,
+                placeholder="Select a multi-year pack…",
+                className="mb-3 up-roll-pack",
+            ),
+            html.Label("New latest season", className="rs-field-label"),
+            dmc.Select(
+                id="up-roll-new-year",
+                data=src,
+                value="",
+                clearable=True,
+                searchable=True,
+                placeholder="Select a saved CSV…",
+                className="mb-3 up-roll-new-year",
+            ),
+            html.Label("New pack name", className="rs-field-label"),
+            dmc.TextInput(
+                id="up-roll-name",
+                placeholder="e.g. Liga I 2024–27",
+                className="mb-3 up-roll-name",
+            ),
+            html.Label("Note", className="rs-field-label"),
+            dbc.Textarea(
+                id="up-roll-note",
+                placeholder="Optional note",
+                rows=2,
+                className="up-roll-note mb-3",
+            ),
+            html.Div(
+                id="up-roll-preview",
+                children=_roll_preview(None, None),
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    dmc.Button(
+                        "Create pack with latest year",
+                        id="up-roll-apply",
+                        n_clicks=0,
+                    ),
+                ],
+                className="up-roll-actions",
+            ),
+            html.Div(id="up-roll-status", className="mt-2"),
         ]
     )
 
@@ -643,7 +791,7 @@ def layout(**_kwargs):
                     dbc.Card(
                         [
                             _card_header(
-                                "3. Multi-year pack",
+                                "3. Create multi-year pack",
                                 UP_MULTI_YEAR_TIP,
                                 "up-help-multi-year",
                             ),
@@ -654,7 +802,18 @@ def layout(**_kwargs):
                     dbc.Card(
                         [
                             _card_header(
-                                "4. Saved files & page eligibility",
+                                "4. Add latest year",
+                                UP_ROLL_YEAR_TIP,
+                                "up-help-roll-year",
+                            ),
+                            dbc.CardBody(_roll_year_panel()),
+                        ],
+                        className="mb-3 rs-section-card",
+                    ),
+                    dbc.Card(
+                        [
+                            _card_header(
+                                "5. Saved files & page eligibility",
                                 UP_ELIGIBILITY_TIP,
                                 "up-help-eligibility",
                             ),
@@ -713,6 +872,8 @@ def layout(**_kwargs):
     Output("up-my-year-1", "data"),
     Output("up-my-year-2", "data"),
     Output("up-my-year-3", "data"),
+    Output("up-roll-new-year", "data"),
+    Output("up-roll-pack", "data"),
     Input("up-upload", "contents"),
     State("up-upload", "filename"),
     State("up-rev", "data"),
@@ -720,7 +881,7 @@ def layout(**_kwargs):
 )
 def save_uploads(contents_list, filenames, rev):
     if not contents_list:
-        return tuple([no_update] * 7)
+        return tuple([no_update] * 9)
     if isinstance(contents_list, str):
         contents_list = [contents_list]
         filenames = [filenames]
@@ -756,8 +917,9 @@ def save_uploads(contents_list, filenames, rev):
         except Exception as exc:
             messages.append(upload_error(f"{name}: {exc}"))
     if not messages:
-        return tuple([no_update] * 7)
+        return tuple([no_update] * 9)
     src = _source_select_data()
+    packs = _pack_select_data()
     return (
         html.Div(messages),
         _files_table(),
@@ -766,6 +928,8 @@ def save_uploads(contents_list, filenames, rev):
         src,
         src,
         src,
+        src,
+        packs,
     )
 
 
@@ -776,20 +940,23 @@ def save_uploads(contents_list, filenames, rev):
     Output("up-my-year-1", "data", allow_duplicate=True),
     Output("up-my-year-2", "data", allow_duplicate=True),
     Output("up-my-year-3", "data", allow_duplicate=True),
+    Output("up-roll-new-year", "data", allow_duplicate=True),
+    Output("up-roll-pack", "data", allow_duplicate=True),
     Input({"type": "up-delete", "id": ALL}, "n_clicks"),
     State("up-rev", "data"),
     prevent_initial_call=True,
 )
 def delete_saved(n_clicks, rev):
     if not ctx.triggered_id or not any(n_clicks or []):
-        return tuple([no_update] * 6)
+        return tuple([no_update] * 8)
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
-        return tuple([no_update] * 6)
+        return tuple([no_update] * 8)
     if not any((n or 0) > 0 for n in (n_clicks or [])):
-        return tuple([no_update] * 6)
+        return tuple([no_update] * 8)
     lib.delete_file(file_id)
     src = _source_select_data()
+    packs = _pack_select_data()
     return (
         _files_table(),
         int(rev or 0) + 1,
@@ -797,6 +964,8 @@ def delete_saved(n_clicks, rev):
         src,
         src,
         src,
+        src,
+        packs,
     )
 
 
@@ -810,6 +979,7 @@ def delete_saved(n_clicks, rev):
     Output("up-my-year-1", "value"),
     Output("up-my-year-2", "value"),
     Output("up-my-year-3", "value"),
+    Output("up-roll-pack", "data", allow_duplicate=True),
     Input("up-my-create", "n_clicks"),
     State("up-my-name", "value"),
     State("up-my-note", "value"),
@@ -821,7 +991,7 @@ def delete_saved(n_clicks, rev):
 )
 def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
     if not n_clicks:
-        return tuple([no_update] * 9)
+        return tuple([no_update] * 10)
     years = {"1": y1 or "", "2": y2 or "", "3": y3 or ""}
     try:
         entry = lib.save_multi_year_pack(
@@ -848,10 +1018,103 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
             "",
             "",
             "",
+            _pack_select_data(),
         )
     except Exception as exc:
         return (
             upload_error(str(exc)),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
+
+
+@callback(
+    Output("up-roll-preview", "children"),
+    Input("up-roll-pack", "value"),
+    Input("up-roll-new-year", "value"),
+)
+def update_roll_preview(pack_id, new_year_id):
+    return _roll_preview(pack_id or "", new_year_id or "")
+
+
+@callback(
+    Output("up-roll-name", "value", allow_duplicate=True),
+    Output("up-roll-note", "value", allow_duplicate=True),
+    Input("up-roll-pack", "value"),
+    prevent_initial_call=True,
+)
+def prefill_roll_meta(pack_id):
+    """Suggest a new-pack name/note from the source when the user picks one."""
+    if not pack_id:
+        return "", ""
+    pack = lib.get_file(pack_id)
+    if not pack or not lib.is_multi_year(pack):
+        return no_update, no_update
+    return lib.display_label(pack), pack.get("user_note") or ""
+
+
+@callback(
+    Output("up-roll-status", "children"),
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-compute-all", "disabled", allow_duplicate=True),
+    Output("up-roll-pack", "data", allow_duplicate=True),
+    Output("up-roll-pack", "value"),
+    Output("up-roll-new-year", "value"),
+    Output("up-roll-name", "value"),
+    Output("up-roll-note", "value"),
+    Output("up-roll-preview", "children", allow_duplicate=True),
+    Input("up-roll-apply", "n_clicks"),
+    State("up-roll-pack", "value"),
+    State("up-roll-new-year", "value"),
+    State("up-roll-name", "value"),
+    State("up-roll-note", "value"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
+    if not n_clicks:
+        return tuple([no_update] * 10)
+    try:
+        entry = lib.add_latest_year_to_pack(
+            pack_id=pack_id or "",
+            new_year_file_id=new_year_id or "",
+            display_name=name or "",
+            user_note=note or "",
+        )
+        cache = upload_cache.cache_status(entry.get("id") or "", entry)
+        msg = html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(f"Created {lib.display_label(entry)} from latest year"),
+                html.Span(f" · precompute: {cache['label']}", className="text-muted"),
+            ],
+            className="up-save-row",
+        )
+        packs = _pack_select_data()
+        return (
+            msg,
+            _files_table(),
+            int(rev or 0) + 1,
+            not _any_computable(),
+            packs,
+            "",
+            "",
+            "",
+            "",
+            _roll_preview(None, None),
+        )
+    except Exception as exc:
+        return (
+            upload_error(str(exc)),
+            no_update,
             no_update,
             no_update,
             no_update,
@@ -1097,6 +1360,7 @@ def refresh_table_after_edit(is_open):
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-edit-recompute", "data", allow_duplicate=True),
     Output("up-upload-status", "children", allow_duplicate=True),
+    Output("up-roll-pack", "data", allow_duplicate=True),
     Input("up-edit-recompute", "data"),
     State("up-rev", "data"),
     prevent_initial_call=True,
@@ -1104,7 +1368,7 @@ def refresh_table_after_edit(is_open):
 def recompute_after_multi_year_edit(pack_id, rev):
     """Finish multi-year edit: recompute cache after the modal already closed."""
     if not pack_id:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     entry = lib.get_file(pack_id)
     label = lib.display_label(entry) if entry else pack_id
     try:
@@ -1120,7 +1384,13 @@ def recompute_after_multi_year_edit(pack_id, rev):
         )
     except Exception as exc:
         msg = upload_error(f"Update failed: {exc}")
-    return _files_table(), int(rev or 0) + 1, None, msg
+    return (
+        _files_table(),
+        int(rev or 0) + 1,
+        None,
+        msg,
+        _pack_select_data(),
+    )
 
 
 
@@ -1226,7 +1496,7 @@ def download_view(n_clicks):
 
 clientside_callback(
     """
-    function(contents, computeClicks, computeAllClicks, packClicks, editSave, editKind) {
+    function(contents, computeClicks, computeAllClicks, packClicks, rollClicks, editSave, editKind) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return window.dash_clientside.no_update;
@@ -1239,6 +1509,9 @@ clientside_callback(
             return window.dash_clientside.no_update;
         }
         if (prop.indexOf("up-my-create") !== -1 && !packClicks) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("up-roll-apply") !== -1 && !rollClicks) {
             return window.dash_clientside.no_update;
         }
         if (prop.indexOf("up-edit-save") !== -1) {
@@ -1260,6 +1533,8 @@ clientside_callback(
         if (label) {
             if (prop.indexOf("up-edit-save") !== -1) {
                 label.textContent = "Updating multi-year pack…";
+            } else if (prop.indexOf("up-roll-apply") !== -1) {
+                label.textContent = "Creating pack with latest year…";
             } else if (prop.indexOf("up-my-create") !== -1) {
                 label.textContent = "Creating multi-year pack…";
             } else if (prop.indexOf("up-compute-all") !== -1) {
@@ -1278,6 +1553,7 @@ clientside_callback(
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
     Input("up-compute-all", "n_clicks"),
     Input("up-my-create", "n_clicks"),
+    Input("up-roll-apply", "n_clicks"),
     Input("up-edit-save", "n_clicks"),
     State("up-edit-kind", "data"),
     prevent_initial_call=True,

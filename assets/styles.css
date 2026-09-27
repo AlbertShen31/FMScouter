@@ -7732,6 +7732,30 @@ body[data-theme="light"] .up-elig.yes {
 .up-my-name {
     max-width: 24rem;
 }
+.up-my-divider {
+    border-color: var(--app-line);
+    opacity: 1;
+}
+.up-roll-pack,
+.up-roll-new-year {
+    max-width: 36rem;
+}
+.up-roll-name {
+    max-width: 24rem;
+}
+.up-roll-preview {
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--app-line);
+    border-radius: 0.45rem;
+    background: var(--app-input);
+    color: var(--app-text);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    max-width: 42rem;
+}
+.up-roll-preview-row {
+    color: var(--app-text);
+}
 .my-status-pill {
     display: inline-block;
     padding: 0.1rem 0.45rem;

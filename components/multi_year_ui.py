@@ -91,6 +91,8 @@ def stats_player_for_pct_basis(
             out["effective_minutes"] = snap["effective_minutes"]
         else:
             out["effective_minutes"] = snap["minutes"]
+    if snap.get("appearances") not in (None, "", "-", "—"):
+        out["appearances"] = snap["appearances"]
     if "stats_unavailable" in snap:
         out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
     if "stats_limited_tracking" in snap:
@@ -838,6 +840,9 @@ def by_year_section(
             meta_bits.append(str(snap["club"]))
         if snap.get("age") not in (None, "", "-"):
             meta_bits.append(f"Age {snap['age']}")
+        apps = snap.get("appearances")
+        if apps not in (None, "", "-"):
+            meta_bits.append(f"{_fmt_num(apps, digits=0)} apps")
         mins = snap.get("minutes")
         if mins not in (None, "", "-"):
             meta_bits.append(f"{_fmt_num(mins, digits=0)} mins")
