@@ -750,3 +750,41 @@ def pack_signature_bits(entry: dict[str, Any]) -> dict[str, Any]:
         "years": configured_years(entry),
         "weights": year_weights(entry),
     }
+
+
+# Heavy per-player maps — keep on disk / server cache, not in Dash client stores.
+GROWTH_FIELD_KEYS: tuple[str, ...] = (
+    "role_scores_by_year",
+    "role_scores_combined",
+    "by_year",
+)
+
+
+def growth_fields_of(record: dict[str, Any] | None) -> dict[str, Any]:
+    """Copy multi-year growth maps from a player/row (empty when absent)."""
+    if not isinstance(record, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key in GROWTH_FIELD_KEYS:
+        val = record.get(key)
+        if val not in (None, "", {}, []):
+            out[key] = val
+    return out
+
+
+def without_growth_fields(record: dict[str, Any] | None) -> dict[str, Any]:
+    """Shallow copy without growth maps (same object when already slim)."""
+    if not isinstance(record, dict):
+        return {}
+    if not any(key in record for key in GROWTH_FIELD_KEYS):
+        return record
+    return {key: val for key, val in record.items() if key not in GROWTH_FIELD_KEYS}
+
+
+def list_without_growth_fields(
+    records: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Strip growth maps from each dict (new list; reuses slim dicts)."""
+    if not records:
+        return []
+    return [without_growth_fields(row) for row in records if isinstance(row, dict)]

@@ -2197,6 +2197,27 @@ def layout(**_kwargs):
 
 
 @callback(
+    Output("st-parsed", "data", allow_duplicate=True),
+    Output("st-parsed-scouting", "data", allow_duplicate=True),
+    Input("st-parsed", "data"),
+    Input("st-parsed-scouting", "data"),
+    prevent_initial_call=True,
+)
+def slim_st_parsed_stores(parsed, scout_parsed):
+    """One-shot: strip growth maps from already-loaded stats session stores."""
+    from components.scouting_shell import slim_parsed_store_if_needed
+
+    slim_main = slim_parsed_store_if_needed(parsed)
+    slim_scout = slim_parsed_store_if_needed(scout_parsed)
+    if slim_main is None and slim_scout is None:
+        return no_update, no_update
+    return (
+        slim_main if slim_main is not None else no_update,
+        slim_scout if slim_scout is not None else no_update,
+    )
+
+
+@callback(
     Output("st-detail-level-map", "data"),
     Input("st-parsed", "data"),
     Input("st-parsed-scouting", "data"),

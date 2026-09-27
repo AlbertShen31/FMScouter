@@ -1847,6 +1847,7 @@ def _build_role_modal_body(
         cohort=local_cohort,
     )
     # Prefer scored-row multi-year role maps when the parsed player blob is thin.
+    # Client stores strip growth maps — fall back to the upload cache.
     player = dict(player or {})
     if payload and not player.get("role_scores_by_year"):
         scored = _find_scored_row(
@@ -1873,6 +1874,23 @@ def _build_role_modal_body(
                     player[key] = scored.get(key)
             if scored.get("role_scores_by_year") or scored.get("multi_year_status"):
                 player["multi_year"] = True
+    if not player.get("role_scores_by_year") or not player.get("by_year"):
+        import services.upload_cache as upload_cache
+
+        growth = upload_cache.growth_fields_for_player(
+            [
+                file_id,
+                str((payload or {}).get("file_id") or "").strip(),
+                str((payload or {}).get("scouting_file_id") or "").strip(),
+                str((parsed or {}).get("file_id") or "").strip(),
+            ],
+            player,
+        )
+        for key, val in growth.items():
+            if player.get(key) in (None, "", {}, []):
+                player[key] = val
+        if growth:
+            player["multi_year"] = True
     limited = _limited_tracking_divisions(payload)
     banding_ctx = None
     if stats_cohort:
@@ -3449,6 +3467,51 @@ def persist_rs_show_finance(checked, settings, parsed):
 
 
 @callback(
+    Output("rs-parsed", "data", allow_duplicate=True),
+    Output("rs-parsed-scouting", "data", allow_duplicate=True),
+    Input("rs-parsed", "data"),
+    Input("rs-parsed-scouting", "data"),
+    prevent_initial_call=True,
+)
+def slim_rs_parsed_stores(parsed, scout_parsed):
+    """One-shot: strip growth maps from already-loaded session stores."""
+    from components.scouting_shell import slim_parsed_store_if_needed
+
+    slim_main = slim_parsed_store_if_needed(parsed)
+    slim_scout = slim_parsed_store_if_needed(scout_parsed)
+    if slim_main is None and slim_scout is None:
+        return no_update, no_update
+    return (
+        slim_main if slim_main is not None else no_update,
+        slim_scout if slim_scout is not None else no_update,
+    )
+
+
+@callback(
+    Output("rs-rows", "data", allow_duplicate=True),
+    Input("rs-rows", "data"),
+    prevent_initial_call=True,
+)
+def slim_rs_rows_store(payload):
+    """One-shot: strip growth maps from the scored-rows store."""
+    from scoring.multi_year import GROWTH_FIELD_KEYS, list_without_growth_fields
+
+    if not isinstance(payload, dict):
+        return no_update
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return no_update
+    if not any(
+        isinstance(row, dict) and any(key in row for key in GROWTH_FIELD_KEYS)
+        for row in rows[:8]
+    ):
+        return no_update
+    out = dict(payload)
+    out["rows"] = list_without_growth_fields(rows)
+    return out
+
+
+@callback(
     Output("rs-rows", "data"),
     Output("rs-focus-role", "data"),
     Output("rs-table", "sort_by", allow_duplicate=True),
@@ -3603,13 +3666,16 @@ def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_f
     else:
         focus = kept
         sort = _sort_by_focus(focus)
+    from scoring.multi_year import list_without_growth_fields
+
+    # Growth maps stay on disk; client stores must stay slim for filter callbacks.
     return (
         {
             "filename": parsed.get("filename", "export.csv"),
             "file_id": squad_file_id or "",
             "scouting_file_id": scout_file_id or "",
             "has_scouting": bool(scout_players),
-            "rows": rows,
+            "rows": list_without_growth_fields(rows),
             "roles": labels,
             "role_ids": needed,
             "combos": combos,
@@ -4350,10 +4416,41 @@ def render_shortlist(
     band_colors = us.band_text_colors(settings, theme=theme)
     limited_divisions = _limited_tracking_divisions(payload)
     from components.multi_year_ui import score_year_suffix_html, status_markdown
+    import services.upload_cache as upload_cache
+
+    # Rehydrate growth maps from disk once per rebuild (stripped from rs-rows).
+    growth_indexes: dict[str, dict] = {}
+    needs_growth = any(
+        (r or {}).get("multi_year_status") or (r or {}).get("years_present")
+        for r in filtered
+    )
+    if needs_growth:
+        for fid in _payload_file_ids(payload):
+            growth_indexes[fid] = upload_cache.growth_fields_by_player_key(fid)
+
+    def _row_with_growth(base: dict) -> dict:
+        if not growth_indexes:
+            return base
+        if base.get("role_scores_by_year"):
+            return base
+        key = player_row_key(base)
+        if not key:
+            return base
+        preferred = str(base.get("_source_file_id") or "").strip()
+        order = [preferred] if preferred else []
+        order.extend(fid for fid in growth_indexes if fid and fid not in order)
+        for fid in order:
+            hit = (growth_indexes.get(fid) or {}).get(key)
+            if hit:
+                merged = dict(base)
+                merged.update(hit)
+                return merged
+        return base
 
     for row in filtered:
         row_key = player_row_key(row)
         row_years = _row_configured_years(row, payload)
+        growth_row = _row_with_growth(row)
         item = {}
         tip_row: dict[str, str] = {}
         for key in data_cols:
@@ -4370,7 +4467,7 @@ def render_shortlist(
                     color=band_colors.get(band) if band else None,
                 )
                 suffix = score_year_suffix_html(
-                    row,
+                    growth_row,
                     key,
                     combo_meta=combo_by_col.get(key),
                     ip_weight=hybrid_w["ip"],
@@ -4408,7 +4505,7 @@ def render_shortlist(
                             raw,
                             numeric=row.get("salary_numeric"),
                             currency=row.get("salary_currency"),
-                            salary_period=us.salary_period(settings),
+                            salary_period=wage_period,
                             is_salary=True,
                         )
                     else:
@@ -4448,7 +4545,7 @@ def render_shortlist(
         )
         tip_row.update(nation_tooltip_entry(row=row))
         tip_row.update(
-            finance_tooltip_entry(item, salary_period=us.salary_period(settings))
+            finance_tooltip_entry(item, salary_period=wage_period)
         )
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()

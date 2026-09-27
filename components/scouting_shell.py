@@ -120,10 +120,63 @@ def decode_upload(contents: str, *, strict: bool = False) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def players_for_session_store(players: list | None) -> list:
+    """Drop multi-year growth maps before putting players in a Dash store.
+
+    ``role_scores_by_year`` / ``by_year`` blobs are ~10KB+ each and must not
+    round-trip on every filter callback. Modal / growth UI rehydrate from the
+    upload cache on demand.
+    """
+    from scoring.multi_year import list_without_growth_fields
+
+    return list_without_growth_fields(list(players or []))
+
+
+def _store_has_growth_fields(players: list | None) -> bool:
+    from scoring.multi_year import GROWTH_FIELD_KEYS
+
+    for row in list(players or [])[:12]:
+        if isinstance(row, dict) and any(key in row for key in GROWTH_FIELD_KEYS):
+            return True
+    return False
+
+
+def slim_parsed_store_if_needed(parsed) -> dict | None:
+    """Return a growth-stripped store copy, or None when already slim."""
+    if not isinstance(parsed, dict):
+        return None
+    data = unpack_parsed(parsed)
+    if not data:
+        return None
+    players = data.get("players")
+    if not _store_has_growth_fields(players):
+        return None
+    slim = players_for_session_store(players)
+    filename = str(data.get("filename") or parsed.get("filename") or "export.csv")
+    if parsed.get("encoding") == "zlib+b64" or parsed.get("payload"):
+        store = pack_parsed(slim, filename)
+    else:
+        store = {**parsed, "players": slim, "filename": filename, "n": len(slim)}
+        store.pop("payload", None)
+        store.pop("encoding", None)
+    for key in (
+        "file_id",
+        "multi_year",
+        "from_cache",
+        "rev",
+        "percentiles",
+        "scouting_file_id",
+    ):
+        if key in parsed and key not in store:
+            store[key] = parsed[key]
+    return store
+
+
 def pack_parsed(players: list, filename: str) -> dict:
     """Compress parsed players for sessionStorage (large exports)."""
+    slim = players_for_session_store(players)
     raw = json.dumps(
-        {"players": players, "filename": filename},
+        {"players": slim, "filename": filename},
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
@@ -132,7 +185,7 @@ def pack_parsed(players: list, filename: str) -> dict:
         "v": 1,
         "encoding": "zlib+b64",
         "filename": filename,
-        "n": len(players),
+        "n": len(slim),
         "payload": blob,
     }
 
@@ -947,12 +1000,13 @@ def register_library_select_callbacks(
                 elif rev:
                     prev_n = int(rev)
                 rev_payload = {"n": prev_n + 1, "replaced": True}
+            slim_players = players_for_session_store(players)
             if pack_store:
-                store = pack_parsed(players, name)
+                store = pack_parsed(slim_players, name)
                 if track_rev and rev_payload:
                     store["rev"] = rev_payload["n"]
             else:
-                store = {"filename": name, "players": players}
+                store = {"filename": name, "players": slim_players}
                 if track_rev and rev_payload:
                     store["rev"] = rev_payload["n"]
             store["file_id"] = file_id
@@ -963,7 +1017,7 @@ def register_library_select_callbacks(
             row = [
                 store,
                 upload_status_bar(
-                    len(players),
+                    len(slim_players),
                     name,
                     replaced=True,
                     slot_label=_tag,
@@ -1271,15 +1325,16 @@ def _register_upload_slot(
             elif rev:
                 prev_n = int(rev)
             rev_payload = {"n": prev_n + 1, "replaced": replaced}
+        slim_players = players_for_session_store(players)
         if pack_store:
-            store = pack_parsed(players, name)
+            store = pack_parsed(slim_players, name)
             if track_data_rev and rev_payload:
                 store["rev"] = rev_payload["n"]
         else:
-            store = {"filename": name, "players": players}
+            store = {"filename": name, "players": slim_players}
             if track_data_rev and rev_payload:
                 store["rev"] = rev_payload["n"]
-        return _ok(store, len(players), name, rev_payload, replaced=replaced)
+        return _ok(store, len(slim_players), name, rev_payload, replaced=replaced)
 
     restore_outputs = [
         Output(status_id, "children", allow_duplicate=True),

@@ -645,7 +645,10 @@ def finance_tooltip_entry(
     *,
     salary_period: str | None = None,
 ) -> dict[str, str]:
-    """Hover tips for finance columns when the displayed cell may be truncated."""
+    """Hover tips for finance columns when the displayed cell may be truncated.
+
+    Skips trivial $0 / blank tips so tooltip_data stays sparse for DataTable.
+    """
     record = row if isinstance(row, dict) else {}
     tip: dict[str, str] = {}
     for col, key in (
@@ -662,14 +665,21 @@ def finance_tooltip_entry(
                 is_salary=True,
             )
             export = str(raw or "").strip()
+            if text in ("—", "", "$0") and (
+                not export
+                or export in ("-", "—")
+                or export.casefold() in {"n/a", "na", "n.a.", "n.a", "$0", "0"}
+            ):
+                continue
             if export and export not in ("-", "—") and text != export:
                 tip[col] = f"{text} (export: {export})"
-            elif text != "—":
+            elif text not in ("—", "", "$0"):
                 tip[col] = text
         else:
             text = finance_display(raw)
-            if text != "—":
-                tip[col] = text
+            if text in ("—", "", "$0"):
+                continue
+            tip[col] = text
     return tip
 
 

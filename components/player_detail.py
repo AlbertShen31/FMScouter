@@ -490,6 +490,24 @@ def build_player_modal_body(
     settings = us.normalize(settings)
     mode = mode or "roles"
     pct_basis = normalize_pct_basis(pct_basis)
+
+    # Session stores strip multi-year growth maps; pull them back for the modal.
+    if isinstance(player, dict) and file_id and (
+        not player.get("role_scores_by_year") or not player.get("by_year")
+    ):
+        try:
+            import services.upload_cache as upload_cache
+
+            growth = upload_cache.growth_fields_for_player([file_id], player)
+            if growth:
+                player = dict(player)
+                for key, val in growth.items():
+                    if player.get(key) in (None, "", {}, []):
+                        player[key] = val
+                player["multi_year"] = True
+        except Exception:
+            pass
+
     if stats_player is None and file_id:
         stats_player, stats_cohort = resolve_stats_player_for_file(file_id, player)
     stats_player = _enrich_stats_player(
@@ -505,6 +523,24 @@ def build_player_modal_body(
                 [],
             ):
                 stats_player[key] = player.get(key)
+        if file_id and not stats_player.get("by_year"):
+            try:
+                import services.upload_cache as upload_cache
+
+                growth = upload_cache.growth_fields_for_player(
+                    [file_id], stats_player or player
+                )
+                if growth.get("by_year"):
+                    stats_player = dict(stats_player)
+                    stats_player["by_year"] = growth["by_year"]
+                    for key in ("years_present", "multi_year", "multi_year_status"):
+                        if stats_player.get(key) in (None, "", {}, []) and growth.get(
+                            key
+                        ) not in (None, "", {}, []):
+                            stats_player[key] = growth[key]
+                    stats_player["multi_year"] = True
+            except Exception:
+                pass
 
     has_stats_payload = bool(stats_player and stats_player.get("stats"))
     if upload_has_stats is None:

@@ -960,6 +960,107 @@ def cached_role_rows(file_id: str) -> list[dict[str, Any]] | None:
     return rows if isinstance(rows, list) else None
 
 
+# file_id → (signature_key, player_key → growth fields)
+_GROWTH_INDEX: dict[str, tuple[str, dict[str, dict[str, Any]]]] = {}
+
+
+def growth_fields_by_player_key(file_id: str) -> dict[str, dict[str, Any]]:
+    """player_row_key → multi-year growth maps from a fresh upload cache.
+
+    Used to rehydrate Dash session rows that intentionally omit these blobs.
+    """
+    from scoring.multi_year import growth_fields_of
+    from scoring.role_scorer import player_row_key
+
+    fid = str(file_id or "").strip()
+    if not fid:
+        return {}
+    entry = lib.get_file(fid)
+    cache = load_cache(fid)
+    if not cache or not is_fresh(cache, entry=entry):
+        return {}
+    sig = str(
+        cache.get("signature_key")
+        or cache.get("signature")
+        or cache.get("computed_at")
+        or ""
+    )
+    cached = _GROWTH_INDEX.get(fid)
+    if cached and cached[0] == sig:
+        return cached[1]
+
+    index: dict[str, dict[str, Any]] = {}
+
+    def _absorb(rows: list | None) -> None:
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            fields = growth_fields_of(row)
+            if not fields:
+                continue
+            key = player_row_key(row)
+            if not key:
+                key = player_row_key(
+                    {
+                        "name": row.get("name") or row.get("Name"),
+                        "unique_id": row.get("unique_id") or row.get("Unique ID"),
+                        "club": row.get("club") or row.get("Club"),
+                    }
+                )
+            if key and key not in index:
+                index[key] = fields
+
+    role_block = cache.get("role_scores") if isinstance(cache.get("role_scores"), dict) else {}
+    _absorb(role_block.get("rows") if isinstance(role_block, dict) else None)
+    if not index:
+        _absorb(_players_from_cache(cache, "role_scores"))
+    if not index:
+        _absorb(_players_from_cache(cache, "stats"))
+
+    _GROWTH_INDEX[fid] = (sig, index)
+    return index
+
+
+def growth_fields_for_player(
+    file_ids: list[str] | tuple[str, ...] | None,
+    player: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Resolve growth maps for one player across one or more upload file ids."""
+    from scoring.role_scorer import player_row_key
+
+    if not isinstance(player, dict):
+        return {}
+    key = player_row_key(player)
+    if not key:
+        key = player_row_key(
+            {
+                "name": player.get("name") or player.get("Name"),
+                "unique_id": player.get("unique_id") or player.get("Unique ID"),
+                "club": player.get("club") or player.get("Club"),
+            }
+        )
+    if not key:
+        return {}
+
+    preferred = str(
+        player.get("_source_file_id") or player.get("file_id") or ""
+    ).strip()
+    ordered: list[str] = []
+    if preferred:
+        ordered.append(preferred)
+    for fid in file_ids or []:
+        text = str(fid or "").strip()
+        if text and text not in ordered:
+            ordered.append(text)
+    for fid in ordered:
+        hit = growth_fields_by_player_key(fid).get(key)
+        if hit:
+            return hit
+    return {}
+
+
 def cached_stats_percentiles(file_id: str) -> dict[str, Any] | None:
     entry = lib.get_file(file_id)
     cache = load_cache(file_id)
