@@ -259,15 +259,10 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
         return True
     if str(p.get("max_age") or "99") != "99":
         return True
-    settings = us.normalize(settings)
-    ok_floor = settings["bands"]["ok"]
     min_score = p.get("min_score")
     if min_score is not None:
-        try:
-            if abs(float(min_score) - float(ok_floor)) > 1e-9:
-                return True
-        except (TypeError, ValueError):
-            return True
+        # None = follow auto band floor; any other stored value is intentional.
+        return True
     min_q, min_s = _migrate_min_score_persist(p)
     if min_q != "all" or min_s != "all":
         return True
@@ -294,17 +289,100 @@ def _persist_has_state(persist: dict | None, settings: dict | None = None) -> bo
     return False
 
 
-def _persist_min_score(value, settings: dict | None = None):
-    """Store None when min score matches the layout default (OK band)."""
-    if value is None or value == "":
+_BAND_RANK_HIGH_TO_LOW = ("elite", "good", "ok", "poor")
+
+
+def _band_cut_kwargs(bands: dict | None) -> dict[str, float]:
+    bands = bands or {}
+    return {
+        key: float(bands[key])
+        for key in ("elite", "good", "ok")
+        if bands.get(key) is not None
+    }
+
+
+def _band_floor_value(band: str, bands: dict) -> float:
+    if band == "poor":
+        return 0.0
+    return float(bands[band])
+
+
+def _combined_band_counts(
+    rows: list[dict],
+    role_cols: list[str],
+    bands: dict,
+) -> dict[str, int]:
+    """Sum eligible score-band hits across every scored role column."""
+    cut_kwargs = _band_cut_kwargs(bands)
+    counts = {band: 0 for band in _BAND_RANK_HIGH_TO_LOW}
+    for row in rows:
+        for col in role_cols:
+            if normalize_eligibility(row.get(f"{col} eligible")) == ELIGIBILITY_NONE:
+                continue
+            raw = row.get(col)
+            if raw in (None, "", "-"):
+                continue
+            try:
+                score = float(raw)
+            except (TypeError, ValueError):
+                continue
+            counts[score_band(score, **cut_kwargs)] += 1
+    return counts
+
+
+def _second_highest_band_floor(
+    rows: list[dict] | None,
+    role_cols: list[str] | None,
+    bands: dict | None,
+) -> float | None:
+    """Auto Floor: second-highest occupied band, capped at the Good cut.
+
+    Counts are combined across all scored role columns; a band is available
+    when its combined count is > 0. With only one available band, that band
+    is used. Elite can never raise Floor above Good.
+    """
+    settings_bands = us.normalize_bands(bands)
+    if not rows or not role_cols:
         return None
-    settings = us.normalize(settings)
+    counts = _combined_band_counts(rows, role_cols, settings_bands)
+    available = [band for band in _BAND_RANK_HIGH_TO_LOW if counts.get(band, 0) > 0]
+    if not available:
+        return None
+    chosen = available[1] if len(available) >= 2 else available[0]
+    floor = _band_floor_value(chosen, settings_bands)
+    good_cut = float(settings_bands["good"])
+    if floor > good_cut:
+        return good_cut
+    return floor
+
+
+def _persist_min_score(
+    value,
+    settings: dict | None = None,
+    auto_state: dict | None = None,
+):
+    """Store None while the control still matches the auto band floor.
+
+    Explicit blank/Any persists as 0 when the auto floor is above 0, so reload
+    does not snap back to auto.
+    """
+    auto_state = auto_state or {}
+    floor = auto_state.get("floor")
     try:
-        if abs(float(value) - float(settings["bands"]["ok"])) <= 1e-9:
-            return None
+        default = float(floor) if floor is not None else None
     except (TypeError, ValueError):
-        pass
-    return value
+        default = None
+    if value is None or value == "":
+        if default is None or default <= 0:
+            return None
+        return 0
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return value
+    if default is not None and abs(number - default) <= 1e-9:
+        return None
+    return number
 
 
 def _persist_page_size(value, settings: dict | None = None):
@@ -1066,6 +1144,7 @@ def layout():
         dcc.Store(id="rs-table-cache"),
         dcc.Store(id="rs-hydrated", data=False),
         dcc.Store(id="rs-persist-boot"),
+        dcc.Store(id="rs-min-score-auto", data={"manual": False, "floor": None}),
         dcc.Store(id="rs-role-mode-prev", data=None),
         dcc.Store(id="rs-player-key", data=None),
         dcc.Store(id="rs-modal-pct-basis", data="current"),
@@ -1481,6 +1560,9 @@ def layout():
                                                                             "Floor",
                                                                             tip=(
                                                                                 "Minimum score required. "
+                                                                                "Defaults to the second-highest "
+                                                                                "occupied score band across "
+                                                                                "scored roles (capped at Good). "
                                                                                 "Leave blank for any score."
                                                                             ),
                                                                             help_id="rs-help-min-score-floor",
@@ -1492,7 +1574,7 @@ def layout():
                                                                             max=20,
                                                                             step=0.1,
                                                                             decimalScale=1,
-                                                                            value=settings["bands"]["ok"],
+                                                                            value=None,
                                                                         ),
                                                                     ],
                                                                     className="rs-min-score-floor",
@@ -2644,6 +2726,7 @@ def _depth_panel(
     Input("rs-set-piece-min-score", "value"),
     Input("rs-archetypes", "data"),
     State("rs-hydrated", "data"),
+    State("rs-min-score-auto", "data"),
     prevent_initial_call=True,
 )
 def save_page_persist(
@@ -2670,6 +2753,7 @@ def save_page_persist(
     set_piece_min_score,
     archetypes,
     hydrated,
+    min_score_auto,
 ):
     if not hydrated:
         return no_update
@@ -2689,7 +2773,7 @@ def save_page_persist(
         "focus_role": _as_list(focus_role),
         "search": (search or "").strip(),
         "max_age": str(max_age or "99"),
-        "min_score": _persist_min_score(min_score, settings),
+        "min_score": _persist_min_score(min_score, settings, min_score_auto),
         "min_score_quantifier": _normalize_min_score_quantifier(min_score_quantifier),
         "min_score_scope": _normalize_min_score_scope(min_score_scope),
         "pos_filter": pos_filter or "all",
@@ -2745,6 +2829,7 @@ clientside_callback(
     Output("rs-age", "value", allow_duplicate=True),
     Output("rs-archetypes", "data", allow_duplicate=True),
     Output("rs-min-score", "value"),
+    Output("rs-min-score-auto", "data"),
     Output("rs-min-score-quantifier", "value"),
     Output("rs-min-score-scope", "value"),
     Output("rs-pos-filter", "data", allow_duplicate=True),
@@ -2762,7 +2847,7 @@ clientside_callback(
 def hydrate_page_persist(persist, hydrated):
     from scoring.player_archetypes import normalize_archetype_filter
 
-    _skip = (no_update,) * 28
+    _skip = (no_update,) * 29
     if hydrated:
         return _skip
     raw = persist or {}
@@ -2774,7 +2859,9 @@ def hydrate_page_persist(persist, hydrated):
             True,
             persist.get("role_mode") or "formations",
             no_update,
-            *(no_update,) * 14,
+            *(no_update,) * 4,
+            {"manual": False, "floor": None},
+            *(no_update,) * 10,
         )
     roles = _as_list(persist.get("roles"))
     combos = normalize_combos(persist.get("combos"))
@@ -2797,8 +2884,19 @@ def hydrate_page_persist(persist, hydrated):
     min_score = persist.get("min_score")
     if min_score is None:
         min_score_out = no_update
+        min_score_auto = {"manual": False, "floor": None}
     else:
-        min_score_out = min_score
+        try:
+            stored = float(min_score)
+        except (TypeError, ValueError):
+            stored = None
+        # 0 = explicit Any (blank input)
+        if stored is not None and stored == 0:
+            min_score_out = None
+            min_score_auto = {"manual": True, "floor": None}
+        else:
+            min_score_out = min_score
+            min_score_auto = {"manual": True, "floor": None}
     min_score_quantifier, min_score_scope = _migrate_min_score_persist(persist)
     pos_filter = persist.get("pos_filter") or "all"
     foot_filter = persist.get("foot_filter") or ""
@@ -2826,6 +2924,7 @@ def hydrate_page_persist(persist, hydrated):
         _changed_or_skip(max_age, "99"),
         archetypes if archetypes else no_update,
         min_score_out,
+        min_score_auto,
         _changed_or_skip(min_score_quantifier, "all"),
         _changed_or_skip(min_score_scope, "all"),
         _changed_or_skip(pos_filter, "all"),
@@ -2837,6 +2936,71 @@ def hydrate_page_persist(persist, hydrated):
         page_size if page_size is not None else no_update,
         set_piece_min if set_piece_min is not None else no_update,
     )
+
+
+@callback(
+    Output("rs-min-score", "value", allow_duplicate=True),
+    Output("rs-min-score-auto", "data", allow_duplicate=True),
+    Input("rs-rows", "data"),
+    Input("ui-settings", "data"),
+    State("rs-min-score", "value"),
+    State("rs-min-score-auto", "data"),
+    prevent_initial_call=True,
+)
+def sync_auto_min_score(payload, settings, current, auto_state):
+    """Keep Floor on the second-highest occupied band until the user edits it."""
+    auto_state = dict(auto_state or {})
+    settings = us.normalize(settings)
+    rows = (payload or {}).get("rows") if isinstance(payload, dict) else None
+    role_cols = (
+        list((payload or {}).get("roles") or []) if isinstance(payload, dict) else []
+    )
+    floor = _second_highest_band_floor(rows, role_cols, settings["bands"])
+    file_sig = (
+        f"{(payload or {}).get('file_id') or ''}|"
+        f"{(payload or {}).get('scouting_file_id') or ''}|"
+        f"{','.join(role_cols)}"
+    )
+    bands = settings["bands"]
+    bands_sig = f"{bands.get('elite')}|{bands.get('good')}|{bands.get('ok')}"
+    next_state = {
+        "manual": bool(auto_state.get("manual")),
+        "floor": floor,
+        "file_sig": file_sig,
+        "bands_sig": bands_sig,
+    }
+    if floor is None:
+        next_state["floor"] = auto_state.get("floor")
+        return no_update, next_state
+
+    prev_floor = auto_state.get("floor")
+    manual = bool(auto_state.get("manual"))
+    if not manual and prev_floor is not None:
+        if current is None or current == "":
+            if float(prev_floor) > 0:
+                manual = True
+        else:
+            try:
+                if abs(float(current) - float(prev_floor)) > 1e-9:
+                    manual = True
+            except (TypeError, ValueError):
+                manual = True
+    next_state["manual"] = manual
+    if manual:
+        return no_update, next_state
+    target = None if floor <= 0 else floor
+    try:
+        if current is None and target is None:
+            return no_update, next_state
+        if (
+            current is not None
+            and target is not None
+            and abs(float(current) - float(target)) <= 1e-9
+        ):
+            return no_update, next_state
+    except (TypeError, ValueError):
+        pass
+    return target, next_state
 
 
 def _workflow_visibility(parsed, payload):
