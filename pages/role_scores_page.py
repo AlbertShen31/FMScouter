@@ -2956,26 +2956,33 @@ def sync_auto_min_score(payload, settings, current, auto_state):
         list((payload or {}).get("roles") or []) if isinstance(payload, dict) else []
     )
     floor = _second_highest_band_floor(rows, role_cols, settings["bands"])
-    file_sig = (
-        f"{(payload or {}).get('file_id') or ''}|"
-        f"{(payload or {}).get('scouting_file_id') or ''}|"
-        f"{','.join(role_cols)}"
+    file_id = str((payload or {}).get("file_id") or "") if isinstance(payload, dict) else ""
+    scout_id = (
+        str((payload or {}).get("scouting_file_id") or "")
+        if isinstance(payload, dict)
+        else ""
     )
+    export_sig = f"{file_id}|{scout_id}"
     bands = settings["bands"]
     bands_sig = f"{bands.get('elite')}|{bands.get('good')}|{bands.get('ok')}"
-    next_state = {
-        "manual": bool(auto_state.get("manual")),
-        "floor": floor,
-        "file_sig": file_sig,
-        "bands_sig": bands_sig,
-    }
+    # Ignore empty clear/replace flashes — keep prior export identity so the
+    # next real payload still counts as an export change.
+    has_export = bool(file_id or scout_id or (rows and role_cols))
+    export_changed = has_export and auto_state.get("export_sig") != export_sig
+
     if floor is None:
-        next_state["floor"] = auto_state.get("floor")
-        return no_update, next_state
+        return no_update, {
+            **auto_state,
+            "floor": auto_state.get("floor"),
+            "bands_sig": bands_sig,
+        }
 
     prev_floor = auto_state.get("floor")
     manual = bool(auto_state.get("manual"))
-    if not manual and prev_floor is not None:
+    # New squad/scouting export always reclaims auto Floor (textbox + store).
+    if export_changed:
+        manual = False
+    elif not manual and prev_floor is not None:
         if current is None or current == "":
             if float(prev_floor) > 0:
                 manual = True
@@ -2985,10 +2992,22 @@ def sync_auto_min_score(payload, settings, current, auto_state):
                     manual = True
             except (TypeError, ValueError):
                 manual = True
-    next_state["manual"] = manual
+
+    next_state = {
+        "manual": manual,
+        "floor": floor,
+        "export_sig": export_sig,
+        "file_sig": f"{export_sig}|{','.join(role_cols)}",
+        "bands_sig": bands_sig,
+    }
     if manual:
         return no_update, next_state
+
     target = None if floor <= 0 else floor
+    # Always push on export change so Mantine NumberInput refreshes even when
+    # the numeric floor happens to match the previous file.
+    if export_changed:
+        return target, next_state
     try:
         if current is None and target is None:
             return no_update, next_state
