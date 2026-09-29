@@ -3,7 +3,7 @@
 Page-specific content (attribute grid, stats charts) is passed as `bottom`
 and optional `after_identity` children. Detail categories (international,
 contract, career, season, discipline) are behind a one-at-a-time filter;
-with nothing selected the modal shows personality, archetypes, and page content.
+personality, archetypes, and page content always stay visible below.
 """
 from __future__ import annotations
 
@@ -987,12 +987,10 @@ def register_modal_section_callbacks(prefix: str) -> None:
     panel_type = f"{prefix}-modal-extra-panel"
     sel_id = f"{prefix}-modal-extra-sel"
     extras_id = f"{prefix}-modal-extras"
-    main_id = f"{prefix}-modal-main"
 
     @callback(
         Output(sel_id, "data"),
         Output(extras_id, "hidden"),
-        Output(main_id, "hidden"),
         Output({"type": btn_type, "section": ALL}, "className"),
         Output({"type": panel_type, "section": ALL}, "hidden"),
         Input({"type": btn_type, "section": ALL}, "n_clicks"),
@@ -1003,10 +1001,10 @@ def register_modal_section_callbacks(prefix: str) -> None:
     )
     def _switch_modal_extra_section(n_clicks, current, btn_ids, panel_ids):
         if not ctx.triggered_id or not clicked(n_clicks):
-            return (no_update,) * 5
+            return (no_update,) * 4
         section = str(ctx.triggered_id.get("section") or "").strip().lower()
         if not section:
-            return (no_update,) * 5
+            return (no_update,) * 4
         cur = str(current or "").strip().lower() or None
         new = None if section == cur else section
         btn_classes = [
@@ -1027,7 +1025,7 @@ def register_modal_section_callbacks(prefix: str) -> None:
             )
             for pid in (panel_ids or [])
         ]
-        return new, new is None, new is not None, btn_classes, panel_hidden
+        return new, new is None, btn_classes, panel_hidden
 
 
 def player_detail_body(
@@ -1052,9 +1050,9 @@ def player_detail_body(
 ) -> html.Div:
     """Shared modal body.
 
-    Always: player identity. Optional exclusive filter for international /
-    contract / career / season / discipline. Default (nothing selected):
-    personality → archetypes → page content (role scores / player stats).
+    Always: player identity, then personality / archetypes / page content.
+    Optional exclusive filter only toggles international / contract / career /
+    season / discipline above that content.
     """
     effective_theme = theme
     if effective_theme is None and settings:
@@ -1148,9 +1146,7 @@ def player_detail_body(
     children.append(
         html.Div(
             [child for child in main_children if child is not None],
-            id=f"{id_prefix}-modal-main",
             className="rs-modal-main rs-player-detail-stack",
-            hidden=False,
         )
     )
     return html.Div(

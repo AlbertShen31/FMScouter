@@ -5359,7 +5359,6 @@ body[data-theme="light"] .st-pizza-legend-pct {
 }
 
 .rs-modal-extras[hidden],
-.rs-modal-main[hidden],
 .rs-modal-extra-panel[hidden] {
     display: none !important;
 }
