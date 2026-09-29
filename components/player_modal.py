@@ -527,24 +527,21 @@ def _current_season_player(player: dict) -> dict:
 def player_playing_time_section(player: dict, **kwargs) -> html.Div | None:
     season_player = _current_season_player(player)
     settings = kwargs.pop("settings", None)
-    # Identity minutes follow the Year toggle; recolor from current-season mins.
-    if (
-        season_player.get("minutes") != player.get("minutes")
-        and kwargs.get("field_styles")
-    ):
-        try:
-            from scoring.stats_scorer import minutes_color, minutes_status
+    # Always color Season stats minutes (identity styles are mode-gated and may
+    # be absent on Role scores). Use current-season mins, not Year-toggle mins.
+    try:
+        from scoring.stats_scorer import minutes_color, minutes_status
 
-            req = float(us.default_minutes_required(settings))
-            styles = dict(kwargs["field_styles"])
-            styles["minutes"] = {
-                "color": minutes_color(
-                    minutes_status(season_player.get("minutes"), req)
-                )
-            }
-            kwargs = {**kwargs, "field_styles": styles}
-        except Exception:
-            pass
+        req = float(us.default_minutes_required(settings))
+        styles = dict(kwargs.get("field_styles") or {})
+        styles["minutes"] = {
+            "color": minutes_color(
+                minutes_status(season_player.get("minutes"), req)
+            )
+        }
+        kwargs = {**kwargs, "field_styles": styles}
+    except Exception:
+        pass
     return player_record_section(
         season_player,
         "Season stats",
