@@ -2,6 +2,14 @@
 
 Based on the python evaluation script created by https://www.youtube.com/@squirrel_plays_fof4318
 
+Requires **Python 3.12**. Create/activate the venv, then install deps:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 How the scorer, role groups, packs, and naming are wired: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Code layout: `pages/` (routes), `components/` (shared UI), `scoring/` (parse/score), `services/` (packs/settings), `config/` (data).
