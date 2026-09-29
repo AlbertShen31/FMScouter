@@ -1,7 +1,9 @@
-"""Shared player detail modal: identity, international, personality, shell.
+"""Shared player detail modal: identity, exclusive detail filter, personality, shell.
 
 Page-specific content (attribute grid, stats charts) is passed as `bottom`
-and optional `after_identity` children.
+and optional `after_identity` children. Detail categories (international,
+contract, career, season, discipline) are behind a one-at-a-time filter;
+with nothing selected the modal shows personality, archetypes, and page content.
 """
 from __future__ import annotations
 
@@ -245,14 +247,22 @@ def player_identity_sections(
     field_formatters: Mapping[str, FieldFormatter] | None = None,
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    include_sections: Sequence[str] | None = None,
 ) -> list:
-    """Build identity + international section nodes (no personality)."""
+    """Build identity and/or international section nodes (no personality).
+
+    ``include_sections`` defaults to both ``identity`` and ``international``.
+    """
+    wanted = set(include_sections) if include_sections is not None else {
+        "identity",
+        "international",
+    }
     configured = [
         (label, key, section)
         for label, key, section in (fields or [])
-        if key not in STAR_ATTRIBUTES_BROKEN
+        if key not in STAR_ATTRIBUTES_BROKEN and section in wanted
     ]
-    if extra_identity_fields:
+    if extra_identity_fields and "identity" in wanted:
         configured.extend(
             (label, key, "identity")
             for label, key in extra_identity_fields
@@ -268,7 +278,12 @@ def player_identity_sections(
         by_section.setdefault(title, []).append((label, key))
 
     sections = []
-    for title in (None, "International & youth"):
+    title_order = []
+    if "identity" in wanted:
+        title_order.append(None)
+    if "international" in wanted:
+        title_order.append("International & youth")
+    for title in title_order:
         if title not in by_section:
             continue
         field_map = {key: label for label, key in by_section[title]}
@@ -321,6 +336,108 @@ def player_identity_sections(
                 html.Div(row_nodes, className="rs-player-identity-block")
             )
     return sections
+
+
+# Exclusive modal detail categories (shown one-at-a-time via the section filter).
+# Default (nothing selected): personality + archetypes + page content.
+MODAL_EXTRA_SECTION_DEFS: tuple[tuple[str, str], ...] = (
+    ("international", "International"),
+    ("finance", "Contract & finance"),
+    ("career", "Career totals"),
+    ("season", "Season stats"),
+    ("discipline", "Discipline"),
+)
+
+
+def player_international_section(
+    player: dict,
+    *,
+    fields: Sequence[tuple[str, str, str]] | None = None,
+    field_styles: Mapping[str, dict] | None = None,
+    field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    **_kwargs,
+) -> html.Div | None:
+    """International & youth block for the modal section filter."""
+    nodes = player_identity_sections(
+        player,
+        fields=fields,
+        field_styles=field_styles,
+        field_formatters=field_formatters,
+        theme=theme,
+        limited_divisions=limited_divisions,
+        include_sections=("international",),
+    )
+    if not nodes:
+        return None
+    if len(nodes) == 1:
+        return nodes[0]
+    return html.Div(nodes, className="rs-player-id-section")
+
+
+def _modal_extra_section_nodes(
+    player: dict,
+    *,
+    modal_fields: Sequence[tuple[str, str, str]] | None = None,
+    field_styles: Mapping[str, dict] | None = None,
+    field_formatters: Mapping[str, FieldFormatter] | None = None,
+    theme: str | None = None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+) -> list[tuple[str, str, html.Div]]:
+    """Build available (key, button_label, node) rows for the exclusive filter."""
+    kwargs = {
+        "field_styles": field_styles,
+        "field_formatters": field_formatters,
+        "theme": theme,
+        "limited_divisions": limited_divisions,
+    }
+    builders = {
+        "international": lambda: player_international_section(
+            player, fields=modal_fields, **kwargs
+        ),
+        "finance": lambda: player_finance_section(player, **kwargs),
+        "career": lambda: player_career_section(player, **kwargs),
+        "season": lambda: player_playing_time_section(player, **kwargs),
+        "discipline": lambda: player_discipline_section(player, **kwargs),
+    }
+    out: list[tuple[str, str, html.Div]] = []
+    for key, label in MODAL_EXTRA_SECTION_DEFS:
+        node = builders[key]()
+        if node is not None:
+            out.append((key, label, node))
+    return out
+
+
+def _modal_section_filter(
+    *,
+    id_prefix: str,
+    options: Sequence[tuple[str, str]],
+    active: str | None = None,
+) -> html.Div:
+    buttons = [
+        html.Button(
+            label,
+            id={"type": f"{id_prefix}-modal-extra-btn", "section": key},
+            n_clicks=0,
+            type="button",
+            className="st-player-seg-btn"
+            + (" active" if key == active else ""),
+        )
+        for key, label in options
+    ]
+    return html.Div(
+        [
+            html.Span("Details", className="st-player-switch-label"),
+            html.Div(
+                buttons,
+                id=f"{id_prefix}-modal-extra-btns",
+                className="st-player-seg rs-modal-section-seg",
+            ),
+            dcc.Store(id=f"{id_prefix}-modal-extra-sel", data=active),
+        ],
+        className="rs-modal-section-filter",
+    )
 
 
 def _as_field_rows(
@@ -859,6 +976,59 @@ def register_archetype_group_callbacks(prefix: str) -> None:
         )
         return chips, group, buttons
 
+    register_modal_section_callbacks(prefix)
+
+
+def register_modal_section_callbacks(prefix: str) -> None:
+    """Exclusive detail filter: one of international / contract / career / season / discipline."""
+    from components.scouting_shell import clicked
+
+    btn_type = f"{prefix}-modal-extra-btn"
+    panel_type = f"{prefix}-modal-extra-panel"
+    sel_id = f"{prefix}-modal-extra-sel"
+    extras_id = f"{prefix}-modal-extras"
+    main_id = f"{prefix}-modal-main"
+
+    @callback(
+        Output(sel_id, "data"),
+        Output(extras_id, "hidden"),
+        Output(main_id, "hidden"),
+        Output({"type": btn_type, "section": ALL}, "className"),
+        Output({"type": panel_type, "section": ALL}, "hidden"),
+        Input({"type": btn_type, "section": ALL}, "n_clicks"),
+        State(sel_id, "data"),
+        State({"type": btn_type, "section": ALL}, "id"),
+        State({"type": panel_type, "section": ALL}, "id"),
+        prevent_initial_call=True,
+    )
+    def _switch_modal_extra_section(n_clicks, current, btn_ids, panel_ids):
+        if not ctx.triggered_id or not clicked(n_clicks):
+            return (no_update,) * 5
+        section = str(ctx.triggered_id.get("section") or "").strip().lower()
+        if not section:
+            return (no_update,) * 5
+        cur = str(current or "").strip().lower() or None
+        new = None if section == cur else section
+        btn_classes = [
+            "st-player-seg-btn"
+            + (
+                " active"
+                if isinstance(bid, dict)
+                and str(bid.get("section") or "").strip().lower() == (new or "")
+                else ""
+            )
+            for bid in (btn_ids or [])
+        ]
+        panel_hidden = [
+            not (
+                isinstance(pid, dict)
+                and new is not None
+                and str(pid.get("section") or "").strip().lower() == new
+            )
+            for pid in (panel_ids or [])
+        ]
+        return new, new is None, new is not None, btn_classes, panel_hidden
+
 
 def player_detail_body(
     player: dict,
@@ -880,17 +1050,16 @@ def player_detail_body(
     show_archetypes: bool = True,
     arch_pos_group: str | None = None,
 ) -> html.Div:
-    """Shared modal body: identity → international → finance → career → season stats → discipline → personality → page content."""
+    """Shared modal body.
+
+    Always: player identity. Optional exclusive filter for international /
+    contract / career / season / discipline. Default (nothing selected):
+    personality → archetypes → page content (role scores / player stats).
+    """
     effective_theme = theme
     if effective_theme is None and settings:
         effective_theme = us.preferred_theme(settings)
-    section_kwargs = {
-        "field_styles": field_styles,
-        "field_formatters": field_formatters,
-        "theme": effective_theme,
-        "limited_divisions": limited_divisions,
-    }
-    children = [
+    children: list = [
         *player_identity_sections(
             player,
             position_eligible=position_eligible,
@@ -900,15 +1069,60 @@ def player_detail_body(
             field_formatters=field_formatters,
             theme=effective_theme,
             limited_divisions=limited_divisions,
+            include_sections=("identity",),
         ),
-        player_finance_section(player, **section_kwargs),
-        player_career_section(player, **section_kwargs),
-        player_playing_time_section(player, **section_kwargs),
-        player_discipline_section(player, **section_kwargs),
+    ]
+
+    extra_sections = _modal_extra_section_nodes(
+        player,
+        modal_fields=modal_fields,
+        field_styles=field_styles,
+        field_formatters=field_formatters,
+        theme=effective_theme,
+        limited_divisions=limited_divisions,
+    )
+    if extra_sections:
+        children.append(
+            _modal_section_filter(
+                id_prefix=id_prefix,
+                options=[(key, label) for key, label, _node in extra_sections],
+            )
+        )
+        children.append(
+            html.Div(
+                [
+                    html.Div(
+                        node,
+                        id={
+                            "type": f"{id_prefix}-modal-extra-panel",
+                            "section": key,
+                        },
+                        hidden=True,
+                        className="rs-modal-extra-panel",
+                    )
+                    for key, _label, node in extra_sections
+                ],
+                id=f"{id_prefix}-modal-extras",
+                className="rs-modal-extras",
+                hidden=True,
+            )
+        )
+    else:
+        # Stable targets for the section-filter callback when a player has none.
+        children.append(
+            html.Div(
+                dcc.Store(id=f"{id_prefix}-modal-extra-sel", data=None),
+                id=f"{id_prefix}-modal-extras",
+                className="rs-modal-extras",
+                hidden=True,
+            )
+        )
+
+    main_children: list = [
         player_personality_section(player, id_prefix=id_prefix, settings=settings),
     ]
     if show_archetypes:
-        children.append(
+        main_children.append(
             player_archetypes_section(
                 player,
                 id_prefix=id_prefix,
@@ -922,17 +1136,26 @@ def player_detail_body(
         )
     if after_identity is not None:
         if isinstance(after_identity, (list, tuple)):
-            children.extend(after_identity)
+            main_children.extend(after_identity)
         else:
-            children.append(after_identity)
+            main_children.append(after_identity)
     if bottom is not None:
         if isinstance(bottom, (list, tuple)):
-            children.extend(bottom)
+            main_children.extend(bottom)
         else:
-            children.append(bottom)
+            main_children.append(bottom)
+
+    children.append(
+        html.Div(
+            [child for child in main_children if child is not None],
+            id=f"{id_prefix}-modal-main",
+            className="rs-modal-main rs-player-detail-stack",
+            hidden=False,
+        )
+    )
     return html.Div(
         [child for child in children if child is not None],
-        className="rs-player-detail",
+        className="rs-player-detail rs-player-detail-stack",
     )
 
 

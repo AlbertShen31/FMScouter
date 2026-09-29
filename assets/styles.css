@@ -5326,13 +5326,55 @@ body[data-theme="light"] .st-pizza-legend-pct {
 }
 
 /* Space below section content, then divider, then space before next section */
+.rs-player-detail-stack > *:not(:last-child),
 .rs-player-detail > *:not(:last-child) {
     padding-bottom: var(--rs-modal-section-gap);
 }
 
+.rs-player-detail-stack > * + *,
 .rs-player-detail > * + * {
     padding-top: var(--rs-modal-section-gap);
     border-top: 1px solid color-mix(in srgb, var(--app-line) 62%, transparent);
+}
+
+.rs-modal-section-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.rs-modal-section-filter .st-player-switch-label {
+    color: var(--app-muted);
+}
+
+.rs-modal-section-seg {
+    flex-wrap: wrap;
+}
+
+.rs-modal-section-seg .st-player-seg-btn {
+    flex: 1 1 auto;
+    min-width: 4.75rem;
+    padding: 7px 8px;
+    font-size: 11px;
+}
+
+.rs-modal-extras[hidden],
+.rs-modal-main[hidden],
+.rs-modal-extra-panel[hidden] {
+    display: none !important;
+}
+
+.rs-modal-main,
+.rs-modal-extras {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Avoid a double divider when the extras wrap only shows one panel */
+.rs-modal-extras > .rs-modal-extra-panel:not([hidden]) {
+    padding-top: 0;
+    border-top: 0;
 }
 
 .rs-player-detail > hr,
