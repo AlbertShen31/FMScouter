@@ -99,6 +99,7 @@ app.layout = dmc.MantineProvider(
                     dbc.Nav(
                         [
                             dbc.NavItem(dbc.NavLink("Uploads", href="/uploads")),
+                            dbc.NavItem(dbc.NavLink("Save export", href="/save-export")),
                             dbc.NavItem(dbc.NavLink("Role scores", href="/")),
                             dbc.NavItem(dbc.NavLink("Player stats", href="/stats")),
                             dbc.NavItem(dbc.NavLink("Profiles", href="/profiles")),
