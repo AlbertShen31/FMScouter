@@ -1,0 +1,32 @@
+---
+description: Keep player/compare modals fast (no sync recompute on open)
+globs:
+  - components/player_modal.py
+  - components/player_detail.py
+  - components/stats_compare.py
+  - components/multi_year_ui.py
+  - pages/profiles_page.py
+  - pages/role_scores_page.py
+  - pages/stats_page.py
+alwaysApply: false
+---
+
+# Modal performance (FMScouter)
+
+When editing player or compare modals, treat **open latency** as a regression risk.
+
+## Hard rules
+
+- Never call `upload_cache.compute_file` from a modal-open / modal-switch callback.
+- On modal hot paths use `load_stats_players_for_file(..., compute_if_missing=False)`.
+- Prefer embedded snapshots (`profile["stats_player"]`, in-memory `parsed.players`) over reloading the upload cache.
+- Prefer `growth_fields_for_player` for one-player year-map hydrate over loading a full cohort.
+- Keep shared modal shells at `fade=False` (Bootstrap fade feels slow with heavy bodies).
+- Pass / reuse `banding_ctx` with a `cache_key` instead of rebuilding adaptive bounds every open.
+- Prefer show/hide of mounted section panels over rewriting `*-modal-body` when the player is unchanged.
+
+## Acceptance
+
+Warm cache: Profiles player-modal body build should stay snappy (order of hundreds of ms, not seconds). Cache miss: open on the embedded snapshot — do not stall waiting for a pack recompute.
+
+See `AGENTS.md` → **Modal performance**.

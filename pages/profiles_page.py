@@ -7950,9 +7950,18 @@ def open_profile_modal_from_depth(n_clicks, settings, theme, focus_role, depth_p
 
 
 def _resolve_stats_player_for_profile(
-    profile: dict, player: dict
+    profile: dict,
+    player: dict,
+    *,
+    load_cohort: bool = True,
 ) -> tuple[dict | None, list[dict] | None]:
-    """Return (stats player, cohort) for the Profiles modal if available."""
+    """Return (stats player, cohort) for the Profiles modal if available.
+
+    Modal hot path: never synchronously recompute a multi-year pack. Prefer the
+    embedded ``stats_player`` snapshot; hydrate year maps from the upload-cache
+    growth index; load the cohort only from a fresh cache (banding / compare).
+    Pass ``load_cohort=False`` when banding is already warm in the LRU.
+    """
     from scoring.stats_scorer import player_key as stats_player_key
 
     file_id = str(profile.get("file_id") or "").strip()
@@ -7962,12 +7971,20 @@ def _resolve_stats_player_for_profile(
         preferred = dict(embedded)
     elif isinstance(player, dict) and player.get("stats"):
         preferred = dict(player)
+
+    # Cache-only — Uploads "Compute All" owns cold multi-year recomputes.
     cohort = None
-    if file_id:
+    if file_id and load_cohort:
         try:
-            cohort = profiles.load_stats_players_for_file(file_id) or None
+            cohort = (
+                profiles.load_stats_players_for_file(
+                    file_id, compute_if_missing=False
+                )
+                or None
+            )
         except Exception:
             cohort = None
+
     if preferred is not None:
         # Prefer richer by_year from the upload cohort (old profile snaps may
         # omit GK / category metrics needed for Current-year modal charts).
@@ -7991,8 +8008,30 @@ def _resolve_stats_player_for_profile(
                             ) not in (None, "", {}, []):
                                 preferred[key] = sp.get(key)
                         break
+        elif file_id and not preferred.get("by_year"):
+            # No in-memory cohort — cheap single-player growth hydrate.
+            try:
+                import services.upload_cache as upload_cache
+
+                growth = upload_cache.growth_fields_for_player([file_id], preferred)
+                if growth.get("by_year"):
+                    preferred["by_year"] = growth["by_year"]
+                    for key in (
+                        "years_present",
+                        "multi_year",
+                        "multi_year_status",
+                    ):
+                        if preferred.get(key) in (None, "", {}, []) and growth.get(
+                            key
+                        ) not in (None, "", {}, []):
+                            preferred[key] = growth[key]
+                    preferred["multi_year"] = True
+            except Exception:
+                pass
         return preferred, cohort
-    return resolve_stats_player_for_file(file_id, player)
+    return resolve_stats_player_for_file(
+        file_id, player, cohort=cohort, compute_if_missing=False
+    )
 
 
 def _enrich_player_multi_year(player: dict, profile: dict) -> dict:
@@ -8039,19 +8078,30 @@ def _build_profile_modal_body(
 
     eval_group = pos_group or _profile_stats_group(profile)
     player = _enrich_player_multi_year(player, profile)
-    stats_player, stats_cohort = _resolve_stats_player_for_profile(profile, player)
     file_id = str(profile.get("file_id") or "").strip()
     import services.export_library as lib
 
     limited_divisions = lib.list_limited_tracking_divisions(file_id=file_id or None)
+    # Skip cohort gunzip when banding for this file is already warm.
+    banding_ctx = (
+        us.peek_stats_banding_context(
+            settings,
+            cache_key=file_id or None,
+            limited_divisions=limited_divisions or None,
+        )
+        if file_id
+        else None
+    )
+    stats_player, stats_cohort = _resolve_stats_player_for_profile(
+        profile, player, load_cohort=banding_ctx is None
+    )
     growth_col = str(
         role_growth_column
         or profile.get("role_column")
         or (profile.get("row") or {}).get("Role")
         or ""
     ).strip() or None
-    banding_ctx = None
-    if stats_cohort:
+    if banding_ctx is None and stats_cohort:
         banding_ctx = us.build_stats_banding_context(
             settings,
             stats_cohort,

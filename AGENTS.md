@@ -64,6 +64,30 @@ Prefer editing existing shared components over duplicating page-local table/moda
 
 ---
 
+## Modal performance (Profiles / Role scores / Player stats)
+
+Player + compare modals must stay snappy. Opening one should not feel like a page reload.
+
+**Do**
+
+- Prefer data already in memory: profile `stats_player` / `player` snapshots, Role-scores `parsed.players`, page banding context. Pass them in; do not re-fetch unless missing.
+- Load upload-cache cohorts with `load_stats_players_for_file(..., compute_if_missing=False)` on modal / depth / switch hot paths. Cold multi-year recompute belongs on Uploads (“Compute All”), never on modal open.
+- Reuse `upload_cache.growth_fields_for_player` for single-player year-map hydrate instead of scanning a full cohort when you only need one row.
+- Pass `banding_ctx` (via `us.build_stats_banding_context(..., cache_key=file_id)`) so modal opens reuse the LRU instead of rescanning the cohort. Prefer `us.peek_stats_banding_context` first so a warm LRU can skip cohort gunzip entirely.
+- Keep shared shells on `fade=False` (`components/player_modal.py`, `components/stats_compare.py`). Bootstrap fade makes heavy bodies feel lagged.
+- Prefer toggling `hidden` / className for exclusive modal sections over rebuilding `*-modal-body` children when the player has not changed.
+
+**Do not**
+
+- Call `upload_cache.compute_file` / `load_stats_players_for_file` with default `compute_if_missing=True` from an open-modal callback.
+- Rebuild the whole Profiles page layout (depth chart, tables) when only the modal body should change.
+- Dump large unused cohort lists into `dcc.Store` or modal props “just in case.”
+- Add per-attribute `dbc.Tooltip` / Plotly graphs to the default modal stack without measuring open cost — personality tooltips and role-growth charts are already on the hot path.
+
+Acceptance: with a warm upload cache, Profiles player modal open should stay well under ~300ms server-side body build; a cache miss must open on the embedded snapshot rather than stall on recompute.
+
+---
+
 ## Scoring & limited tracking
 
 Source of truth: `config/stats_availability.json` + `scoring/stats_availability.py`.

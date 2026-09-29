@@ -2065,8 +2065,9 @@ def load_stats_players_for_file(
     """Best-effort stats players for enriching role-score saves with percentiles.
 
     When ``compute_if_missing`` is False, skip synchronous multi-year recompute
-    (Profiles depth/auto-rank hot paths) and return [] if the upload cache is
-    cold — callers fall back to embedded ``stats_player`` snapshots.
+    (Profiles depth/auto-rank **and modal open** hot paths) and return [] if the
+    upload cache is cold — callers fall back to embedded ``stats_player``
+    snapshots. Default True is for Uploads / save / explicit refresh only.
     """
     if not file_id:
         return []

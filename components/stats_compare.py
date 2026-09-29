@@ -752,6 +752,7 @@ def stats_compare_modal(*, prefix: str) -> dbc.Modal:
         scrollable=True,
         backdrop=True,
         keyboard=True,
+        fade=False,
         className="rs-player-modal rs-compare-modal",
         content_class_name="rs-player-modal-content rs-compare-modal-content",
     )

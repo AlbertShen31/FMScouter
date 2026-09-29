@@ -1208,7 +1208,10 @@ def player_detail_body(
 
 
 def player_modal(*, prefix: str) -> dbc.Modal:
-    """Reusable modal shell. IDs: `{prefix}-player-modal[-title|-body|-close]`."""
+    """Reusable modal shell. IDs: `{prefix}-player-modal[-title|-body|-close]`.
+
+    ``fade=False`` — Bootstrap fade delays perceived open/close on heavy bodies.
+    """
     return dbc.Modal(
         [
             dbc.ModalHeader(
@@ -1235,6 +1238,7 @@ def player_modal(*, prefix: str) -> dbc.Modal:
         scrollable=False,
         backdrop=True,
         keyboard=True,
+        fade=False,
         className="rs-player-modal",
         content_class_name="rs-player-modal-content",
     )

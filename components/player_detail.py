@@ -351,19 +351,29 @@ def resolve_stats_player_for_file(
     player: dict,
     *,
     cohort: list[dict] | None = None,
+    compute_if_missing: bool = False,
 ) -> tuple[dict | None, list[dict] | None]:
     """Return (stats player, cohort) for a saved upload when stats are available.
 
     Pass ``cohort`` when the page already has players in memory (multiyear /
     combined caches embed stats on the role-score players) to avoid reloading
     the full upload cache on every modal open.
+
+    Default ``compute_if_missing=False`` so modal opens never block on a
+    synchronous multi-year recompute — use Uploads / explicit refresh for that.
     """
     from scoring.stats_scorer import player_key as stats_player_key
     from services.player_profiles import load_stats_players_for_file
 
     stat_players = cohort
     if stat_players is None:
-        stat_players = load_stats_players_for_file(file_id) if file_id else None
+        stat_players = (
+            load_stats_players_for_file(
+                file_id, compute_if_missing=compute_if_missing
+            )
+            if file_id
+            else None
+        )
     name = (player.get("name") or "").strip()
     unique_id = str(player.get("unique_id") or "").strip()
     club = (player.get("club") or "").strip()

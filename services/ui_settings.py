@@ -1090,6 +1090,84 @@ _BANDING_CTX_LRU_MAX = 8
 _BANDING_CTX_LRU: dict[str, dict[str, Any]] = {}
 
 
+def _banding_memo_settings_tail(
+    settings: dict[str, Any],
+    *,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    min_minutes: float | None = None,
+    exclude_limited_leagues: bool | None = None,
+) -> tuple[str, str, str, str, str]:
+    """Stable settings fingerprint segments for banding LRU keys (no cohort size)."""
+    import hashlib
+    import json as _json
+
+    from scoring.stats_scorer import adaptive_bound_options
+
+    trees = settings.get("stats_threshold_trees") or {}
+    if not trees:
+        raw = settings.get("stats_thresholds") or {}
+        trees = {"no_detail": raw, "full_detail": raw, "inactive": raw}
+    full_detail = frozenset(settings.get("stats_full_detail_divisions") or [])
+    limited = frozenset(limited_divisions or [])
+    bound_opts = adaptive_bound_options(
+        settings,
+        min_minutes=min_minutes,
+        limited_divisions=limited,
+    )
+    if exclude_limited_leagues is not None:
+        bound_opts["exclude_limited_leagues"] = bool(exclude_limited_leagues)
+    trees_fp = hashlib.sha1(
+        _json.dumps(trees, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:12]
+    return (
+        str(bound_opts.get("min_minutes")),
+        str(bool(bound_opts.get("exclude_limited_leagues"))),
+        trees_fp,
+        ",".join(sorted(str(x) for x in limited)),
+        ",".join(sorted(str(x) for x in full_detail)),
+    )
+
+
+def peek_stats_banding_context(
+    settings: dict[str, Any] | None,
+    *,
+    cache_key: str | None,
+    limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    min_minutes: float | None = None,
+    exclude_limited_leagues: bool | None = None,
+) -> dict[str, Any] | None:
+    """Return a warm banding ctx for ``cache_key`` without loading the cohort.
+
+    Matches LRU entries that share the same file/settings fingerprint (player
+    count may differ). Used by modal opens to skip gunzip when banding is warm.
+    """
+    key = str(cache_key or "").strip()
+    if not key or not _BANDING_CTX_LRU:
+        return None
+    settings = normalize(settings)
+    tail = _banding_memo_settings_tail(
+        settings,
+        limited_divisions=limited_divisions,
+        min_minutes=min_minutes,
+        exclude_limited_leagues=exclude_limited_leagues,
+    )
+    prefix = f"{key}|"
+    # Newest-first (LRU moves hits to the end).
+    for memo_key in reversed(list(_BANDING_CTX_LRU.keys())):
+        if not memo_key.startswith(prefix):
+            continue
+        parts = memo_key.split("|")
+        # cache_key | n_players | min | exclude | trees_fp | limited | full
+        if len(parts) < 7:
+            continue
+        if tuple(parts[2:7]) != tail:
+            continue
+        hit = _BANDING_CTX_LRU.pop(memo_key)
+        _BANDING_CTX_LRU[memo_key] = hit
+        return hit
+    return None
+
+
 def build_stats_banding_context(
     settings: dict[str, Any] | None,
     players: list[dict[str, Any]] | None,
@@ -1125,22 +1203,14 @@ def build_stats_banding_context(
         bound_opts["exclude_limited_leagues"] = bool(exclude_limited_leagues)
 
     if cache_key:
-        import hashlib
-        import json as _json
-
-        trees_fp = hashlib.sha1(
-            _json.dumps(trees, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()[:12]
+        tail = _banding_memo_settings_tail(
+            settings,
+            limited_divisions=limited_divisions,
+            min_minutes=min_minutes,
+            exclude_limited_leagues=exclude_limited_leagues,
+        )
         memo_key = "|".join(
-            [
-                str(cache_key),
-                str(len(players or [])),
-                str(bound_opts.get("min_minutes")),
-                str(bool(bound_opts.get("exclude_limited_leagues"))),
-                trees_fp,
-                ",".join(sorted(str(x) for x in limited)),
-                ",".join(sorted(str(x) for x in full_detail)),
-            ]
+            [str(cache_key), str(len(players or [])), *tail]
         )
         hit = _BANDING_CTX_LRU.get(memo_key)
         if hit is not None:
@@ -1175,6 +1245,18 @@ def build_stats_banding_context(
         "bounds_by_level": bounds_by_level,
     }
     if cache_key:
+        memo_key = "|".join(
+            [
+                str(cache_key),
+                str(len(players or [])),
+                *_banding_memo_settings_tail(
+                    settings,
+                    limited_divisions=limited_divisions,
+                    min_minutes=min_minutes,
+                    exclude_limited_leagues=exclude_limited_leagues,
+                ),
+            ]
+        )
         if len(_BANDING_CTX_LRU) >= _BANDING_CTX_LRU_MAX and memo_key not in _BANDING_CTX_LRU:
             oldest = next(iter(_BANDING_CTX_LRU), None)
             if oldest is not None:
