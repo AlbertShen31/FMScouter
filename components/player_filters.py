@@ -316,11 +316,19 @@ def archetype_filter_control(
     *,
     prefix: str,
     value: Sequence[str] | None = None,
+    pct_basis: str | None = None,
 ) -> html.Div:
-    """Icon toggles: keep players who earn any selected high-tier archetype."""
+    """Icon toggles: keep players who earn any selected high-tier archetype.
+
+    Includes a Current / Multi-year Year switch (hidden until a multi-year
+    export is loaded). Filter matching defaults to Multi-year.
+    """
+    from components.multi_year_ui import normalize_pct_basis, pct_basis_switcher
     from scoring.player_archetypes import normalize_archetype_filter
 
     selected = normalize_archetype_filter(value)
+    # Filters default to multi-year (unlike modal charts, which open on Current).
+    basis = "multiyear" if pct_basis is None else normalize_pct_basis(pct_basis)
     return html.Div(
         [
             html.Div(
@@ -330,11 +338,25 @@ def archetype_filter_control(
                         "Click icons to keep players who earn any selected "
                         "archetype at Bronze, Silver, or Gold (Rust opposite tier "
                         "is ignored). Requires Moneyball stats and enough "
-                        "minutes. Empty selection = any archetype.",
+                        "minutes. Empty selection = any archetype. On multi-year "
+                        "packs, Year chooses newest-season vs combined rates "
+                        "(defaults to Multi-year).",
                         f"{prefix}-help-archetypes",
                     ),
                 ],
                 className="rs-field-label-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Year", className="st-player-switch-label"),
+                    pct_basis_switcher(
+                        basis,
+                        control_id=f"{prefix}-archetype-pct-basis",
+                    ),
+                ],
+                id=f"{prefix}-archetype-pct-basis-wrap",
+                className="my-modal-pct-basis rs-arch-pct-basis",
+                hidden=True,
             ),
             html.Div(
                 archetype_filter_buttons(prefix=prefix, selected=selected),
@@ -344,6 +366,7 @@ def archetype_filter_control(
                 **{"aria-label": "Archetype filters"},
             ),
             dcc.Store(id=f"{prefix}-archetypes", data=selected),
+            dcc.Store(id=f"{prefix}-archetype-pct-basis", data=basis),
         ],
         className="rs-filter-archetypes",
     )
@@ -351,12 +374,15 @@ def archetype_filter_control(
 
 def register_archetype_filter_callbacks(prefix: str) -> None:
     """Toggle archetype filter store and refresh icon button active states."""
+    from components.multi_year_ui import normalize_pct_basis
     from components.scouting_shell import clicked
     from scoring.player_archetypes import normalize_archetype_filter
 
     store_id = f"{prefix}-archetypes"
     btn_host = f"{prefix}-archetype-btns"
     btn_type = f"{prefix}-archetype"
+    basis_store = f"{prefix}-archetype-pct-basis"
+    basis_btn = f"{prefix}-archetype-pct-basis"
 
     @callback(
         Output(store_id, "data"),
@@ -381,3 +407,34 @@ def register_archetype_filter_callbacks(prefix: str) -> None:
     )
     def _render_archetype_filter_buttons(selected):
         return archetype_filter_buttons(prefix=prefix, selected=selected)
+
+    @callback(
+        Output(basis_store, "data", allow_duplicate=True),
+        Input({"type": basis_btn, "view": ALL}, "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def _set_archetype_pct_basis(n_clicks):
+        if not ctx.triggered_id or not clicked(n_clicks):
+            return no_update
+        view = str(ctx.triggered_id.get("view") or "").strip()
+        if not view or view == "_":
+            return no_update
+        # Sticky: always land on a real basis (default multi-year).
+        basis = normalize_pct_basis(view)
+        return basis if basis in ("current", "multiyear") else "multiyear"
+
+    @callback(
+        Output(f"{prefix}-archetype-pct-basis-wrap", "children"),
+        Input(basis_store, "data"),
+    )
+    def _render_archetype_pct_basis_switch(basis):
+        from components.multi_year_ui import pct_basis_switcher
+
+        active = "multiyear" if basis is None else normalize_pct_basis(basis)
+        return [
+            html.Span("Year", className="st-player-switch-label"),
+            pct_basis_switcher(
+                active,
+                control_id=f"{prefix}-archetype-pct-basis",
+            ),
+        ]

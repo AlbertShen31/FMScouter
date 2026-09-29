@@ -37,6 +37,8 @@ DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "player_archetypes.
 
 # Precomputed on cached stats players for fast archetype filters (not shown in UI).
 HIGH_ARCHETYPES_FIELD = "high_archetypes"
+# Newest-season-only stamp for multi-year packs (same as high_archetypes on single-year).
+HIGH_ARCHETYPES_CURRENT_FIELD = "high_archetypes_current"
 
 ArchetypeTierId = Literal["bronze", "silver", "gold", "rust"]
 
@@ -222,14 +224,50 @@ def normalize_archetype_filter(raw) -> list[str]:
     return out
 
 
-def _read_stamped_high_archetypes(player: dict[str, Any] | None) -> set[str] | None:
+def _read_stamped_high_archetypes(
+    player: dict[str, Any] | None,
+    *,
+    field: str = HIGH_ARCHETYPES_FIELD,
+) -> set[str] | None:
     """Return stamped high archetype ids, or None when the field is absent."""
-    if not player or HIGH_ARCHETYPES_FIELD not in player:
+    if not player or field not in player:
         return None
-    raw = player.get(HIGH_ARCHETYPES_FIELD)
+    raw = player.get(field)
     if not isinstance(raw, (list, tuple)):
         return set()
     return {str(item).strip() for item in raw if str(item).strip()}
+
+
+def stamped_field_for_pct_basis(pct_basis: str | None = None) -> str:
+    """Which stamped high-archetype field to use for a Current / Multi-year basis."""
+    from scoring.multi_year import normalize_pct_basis
+
+    if normalize_pct_basis(pct_basis) == "current":
+        return HIGH_ARCHETYPES_CURRENT_FIELD
+    return HIGH_ARCHETYPES_FIELD
+
+
+def archetype_map_from_players(
+    players: list[dict[str, Any]] | None,
+    *,
+    field: str = HIGH_ARCHETYPES_FIELD,
+    key_fn=None,
+) -> dict[str, list[str]]:
+    """Build player_key → archetype ids from a stamped field on each player."""
+    from scoring.stats_scorer import player_key as default_key
+
+    resolve_key = key_fn or default_key
+    out: dict[str, list[str]] = {}
+    for player in players or []:
+        if not isinstance(player, dict):
+            continue
+        earned = _read_stamped_high_archetypes(player, field=field)
+        if not earned:
+            continue
+        key = str(resolve_key(player) or "").strip()
+        if key:
+            out[key] = sorted(earned)
+    return out
 
 
 def high_archetype_ids_for_player(
@@ -367,7 +405,13 @@ def stamp_high_archetypes(
     value_mode: str = "raw",
     key_fn=None,
 ) -> dict[str, list[str]]:
-    """Write ``high_archetypes`` onto each player; return player_key → ids."""
+    """Write multi-year + current-year ``high_archetypes*``; return multi-year map.
+
+    ``high_archetypes`` uses the player's combined rates (multi-year merge or
+    single-season export). ``high_archetypes_current`` uses the newest season
+    when ``by_year`` is present; otherwise it mirrors ``high_archetypes``.
+    """
+    from scoring.multi_year import overlay_player_pct_basis
     from scoring.stats_scorer import player_key as default_key
 
     import services.ui_settings as us
@@ -404,6 +448,36 @@ def stamp_high_archetypes(
         key = str(resolve_key(player) or "").strip()
         if key and ids:
             out[key] = ids
+
+        current_src = overlay_player_pct_basis(player, pct_basis="current")
+        if (
+            isinstance(current_src, dict)
+            and current_src is not player
+            and current_src.get("stats")
+        ):
+            # Banding stays league-level; only the player's rates/mins change.
+            cur_thresholds = settings.get("stats_thresholds") or {}
+            cur_p0 = None
+            cur_p100 = None
+            if banding_ctx is not None:
+                cur_thresholds, cur_p0, cur_p100 = us.banding_for_player(
+                    banding_ctx, current_src, settings=settings
+                )
+            cur_earned = high_archetype_ids_for_player(
+                current_src,
+                settings=settings,
+                threshold_overrides=cur_thresholds,
+                metric_p0=cur_p0,
+                metric_p100=cur_p100,
+                limited_divisions=limited_divisions,
+                value_mode=value_mode,
+                tier_floors=floors,
+                min_minutes=min_minutes,
+                settings_normalized=True,
+            )
+            player[HIGH_ARCHETYPES_CURRENT_FIELD] = sorted(cur_earned)
+        else:
+            player[HIGH_ARCHETYPES_CURRENT_FIELD] = list(ids)
     return out
 
 
@@ -417,12 +491,16 @@ def matching_archetype_keys(
     value_mode: str = "raw",
     key_fn=None,
     precomputed: dict[str, list[str] | tuple[str, ...]] | None = None,
+    precomputed_current: dict[str, list[str] | tuple[str, ...]] | None = None,
+    pct_basis: str | None = None,
 ) -> set[str] | None:
     """Keys of players earning any selected high archetype, or None if filter off.
 
-    Prefers stamped ``high_archetypes`` / ``precomputed`` maps (raw mode) so filters
-    stay cheap after upload precompute.
+    Prefers stamped ``high_archetypes`` / ``high_archetypes_current`` (or the
+    matching ``precomputed*`` maps) so filters stay cheap after upload precompute.
+    ``pct_basis`` selects Multi-year (default) vs Current stamps.
     """
+    from scoring.multi_year import normalize_pct_basis, overlay_player_pct_basis
     from scoring.stats_scorer import player_key as default_key
 
     wanted = set(normalize_archetype_filter(selected_ids))
@@ -433,10 +511,19 @@ def matching_archetype_keys(
 
     resolve_key = key_fn or default_key
     mode = normalize_value_mode(value_mode)
+    # Filter default is multi-year; normalize_pct_basis(None/"" ) → current.
+    basis = (
+        "multiyear"
+        if pct_basis is None
+        else normalize_pct_basis(pct_basis)
+    )
 
-    if mode == "raw" and precomputed is not None:
+    precomputed_map = (
+        precomputed_current if basis == "current" else precomputed
+    )
+    if mode == "raw" and precomputed_map is not None:
         matched: set[str] = set()
-        for key, ids in precomputed.items():
+        for key, ids in precomputed_map.items():
             key_s = str(key or "").strip()
             if not key_s:
                 continue
@@ -445,11 +532,17 @@ def matching_archetype_keys(
                 matched.add(key_s)
         return matched
 
+    stamp_field = stamped_field_for_pct_basis(basis)
     if mode == "raw":
         stamped_ok = True
         matched = set()
         for player in players or []:
-            earned = _read_stamped_high_archetypes(player)
+            earned = _read_stamped_high_archetypes(player, field=stamp_field)
+            if earned is None and basis == "current" and not player.get("by_year"):
+                # Single-year caches only stamped high_archetypes before dual-stamp.
+                earned = _read_stamped_high_archetypes(
+                    player, field=HIGH_ARCHETYPES_FIELD
+                )
             if earned is None:
                 stamped_ok = False
                 break
@@ -465,32 +558,37 @@ def matching_archetype_keys(
     min_minutes = float(us.default_minutes_required(settings))
     matched = set()
     for player in players or []:
+        eval_player = player
+        if basis == "current":
+            overlaid = overlay_player_pct_basis(player, pct_basis="current")
+            if isinstance(overlaid, dict):
+                eval_player = overlaid
         threshold_overrides = settings.get("stats_thresholds") or {}
         metric_p0 = None
         metric_p100 = None
         if banding_ctx is not None:
             if mode == "raw":
                 threshold_overrides, metric_p0, metric_p100 = us.banding_for_player(
-                    banding_ctx, player, settings=settings
+                    banding_ctx, eval_player, settings=settings
                 )
             else:
                 threshold_overrides, metric_p0, metric_p100 = us.banding_for_value_mode(
-                    banding_ctx, player, mode
+                    banding_ctx, eval_player, mode
                 )
         earned = high_archetype_ids_for_player(
-            player,
+            eval_player,
             settings=settings,
             threshold_overrides=threshold_overrides,
             metric_p0=metric_p0,
             metric_p100=metric_p100,
             limited_divisions=limited_divisions,
-            value_mode=mode,
+            value_mode=value_mode,
             tier_floors=floors,
             min_minutes=min_minutes,
             only_ids=wanted,
             settings_normalized=True,
         )
-        if earned:
+        if earned & wanted:
             key = str(resolve_key(player) or "").strip()
             if key:
                 matched.add(key)

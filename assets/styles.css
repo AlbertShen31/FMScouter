@@ -4853,6 +4853,10 @@ body[data-theme="light"] .st-player-switch-label {
     gap: 0.45rem;
 }
 
+.rs-filter-archetypes .rs-arch-pct-basis {
+    margin: 0 0 0.4rem;
+}
+
 .my-modal-pct-basis .st-player-switch-label {
     margin: 0;
     white-space: nowrap;

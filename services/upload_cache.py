@@ -4,7 +4,8 @@ Caches live under ``data/uploads/cache/{file_id}.json.gz``. The settings
 signature invalidates the cache when the role pack, tier weights, set-piece
 profiles, stats thresholds, benchmarks, or archetype floors/defs change.
 Hybrid IP/OOP weights are applied at read time (cheap) and do not force a
-recompute. Stats caches also stamp each player with ``high_archetypes`` for
+recompute. Stats caches also stamp each player with ``high_archetypes``
+(multi-year / combined) and ``high_archetypes_current`` (newest season) for
 fast archetype filters.
 """
 from __future__ import annotations
@@ -23,7 +24,7 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v48"
+FORMULA_VERSION = "v49"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 _ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 
@@ -606,7 +607,11 @@ def _compute_single_file(
                 ),
                 settings=settings,
             )
-            from scoring.player_archetypes import stamp_high_archetypes
+            from scoring.player_archetypes import (
+                HIGH_ARCHETYPES_CURRENT_FIELD,
+                archetype_map_from_players,
+                stamp_high_archetypes,
+            )
 
             min_minutes = float(us.default_minutes_required(settings))
             exclude_limited = us.exclude_limited_leagues_adaptive_bounds(settings)
@@ -623,10 +628,14 @@ def _compute_single_file(
                 banding_ctx=banding_ctx,
                 limited_divisions=limited_divisions,
             )
+            high_archetypes_current = archetype_map_from_players(
+                players, field=HIGH_ARCHETYPES_CURRENT_FIELD
+            )
             payload["stats"] = {
                 "players": players,
                 "percentiles": percentiles,
                 "high_archetypes": high_archetypes,
+                "high_archetypes_current": high_archetypes_current,
                 "n_players": len(players),
                 "limited_tracking_divisions": limited_divisions,
             }
@@ -817,7 +826,11 @@ def _compute_multi_year_pack(
                 ),
                 settings=settings,
             )
-            from scoring.player_archetypes import stamp_high_archetypes
+            from scoring.player_archetypes import (
+                HIGH_ARCHETYPES_CURRENT_FIELD,
+                archetype_map_from_players,
+                stamp_high_archetypes,
+            )
 
             min_minutes = float(us.default_minutes_required(settings))
             exclude_limited = us.exclude_limited_leagues_adaptive_bounds(settings)
@@ -835,9 +848,13 @@ def _compute_multi_year_pack(
                 banding_ctx=banding_ctx,
                 limited_divisions=limited_divisions,
             )
+            high_archetypes_current = archetype_map_from_players(
+                merged, field=HIGH_ARCHETYPES_CURRENT_FIELD
+            )
             payload["stats"] = {
                 "percentiles": percentiles,
                 "high_archetypes": high_archetypes,
+                "high_archetypes_current": high_archetypes_current,
                 "n_players": len(merged),
                 "limited_tracking_divisions": limited_divisions,
                 "multi_year": True,
@@ -1070,13 +1087,33 @@ def cached_stats_percentiles(file_id: str) -> dict[str, Any] | None:
     return pct if isinstance(pct, dict) else None
 
 
-def cached_high_archetypes(file_id: str) -> dict[str, list[str]] | None:
-    """player_key → high archetype ids from a fresh upload cache."""
+def cached_high_archetypes(
+    file_id: str,
+    *,
+    pct_basis: str | None = None,
+) -> dict[str, list[str]] | None:
+    """player_key → high archetype ids from a fresh upload cache.
+
+    ``pct_basis='current'`` reads newest-season stamps when present; otherwise
+    (and by default) returns the multi-year / combined map.
+    """
+    from scoring.multi_year import normalize_pct_basis
+
     entry = lib.get_file(file_id)
     cache = load_cache(file_id)
     if not is_fresh(cache, entry=entry) or not (cache or {}).get("stats"):
         return None
-    raw = cache["stats"].get("high_archetypes")
+    stats = cache["stats"]
+    basis = (
+        "multiyear"
+        if pct_basis is None
+        else normalize_pct_basis(pct_basis)
+    )
+    raw = None
+    if basis == "current":
+        raw = stats.get("high_archetypes_current")
+    if not isinstance(raw, dict):
+        raw = stats.get("high_archetypes")
     if not isinstance(raw, dict):
         return None
     out: dict[str, list[str]] = {}

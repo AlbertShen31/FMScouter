@@ -210,6 +210,7 @@ PERSIST_DEFAULTS = {
     "page_size": None,
     "set_piece_min_score": None,
     "archetypes": [],
+    "archetype_pct_basis": "multiyear",
 }
 
 MIN_SCORE_QUANTIFIERS = frozenset({"all", "any"})
@@ -1156,6 +1157,7 @@ def layout():
                 {"type": "pos", "pos": "_"},
                 {"type": "foot", "foot": "_"},
                 {"type": "archetype", "id": "_"},
+                {"type": "archetype-pct-basis", "view": "_"},
                 {"type": "depth", "role": "_"},
                 {"type": "pill", "role": "_"},
                 {"type": "group", "group": "_"},
@@ -1795,7 +1797,13 @@ def _limited_tracking_divisions(payload: dict | None) -> set[str]:
     return out
 
 
-def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] | None:
+def _archetype_match_keys(
+    payload: dict | None,
+    selected,
+    settings,
+    *,
+    pct_basis: str | None = None,
+) -> set[str] | None:
     """Role-row keys matching any selected high archetype via Moneyball stats."""
     from scoring.player_archetypes import (
         matching_archetype_keys,
@@ -1820,6 +1828,7 @@ def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] 
         return set()
     settings = us.normalize(settings)
     limited = _limited_tracking_divisions(payload)
+    basis = pct_basis if pct_basis is not None else "multiyear"
     # Cached stats players carry stamped high_archetypes → instant set lookup.
     # Uncached exports fall back to evaluating only the selected archetypes.
     from scoring.player_archetypes import HIGH_ARCHETYPES_FIELD
@@ -1829,6 +1838,7 @@ def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] 
             stats_players,
             selected,
             key_fn=stats_player_key,
+            pct_basis=basis,
         )
     banding_ctx = us.build_stats_banding_context(
         settings,
@@ -1843,6 +1853,7 @@ def _archetype_match_keys(payload: dict | None, selected, settings) -> set[str] 
         banding_ctx=banding_ctx,
         limited_divisions=limited,
         key_fn=stats_player_key,
+        pct_basis=basis,
     )
 
 
@@ -3046,18 +3057,19 @@ def reveal_workflow(parsed, payload):
 
 @callback(
     Output("rs-status-filter-wrap", "hidden"),
+    Output("rs-archetype-pct-basis-wrap", "hidden"),
     Input("rs-rows", "data"),
 )
 def toggle_multi_year_status_filter(payload):
     rows = (payload or {}).get("rows") if isinstance(payload, dict) else None
     if not rows:
-        return True
+        return True, True
     for row in rows:
         if not isinstance(row, dict):
             continue
         if row.get("multi_year_status") or row.get("years_present"):
-            return False
-    return True
+            return False, False
+    return True, True
 
 
 @callback(
@@ -4023,6 +4035,7 @@ def sync_rs_source_legend(payload):
     Input("rs-pos-filter", "data"),
     Input("rs-foot-filter", "data"),
     Input("rs-archetypes", "data"),
+    Input("rs-archetype-pct-basis", "data"),
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
     Input("theme", "data"),
@@ -4051,6 +4064,7 @@ def render_shortlist(
     pos_filter,
     foot_filter,
     archetypes,
+    archetype_pct_basis,
     page_size,
     sort_by,
     theme,
@@ -4195,7 +4209,12 @@ def render_shortlist(
             status_filter = _normalize_status_filter(status_filter)
             foot_thresholds = settings["foot_thresholds"]
             combo_by_col = _combo_columns_by_label(combos)
-            archetype_keys = _archetype_match_keys(payload, archetypes, settings)
+            archetype_keys = _archetype_match_keys(
+                payload,
+                archetypes,
+                settings,
+                pct_basis=archetype_pct_basis,
+            )
             configured_years = _configured_years_for_payload(payload)
             multi_year = bool(configured_years) or any(
                 (r or {}).get("multi_year_status") or (r or {}).get("years_present")
@@ -4492,7 +4511,12 @@ def render_shortlist(
     chosen_pieces = _as_list(set_pieces)
     marked_keys = set(_as_list(squad_marked))
     combo_by_col = _combo_columns_by_label(combos)
-    archetype_keys = _archetype_match_keys(payload, archetypes, settings)
+    archetype_keys = _archetype_match_keys(
+        payload,
+        archetypes,
+        settings,
+        pct_basis=archetype_pct_basis,
+    )
     multi_year = any(
         (r or {}).get("multi_year_status") or (r or {}).get("years_present")
         for r in rows

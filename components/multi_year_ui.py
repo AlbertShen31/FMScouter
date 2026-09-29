@@ -6,37 +6,28 @@ from typing import Any
 from dash import dcc, html
 import plotly.graph_objects as go
 
-from scoring.multi_year import YEAR_KEYS, status_label
+from scoring.multi_year import (
+    YEAR_KEYS,
+    newest_year_key,
+    normalize_pct_basis,
+    overlay_player_pct_basis,
+    status_label,
+)
 from scoring.role_scorer import parse_appearances
 from scoring.stats_scorer import metric_defs
 
 PCT_BASIS_VALUES = ("current", "multiyear")
 
-
-def normalize_pct_basis(value: Any) -> str:
-    """``current`` (newest season) or ``multiyear`` (recency-weighted combined)."""
-    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if raw in ("current", "current_year", "latest", "newest", "year"):
-        return "current"
-    if raw in ("multiyear", "multi_year", "combined", "merged", "all"):
-        return "multiyear"
-    return "current"
-
-
-def newest_year_key(
-    by_year: dict | None,
-    years_present=None,
-) -> str | None:
-    """Newest configured year key present in ``by_year``."""
-    by_year = by_year if isinstance(by_year, dict) else {}
-    present: list[str] = []
-    if years_present is not None:
-        present = [str(y) for y in (years_present or []) if str(y) in by_year]
-    if not present:
-        present = [y for y in YEAR_KEYS if y in by_year]
-    else:
-        present = [y for y in YEAR_KEYS if y in present] or present
-    return present[-1] if present else None
+# Re-export for callers that imported these from this module.
+__all__ = [
+    "PCT_BASIS_VALUES",
+    "newest_year_key",
+    "normalize_pct_basis",
+    "overlay_player_pct_basis",
+    "player_supports_pct_basis",
+    "stats_player_for_pct_basis",
+    "pct_basis_switcher",
+]
 
 
 def player_supports_pct_basis(player: dict | None) -> bool:
@@ -68,43 +59,7 @@ def stats_player_for_pct_basis(
     pct_basis: str = "current",
 ) -> dict | None:
     """Overlay newest-year rates when Year is Current; else keep combined stats."""
-    if not isinstance(stats_player, dict):
-        return None
-    if normalize_pct_basis(pct_basis) != "current":
-        return stats_player
-    by_year = stats_player.get("by_year")
-    if not isinstance(by_year, dict) or not by_year:
-        return stats_player
-    year = newest_year_key(by_year, stats_player.get("years_present"))
-    if not year:
-        return stats_player
-    snap = by_year.get(year)
-    if not isinstance(snap, dict):
-        return stats_player
-    out = dict(stats_player)
-    if isinstance(snap.get("stats"), dict):
-        out["stats"] = dict(snap["stats"])
-    if isinstance(snap.get("set_piece_stats"), dict):
-        out["set_piece_stats"] = dict(snap["set_piece_stats"])
-    if snap.get("minutes") not in (None, "", "-", "—"):
-        out["minutes"] = snap["minutes"]
-        if snap.get("effective_minutes") not in (None, "", "-", "—"):
-            out["effective_minutes"] = snap["effective_minutes"]
-        else:
-            out["effective_minutes"] = snap["minutes"]
-    if snap.get("appearances") not in (None, "", "-", "—"):
-        out["appearances"] = snap["appearances"]
-    if "stats_unavailable" in snap:
-        out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
-    if "stats_limited_tracking" in snap:
-        out["stats_limited_tracking"] = bool(snap.get("stats_limited_tracking"))
-    if "limited_division_tracking" in snap:
-        out["limited_division_tracking"] = bool(snap.get("limited_division_tracking"))
-    if snap.get("division") not in (None, "", "-", "—"):
-        out["division"] = snap["division"]
-    if snap.get("club") not in (None, "", "-", "—"):
-        out["club"] = snap["club"]
-    return out
+    return overlay_player_pct_basis(stats_player, pct_basis=pct_basis)
 
 
 def pct_basis_switcher(

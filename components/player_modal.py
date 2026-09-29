@@ -1091,6 +1091,7 @@ def player_detail_body(
     value_mode: str = "raw",
     show_archetypes: bool = True,
     arch_pos_group: str | None = None,
+    archetype_player: dict | None = None,
 ) -> html.Div:
     """Shared modal body.
 
@@ -1171,9 +1172,12 @@ def player_detail_body(
         player_personality_section(player, id_prefix=id_prefix, settings=settings),
     ]
     if show_archetypes:
+        arch_src = (
+            archetype_player if isinstance(archetype_player, dict) else player
+        )
         main_children.append(
             player_archetypes_section(
-                player,
+                arch_src,
                 id_prefix=id_prefix,
                 settings=settings,
                 limited_divisions=limited_divisions,

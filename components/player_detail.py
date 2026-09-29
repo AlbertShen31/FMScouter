@@ -832,6 +832,8 @@ def build_player_modal_body(
         show_archetypes=has_stats_payload,
         # Profiles force_pos_group / Evaluate-as; else Best Pos via player.pos_group.
         arch_pos_group=resolved_eval,
+        # Follow Current / Multi-year rates (charts use the same basis).
+        archetype_player=chart_player if show_pct_toggle else None,
     )
 
 

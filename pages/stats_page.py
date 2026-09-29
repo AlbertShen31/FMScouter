@@ -208,6 +208,7 @@ ST_PERSIST_DEFAULTS = {
     "page_size": None,
     "sort_by": None,
     "archetypes": [],
+    "archetype_pct_basis": "multiyear",
 }
 
 VALUE_MODE_TIP = (
@@ -246,6 +247,10 @@ def _st_persist_has_state(persist: dict | None) -> bool:
     from scoring.player_archetypes import normalize_archetype_filter
 
     if normalize_archetype_filter(p.get("archetypes")):
+        return True
+    from components.multi_year_ui import normalize_pct_basis
+
+    if normalize_pct_basis(p.get("archetype_pct_basis") or "multiyear") != "multiyear":
         return True
     return False
 
@@ -1924,6 +1929,7 @@ def layout(**_kwargs):
                     {"type": "cat", "key": "_"},
                     {"type": "foot", "foot": "_"},
                     {"type": "archetype", "id": "_"},
+                    {"type": "archetype-pct-basis", "view": "_"},
                     {"type": "player-view", "view": "_"},
                     {"type": "player-group", "group": "_"},
                     {"type": "compare-view", "view": "_"},
@@ -2389,6 +2395,7 @@ def sync_st_source_legend(parsed, scout_parsed):
     Input("st-marked", "data"),
     Input("st-table", "sort_by"),
     Input("st-archetypes", "data"),
+    Input("st-archetype-pct-basis", "data"),
     Input("ui-settings", "data"),
     Input("theme", "data"),
     Input("st-parsed-scouting", "data"),
@@ -2412,6 +2419,7 @@ def refresh_table(
     marked,
     sort_by,
     archetypes,
+    archetype_pct_basis,
     settings,
     theme,
     scout_parsed,
@@ -2446,6 +2454,7 @@ def refresh_table(
         banding_ctx=banding_ctx,
         limited_divisions=band_limited,
         value_mode=value_mode,
+        pct_basis=archetype_pct_basis if archetype_pct_basis is not None else "multiyear",
     )
 
     filtered = _filter_players(
@@ -3283,6 +3292,7 @@ def update_stats_compare_controls(marked, parsed, scout_parsed):
     Input("st-page-size", "value"),
     Input("st-table", "sort_by"),
     Input("st-archetypes", "data"),
+    Input("st-archetype-pct-basis", "data"),
     State("st-hydrated", "data"),
     prevent_initial_call=True,
 )
@@ -3300,12 +3310,19 @@ def save_st_page_persist(
     page_size,
     sort_by,
     archetypes,
+    archetype_pct_basis,
     hydrated,
 ):
     if not hydrated:
         return no_update
+    from components.multi_year_ui import normalize_pct_basis
     from scoring.player_archetypes import normalize_archetype_filter
 
+    basis = (
+        "multiyear"
+        if archetype_pct_basis is None
+        else normalize_pct_basis(archetype_pct_basis)
+    )
     return {
         "pos": pos or "all",
         "category": category or "all",
@@ -3320,7 +3337,26 @@ def save_st_page_persist(
         "page_size": page_size,
         "sort_by": sort_by or None,
         "archetypes": normalize_archetype_filter(archetypes),
+        "archetype_pct_basis": basis,
     }
+
+
+@callback(
+    Output("st-archetype-pct-basis-wrap", "hidden"),
+    Input("st-parsed", "data"),
+    Input("st-parsed-scouting", "data"),
+)
+def toggle_stats_archetype_pct_basis(parsed, scout_parsed):
+    players, _limited = _merge_export_players(parsed, scout_parsed)
+    for player in players or []:
+        if isinstance(player, dict) and (
+            player.get("multi_year_status")
+            or player.get("years_present")
+            or player.get("by_year")
+            or player.get("multi_year")
+        ):
+            return False
+    return True
 
 
 clientside_callback(
@@ -3361,24 +3397,30 @@ clientside_callback(
     Output("st-table", "sort_by", allow_duplicate=True),
     Output("st-sort-memory", "data", allow_duplicate=True),
     Output("st-archetypes", "data", allow_duplicate=True),
+    Output("st-archetype-pct-basis", "data", allow_duplicate=True),
     Output("st-hydrated", "data"),
     Input("st-persist-boot", "data"),
     State("st-hydrated", "data"),
     prevent_initial_call=True,
 )
 def hydrate_st_page_persist(persist, hydrated):
+    from components.multi_year_ui import normalize_pct_basis
     from scoring.player_archetypes import normalize_archetype_filter
 
     if hydrated or persist is None:
-        return (no_update,) * 15
+        return (no_update,) * 16
     raw = persist or {}
     if not _st_persist_has_state(raw):
-        return (*((no_update,) * 14), True)
+        return (*((no_update,) * 15), True)
     p = {**ST_PERSIST_DEFAULTS, **raw}
     sort_by = p.get("sort_by") or None
     page_size = p.get("page_size")
     minutes_required = p.get("minutes_required")
     archetypes = normalize_archetype_filter(p.get("archetypes"))
+    arch_basis = p.get("archetype_pct_basis")
+    arch_basis = (
+        "multiyear" if arch_basis is None else normalize_pct_basis(arch_basis)
+    )
     return (
         p.get("pos") or "all",
         p.get("category") or "all",
@@ -3394,5 +3436,6 @@ def hydrate_st_page_persist(persist, hydrated):
         sort_by if sort_by else no_update,
         sort_by if sort_by else no_update,
         archetypes if archetypes else no_update,
+        arch_basis,
         True,
     )

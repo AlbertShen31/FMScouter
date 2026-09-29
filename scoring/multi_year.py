@@ -13,6 +13,77 @@ from services.export_library import (
     year_weights,
 )
 
+def newest_year_key(
+    by_year: dict[str, Any] | None,
+    years_present=None,
+) -> str | None:
+    """Newest configured year key present in ``by_year``."""
+    by_year = by_year if isinstance(by_year, dict) else {}
+    present: list[str] = []
+    if years_present is not None:
+        present = [str(y) for y in (years_present or []) if str(y) in by_year]
+    if not present:
+        present = [y for y in YEAR_KEYS if y in by_year]
+    else:
+        present = [y for y in YEAR_KEYS if y in present] or present
+    return present[-1] if present else None
+
+
+def normalize_pct_basis(value: Any) -> str:
+    """``current`` (newest season) or ``multiyear`` (recency-weighted combined)."""
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in ("current", "current_year", "latest", "newest", "year"):
+        return "current"
+    if raw in ("multiyear", "multi_year", "combined", "merged", "all"):
+        return "multiyear"
+    return "current"
+
+
+def overlay_player_pct_basis(
+    player: dict[str, Any] | None,
+    *,
+    pct_basis: str = "current",
+) -> dict[str, Any] | None:
+    """Overlay newest-year rates/mins when Year is Current; else return player."""
+    if not isinstance(player, dict):
+        return None
+    if normalize_pct_basis(pct_basis) != "current":
+        return player
+    by_year = player.get("by_year")
+    if not isinstance(by_year, dict) or not by_year:
+        return player
+    year = newest_year_key(by_year, player.get("years_present"))
+    if not year:
+        return player
+    snap = by_year.get(year)
+    if not isinstance(snap, dict):
+        return player
+    out = dict(player)
+    if isinstance(snap.get("stats"), dict):
+        out["stats"] = dict(snap["stats"])
+    if isinstance(snap.get("set_piece_stats"), dict):
+        out["set_piece_stats"] = dict(snap["set_piece_stats"])
+    if snap.get("minutes") not in (None, "", "-", "—"):
+        out["minutes"] = snap["minutes"]
+        if snap.get("effective_minutes") not in (None, "", "-", "—"):
+            out["effective_minutes"] = snap["effective_minutes"]
+        else:
+            out["effective_minutes"] = snap["minutes"]
+    if snap.get("appearances") not in (None, "", "-", "—"):
+        out["appearances"] = snap["appearances"]
+    if "stats_unavailable" in snap:
+        out["stats_unavailable"] = list(snap.get("stats_unavailable") or [])
+    if "stats_limited_tracking" in snap:
+        out["stats_limited_tracking"] = bool(snap.get("stats_limited_tracking"))
+    if "limited_division_tracking" in snap:
+        out["limited_division_tracking"] = bool(snap.get("limited_division_tracking"))
+    if snap.get("division") not in (None, "", "-", "—"):
+        out["division"] = snap["division"]
+    if snap.get("club") not in (None, "", "-", "—"):
+        out["club"] = snap["club"]
+    return out
+
+
 # Percent metrics rebuilt from attempted/completed (or count) pairs when possible.
 # Values are (attempted_metric_id | None, completed_metric_id | None).
 # When completed is None, completed_raw ≈ (percent/100) * attempted_raw.
