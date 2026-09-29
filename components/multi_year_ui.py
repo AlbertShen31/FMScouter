@@ -7,6 +7,7 @@ from dash import dcc, html
 import plotly.graph_objects as go
 
 from scoring.multi_year import YEAR_KEYS, status_label
+from scoring.role_scorer import parse_appearances
 from scoring.stats_scorer import metric_defs
 
 PCT_BASIS_VALUES = ("current", "multiyear")
@@ -840,9 +841,9 @@ def by_year_section(
             meta_bits.append(str(snap["club"]))
         if snap.get("age") not in (None, "", "-"):
             meta_bits.append(f"Age {snap['age']}")
-        apps = snap.get("appearances")
-        if apps not in (None, "", "-"):
-            meta_bits.append(f"{_fmt_num(apps, digits=0)} apps")
+        apps_n = parse_appearances(snap.get("appearances"))
+        if apps_n is not None:
+            meta_bits.append(f"{apps_n} apps")
         mins = snap.get("minutes")
         if mins not in (None, "", "-"):
             meta_bits.append(f"{_fmt_num(mins, digits=0)} mins")

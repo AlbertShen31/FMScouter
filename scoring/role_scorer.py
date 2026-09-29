@@ -678,6 +678,28 @@ def extract_record_fields(row: dict[str, str]) -> dict[str, str]:
     return out
 
 
+def parse_appearances(value: Any) -> int | None:
+    """Total apps from FM Appearances: plain ``26`` or ``starts (subs)`` like ``2 (4)``."""
+    if value in (None, "", "-", "—"):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if "(" in text:
+        left, _, rest = text.partition("(")
+        right, _, _ = rest.partition(")")
+        try:
+            starts = int(float(left.strip().replace(",", "."))) if left.strip() else 0
+            subs = int(float(right.strip().replace(",", "."))) if right.strip() else 0
+        except (TypeError, ValueError):
+            return None
+        return starts + subs
+    try:
+        return int(round(float(text.replace(",", ".").replace(" ", ""))))
+    except (TypeError, ValueError):
+        return None
+
+
 _UNSET_STATUS = frozenset({"not set", "no recurring injuries"})
 
 
