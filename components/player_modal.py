@@ -1,9 +1,10 @@
 """Shared player detail modal: identity, exclusive detail filter, personality, shell.
 
 Page-specific content (attribute grid, stats charts) is passed as `bottom`
-and optional `after_identity` children. Detail categories (international,
-contract, career, season, discipline) are behind a one-at-a-time filter;
-personality, archetypes, and page content always stay visible below.
+and optional `after_identity` children. Detail categories (season, finance,
+discipline, international, career) are behind a sticky one-at-a-time filter
+(defaults to Season stats); personality, archetypes, and page content always
+stay visible below.
 """
 from __future__ import annotations
 
@@ -339,14 +340,16 @@ def player_identity_sections(
 
 
 # Exclusive modal detail categories (shown one-at-a-time via the section filter).
-# Default (nothing selected): personality + archetypes + page content.
+# Default: Season stats (first available section if that player has none).
 MODAL_EXTRA_SECTION_DEFS: tuple[tuple[str, str], ...] = (
-    ("international", "International"),
-    ("finance", "Contract & finance"),
-    ("career", "Career totals"),
     ("season", "Season stats"),
+    ("finance", "Contract & finance"),
     ("discipline", "Discipline"),
+    ("international", "International"),
+    ("career", "Career totals"),
 )
+
+DEFAULT_MODAL_EXTRA_SECTION = "season"
 
 
 def player_international_section(
@@ -1023,7 +1026,7 @@ def register_archetype_group_callbacks(prefix: str) -> None:
 
 
 def register_modal_section_callbacks(prefix: str) -> None:
-    """Exclusive detail filter: one of international / contract / career / season / discipline."""
+    """Sticky detail filter: always one of season / finance / discipline / …."""
     from components.scouting_shell import clicked
 
     btn_type = f"{prefix}-modal-extra-btn"
@@ -1037,25 +1040,24 @@ def register_modal_section_callbacks(prefix: str) -> None:
         Output({"type": btn_type, "section": ALL}, "className"),
         Output({"type": panel_type, "section": ALL}, "hidden"),
         Input({"type": btn_type, "section": ALL}, "n_clicks"),
-        State(sel_id, "data"),
         State({"type": btn_type, "section": ALL}, "id"),
         State({"type": panel_type, "section": ALL}, "id"),
         prevent_initial_call=True,
     )
-    def _switch_modal_extra_section(n_clicks, current, btn_ids, panel_ids):
+    def _switch_modal_extra_section(n_clicks, btn_ids, panel_ids):
         if not ctx.triggered_id or not clicked(n_clicks):
             return (no_update,) * 4
         section = str(ctx.triggered_id.get("section") or "").strip().lower()
         if not section:
             return (no_update,) * 4
-        cur = str(current or "").strip().lower() or None
-        new = None if section == cur else section
+        # Sticky selection: clicking the active tab keeps it selected.
+        new = section
         btn_classes = [
             "st-player-seg-btn"
             + (
                 " active"
                 if isinstance(bid, dict)
-                and str(bid.get("section") or "").strip().lower() == (new or "")
+                and str(bid.get("section") or "").strip().lower() == new
                 else ""
             )
             for bid in (btn_ids or [])
@@ -1063,12 +1065,11 @@ def register_modal_section_callbacks(prefix: str) -> None:
         panel_hidden = [
             not (
                 isinstance(pid, dict)
-                and new is not None
                 and str(pid.get("section") or "").strip().lower() == new
             )
             for pid in (panel_ids or [])
         ]
-        return new, new is None, btn_classes, panel_hidden
+        return new, False, btn_classes, panel_hidden
 
 
 def player_detail_body(
@@ -1094,8 +1095,7 @@ def player_detail_body(
     """Shared modal body.
 
     Always: player identity, then personality / archetypes / page content.
-    Optional exclusive filter only toggles international / contract / career /
-    season / discipline above that content.
+    Detail filter defaults to Season stats (sticky — always one section selected).
     """
     effective_theme = theme
     if effective_theme is None and settings:
@@ -1124,10 +1124,17 @@ def player_detail_body(
         settings=settings,
     )
     if extra_sections:
+        available = {key for key, _label, _node in extra_sections}
+        default_section = (
+            DEFAULT_MODAL_EXTRA_SECTION
+            if DEFAULT_MODAL_EXTRA_SECTION in available
+            else extra_sections[0][0]
+        )
         children.append(
             _modal_section_filter(
                 id_prefix=id_prefix,
                 options=[(key, label) for key, label, _node in extra_sections],
+                active=default_section,
             )
         )
         children.append(
@@ -1139,14 +1146,14 @@ def player_detail_body(
                             "type": f"{id_prefix}-modal-extra-panel",
                             "section": key,
                         },
-                        hidden=True,
+                        hidden=key != default_section,
                         className="rs-modal-extra-panel",
                     )
                     for key, _label, node in extra_sections
                 ],
                 id=f"{id_prefix}-modal-extras",
                 className="rs-modal-extras",
-                hidden=True,
+                hidden=False,
             )
         )
     else:
