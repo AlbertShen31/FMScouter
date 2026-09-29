@@ -759,6 +759,14 @@ def player_personality_section(
     return html.Div(children, className="rs-player-id-section rs-personality-section")
 
 
+def _archetype_empty_placeholder() -> html.Div:
+    """Stable empty state when the player has no eligible archetypes."""
+    return html.Div(
+        "No eligible archetypes.",
+        className="rs-arch-empty text-muted small",
+    )
+
+
 def _archetype_chip_elements(
     awards: Sequence[Mapping[str, Any]],
     *,
@@ -773,15 +781,7 @@ def _archetype_chip_elements(
         if str(award.get("group") or "").strip().lower() == group
     ]
     if not filtered:
-        from scoring.player_archetypes import group_abbr
-
-        label = group_abbr(group) if group else "—"
-        return [
-            html.Div(
-                f"No {label} archetypes earned.",
-                className="rs-arch-empty text-muted small",
-            )
-        ]
+        return [_archetype_empty_placeholder()]
 
     chips = []
     for i, award in enumerate(filtered):
@@ -881,6 +881,48 @@ def _archetype_group_switcher(
     )
 
 
+def _archetypes_section_frame(
+    *,
+    id_prefix: str,
+    chips: list,
+    awards: list | None = None,
+    active: str | None = None,
+    options: Sequence[tuple[str, str]] | None = None,
+) -> html.Div:
+    """Shared Archetypes header + chip row + stores (stable callback targets)."""
+    opts = list(options or [])
+    switcher = _archetype_group_switcher(
+        id_prefix=id_prefix, options=opts, active=active
+    )
+    header_children: list = [
+        html.Div("Archetypes", className="rs-player-id-section-title"),
+    ]
+    if switcher is not None:
+        header_children.append(switcher)
+    else:
+        # Keep a stable target for the group-switch callback when only one group.
+        header_children.append(
+            html.Div(id=f"{id_prefix}-arch-group-btns", style={"display": "none"})
+        )
+    return html.Div(
+        [
+            html.Div(header_children, className="rs-arch-section-header"),
+            html.Div(
+                chips,
+                id=f"{id_prefix}-arch-chips",
+                className="rs-arch-chip-row",
+            ),
+            dcc.Store(id=f"{id_prefix}-arch-awards", data=list(awards or [])),
+            dcc.Store(id=f"{id_prefix}-arch-group", data=active),
+            dcc.Store(
+                id=f"{id_prefix}-arch-group-opts",
+                data=[{"id": key, "label": label} for key, label in opts],
+            ),
+        ],
+        className="rs-player-id-section rs-archetypes-section",
+    )
+
+
 def player_archetypes_section(
     player: dict,
     *,
@@ -896,11 +938,22 @@ def player_archetypes_section(
 
     Default group is Best Pos (via ``pos_group`` / player ``pos_group``). Profiles
     pass the depth-slot phase so the filter opens on that group.
+    Players with no / insufficient minutes still get the section with a
+    “No eligible archetypes.” placeholder.
     """
-    if not player or not (player.get("stats") or player.get("minutes")):
+    if not player:
         return None
 
+    from scoring.stats_scorer import minutes_status
+
     settings = us.normalize(settings)
+    required = float(us.default_minutes_required(settings))
+    if minutes_status(player.get("minutes"), required) != "meet":
+        return _archetypes_section_frame(
+            id_prefix=id_prefix,
+            chips=[_archetype_empty_placeholder()],
+        )
+
     threshold_overrides = None
     metric_p0 = None
     metric_p100 = None
@@ -929,44 +982,21 @@ def player_archetypes_section(
         value_mode=value_mode,
         include_groups=[key for key, _ in options] or None,
     )
-    if not awards and not options:
-        return None
 
     active = resolve_archetype_pos_group(player, preferred=pos_group)
     if active is None and options:
         active = options[0][0]
-    chips = _archetype_chip_elements(
-        awards, id_prefix=id_prefix, pos_group=active
+    chips = (
+        _archetype_chip_elements(awards, id_prefix=id_prefix, pos_group=active)
+        if awards or options
+        else [_archetype_empty_placeholder()]
     )
-    switcher = _archetype_group_switcher(
-        id_prefix=id_prefix, options=options, active=active
-    )
-    header_children: list = [
-        html.Div("Archetypes", className="rs-player-id-section-title"),
-    ]
-    if switcher is not None:
-        header_children.append(switcher)
-    else:
-        # Keep a stable target for the group-switch callback when only one group.
-        header_children.append(
-            html.Div(id=f"{id_prefix}-arch-group-btns", style={"display": "none"})
-        )
-    return html.Div(
-        [
-            html.Div(header_children, className="rs-arch-section-header"),
-            html.Div(
-                chips,
-                id=f"{id_prefix}-arch-chips",
-                className="rs-arch-chip-row",
-            ),
-            dcc.Store(id=f"{id_prefix}-arch-awards", data=list(awards)),
-            dcc.Store(id=f"{id_prefix}-arch-group", data=active),
-            dcc.Store(
-                id=f"{id_prefix}-arch-group-opts",
-                data=[{"id": key, "label": label} for key, label in options],
-            ),
-        ],
-        className="rs-player-id-section rs-archetypes-section",
+    return _archetypes_section_frame(
+        id_prefix=id_prefix,
+        chips=chips,
+        awards=list(awards),
+        active=active,
+        options=options,
     )
 
 
