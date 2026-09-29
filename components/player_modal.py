@@ -384,6 +384,7 @@ def _modal_extra_section_nodes(
     field_formatters: Mapping[str, FieldFormatter] | None = None,
     theme: str | None = None,
     limited_divisions: set[str] | frozenset[str] | list[str] | None = None,
+    settings=None,
 ) -> list[tuple[str, str, html.Div]]:
     """Build available (key, button_label, node) rows for the exclusive filter."""
     kwargs = {
@@ -398,7 +399,9 @@ def _modal_extra_section_nodes(
         ),
         "finance": lambda: player_finance_section(player, **kwargs),
         "career": lambda: player_career_section(player, **kwargs),
-        "season": lambda: player_playing_time_section(player, **kwargs),
+        "season": lambda: player_playing_time_section(
+            player, settings=settings, **kwargs
+        ),
         "discipline": lambda: player_discipline_section(player, **kwargs),
     }
     out: list[tuple[str, str, html.Div]] = []
@@ -503,8 +506,48 @@ def player_career_section(player: dict, **kwargs) -> html.Div | None:
     return player_record_section(player, "Career totals", CAREER_MODAL_FIELDS, **kwargs)
 
 
+def _current_season_player(player: dict) -> dict:
+    """Season stats always use newest-year apps/mins, ignoring the Year toggle."""
+    if not isinstance(player, dict):
+        return player
+    by_year = player.get("by_year")
+    if not isinstance(by_year, dict) or not by_year:
+        return player
+    try:
+        from components.multi_year_ui import stats_player_for_pct_basis
+    except Exception:
+        return player
+    overlay = stats_player_for_pct_basis(player, pct_basis="current")
+    return overlay if isinstance(overlay, dict) else player
+
+
 def player_playing_time_section(player: dict, **kwargs) -> html.Div | None:
-    return player_record_section(player, "Season stats", PLAYING_TIME_MODAL_FIELDS, **kwargs)
+    season_player = _current_season_player(player)
+    settings = kwargs.pop("settings", None)
+    # Identity minutes follow the Year toggle; recolor from current-season mins.
+    if (
+        season_player.get("minutes") != player.get("minutes")
+        and kwargs.get("field_styles")
+    ):
+        try:
+            from scoring.stats_scorer import minutes_color, minutes_status
+
+            req = float(us.default_minutes_required(settings))
+            styles = dict(kwargs["field_styles"])
+            styles["minutes"] = {
+                "color": minutes_color(
+                    minutes_status(season_player.get("minutes"), req)
+                )
+            }
+            kwargs = {**kwargs, "field_styles": styles}
+        except Exception:
+            pass
+    return player_record_section(
+        season_player,
+        "Season stats",
+        PLAYING_TIME_MODAL_FIELDS,
+        **kwargs,
+    )
 
 
 def player_discipline_section(player: dict, **kwargs) -> html.Div | None:
@@ -1078,6 +1121,7 @@ def player_detail_body(
         field_formatters=field_formatters,
         theme=effective_theme,
         limited_divisions=limited_divisions,
+        settings=settings,
     )
     if extra_sections:
         children.append(

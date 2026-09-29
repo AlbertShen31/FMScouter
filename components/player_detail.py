@@ -404,8 +404,15 @@ def _enrich_stats_player(
 
 def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
     display_player = dict(display_player)
+    # Always prefer stats blob for maps / rates when present.
+    for key in ("stats", "stats_unavailable", "by_year"):
+        if stats_player.get(key) not in (None, "", [], {}):
+            display_player[key] = stats_player.get(key)
     for key in (
         "minutes",
+        "appearances",
+        "avg_rating_club",
+        "last_5_club",
         "age",
         "club",
         "division",
@@ -424,13 +431,10 @@ def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
         "loan_status",
         "pos_group",
         "limited_division_tracking",
-        "stats",
-        "stats_unavailable",
+        "years_present",
+        "multi_year",
+        "multi_year_status",
     ):
-        if key in ("stats", "stats_unavailable"):
-            if stats_player.get(key) not in (None, "", [], {}):
-                display_player[key] = stats_player.get(key)
-            continue
         if display_player.get(key) in (None, "", [], {}):
             display_player[key] = stats_player.get(key)
     return display_player

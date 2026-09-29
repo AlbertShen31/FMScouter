@@ -841,9 +841,9 @@ def by_year_section(
             meta_bits.append(str(snap["club"]))
         if snap.get("age") not in (None, "", "-"):
             meta_bits.append(f"Age {snap['age']}")
-        apps_n = parse_appearances(snap.get("appearances"))
-        if apps_n is not None:
-            meta_bits.append(f"{apps_n} apps")
+        apps_raw = snap.get("appearances")
+        if parse_appearances(apps_raw) is not None:
+            meta_bits.append(f"{str(apps_raw).strip()} apps")
         mins = snap.get("minutes")
         if mins not in (None, "", "-"):
             meta_bits.append(f"{_fmt_num(mins, digits=0)} mins")
