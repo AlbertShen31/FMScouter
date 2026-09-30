@@ -15,4 +15,4 @@ python-dotenv==1.0.1
 nest-asyncio==1.6.0
 pillow==10.3.0
 requests==2.32.3
-fmsave[pandas]>=0.5.1
+fmsave[pandas]>=0.5.3
