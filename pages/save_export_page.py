@@ -31,6 +31,11 @@ _POS_OPTIONS = [
     {"label": "FWD", "value": "fwd"},
 ]
 
+_NATION_OPTIONS = [
+    {"label": label, "value": str(nid)}
+    for nid, label in sorted(fms.CLUB_NATION_OPTIONS, key=lambda item: item[1].casefold())
+]
+
 
 def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
     return dbc.CardHeader(
@@ -155,6 +160,35 @@ def layout(**_kwargs):
                                                 placeholder="optional",
                                                 className="mb-2",
                                             ),
+                                            dbc.Row(
+                                                [
+                                                    dbc.Col(
+                                                        dmc.MultiSelect(
+                                                            id="sx-club-nations",
+                                                            label="Club nation (Based In)",
+                                                            data=_NATION_OPTIONS,
+                                                            value=[],
+                                                            searchable=True,
+                                                            clearable=True,
+                                                            placeholder="Any",
+                                                        ),
+                                                        md=6,
+                                                    ),
+                                                    dbc.Col(
+                                                        dmc.MultiSelect(
+                                                            id="sx-player-nations",
+                                                            label="Nationality",
+                                                            data=_NATION_OPTIONS,
+                                                            value=[],
+                                                            searchable=True,
+                                                            clearable=True,
+                                                            placeholder="Any",
+                                                        ),
+                                                        md=6,
+                                                    ),
+                                                ],
+                                                className="g-2 mb-2",
+                                            ),
                                             html.Label(
                                                 "Position groups",
                                                 className="rs-field-label",
@@ -221,12 +255,24 @@ def layout(**_kwargs):
     )
 
 
+def _parse_nation_ids(values) -> list[int]:
+    out: list[int] = []
+    for raw in values or []:
+        try:
+            out.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _filters_payload(
     age_min,
     age_max,
     min_ca,
     min_club_rep,
     club_contains,
+    club_nations,
+    player_nations,
     pos_groups,
 ) -> dict:
     return {
@@ -235,6 +281,8 @@ def _filters_payload(
         "min_ca": min_ca,
         "min_club_reputation": min_club_rep,
         "club_contains": club_contains or "",
+        "club_nation_ids": _parse_nation_ids(club_nations),
+        "nation_ids": _parse_nation_ids(player_nations),
         "position_groups": list(pos_groups or []),
     }
 
@@ -306,6 +354,8 @@ clientside_callback(
     State("sx-min-ca", "value"),
     State("sx-min-club-rep", "value"),
     State("sx-club-contains", "value"),
+    State("sx-club-nations", "value"),
+    State("sx-player-nations", "value"),
     State("sx-pos-groups", "value"),
     State("sx-to-uploads", "checked"),
     State("sx-rev", "data"),
@@ -320,6 +370,8 @@ def sx_generate(
     min_ca,
     min_club_rep,
     club_contains,
+    club_nations,
+    player_nations,
     pos_groups,
     to_uploads,
     rev,
@@ -337,7 +389,14 @@ def sx_generate(
         )
     scope_key = scope if scope in {"squad", "all", "filtered"} else "squad"
     filters = _filters_payload(
-        age_min, age_max, min_ca, min_club_rep, club_contains, pos_groups
+        age_min,
+        age_max,
+        min_ca,
+        min_club_rep,
+        club_contains,
+        club_nations,
+        player_nations,
+        pos_groups,
     )
     try:
         csv_text, meta = fms.export_moneyball_csv(

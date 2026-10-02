@@ -13,6 +13,45 @@ import pandas as pd
 
 Scope = Literal["squad", "all", "filtered"]
 
+# fmsave ships no nation names; club_nation_id / nation_id are integers only.
+# Labels below are curated from FM26 club samples (Based In / league nation).
+CLUB_NATION_OPTIONS: tuple[tuple[int, str], ...] = (
+    (120, "U.S.A."),
+    (129, "Austria"),
+    (131, "Belgium"),
+    (134, "Bulgaria"),
+    (135, "Croatia"),
+    (137, "Czechia"),
+    (138, "Denmark"),
+    (139, "England"),
+    (142, "Finland"),
+    (143, "France"),
+    (145, "Germany"),
+    (146, "Greece"),
+    (147, "Hungary"),
+    (149, "Israel"),
+    (150, "Italy"),
+    (157, "Moldova"),
+    (158, "Netherlands"),
+    (159, "Scotland"),
+    (160, "Norway"),
+    (161, "Poland"),
+    (162, "Portugal"),
+    (163, "Ireland"),
+    (164, "Romania"),
+    (165, "Russia"),
+    (170, "Spain"),
+    (171, "Sweden"),
+    (172, "Switzerland"),
+    (173, "Türkiye"),
+    (174, "Ukraine"),
+    (175, "Wales"),
+    (176, "Serbia"),
+    (177, "Australia"),
+    (189, "Brazil"),
+    (191, "Colombia"),
+)
+
 # Intentionally blank in v1 — save has no display labels / name maps.
 BLANK_COLUMNS: tuple[str, ...] = (
     "Personality",
@@ -349,6 +388,20 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     if club_contains:
         club = (player.club_name or "").casefold()
         if club_contains not in club:
+            return False
+
+    club_nations = filters.get("club_nation_ids") or []
+    if club_nations:
+        wanted = {int(n) for n in club_nations}
+        club_nation = player.club_nation_id
+        if club_nation is None or int(club_nation) not in wanted:
+            return False
+
+    player_nations = filters.get("nation_ids") or []
+    if player_nations:
+        wanted = {int(n) for n in player_nations}
+        nation = player.nation_id
+        if nation is None or int(nation) not in wanted:
             return False
 
     groups = filters.get("position_groups") or []
