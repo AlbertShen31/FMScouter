@@ -211,4 +211,4 @@ def sync_mantine_theme(theme):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run(debug=True)
