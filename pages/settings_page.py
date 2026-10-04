@@ -1862,6 +1862,23 @@ def apply_preferred_theme_select(preferred_values, current):
 
 
 @callback(
+    Output({"type": "st-preferred-theme", "index": ALL}, "value", allow_duplicate=True),
+    Input("theme", "data"),
+    State({"type": "st-preferred-theme", "index": ALL}, "value"),
+    prevent_initial_call=True,
+)
+def sync_preferred_theme_from_navbar(theme, current_values):
+    """Mirror navbar / store theme into the Settings control when present."""
+    normalized = us.normalize_preferred_theme(theme)
+    values = list(current_values or [])
+    if not values:
+        return []
+    if all(us.normalize_preferred_theme(v) == normalized for v in values):
+        return [no_update] * len(values)
+    return [normalized] * len(values)
+
+
+@callback(
     Output("ui-settings", "data", allow_duplicate=True),
     Input("st-salary-period", "value"),
     State("ui-settings", "data"),

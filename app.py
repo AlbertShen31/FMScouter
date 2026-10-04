@@ -1,7 +1,7 @@
 import dash
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
-from dash import ALL, Input, Output, State, callback, dcc, html
+from dash import Input, Output, State, callback, dcc, html
 
 import services.ui_settings as ui_settings
 import services.export_library as export_library
@@ -190,16 +190,17 @@ app.clientside_callback(
 @callback(
     Output("theme", "data"),
     Output("ui-settings", "data", allow_duplicate=True),
-    Output({"type": "st-preferred-theme", "index": ALL}, "value", allow_duplicate=True),
     Input("theme-toggle", "n_clicks"),
     State("theme", "data"),
-    State({"type": "st-preferred-theme", "index": ALL}, "id"),
     prevent_initial_call=True,
 )
-def toggle_theme(_clicks, current, theme_ids):
+def toggle_theme(_clicks, current):
+    # Keep this callback free of page-local pattern-matching outputs. Wiring
+    # navbar theme → Settings `st-preferred-theme` ALL in one callback creates a
+    # bridge that crashes Dash's debug Callbacks graph (dagre assignOrder).
     next_theme = "light" if (current or "dark") == "dark" else "dark"
     settings = ui_settings.set_preferred_theme(next_theme)
-    return next_theme, settings, [next_theme] * len(theme_ids or [])
+    return next_theme, settings
 
 
 @callback(
