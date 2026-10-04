@@ -1423,6 +1423,7 @@ def layout():
                                                                 dmc.TextInput(
                                                                     id="rs-search",
                                                                     placeholder="Name, club, position",
+                                                                    debounce=300,
                                                                 ),
                                                             ],
                                                             className="rs-filter-search",
@@ -1817,7 +1818,10 @@ def _archetype_match_keys(
     stats_players: list = []
     seen_keys: set[str] = set()
     for file_id in _payload_file_ids(payload):
-        for player in load_stats_players_for_file(file_id) or []:
+        # Filter hot path: never stall on cold multi-year recompute.
+        for player in load_stats_players_for_file(
+            file_id, compute_if_missing=False
+        ) or []:
             key = stats_player_key(player)
             if key and key in seen_keys:
                 continue
@@ -3881,10 +3885,31 @@ def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_f
 
 
 
-_COLUMN_TOGGLE_TRIGGERS = {
+# Triggers that can reuse wide markdown in rs-table-cache (re-filter / re-sort /
+# column visibility only). Must include rs-table.sort_by: focus clicks and set-piece
+# adds update focus/pieces + sort together, and omitting sort forced a full rebuild.
+_CACHE_REUSE_TRIGGERS = {
     "rs-focus-role.data",
     "rs-set-pieces.value",
     "rs-hybrids-only.checked",
+    "rs-table.sort_by",
+    "rs-search.value",
+    "rs-age.value",
+    "rs-min-score.value",
+    "rs-min-score-quantifier.value",
+    "rs-min-score-scope.value",
+    "rs-pos-match.value",
+    "rs-club-filter.value",
+    "rs-status-filter.value",
+    "rs-set-piece-min-score.value",
+    "rs-pos-filter.data",
+    "rs-foot-filter.data",
+    "rs-archetypes.data",
+    "rs-archetype-pct-basis.data",
+}
+_POS_BAR_TRIGGERS = {
+    "rs-pos-filter.data",
+    "rs-foot-filter.data",
 }
 
 
@@ -4154,11 +4179,12 @@ def render_shortlist(
                 no_update,  # cache
             )
 
-    # Focus / set-piece / hybrids toggles: change visible columns (and row
-    # membership) from the wide markdown cache — no cell rebuild.
+    # Focus / filter / set-piece / hybrids / sort: change visible columns and
+    # row membership from the wide markdown cache — no cell rebuild.
+    # Loosening a filter past the cached row set falls through (subset → None).
     if (
         triggered_props
-        and triggered_props.issubset(_COLUMN_TOGGLE_TRIGGERS)
+        and triggered_props.issubset(_CACHE_REUSE_TRIGGERS)
         and payload
         and payload.get("rows")
     ):
@@ -4330,11 +4356,20 @@ def render_shortlist(
                 f"{focus_note}{hybrid_note}{min_note}"
                 f" · {payload.get('filename')}."
             )
+            # Pos/foot chips live outside the table; refresh only when they change.
+            pos_bar_out = (
+                _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
+                if triggered_props & _POS_BAR_TRIGGERS
+                else no_update
+            )
             # Same row set + no focus change: only swap visible columns.
             # Focus still needs a data pass so PosEligible highlighting stays correct.
+            # Sort-only with unchanged keys is handled by the pure-sort path above;
+            # focus+sort still needs the subset pass below for PosEligible + order.
             if (
                 ordered_keys == current_keys
                 and "rs-focus-role.data" not in triggered_props
+                and "rs-table.sort_by" not in triggered_props
             ):
                 new_data = no_update
                 new_tips = no_update
@@ -4357,7 +4392,7 @@ def render_shortlist(
                     else None
                 )
                 return (
-                    no_update,
+                    pos_bar_out,
                     no_update,
                     no_update,
                     new_data,
@@ -4406,7 +4441,7 @@ def render_shortlist(
                 )
                 selected_ids = _marked_selected_ids(new_data, squad_marked)
                 return (
-                    no_update,
+                    pos_bar_out,
                     no_update,
                     no_update,
                     new_data,
