@@ -626,6 +626,52 @@ body {
     }
 }
 
+.rs-busy-progress {
+    width: min(320px, 80%);
+    height: 8px;
+    margin-top: 2px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--app-line) 85%, var(--app-card));
+    border: 1px solid var(--app-line);
+}
+
+.rs-busy-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: var(--app-accent);
+    transition: width 0.35s ease;
+}
+
+.rs-busy-progress.is-indeterminate .rs-busy-progress-bar {
+    width: 40%;
+    animation: rs-busy-progress-slide 1.25s ease-in-out infinite;
+}
+
+.rs-busy-progress-detail {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--app-muted);
+    text-align: center;
+    max-width: min(360px, 90%);
+}
+
+@keyframes rs-busy-progress-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(280%);
+    }
+}
+
+html[data-theme="light"] .rs-busy-progress,
+body[data-theme="light"] .rs-busy-progress {
+    background: color-mix(in srgb, var(--app-line) 70%, #fff);
+}
+
 .rs-export-subhead-row {
     display: flex;
     align-items: center;

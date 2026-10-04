@@ -688,6 +688,49 @@ def shortlist_busy_overlay(prefix: str) -> html.Div:
     )
 
 
+def job_busy_overlay(
+    overlay_id: str,
+    *,
+    prefix: str,
+    initial_label: str = "Working…",
+) -> html.Div:
+    """Full-page-section busy overlay with label + progress bar + detail line.
+
+    Pair with a ``dcc.Interval`` poll that reads ``services.compute_progress``.
+    """
+    return html.Div(
+        [
+            html.Div(
+                className="rs-shortlist-busy-spinner",
+                **{"aria-hidden": "true"},
+            ),
+            html.Div(
+                initial_label,
+                id=f"{prefix}-busy-label",
+                className="rs-shortlist-busy-label",
+            ),
+            html.Div(
+                html.Div(
+                    id=f"{prefix}-busy-bar",
+                    className="rs-busy-progress-bar",
+                    style={"width": "40%"},
+                ),
+                id=f"{prefix}-busy-track",
+                className="rs-busy-progress is-indeterminate",
+            ),
+            html.Div(
+                "",
+                id=f"{prefix}-busy-detail",
+                className="rs-busy-progress-detail",
+            ),
+        ],
+        id=overlay_id,
+        className="rs-shortlist-busy",
+        role="status",
+        **{"aria-live": "polite"},
+    )
+
+
 def hist_block(
     prefix: str,
     *,

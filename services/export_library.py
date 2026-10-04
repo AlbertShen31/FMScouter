@@ -598,8 +598,15 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
     _write_index(index)
     # Precompute role scores / stats percentiles for faster page loads.
     try:
+        import services.compute_progress as compute_progress
         import services.upload_cache as upload_cache
 
+        compute_progress.update(
+            phase="Saving to Uploads…",
+            message=str(entry.get("display_name") or original),
+            done=0,
+            total=0,
+        )
         upload_cache.compute_file(file_id)
         # Refresh entry with cache metadata written by compute_file.
         entry = get_file(file_id) or entry

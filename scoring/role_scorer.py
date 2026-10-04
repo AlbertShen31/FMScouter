@@ -1847,6 +1847,7 @@ def score_players(
     tier_weights: dict[str, float] | None = None,
     set_piece_profiles: list[dict] | None = None,
     partial_adjacency: dict[str, frozenset[str]] | None = None,
+    on_progress: Any | None = None,
 ) -> list[dict[str, Any]]:
     if partial_adjacency is None:
         partial_adjacency = default_partial_adjacency()
@@ -1866,7 +1867,11 @@ def score_players(
             )
         )
     scored = []
-    for player in players:
+    total_players = len(players)
+    progress_step = 1
+    if total_players > 200:
+        progress_step = max(1, total_players // 40)
+    for player_idx, player in enumerate(players, start=1):
         row = {
             "Name": player["name"],
             "Unique ID": str(player.get("unique_id") or "").strip(),
@@ -1944,6 +1949,15 @@ def score_players(
         row["Best Role"] = best_label
         row["Best Role Score"] = best_score if best_score >= 0 else 0
         scored.append(row)
+        if on_progress and (
+            player_idx == 1
+            or player_idx == total_players
+            or player_idx % progress_step == 0
+        ):
+            try:
+                on_progress(player_idx, total_players)
+            except Exception:
+                pass
     return scored
 
 

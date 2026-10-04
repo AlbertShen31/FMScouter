@@ -6,6 +6,8 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
+from components.scouting_shell import job_busy_overlay
+import services.compute_progress as compute_progress
 import services.export_library as lib
 import services.fmsave_export as fms
 
@@ -62,6 +64,12 @@ def layout(**_kwargs):
         [
             dcc.Download(id="sx-download"),
             dcc.Store(id="sx-rev", data=0),
+            dcc.Interval(
+                id="sx-progress-poll",
+                interval=1500,
+                n_intervals=0,
+                disabled=True,
+            ),
             html.H4("Save export", className="mb-2"),
             html.P(
                 "Generate a Moneyball-compatible CSV from an FM26 save for Role scores, "
@@ -235,16 +243,10 @@ def layout(**_kwargs):
                             dbc.CardBody(html.Div(id="sx-status", children="Ready.")),
                         ]
                     ),
-                    html.Div(
-                        [
-                            html.Div(className="rs-shortlist-busy-spinner"),
-                            html.Div(
-                                "Reading save…",
-                                className="rs-shortlist-busy-label",
-                            ),
-                        ],
-                        id="sx-busy",
-                        className="rs-shortlist-busy",
+                    job_busy_overlay(
+                        "sx-busy",
+                        prefix="sx",
+                        initial_label="Reading save…",
                     ),
                 ],
                 className="rs-shortlist-busy-host",
@@ -331,14 +333,44 @@ def sx_toggle_filters(scope):
 clientside_callback(
     """
     function(n) {
-        if (!n) { return window.dash_clientside.no_update; }
-        return "rs-shortlist-busy is-on t-" + String(Date.now());
+        if (!n) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        var label = document.getElementById("sx-busy-label");
+        if (label) { label.textContent = "Reading save…"; }
+        var detail = document.getElementById("sx-busy-detail");
+        if (detail) { detail.textContent = ""; }
+        var track = document.getElementById("sx-busy-track");
+        if (track) {
+            track.className = "rs-busy-progress is-indeterminate";
+        }
+        return ["rs-shortlist-busy is-on t-" + String(Date.now()), false];
     }
     """,
     Output("sx-busy", "className"),
+    Output("sx-progress-poll", "disabled"),
     Input("sx-generate", "n_clicks"),
     prevent_initial_call=True,
 )
+
+
+@callback(
+    Output("sx-busy-label", "children"),
+    Output("sx-busy-track", "className"),
+    Output("sx-busy-bar", "style"),
+    Output("sx-busy-detail", "children"),
+    Input("sx-progress-poll", "n_intervals"),
+)
+def sx_poll_progress(_n):
+    props = compute_progress.ui_props()
+    if not props.get("active"):
+        return no_update, no_update, no_update, no_update
+    return (
+        props["label"],
+        props["track_class"],
+        props["bar_style"],
+        props["detail"] or "",
+    )
 
 
 @callback(
@@ -346,6 +378,7 @@ clientside_callback(
     Output("sx-status", "children"),
     Output("sx-rev", "data"),
     Output("sx-busy", "className", allow_duplicate=True),
+    Output("sx-progress-poll", "disabled", allow_duplicate=True),
     Input("sx-generate", "n_clicks"),
     State("sx-path", "value"),
     State("sx-scope", "value"),
@@ -377,7 +410,7 @@ def sx_generate(
     rev,
 ):
     if not n_clicks:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     next_rev = int(rev or 0) + 1
     save_path = (path or "").strip()
     if not save_path:
@@ -386,6 +419,7 @@ def sx_generate(
             html.P("Enter a path to a .fm save file.", className="text-danger mb-0"),
             next_rev,
             "rs-shortlist-busy",
+            True,
         )
     scope_key = scope if scope in {"squad", "all", "filtered"} else "squad"
     filters = _filters_payload(
@@ -398,51 +432,66 @@ def sx_generate(
         player_nations,
         pos_groups,
     )
+    compute_progress.begin("Reading save…", phase="Reading save…")
     try:
-        csv_text, meta = fms.export_moneyball_csv(
-            save_path,
-            scope=scope_key,  # type: ignore[arg-type]
-            filters=filters if scope_key == "filtered" else None,
-        )
-    except ImportError as exc:
-        return (
-            no_update,
-            html.P(
-                f"fmsave is not installed (needs Python 3.12+): {exc}. "
-                'Run: pip install "fmsave[pandas]"',
-                className="text-danger mb-0",
-            ),
-            next_rev,
-            "rs-shortlist-busy",
-        )
-    except Exception as exc:  # noqa: BLE001 — surface any fmsave / IO error
-        return (
-            no_update,
-            html.P(str(exc), className="text-danger mb-0"),
-            next_rev,
-            "rs-shortlist-busy",
-        )
-
-    uploads_note = ""
-    if to_uploads:
         try:
-            entry = lib.save_upload(meta.get("filename") or "fmsave_export.csv", csv_text)
-            pages = ", ".join(entry.get("pages") or []) or "none"
-            uploads_note = (
-                f"Saved to Uploads as “{entry.get('display_name')}” "
-                f"(id={entry.get('id')}; pages: {pages})."
+            csv_text, meta = fms.export_moneyball_csv(
+                save_path,
+                scope=scope_key,  # type: ignore[arg-type]
+                filters=filters if scope_key == "filtered" else None,
             )
-        except Exception as exc:  # noqa: BLE001
-            uploads_note = f"CSV generated, but Uploads save failed: {exc}"
+        except ImportError as exc:
+            return (
+                no_update,
+                html.P(
+                    f"fmsave is not installed (needs Python 3.12+): {exc}. "
+                    'Run: pip install "fmsave[pandas]"',
+                    className="text-danger mb-0",
+                ),
+                next_rev,
+                "rs-shortlist-busy",
+                True,
+            )
+        except Exception as exc:  # noqa: BLE001 — surface any fmsave / IO error
+            return (
+                no_update,
+                html.P(str(exc), className="text-danger mb-0"),
+                next_rev,
+                "rs-shortlist-busy",
+                True,
+            )
 
-    download = dict(
-        content=csv_text,
-        filename=meta.get("filename") or "fmsave_export.csv",
-        type="text/csv",
-    )
-    return (
-        download,
-        _status_children(meta, uploads_note=uploads_note),
-        next_rev,
-        "rs-shortlist-busy",
-    )
+        uploads_note = ""
+        if to_uploads:
+            try:
+                compute_progress.update(
+                    phase="Adding to Uploads…",
+                    message="Saving and precomputing…",
+                    done=0,
+                    total=0,
+                )
+                entry = lib.save_upload(
+                    meta.get("filename") or "fmsave_export.csv", csv_text
+                )
+                pages = ", ".join(entry.get("pages") or []) or "none"
+                uploads_note = (
+                    f"Saved to Uploads as “{entry.get('display_name')}” "
+                    f"(id={entry.get('id')}; pages: {pages})."
+                )
+            except Exception as exc:  # noqa: BLE001
+                uploads_note = f"CSV generated, but Uploads save failed: {exc}"
+
+        download = dict(
+            content=csv_text,
+            filename=meta.get("filename") or "fmsave_export.csv",
+            type="text/csv",
+        )
+        return (
+            download,
+            _status_children(meta, uploads_note=uploads_note),
+            next_rev,
+            "rs-shortlist-busy",
+            True,
+        )
+    finally:
+        compute_progress.end()

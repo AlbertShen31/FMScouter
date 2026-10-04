@@ -470,6 +470,7 @@ def _precompute_stats_percentiles(
     settings: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """player_key → group → metric_id → percentile."""
+    import services.compute_progress as compute_progress
     import services.ui_settings as us
     from scoring.stats_scorer import (
         band_metric,
@@ -503,9 +504,26 @@ def _precompute_stats_percentiles(
     groups = list(benchmarks().get("groups") or ["gk", "def", "mid", "fwd"])
     categories = ["defending", "final_third", "possession", "all"]
     out: dict[str, dict[str, dict[str, float]]] = {}
-    for player in players:
+    total_players = len(players)
+    step = 1 if total_players <= 200 else max(1, total_players // 40)
+    compute_progress.update(
+        phase="Computing player stats…",
+        done=0,
+        total=total_players,
+    )
+    for player_idx, player in enumerate(players, start=1):
         key = player_key(player)
         if not key:
+            if (
+                player_idx == 1
+                or player_idx == total_players
+                or player_idx % step == 0
+            ):
+                compute_progress.tick(
+                    player_idx,
+                    total_players,
+                    phase="Computing player stats…",
+                )
             continue
         if banding_ctx:
             tree, metric_p0, metric_p100 = us.banding_for_player(banding_ctx, player)
@@ -542,6 +560,16 @@ def _precompute_stats_percentiles(
                 by_group[group] = band_map
         if by_group:
             out[key] = by_group
+        if (
+            player_idx == 1
+            or player_idx == total_players
+            or player_idx % step == 0
+        ):
+            compute_progress.tick(
+                player_idx,
+                total_players,
+                phase="Computing player stats…",
+            )
     return out
 
 
@@ -554,6 +582,7 @@ def _compute_single_file(
     settings: dict[str, Any],
 ) -> dict[str, Any]:
     import config.role_weights.fm26_role_weight_config as pc
+    import services.compute_progress as compute_progress
     import services.ui_settings as us
     from scoring.stats_scorer import parse_stats_export_with_meta
 
@@ -571,15 +600,24 @@ def _compute_single_file(
         try:
             from scoring.role_scorer import parse_export, score_players
 
+            compute_progress.update(phase="Parsing export…", done=0, total=0)
             rc.load_pack(sig["role_pack_id"], persist=False)
             players = parse_export(text)
             role_ids = list(pc.all_positions.keys())
+            compute_progress.update(
+                phase="Scoring role scores…",
+                done=0,
+                total=len(players),
+            )
             rows = score_players(
                 players,
                 role_ids,
                 tier_weights=us.tier_weights(settings),
                 set_piece_profiles=us.set_piece_profiles(settings),
                 partial_adjacency=rs.default_partial_adjacency(),
+                on_progress=lambda done, total: compute_progress.tick(
+                    done, total, phase="Scoring role scores…"
+                ),
             )
             payload["role_scores"] = {
                 "players": players,
@@ -596,6 +634,7 @@ def _compute_single_file(
         try:
             from scoring.stats_availability import nation_counts_for_limited_divisions
 
+            compute_progress.update(phase="Parsing stats…", done=0, total=0)
             players, limited_divisions = parse_stats_export_with_meta(text)
             percentiles = _precompute_stats_percentiles(
                 players,
@@ -759,7 +798,14 @@ def _compute_multi_year_pack(
 
     if want_roles and role_by_year:
         try:
+            import services.compute_progress as compute_progress
+
             rc.load_pack(sig["role_pack_id"], persist=False)
+            compute_progress.update(
+                phase="Scoring multi-year roles…",
+                done=0,
+                total=len(merged),
+            )
             attach_role_scores_by_year(
                 merged,
                 role_players_by_year=role_by_year,
@@ -774,6 +820,9 @@ def _compute_multi_year_pack(
                 tier_weights=tier_w,
                 set_piece_profiles=sp_profiles,
                 partial_adjacency=rs.default_partial_adjacency(),
+                on_progress=lambda done, total: compute_progress.tick(
+                    done, total, phase="Scoring multi-year roles…"
+                ),
             )
             # Stamp growth maps onto scored rows for table display.
             # Per-year / Combined score columns are derived at read time from
@@ -876,6 +925,7 @@ def _compute_multi_year_pack(
 
 def compute_file(file_id: str) -> dict[str, Any]:
     """Parse + score eligible pages for one saved upload; write gzip cache."""
+    import services.compute_progress as compute_progress
     import services.ui_settings as us
 
     entry = lib.get_file(file_id)
@@ -883,12 +933,21 @@ def compute_file(file_id: str) -> dict[str, Any]:
         raise FileNotFoundError("Saved file not found.")
     sig = current_signature()
     settings = us.load()
+    label = lib.display_label(entry)
+    compute_progress.update(
+        phase="Precomputing…",
+        message=str(label or file_id),
+        done=0,
+        total=0,
+    )
 
     if lib.is_multi_year(entry):
+        compute_progress.update(phase="Merging multi-year pack…")
         payload = _compute_multi_year_pack(
             file_id, entry, sig=sig, settings=settings
         )
     else:
+        compute_progress.update(phase="Reading upload…")
         text, entry = lib.read_text(file_id)
         payload = _compute_single_file(
             file_id, text, entry, sig=sig, settings=settings
@@ -917,6 +976,7 @@ def compute_file(file_id: str) -> dict[str, Any]:
         )
         raise ValueError(meta["error"])
 
+    compute_progress.update(phase="Writing cache…")
     _write_cache(file_id, payload)
     meta = {
         "status": "ready",

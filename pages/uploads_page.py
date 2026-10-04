@@ -18,7 +18,8 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
-from components.scouting_shell import decode_upload, upload_error
+from components.scouting_shell import decode_upload, job_busy_overlay, upload_error
+import services.compute_progress as compute_progress
 import services.export_library as lib
 import services.upload_cache as upload_cache
 from scoring.stats_availability import limited_tracking_tooltip
@@ -728,6 +729,12 @@ def layout(**_kwargs):
         [
             dcc.Download(id="up-view-download"),
             dcc.Store(id="up-rev", data=0),
+            dcc.Interval(
+                id="up-progress-poll",
+                interval=1500,
+                n_intervals=0,
+                disabled=True,
+            ),
             html.Div(
                 [
                     dmc.Button(
@@ -839,21 +846,10 @@ def layout(**_kwargs):
                         ],
                         className="mb-3 rs-section-card",
                     ),
-                    html.Div(
-                        [
-                            html.Div(
-                                className="rs-shortlist-busy-spinner",
-                                **{"aria-hidden": "true"},
-                            ),
-                            html.Span(
-                                "Saving and precomputing…",
-                                className="rs-shortlist-busy-label",
-                            ),
-                        ],
-                        id="up-busy",
-                        className="rs-shortlist-busy",
-                        role="status",
-                        **{"aria-live": "polite"},
+                    job_busy_overlay(
+                        "up-busy",
+                        prefix="up",
+                        initial_label="Saving and precomputing…",
                     ),
                 ],
                 className="rs-shortlist-busy-host up-busy-host",
@@ -887,35 +883,45 @@ def save_uploads(contents_list, filenames, rev):
         filenames = [filenames]
     filenames = filenames or []
     messages = []
-    for i, contents in enumerate(contents_list):
-        name = (filenames[i] if i < len(filenames) else None) or f"export_{i + 1}.csv"
-        if not str(name).lower().endswith(".csv"):
-            messages.append(upload_error(f"{name}: not a CSV file."))
-            continue
-        try:
-            text = decode_upload(contents, strict=False)
-            entry = lib.save_upload(name, text)
-            pages = entry.get("pages") or []
-            page_txt = (
-                ", ".join(lib.PAGE_LABELS[p] for p in pages) if pages else "none"
-            )
-            cache = upload_cache.cache_status(entry.get("id") or "", entry)
-            messages.append(
-                html.Div(
-                    [
-                        html.Span("✓ ", className="rs-upload-ok"),
-                        html.Span(lib.display_label(entry)),
-                        html.Span(f" · eligible: {page_txt}", className="text-muted"),
-                        html.Span(
-                            f" · precompute: {cache['label']}",
-                            className="text-muted",
-                        ),
-                    ],
-                    className="up-save-row",
+    compute_progress.begin("Saving and precomputing…", phase="Saving and precomputing…")
+    try:
+        total_files = len(contents_list)
+        for i, contents in enumerate(contents_list):
+            name = (filenames[i] if i < len(filenames) else None) or f"export_{i + 1}.csv"
+            if total_files > 1:
+                compute_progress.update(
+                    phase=f"File {i + 1} of {total_files}",
+                    message=str(name),
                 )
-            )
-        except Exception as exc:
-            messages.append(upload_error(f"{name}: {exc}"))
+            if not str(name).lower().endswith(".csv"):
+                messages.append(upload_error(f"{name}: not a CSV file."))
+                continue
+            try:
+                text = decode_upload(contents, strict=False)
+                entry = lib.save_upload(name, text)
+                pages = entry.get("pages") or []
+                page_txt = (
+                    ", ".join(lib.PAGE_LABELS[p] for p in pages) if pages else "none"
+                )
+                cache = upload_cache.cache_status(entry.get("id") or "", entry)
+                messages.append(
+                    html.Div(
+                        [
+                            html.Span("✓ ", className="rs-upload-ok"),
+                            html.Span(lib.display_label(entry)),
+                            html.Span(f" · eligible: {page_txt}", className="text-muted"),
+                            html.Span(
+                                f" · precompute: {cache['label']}",
+                                className="text-muted",
+                            ),
+                        ],
+                        className="up-save-row",
+                    )
+                )
+            except Exception as exc:
+                messages.append(upload_error(f"{name}: {exc}"))
+    finally:
+        compute_progress.end()
     if not messages:
         return tuple([no_update] * 9)
     src = _source_select_data()
@@ -993,6 +999,10 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
     if not n_clicks:
         return tuple([no_update] * 10)
     years = {"1": y1 or "", "2": y2 or "", "3": y3 or ""}
+    compute_progress.begin(
+        "Creating multi-year pack…",
+        phase="Creating multi-year pack…",
+    )
     try:
         entry = lib.save_multi_year_pack(
             display_name=name or "",
@@ -1033,6 +1043,8 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
             no_update,
             no_update,
         )
+    finally:
+        compute_progress.end()
 
 
 @callback(
@@ -1082,6 +1094,10 @@ def prefill_roll_meta(pack_id):
 def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
     if not n_clicks:
         return tuple([no_update] * 10)
+    compute_progress.begin(
+        "Creating pack with latest year…",
+        phase="Creating pack with latest year…",
+    )
     try:
         entry = lib.add_latest_year_to_pack(
             pack_id=pack_id or "",
@@ -1124,6 +1140,8 @@ def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
             no_update,
             no_update,
         )
+    finally:
+        compute_progress.end()
 
 @callback(
     Output("up-edit-modal", "is_open"),
@@ -1371,6 +1389,10 @@ def recompute_after_multi_year_edit(pack_id, rev):
         return no_update, no_update, no_update, no_update, no_update
     entry = lib.get_file(pack_id)
     label = lib.display_label(entry) if entry else pack_id
+    compute_progress.begin(
+        f"Updating {label}…",
+        phase="Updating multi-year pack…",
+    )
     try:
         upload_cache.compute_file(pack_id)
         status = upload_cache.cache_status(pack_id)
@@ -1384,6 +1406,8 @@ def recompute_after_multi_year_edit(pack_id, rev):
         )
     except Exception as exc:
         msg = upload_error(f"Update failed: {exc}")
+    finally:
+        compute_progress.end()
     return (
         _files_table(),
         int(rev or 0) + 1,
@@ -1413,6 +1437,10 @@ def compute_saved(n_clicks, rev):
     entry = lib.get_file(file_id)
     if not entry:
         return no_update, no_update, no_update
+    compute_progress.begin(
+        f"Precomputing {lib.display_label(entry)}…",
+        phase="Precomputing…",
+    )
     try:
         upload_cache.compute_file(file_id)
         status = upload_cache.cache_status(file_id)
@@ -1426,6 +1454,8 @@ def compute_saved(n_clicks, rev):
         )
     except Exception as exc:
         msg = upload_error(f"Compute failed: {exc}")
+    finally:
+        compute_progress.end()
     return _files_table(), int(rev or 0) + 1, msg
 
 
@@ -1455,14 +1485,24 @@ def compute_all_saved(n_clicks, rev):
         )
     ok = 0
     errors = []
-    for entry in eligible:
-        file_id = entry.get("id") or ""
-        try:
-            upload_cache.compute_file(file_id)
-            ok += 1
-        except Exception as exc:
+    compute_progress.begin("Precomputing all files…", phase="Precomputing all files…")
+    try:
+        for idx, entry in enumerate(eligible, start=1):
+            file_id = entry.get("id") or ""
             label = lib.display_label(entry)
-            errors.append(f"{label}: {exc}")
+            compute_progress.update(
+                phase=f"File {idx} of {len(eligible)}",
+                message=str(label),
+                done=0,
+                total=0,
+            )
+            try:
+                upload_cache.compute_file(file_id)
+                ok += 1
+            except Exception as exc:
+                errors.append(f"{label}: {exc}")
+    finally:
+        compute_progress.end()
     rows = [
         html.Div(
             [
@@ -1497,26 +1537,30 @@ def download_view(n_clicks):
 clientside_callback(
     """
     function(contents, computeClicks, computeAllClicks, packClicks, rollClicks, editSave, editKind) {
+        var skip = [
+            window.dash_clientside.no_update,
+            window.dash_clientside.no_update,
+        ];
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
-            return window.dash_clientside.no_update;
+            return skip;
         }
         var prop = trig[0].prop_id || "";
         if (prop.indexOf("contents") !== -1 && !trig[0].value) {
-            return window.dash_clientside.no_update;
+            return skip;
         }
         if (prop.indexOf("up-compute-all") !== -1 && !computeAllClicks) {
-            return window.dash_clientside.no_update;
+            return skip;
         }
         if (prop.indexOf("up-my-create") !== -1 && !packClicks) {
-            return window.dash_clientside.no_update;
+            return skip;
         }
         if (prop.indexOf("up-roll-apply") !== -1 && !rollClicks) {
-            return window.dash_clientside.no_update;
+            return skip;
         }
         if (prop.indexOf("up-edit-save") !== -1) {
             if (!editSave || editKind !== "multi_year") {
-                return window.dash_clientside.no_update;
+                return skip;
             }
         }
         if (prop.indexOf("up-compute") !== -1 && prop.indexOf("up-compute-all") === -1) {
@@ -1526,29 +1570,35 @@ clientside_callback(
                 if (clicks[i]) { any = true; break; }
             }
             if (!any) {
-                return window.dash_clientside.no_update;
+                return skip;
             }
         }
-        var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
-        if (label) {
-            if (prop.indexOf("up-edit-save") !== -1) {
-                label.textContent = "Updating multi-year pack…";
-            } else if (prop.indexOf("up-roll-apply") !== -1) {
-                label.textContent = "Creating pack with latest year…";
-            } else if (prop.indexOf("up-my-create") !== -1) {
-                label.textContent = "Creating multi-year pack…";
-            } else if (prop.indexOf("up-compute-all") !== -1) {
-                label.textContent = "Precomputing all files…";
-            } else if (prop.indexOf("n_clicks") !== -1) {
-                label.textContent = "Precomputing…";
-            } else {
-                label.textContent = "Saving and precomputing…";
-            }
+        var label = document.getElementById("up-busy-label")
+            || document.querySelector("#up-busy .rs-shortlist-busy-label");
+        var text = "Saving and precomputing…";
+        if (prop.indexOf("up-edit-save") !== -1) {
+            text = "Updating multi-year pack…";
+        } else if (prop.indexOf("up-roll-apply") !== -1) {
+            text = "Creating pack with latest year…";
+        } else if (prop.indexOf("up-my-create") !== -1) {
+            text = "Creating multi-year pack…";
+        } else if (prop.indexOf("up-compute-all") !== -1) {
+            text = "Precomputing all files…";
+        } else if (prop.indexOf("n_clicks") !== -1) {
+            text = "Precomputing…";
         }
-        return "rs-shortlist-busy is-on t-" + String(Date.now());
+        if (label) { label.textContent = text; }
+        var detail = document.getElementById("up-busy-detail");
+        if (detail) { detail.textContent = ""; }
+        var track = document.getElementById("up-busy-track");
+        if (track) {
+            track.className = "rs-busy-progress is-indeterminate";
+        }
+        return ["rs-shortlist-busy is-on t-" + String(Date.now()), false];
     }
     """,
     Output("up-busy", "className"),
+    Output("up-progress-poll", "disabled"),
     Input("up-upload", "contents"),
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
     Input("up-compute-all", "n_clicks"),
@@ -1564,7 +1614,7 @@ clientside_callback(
     function(deleteClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
-            return window.dash_clientside.no_update;
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var clicks = deleteClicks || [];
         var any = false;
@@ -1572,16 +1622,18 @@ clientside_callback(
             if (clicks[i]) { any = true; break; }
         }
         if (!any) {
-            return window.dash_clientside.no_update;
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        var label = document.querySelector("#up-busy .rs-shortlist-busy-label");
+        var label = document.getElementById("up-busy-label")
+            || document.querySelector("#up-busy .rs-shortlist-busy-label");
         if (label) {
             label.textContent = "Deleting…";
         }
-        return "rs-shortlist-busy is-on t-" + String(Date.now());
+        return ["rs-shortlist-busy is-on t-" + String(Date.now()), true];
     }
     """,
     Output("up-busy", "className", allow_duplicate=True),
+    Output("up-progress-poll", "disabled", allow_duplicate=True),
     Input({"type": "up-delete", "id": ALL}, "n_clicks"),
     prevent_initial_call=True,
 )
@@ -1591,12 +1643,32 @@ clientside_callback(
     function(_rev) {
         var el = document.getElementById("up-busy");
         if (!el || el.className.indexOf("is-on") === -1) {
-            return window.dash_clientside.no_update;
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        return "rs-shortlist-busy";
+        return ["rs-shortlist-busy", true];
     }
     """,
     Output("up-busy", "className", allow_duplicate=True),
+    Output("up-progress-poll", "disabled", allow_duplicate=True),
     Input("up-rev", "data"),
     prevent_initial_call=True,
 )
+
+
+@callback(
+    Output("up-busy-label", "children"),
+    Output("up-busy-track", "className"),
+    Output("up-busy-bar", "style"),
+    Output("up-busy-detail", "children"),
+    Input("up-progress-poll", "n_intervals"),
+)
+def up_poll_progress(_n):
+    props = compute_progress.ui_props()
+    if not props.get("active"):
+        return no_update, no_update, no_update, no_update
+    return (
+        props["label"],
+        props["track_class"],
+        props["bar_style"],
+        props["detail"] or "",
+    )

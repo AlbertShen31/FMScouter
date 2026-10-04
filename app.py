@@ -212,4 +212,6 @@ def sync_mantine_theme(theme):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # threaded=True so progress-poll callbacks can update busy overlays while
+    # a long export / upload precompute request is still running.
+    app.run(debug=True, threaded=True)

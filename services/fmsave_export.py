@@ -992,9 +992,14 @@ def export_moneyball_csv(
         COMPETITION_NAMES_PATH if COMPETITION_NAMES_PATH.is_file() else None
     )
 
+    import services.compute_progress as compute_progress
+
+    compute_progress.update(phase="Opening save…", done=0, total=0)
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with fmsave.open(path, competition_names=competition_names) as career_save:
+            compute_progress.update(phase="Loading players…")
             if scope == "squad":
                 managed = career_save.managed_clubs()
                 if not managed:
@@ -1015,6 +1020,12 @@ def export_moneyball_csv(
             uid_set = {p.uid for p in player_list}
             club_divisions = _build_club_divisions(career_save)
 
+            compute_progress.update(
+                phase="Loading season stats…",
+                done=0,
+                total=len(player_list),
+            )
+
             season_by_uid: dict[int, list[Any]] = {}
             for record in career_save.player_season_stats():
                 if record.player_uid not in uid_set:
@@ -1023,7 +1034,14 @@ def export_moneyball_csv(
                     continue
                 season_by_uid.setdefault(record.player_uid, []).append(record)
 
-            for player in player_list:
+            total_players = len(player_list)
+            step = 1 if total_players <= 200 else max(1, total_players // 40)
+            compute_progress.update(
+                phase="Exporting players…",
+                done=0,
+                total=total_players,
+            )
+            for player_idx, player in enumerate(player_list, start=1):
                 season = _pick_season_row(
                     season_by_uid.get(player.uid, []),
                     club_uid=player.club_uid,
@@ -1032,10 +1050,21 @@ def export_moneyball_csv(
                 if player.club_uid is not None:
                     division = club_divisions.get(int(player.club_uid), "")
                 rows.append(_player_row(player, season, division=division))
+                if (
+                    player_idx == 1
+                    or player_idx == total_players
+                    or player_idx % step == 0
+                ):
+                    compute_progress.tick(
+                        player_idx,
+                        total_players,
+                        phase="Exporting players…",
+                    )
 
     if not rows:
         raise ValueError("No players matched the selected scope/filters.")
 
+    compute_progress.update(phase="Writing CSV…", done=len(rows), total=len(rows))
     columns = _column_order(rows[0])
     frame = pd.DataFrame(rows, columns=columns)
     buffer = io.StringIO()
