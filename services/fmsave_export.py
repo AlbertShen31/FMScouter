@@ -266,37 +266,69 @@ def _pos_label(code: str) -> str:
     return _POS_CODE_TO_LABEL.get(str(code).upper(), str(code))
 
 
+# Pitch order matching Moneyball Position strings (D before WB before DM …).
+_STEM_ORDER: dict[str, int] = {
+    "GK": 0,
+    "SW": 1,
+    "D": 2,
+    "WB": 3,
+    "DM": 4,
+    "M": 5,
+    "AM": 6,
+    "ST": 7,
+}
+
+
+def _merge_position_codes(
+    *groups: tuple[str, ...] | list[str] | None,
+) -> list[str]:
+    """Dedupe position codes, keeping first-seen order across groups."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for group in groups:
+        if not group:
+            continue
+        for code in group:
+            key = str(code).upper()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+    return out
+
+
 def _combine_positions(codes: tuple[str, ...] | list[str] | None) -> str:
-    """Turn ('AML','AMR') into ``AM (LR)``-style Moneyball Position text."""
+    """Turn ('AML','AMR') into ``AM (RL)``-style Moneyball Position text."""
     if not codes:
         return ""
     labels = [_pos_label(c) for c in codes]
     # Group by stem before " ("
     groups: dict[str, list[str]] = {}
-    order: list[str] = []
     for label in labels:
         if label in {"GK", "SW", "DM"} or " (" not in label:
-            if label not in groups:
-                groups[label] = []
-                order.append(label)
+            groups.setdefault(label, [])
             continue
         stem, rest = label.split(" (", 1)
         side = rest.rstrip(")")
-        if stem not in groups:
-            groups[stem] = []
-            order.append(stem)
-        if side and side not in groups[stem]:
-            groups[stem].append(side)
+        bucket = groups.setdefault(stem, [])
+        # Expand multi-letter sides (e.g. "RL") into individual R/L/C chars.
+        for ch in side or "":
+            if ch in "RLC" and ch not in bucket:
+                bucket.append(ch)
+    stems = sorted(
+        groups,
+        key=lambda s: (_STEM_ORDER.get(s, 50), s),
+    )
     parts: list[str] = []
-    for stem in order:
+    for stem in stems:
         sides = groups[stem]
         if not sides:
             parts.append(stem)
         else:
-            # Prefer L then C then R order
+            # Moneyball / FM export convention: R, then L, then C.
             ranked = sorted(
                 sides,
-                key=lambda s: {"L": 0, "C": 1, "R": 2}.get(s, 9),
+                key=lambda s: {"R": 0, "L": 1, "C": 2}.get(s, 9),
             )
             parts.append(f"{stem} ({''.join(ranked)})")
     return ", ".join(parts)
@@ -614,7 +646,13 @@ def _identity_columns(player: Any) -> dict[str, str]:
         "Age": "" if player.age is None else str(player.age),
         "Club": player.club_name or "",
         "Best Pos": _best_pos(player.natural_positions),
-        "Position": _combine_positions(player.natural_positions),
+        # Natural + accomplished in Position (Moneyball-style); accomplished alone in Sec.
+        "Position": _combine_positions(
+            _merge_position_codes(
+                player.natural_positions,
+                player.accomplished_positions,
+            )
+        ),
         "Sec. Position": _combine_positions(player.accomplished_positions),
         "Height": _format_height_cm(player.height_cm),
         "Left Foot": _format_foot(player.left_foot),

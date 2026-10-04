@@ -1916,9 +1916,13 @@ def expand_role_profile_rows(
     role_columns = expand_view_role_columns(
         view_roles, combos, include_parts=not hybrids_only
     )
+    try:
+        from services.role_scores_view_cache import rows_from_payload
+    except Exception:  # pragma: no cover - import safety
+        rows_from_payload = lambda p: list((p or {}).get("rows") or [])  # type: ignore
     rows_by_key = {
         player_row_key(row): row
-        for row in ((payload or {}).get("rows") or [])
+        for row in rows_from_payload(payload if isinstance(payload, dict) else None)
         if player_row_key(row)
     }
     role_by_key = {

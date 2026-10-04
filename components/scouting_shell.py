@@ -1722,9 +1722,13 @@ def register_marks_callbacks(
                 size = int(page_size or len(rows) or 50)
             except (TypeError, ValueError):
                 page, size = 0, len(rows) or 50
-            start = max(0, page * size)
-            end = min(len(rows), start + size)
-            page_ids = [key for row in rows[start:end] if (key := key_fn(row))]
+            # Custom pagination already sends only the current page as `data`.
+            if len(rows) <= size:
+                page_ids = [key for row in rows if (key := key_fn(row))]
+            else:
+                start = max(0, page * size)
+                end = min(len(rows), start + size)
+                page_ids = [key for row in rows[start:end] if (key := key_fn(row))]
             if not page_ids:
                 return no_update
 

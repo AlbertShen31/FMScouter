@@ -128,6 +128,7 @@ from components.player_table import (
 import services.export_library as lib
 import services.formations as fm
 import services.role_config as rc
+import services.role_scores_view_cache as rs_view_cache
 import services.ui_settings as us
 
 register_page(__name__, path="/", name="Role scores")
@@ -692,6 +693,11 @@ def _sort_by_focus(focus_roles) -> list[dict]:
     return [{"column_id": focused[-1], "direction": "desc"}]
 
 
+def _payload_rows(payload) -> list[dict]:
+    """Scored shortlist rows from server view-cache (or legacy inline rows)."""
+    return rs_view_cache.rows_from_payload(payload if isinstance(payload, dict) else None)
+
+
 def _find_scored_row(payload, name: str, club: str = "", *, unique_id: str = "") -> dict | None:
     if not isinstance(payload, dict):
         return None
@@ -699,11 +705,12 @@ def _find_scored_row(payload, name: str, club: str = "", *, unique_id: str = "")
     unique_id = (unique_id or "").strip()
     club = (club or "").strip()
     club_key = "" if club in ("", "-") else club
+    rows = _payload_rows(payload)
     if unique_id:
-        for row in payload.get("rows") or []:
+        for row in rows:
             if str(row.get("Unique ID") or "").strip() == unique_id:
                 return row
-    for row in payload.get("rows") or []:
+    for row in rows:
         if str(row.get("Name") or "").strip() != name:
             continue
         if unique_id and str(row.get("Unique ID") or "").strip():
@@ -714,7 +721,7 @@ def _find_scored_row(payload, name: str, club: str = "", *, unique_id: str = "")
         if row_club == club_key:
             return row
     if name and not unique_id:
-        for row in payload.get("rows") or []:
+        for row in rows:
             if str(row.get("Name") or "").strip() == name:
                 return row
     return None
@@ -1142,7 +1149,6 @@ def layout():
         dcc.Store(id="rs-focus-role", data=[]),
         dcc.Store(id="rs-set-pieces-prev", data=[]),
         dcc.Store(id="rs-table-cols-sig", data=""),
-        dcc.Store(id="rs-table-cache"),
         dcc.Store(id="rs-hydrated", data=False),
         dcc.Store(id="rs-persist-boot"),
         dcc.Store(id="rs-min-score-auto", data={"manual": False, "floor": None}),
@@ -1707,6 +1713,7 @@ def layout():
                                 player_data_table(
                                     prefix="rs",
                                     page_size=us.page_size(settings),
+                                    page_action="custom",
                                     style_cell_props=style_cell(text_align="right"),
                                     style_cell_conditional_rules=style_cell_conditional(),
                                     style_header_props=style_header(),
@@ -2966,7 +2973,7 @@ def sync_auto_min_score(payload, settings, current, auto_state):
     """Keep Floor on the second-highest occupied band until the user edits it."""
     auto_state = dict(auto_state or {})
     settings = us.normalize(settings)
-    rows = (payload or {}).get("rows") if isinstance(payload, dict) else None
+    rows = _payload_rows(payload)
     role_cols = (
         list((payload or {}).get("roles") or []) if isinstance(payload, dict) else []
     )
@@ -3039,7 +3046,9 @@ def sync_auto_min_score(payload, settings, current, auto_state):
 
 def _workflow_visibility(parsed, payload):
     has_csv = bool(parsed and parsed.get("players"))
-    has_scores = isinstance(payload, dict) and "rows" in payload
+    has_scores = rs_view_cache.payload_has_scores(
+        payload if isinstance(payload, dict) else None
+    )
     setup_hidden = not has_csv
     results_hidden = not has_scores
     placeholder_hidden = not (has_csv and not has_scores)
@@ -3065,7 +3074,7 @@ def reveal_workflow(parsed, payload):
     Input("rs-rows", "data"),
 )
 def toggle_multi_year_status_filter(payload):
-    rows = (payload or {}).get("rows") if isinstance(payload, dict) else None
+    rows = _payload_rows(payload)
     if not rows:
         return True, True
     for row in rows:
@@ -3846,8 +3855,33 @@ def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_f
             )
         )
 
-    rows = apply_combos(
+    # Project + copy before apply_combos so upload-cache LRU rows are never mutated.
+    role_cols = []
+    for role_id in needed:
+        meta = role_meta(role_id) or {}
+        col = str(meta.get("column") or "").strip()
+        if col:
+            role_cols.append(col)
+    piece_score_cols = {
+        str(profile.get("score") or "").strip()
+        for profile in (profiles or [])
+        if profile.get("score")
+    }
+    piece_score_cols.update(
+        str(col or "").strip()
+        for col in set_piece_columns(
+            [p["id"] for p in (profiles or []) if p.get("id")],
+            profiles,
+        )
+        if col
+    )
+    projected = rs_view_cache.project_role_rows(
         scored,
+        role_labels=role_cols,
+        extra_keys=piece_score_cols,
+    )
+    rows = apply_combos(
+        projected,
         combos,
         ip_weight=hybrid_w["ip"],
         oop_weight=hybrid_w["oop"],
@@ -3867,14 +3901,24 @@ def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_f
         sort = _sort_by_focus(focus)
     from scoring.multi_year import list_without_growth_fields
 
-    # Growth maps stay on disk; client stores must stay slim for filter callbacks.
+    # Keep the full matrix server-side; Dash only gets a slim handle.
+    slim_rows = list_without_growth_fields(rows)
+    cache_id = rs_view_cache.put_rows(
+        slim_rows,
+        meta={
+            "file_id": squad_file_id or "",
+            "scouting_file_id": scout_file_id or "",
+            "role_ids": list(needed),
+        },
+    )
     return (
         {
+            "cache_id": cache_id,
             "filename": parsed.get("filename", "export.csv"),
             "file_id": squad_file_id or "",
             "scouting_file_id": scout_file_id or "",
             "has_scouting": bool(scout_players),
-            "rows": list_without_growth_fields(rows),
+            "n": len(slim_rows),
             "roles": labels,
             "role_ids": needed,
             "combos": combos,
@@ -3883,40 +3927,6 @@ def rescore(parsed, scout_parsed, role_ids, combos, pack_id, settings, current_f
         sort,
     )
 
-
-
-# Triggers that can reuse wide markdown in rs-table-cache (re-filter / re-sort /
-# column visibility only). Must include rs-table.sort_by: focus clicks and set-piece
-# adds update focus/pieces + sort together, and omitting sort forced a full rebuild.
-_CACHE_REUSE_TRIGGERS = {
-    "rs-focus-role.data",
-    "rs-set-pieces.value",
-    "rs-hybrids-only.checked",
-    "rs-table.sort_by",
-    "rs-search.value",
-    "rs-age.value",
-    "rs-min-score.value",
-    "rs-min-score-quantifier.value",
-    "rs-min-score-scope.value",
-    "rs-pos-match.value",
-    "rs-club-filter.value",
-    "rs-status-filter.value",
-    "rs-set-piece-min-score.value",
-    "rs-pos-filter.data",
-    "rs-foot-filter.data",
-    "rs-archetypes.data",
-    "rs-archetype-pct-basis.data",
-}
-_POS_BAR_TRIGGERS = {
-    "rs-pos-filter.data",
-    "rs-foot-filter.data",
-}
-
-
-def _all_scored_role_columns(payload: dict | None, combos) -> list[str]:
-    """Every scored role column (with hybrid parts) for wide table data."""
-    labels = list((payload or {}).get("roles") or [])
-    return expand_view_role_columns(labels, combos, include_parts=True)
 
 
 def _visible_shortlist_cols(
@@ -3949,76 +3959,13 @@ def _visible_shortlist_cols(
     return table_cols, score_cols, piece_cols
 
 
-def _data_shortlist_cols(
-    *,
-    settings,
-    payload: dict,
-    combos,
-    set_pieces,
-    finance_available: bool = True,
-) -> tuple[list[str], list[str]]:
-    """Wide data columns: identity + all set-piece scores + all scored roles."""
-    all_role_cols = _all_scored_role_columns(payload, combos)
-    all_piece_ids = [p["id"] for p in us.set_piece_profiles(settings)]
-    piece_cols = set_piece_columns(all_piece_ids, us.set_piece_profiles(settings))
-    score_cols = [
-        profile["score"]
-        for profile in us.set_piece_profiles(settings)
-        if profile.get("score")
-    ] + all_role_cols
-    table_cols = list(us.shortlist_columns_for("role_scores", settings))
-    table_cols = us.with_shortlist_finance_columns(
-        table_cols,
-        settings,
-        page="role_scores",
-        available=finance_available,
-    )
-    table_cols.extend(piece_cols)
-    table_cols.extend(all_role_cols)
-    return table_cols, score_cols
-
-
-def _table_data_has_columns(table_data, col_ids: list[str]) -> bool:
-    if not table_data or not col_ids:
-        return bool(table_data is not None)
-    sample = table_data[0] if table_data else {}
-    return all(col in sample for col in col_ids if col not in TABLE_TEXT_COLS)
-
-
-def _subset_table_data_by_keys(
-    table_data: list[dict],
-    tooltip_data: list | None,
-    ordered_keys: list[str],
-) -> tuple[list[dict], list] | None:
-    """Reorder/subset built rows by player key. None if any key is missing."""
-    tips = list(tooltip_data or [])
-    if len(tips) < len(table_data):
-        tips.extend({} for _ in range(len(table_data) - len(tips)))
-    by_key = {}
-    tip_by_key = {}
-    for idx, row in enumerate(table_data):
-        key = str(row.get("id") or row.get("_key") or "").strip()
-        if key:
-            by_key[key] = row
-            tip_by_key[key] = tips[idx] if idx < len(tips) else {}
-    out_rows = []
-    out_tips = []
-    for key in ordered_keys:
-        row = by_key.get(key)
-        if row is None:
-            return None
-        out_rows.append(row)
-        out_tips.append(tip_by_key.get(key) or {})
-    return out_rows, out_tips
-
-
 @callback(
     Output("rs-source-legend", "children"),
     Input("rs-rows", "data"),
 )
 def sync_rs_source_legend(payload):
     active = bool((payload or {}).get("has_scouting")) or has_scouting_rows(
-        (payload or {}).get("rows")
+        _payload_rows(payload)
     )
     return export_source_legend(active=active) or []
 
@@ -4037,13 +3984,13 @@ def sync_rs_source_legend(payload):
     Output("rs-table", "style_table"),
     Output("rs-table", "page_size"),
     Output("rs-table", "page_current"),
+    Output("rs-table", "page_count"),
     Output("rs-table", "selected_row_ids"),
     Output("rs-table-cols-sig", "data"),
     Output("rs-table-caption", "children"),
     Output("rs-table-empty", "children"),
     Output("rs-table-empty", "hidden"),
     Output("rs-table-shell", "hidden"),
-    Output("rs-table-cache", "data"),
     Input("rs-rows", "data"),
     Input("rs-focus-role", "data"),
     Input("rs-search", "value"),
@@ -4063,13 +4010,11 @@ def sync_rs_source_legend(payload):
     Input("rs-archetype-pct-basis", "data"),
     Input("rs-page-size", "value"),
     Input("rs-table", "sort_by"),
+    Input("rs-table", "page_current"),
     Input("theme", "data"),
     Input("ui-settings", "data"),
     Input("rs-hydrated", "data"),
     State("rs-table-cols-sig", "data"),
-    State("rs-table", "data"),
-    State("rs-table", "tooltip_data"),
-    State("rs-table-cache", "data"),
     State("rs-squad-marked", "data"),
 )
 def render_shortlist(
@@ -4092,376 +4037,18 @@ def render_shortlist(
     archetype_pct_basis,
     page_size,
     sort_by,
+    page_current,
     theme,
     settings,
     hydrated,
     cols_sig,
-    table_data,
-    tooltip_data_state,
-    table_cache,
     squad_marked,
 ):
     # Wait for persist hydrate so filters are restored before the first table build.
     if not hydrated:
         return (no_update,) * 20
 
-    triggered = {
-        (item.get("prop_id") or "").split(".")[0]
-        for item in (ctx.triggered or [])
-        if item.get("prop_id")
-    }
-    # Page-size only: update pagination without rebuilding every cell.
-    if triggered == {"rs-page-size"}:
-        try:
-            page_size_i = int(page_size or 50)
-        except (TypeError, ValueError):
-            page_size_i = 50
-        selected_ids = _marked_selected_ids(table_data, squad_marked)
-        return (
-            (no_update,) * 11
-            + (page_size_i, 0, selected_ids)
-            + (no_update,) * 6
-        )
-
-    # Pure header-sort: reorder already-built markdown rows. Avoids re-filtering and
-    # rebuilding every score/Feet cell (the main sort lag source).
     triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
-    if (
-        triggered_props == {"rs-table.sort_by"}
-        and table_data
-        and payload
-        and payload.get("rows")
-    ):
-        combos = normalize_combos(payload.get("combos"))
-        view_roles = _hybrid_only_roles(
-            _resolved_view_roles(payload, focus_role),
-            combos,
-            bool(hybrids_only),
-        )
-        if view_roles:
-            quantifier = _normalize_min_score_quantifier(min_score_quantifier)
-            scope = _normalize_min_score_scope(min_score_scope)
-            score_cols = _min_score_scope_columns(view_roles, scope, combos)
-            raw_by_key = {
-                key: row
-                for row in payload["rows"]
-                if (key := player_row_key(row))
-            }
-            new_data, new_tips = _reorder_built_rows(
-                list(table_data),
-                tooltip_data_state,
-                raw_by_key=raw_by_key,
-                sort_by=sort_by,
-                score_cols=score_cols,
-                min_score_quantifier=quantifier,
-            )
-            selected_ids = _marked_selected_ids(new_data, squad_marked)
-            return (
-                no_update,
-                no_update,
-                no_update,
-                new_data,
-                no_update,
-                no_update,
-                new_tips,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                selected_ids,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                no_update,
-                no_update,  # cache
-            )
-
-    # Focus / filter / set-piece / hybrids / sort: change visible columns and
-    # row membership from the wide markdown cache — no cell rebuild.
-    # Loosening a filter past the cached row set falls through (subset → None).
-    if (
-        triggered_props
-        and triggered_props.issubset(_CACHE_REUSE_TRIGGERS)
-        and payload
-        and payload.get("rows")
-    ):
-        cache_blob = table_cache if isinstance(table_cache, dict) else {}
-        cache_rows = cache_blob.get("data") or table_data
-        cache_tips = cache_blob.get("tips")
-        if cache_tips is None:
-            cache_tips = tooltip_data_state
-        settings = us.normalize(settings)
-        hybrids_only = bool(hybrids_only)
-        page_size = int(page_size or 50)
-        combos = normalize_combos(payload.get("combos"))
-        view_roles = _hybrid_only_roles(
-            _resolved_view_roles(payload, focus_role),
-            combos,
-            hybrids_only,
-        )
-        min_score = us.parse_score_floor(min_score)
-        quantifier = _normalize_min_score_quantifier(min_score_quantifier)
-        scope = _normalize_min_score_scope(min_score_scope)
-        score_cols = _min_score_scope_columns(view_roles, scope, combos)
-        pos_match = _normalize_pos_match(pos_match)
-        visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
-            settings=settings,
-            view_roles=view_roles,
-            combos=combos,
-            hybrids_only=hybrids_only,
-            set_pieces=set_pieces,
-            finance_available=lib.has_shortlist_finance(
-                (payload or {}).get("file_id")
-            ),
-        )
-        visible_cols = _inject_multi_year_status_col(
-            visible_cols, payload.get("rows")
-        )
-        if view_roles and cache_rows and _table_data_has_columns(
-            cache_rows, visible_score_cols
-        ):
-            rows = payload["rows"]
-            query = (query or "").strip().lower()
-            max_age = 99 if max_age is None else int(max_age)
-            set_piece_min = us.parse_score_floor(set_piece_min)
-            chosen_pieces = _as_list(set_pieces)
-            marked_keys = set(_as_list(squad_marked))
-            pos_filter = pos_filter or "all"
-            foot_filter = foot_filter or ""
-            club_filter = _normalize_club_filter(club_filter)
-            status_filter = _normalize_status_filter(status_filter)
-            foot_thresholds = settings["foot_thresholds"]
-            combo_by_col = _combo_columns_by_label(combos)
-            archetype_keys = _archetype_match_keys(
-                payload,
-                archetypes,
-                settings,
-                pct_basis=archetype_pct_basis,
-            )
-            configured_years = _configured_years_for_payload(payload)
-            multi_year = bool(configured_years) or any(
-                (r or {}).get("multi_year_status") or (r or {}).get("years_present")
-                for r in rows
-            )
-
-            filtered = []
-            for row in rows:
-                if pos_filter != "all" and pos_filter not in _row_pos_groups(row):
-                    continue
-                if foot_filter and not foot_match(row, foot_filter, foot_thresholds):
-                    continue
-                if not _passes_club_filter(row, club_filter):
-                    continue
-                if not _passes_status_filter(
-                    row,
-                    status_filter,
-                    configured=_row_configured_years(row, payload),
-                    multi_year=multi_year,
-                ):
-                    continue
-                if archetype_keys is not None:
-                    key = player_row_key(row)
-                    if not key or key not in archetype_keys:
-                        continue
-                pos_elig = (
-                    _position_eligibility(row, view_roles, combo_by_col=combo_by_col)
-                    or "no"
-                )
-                if not _passes_pos_match(pos_elig, pos_match):
-                    continue
-                if to_int(row.get("Age")) > max_age:
-                    continue
-                if not _passes_min_score(
-                    row,
-                    view_roles,
-                    min_score,
-                    quantifier,
-                    scope,
-                    combos,
-                ):
-                    continue
-                if set_piece_min > 0 and chosen_pieces:
-                    piece_filter_cols = [
-                        set_piece_filter_columns(piece_id)
-                        for piece_id in chosen_pieces
-                    ]
-                    if any(
-                        _cell_number(row.get(col)) < set_piece_min
-                        for col in piece_filter_cols
-                        if col
-                    ):
-                        continue
-                if query:
-                    blob = (
-                        f"{row.get('Name','')} {row.get('Club','')} "
-                        f"{row.get('Position','')} {row.get('Division','')}".lower()
-                    )
-                    if query not in blob:
-                        continue
-                row = dict(row)
-                row["_PosEligible"] = pos_elig
-                row["PosGroups"] = _row_pos_groups(row)
-                filtered.append(row)
-
-            _sort_table_rows(filtered, sort_by, score_cols, quantifier)
-            ordered_keys = [
-                key
-                for row in filtered
-                if (key := player_row_key(row))
-            ]
-            elig_by_key = {
-                key: (row.get("_PosEligible") or "no")
-                for row in filtered
-                if (key := player_row_key(row))
-            }
-            current_keys = [
-                str(row.get("id") or row.get("_key") or "").strip()
-                for row in (table_data or [])
-            ]
-            columns = _table_columns(
-                visible_cols,
-                name_markdown=has_scouting_rows(payload.get("rows")),
-                salary_period=us.salary_period(settings),
-            )
-            header_tips = _header_tooltips(
-                visible_cols,
-                combos=combos,
-                salary_period=us.salary_period(settings),
-            )
-            page_current, new_sig = _table_page_state(columns, cols_sig)
-            style_data, style_header, table_css_rules = _cached_table_chrome(
-                visible_score_cols, settings, theme
-            )
-            focused = [
-                role for role in _focus_roles(focus_role) if role in view_roles
-            ]
-            focus_note = f" Focused: {', '.join(focused)}." if focused else ""
-            hybrid_note = (
-                " IP/OOP roles hidden."
-                if hybrids_only and combo_column_labels(combos)
-                else ""
-            )
-            min_note = _min_score_caption_note(
-                min_score,
-                view_roles,
-                quantifier,
-                scope,
-                combos,
-            )
-            caption = (
-                f"{len(filtered)} of {len(rows)} players"
-                f"{focus_note}{hybrid_note}{min_note}"
-                f" · {payload.get('filename')}."
-            )
-            # Pos/foot chips live outside the table; refresh only when they change.
-            pos_bar_out = (
-                _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
-                if triggered_props & _POS_BAR_TRIGGERS
-                else no_update
-            )
-            # Same row set + no focus change: only swap visible columns.
-            # Focus still needs a data pass so PosEligible highlighting stays correct.
-            # Sort-only with unchanged keys is handled by the pure-sort path above;
-            # focus+sort still needs the subset pass below for PosEligible + order.
-            if (
-                ordered_keys == current_keys
-                and "rs-focus-role.data" not in triggered_props
-                and "rs-table.sort_by" not in triggered_props
-            ):
-                new_data = no_update
-                new_tips = no_update
-                style_table = no_update
-                no_matches = not ordered_keys
-                empty_panel = (
-                    _no_match_placeholder(
-                        pos_match=pos_match,
-                        club_filter=club_filter,
-                        status_filter=status_filter,
-                        pos_filter=pos_filter,
-                        foot_filter=foot_filter,
-                        min_score=min_score,
-                        set_piece_min=set_piece_min,
-                        query=query,
-                        max_age=max_age,
-                        archetypes=archetypes,
-                    )
-                    if no_matches
-                    else None
-                )
-                return (
-                    pos_bar_out,
-                    no_update,
-                    no_update,
-                    new_data,
-                    columns,
-                    header_tips,
-                    new_tips,
-                    style_data,
-                    style_header,
-                    table_css_rules,
-                    style_table,
-                    page_size,
-                    page_current,
-                    no_update,
-                    new_sig,
-                    caption,
-                    empty_panel,
-                    not no_matches,
-                    no_matches,
-                    no_update,  # keep wide cache
-                )
-            subset = _subset_table_data_by_keys(
-                list(cache_rows), cache_tips, ordered_keys
-            )
-            if subset is not None:
-                new_data, new_tips = subset
-                for item in new_data:
-                    key = str(item.get("id") or item.get("_key") or "").strip()
-                    if key in elig_by_key:
-                        item["PosEligible"] = elig_by_key[key]
-                no_matches = not new_data
-                empty_panel = (
-                    _no_match_placeholder(
-                        pos_match=pos_match,
-                        club_filter=club_filter,
-                        status_filter=status_filter,
-                        pos_filter=pos_filter,
-                        foot_filter=foot_filter,
-                        min_score=min_score,
-                        set_piece_min=set_piece_min,
-                        query=query,
-                        max_age=max_age,
-                        archetypes=archetypes,
-                    )
-                    if no_matches
-                    else None
-                )
-                selected_ids = _marked_selected_ids(new_data, squad_marked)
-                return (
-                    pos_bar_out,
-                    no_update,
-                    no_update,
-                    new_data,
-                    columns,
-                    header_tips,
-                    new_tips,
-                    style_data,
-                    style_header,
-                    table_css_rules,
-                    _table_style_table(len(new_data), page_size),
-                    page_size,
-                    page_current,
-                    selected_ids,
-                    new_sig,
-                    caption,
-                    empty_panel,
-                    not no_matches,
-                    no_matches,
-                    no_update,  # keep wide cache
-                )
 
     settings = us.normalize(settings)
     bands = settings["bands"]
@@ -4471,12 +4058,18 @@ def render_shortlist(
     empty_header = _score_header_styles([], theme)
     empty_css = _table_css([], theme)
     hybrids_only = bool(hybrids_only)
-    page_size = int(page_size or 50)
+    try:
+        page_size = int(page_size or 50)
+    except (TypeError, ValueError):
+        page_size = 50
+    page_size = max(1, page_size)
     empty_table_style = _table_style_table(0, page_size)
     empty_page, empty_sig = _table_page_state(empty_cols, cols_sig)
     pos_filter = pos_filter or "all"
     foot_filter = foot_filter or ""
-    if not payload or not payload.get("rows"):
+
+    rows = _payload_rows(payload)
+    if not payload or not rows:
         return (
             None,
             [],
@@ -4490,16 +4083,16 @@ def render_shortlist(
             empty_css,
             empty_table_style,
             page_size,
-            empty_page,
+            0,
+            1,
             [],
             empty_sig,
             "Load a saved file and pick at least one role in section 2.",
             None,
             True,
             False,
-            None,
         )
-    rows = payload["rows"]
+
     role_ids = payload.get("role_ids") or []
     combos = normalize_combos(payload.get("combos"))
     view_roles = _hybrid_only_roles(
@@ -4524,15 +4117,16 @@ def render_shortlist(
             empty_css,
             empty_table_style,
             page_size,
-            empty_page,
+            0,
+            1,
             [],
             empty_sig,
             "Pick at least one role in section 2.",
             None,
             True,
             False,
-            None,
         )
+
     query = (query or "").strip().lower()
     max_age = 99 if max_age is None else int(max_age)
     min_score = us.parse_score_floor(min_score)
@@ -4559,6 +4153,7 @@ def render_shortlist(
     hybrid_w = us.hybrid_weights(settings)
 
     filtered = []
+    elig_by_key: dict[str, str] = {}
     for row in rows:
         if pos_filter != "all" and pos_filter not in _row_pos_groups(row):
             continue
@@ -4606,26 +4201,21 @@ def render_shortlist(
             ):
                 continue
         if query:
-            blob = f"{row.get('Name','')} {row.get('Club','')} {row.get('Position','')} {row.get('Division','')}".lower()
+            blob = (
+                f"{row.get('Name','')} {row.get('Club','')} "
+                f"{row.get('Position','')} {row.get('Division','')}".lower()
+            )
             if query not in blob:
                 continue
-        row = dict(row)
-        row["_PosEligible"] = pos_elig
-        row["PosGroups"] = _row_pos_groups(row)
+        # Keep original row refs (no 13k dict copies); PosEligible applied on page build.
+        key = player_row_key(row)
+        if key:
+            elig_by_key[key] = pos_elig
         filtered.append(row)
 
     _sort_table_rows(filtered, sort_by, score_cols, quantifier)
 
-    # Wide row payload (all roles + all set-piece scores) so later focus / set-piece /
-    # hybrids toggles can change `columns` without rebuilding markdown cells.
     finance_available = lib.has_shortlist_finance((payload or {}).get("file_id"))
-    data_cols, data_score_cols = _data_shortlist_cols(
-        settings=settings,
-        payload=payload,
-        combos=combos,
-        set_pieces=set_pieces,
-        finance_available=finance_available,
-    )
     visible_cols, visible_score_cols, _piece_cols = _visible_shortlist_cols(
         settings=settings,
         view_roles=view_roles,
@@ -4634,10 +4224,8 @@ def render_shortlist(
         set_pieces=set_pieces,
         finance_available=finance_available,
     )
-    data_cols = _inject_multi_year_status_col(data_cols, filtered)
     visible_cols = _inject_multi_year_status_col(visible_cols, filtered)
     highlight_source = has_scouting_rows(filtered)
-    score_cols = visible_score_cols
     wage_period = us.salary_period(settings)
     columns = _table_columns(
         visible_cols,
@@ -4651,20 +4239,52 @@ def render_shortlist(
         header_tips["Name"] = (
             "Colored by export: Squad (club/international) vs Scouting (transfer targets)"
         )
-    table_rows = []
-    tooltip_data = []
-    data_score_set = set(data_score_cols)
-    # Hoist once — per-cell band_text_color/normalize was ~0.5ms × tens of thousands.
+
+    total = len(filtered)
+    page_count = max(1, (total + page_size - 1) // page_size) if total else 1
+    try:
+        page_idx = int(page_current or 0)
+    except (TypeError, ValueError):
+        page_idx = 0
+    # Reset to first page when filters/roles/sort change (not on page flips).
+    page_flip_only = triggered_props == {"rs-table.page_current"}
+    col_page, new_sig = _table_page_state(columns, cols_sig)
+    if not page_flip_only:
+        if col_page == 0 or triggered_props & {
+            "rs-rows.data",
+            "rs-search.value",
+            "rs-age.value",
+            "rs-min-score.value",
+            "rs-min-score-quantifier.value",
+            "rs-min-score-scope.value",
+            "rs-pos-match.value",
+            "rs-club-filter.value",
+            "rs-status-filter.value",
+            "rs-hybrids-only.checked",
+            "rs-set-pieces.value",
+            "rs-set-piece-min-score.value",
+            "rs-pos-filter.data",
+            "rs-foot-filter.data",
+            "rs-archetypes.data",
+            "rs-archetype-pct-basis.data",
+            "rs-focus-role.data",
+            "rs-table.sort_by",
+            "rs-page-size.value",
+        }:
+            page_idx = 0
+    page_idx = max(0, min(page_idx, page_count - 1))
+    start = page_idx * page_size
+    page_rows = filtered[start : start + page_size]
+
     band_colors = us.band_text_colors(settings, theme=theme)
     limited_divisions = _limited_tracking_divisions(payload)
     from components.multi_year_ui import score_year_suffix_html, status_markdown
     import services.upload_cache as upload_cache
 
-    # Rehydrate growth maps from disk once per rebuild (stripped from rs-rows).
     growth_indexes: dict[str, dict] = {}
     needs_growth = any(
         (r or {}).get("multi_year_status") or (r or {}).get("years_present")
-        for r in filtered
+        for r in page_rows
     )
     if needs_growth:
         for fid in _payload_file_ids(payload):
@@ -4689,14 +4309,18 @@ def render_shortlist(
                 return merged
         return base
 
-    for row in filtered:
+    visible_score_set = set(visible_score_cols)
+    table_rows = []
+    tooltip_data = []
+    for row in page_rows:
         row_key = player_row_key(row)
         row_years = _row_configured_years(row, payload)
         growth_row = _row_with_growth(row)
         item = {}
         tip_row: dict[str, str] = {}
-        for key in data_cols:
-            if key in data_score_set:
+        pos_elig = elig_by_key.get(row_key) or "no"
+        for key in visible_cols:
+            if key in visible_score_set:
                 raw = row.get(key)
                 band = None
                 try:
@@ -4766,7 +4390,7 @@ def render_shortlist(
         item["salary_currency"] = row.get("salary_currency")
         item["salary"] = row.get("salary") or row.get("Salary")
         item["transfer_value"] = row.get("transfer_value") or row.get("Transfer Value")
-        item["PosEligible"] = row.get("_PosEligible") or "no"
+        item["PosEligible"] = pos_elig
         item["multi_year_status"] = (
             _row_multi_year_status(row, row_years)
             or row.get("multi_year_status")
@@ -4786,9 +4410,7 @@ def render_shortlist(
             )
         )
         tip_row.update(nation_tooltip_entry(row=row))
-        tip_row.update(
-            finance_tooltip_entry(item, salary_period=wage_period)
-        )
+        tip_row.update(finance_tooltip_entry(item, salary_period=wage_period))
         item["PersonalityTier"] = row.get("PersonalityTier") or ""
         item["Unique ID"] = str(row.get("Unique ID") or "").strip()
         if row_key:
@@ -4796,14 +4418,16 @@ def render_shortlist(
             item["_key"] = row_key
         table_rows.append(item)
         tooltip_data.append(tip_row)
-    # Cache keeps wide score cells for the current row set so column toggles can
-    # swap visibility without rebuilding markdown.
-    wide_cache = {"data": table_rows, "tips": tooltip_data}
+
     extras = []
     if pos_filter != "all":
         extras.append(pos_filter)
     if foot_filter:
-        extras.append({"foot-L": "left foot", "foot-R": "right foot", "foot-B": "both feet"}[foot_filter])
+        extras.append(
+            {"foot-L": "left foot", "foot-R": "right foot", "foot-B": "both feet"}[
+                foot_filter
+            ]
+        )
     extra = f" Position/foot: {', '.join(extras)}." if extras else ""
     piece_note = ""
     if chosen_pieces and set_piece_min > 0:
@@ -4824,12 +4448,11 @@ def render_shortlist(
         else ""
     )
     caption = (
-        f"{len(filtered)} of {len(rows)} players"
+        f"{total} of {len(rows)} players"
         f"{focus_note}{hybrid_note}{min_note}{extra}{piece_note}{mark_note}"
         f" · {payload.get('filename')}."
     )
-    page_current, new_sig = _table_page_state(columns, cols_sig)
-    no_matches = not table_rows
+    no_matches = not table_rows and total == 0
     empty_panel = (
         _no_match_placeholder(
             pos_match=pos_match,
@@ -4846,20 +4469,18 @@ def render_shortlist(
         if no_matches
         else None
     )
-    # Focus/sort clicks should not rebuild the position bar or remount depth cards.
-    # Card active state is synced clientside from rs-focus-role.
-    # Pure sort is handled by the early reorder path above; this mainly covers focus+sort.
-    triggered_props = {item.get("prop_id", "") for item in (ctx.triggered or [])}
-    focus_sort_only = bool(triggered_props) and triggered_props.issubset(
-        {"rs-focus-role.data", "rs-table.sort_by"}
+
+    # Focus/sort/page clicks should not rebuild the position bar or remount depth cards.
+    focus_sort_page_only = bool(triggered_props) and triggered_props.issubset(
+        {"rs-focus-role.data", "rs-table.sort_by", "rs-table.page_current"}
     )
     same_cols = new_sig == cols_sig
     pos_bar = (
         no_update
-        if focus_sort_only
+        if focus_sort_page_only
         else _pos_bar(rows, pos_filter, foot_filter, foot_thresholds)
     )
-    if focus_sort_only:
+    if focus_sort_page_only:
         depth_cards = no_update
         depth_hidden = no_update
     else:
@@ -4874,17 +4495,15 @@ def render_shortlist(
         depth_cards = cards
         depth_hidden = not cards
     style_data, style_header, table_css_rules = _cached_table_chrome(
-        score_cols, settings, theme
+        visible_score_cols, settings, theme
     )
-    if focus_sort_only and same_cols:
-        # Column set unchanged (typical pure sort) — keep DataTable chrome.
+    if focus_sort_page_only and same_cols:
         out_columns = no_update
         out_tips = no_update
         out_style_data = no_update
         out_style_header = no_update
         out_css = no_update
         out_sig = no_update
-        out_page = no_update
     else:
         out_columns = columns
         out_tips = header_tips
@@ -4892,7 +4511,16 @@ def render_shortlist(
         out_style_header = style_header
         out_css = table_css_rules
         out_sig = new_sig
-        out_page = page_current
+
+    if page_flip_only:
+        out_page = no_update
+    elif page_idx == 0 and (col_page == 0 or not same_cols):
+        out_page = 0
+    elif page_idx == int(page_current or 0):
+        out_page = no_update
+    else:
+        out_page = page_idx
+
     selected_ids = _marked_selected_ids(table_rows, marked_keys)
     return (
         pos_bar,
@@ -4908,15 +4536,14 @@ def render_shortlist(
         _table_style_table(len(table_rows), page_size),
         page_size,
         out_page,
+        page_count,
         selected_ids,
         out_sig,
         caption,
         empty_panel,
         not no_matches,
         no_matches,
-        wide_cache,
     )
-
 
 clientside_callback(
     """
