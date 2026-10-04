@@ -278,6 +278,11 @@ _STEM_ORDER: dict[str, int] = {
     "ST": 7,
 }
 
+# Stems that can share a slash token when their side sets match exactly.
+_MERGEABLE_STEMS: frozenset[str] = frozenset({"D", "WB", "M", "AM"})
+# Bare tokens — no (sides), never slash-merged.
+_SIDELESS_STEMS: frozenset[str] = frozenset({"GK", "SW", "DM"})
+
 
 def _merge_position_codes(
     *groups: tuple[str, ...] | list[str] | None,
@@ -297,40 +302,91 @@ def _merge_position_codes(
     return out
 
 
+def _format_side_letters(sides: list[str] | set[str] | frozenset[str]) -> str:
+    """Moneyball / FM export convention: R, then L, then C."""
+    return "".join(
+        sorted(sides, key=lambda s: {"R": 0, "L": 1, "C": 2}.get(s, 9))
+    )
+
+
+def _normalize_stem_sides(stem: str, sides: list[str]) -> list[str]:
+    """Apply FM side constraints per stem."""
+    if stem in _SIDELESS_STEMS:
+        return []
+    if stem == "ST":
+        # ST only ever appears as ST (C); never merges with other stems.
+        return ["C"]
+    if stem == "WB":
+        # Wing-back has no centre side in Moneyball exports.
+        return [s for s in sides if s in "RL"]
+    return [s for s in sides if s in "RLC"]
+
+
 def _combine_positions(codes: tuple[str, ...] | list[str] | None) -> str:
-    """Turn ('AML','AMR') into ``AM (RL)``-style Moneyball Position text."""
+    """Turn codes into Moneyball Position text (``D/WB (L)``, ``AM (RL)``, …)."""
     if not codes:
         return ""
-    labels = [_pos_label(c) for c in codes]
-    # Group by stem before " ("
+    # stem → unique side letters (pre-normalization).
     groups: dict[str, list[str]] = {}
-    for label in labels:
-        if label in {"GK", "SW", "DM"} or " (" not in label:
+    for code in codes:
+        label = _pos_label(code)
+        if label in _SIDELESS_STEMS or " (" not in label:
             groups.setdefault(label, [])
             continue
         stem, rest = label.split(" (", 1)
-        side = rest.rstrip(")")
         bucket = groups.setdefault(stem, [])
-        # Expand multi-letter sides (e.g. "RL") into individual R/L/C chars.
-        for ch in side or "":
+        for ch in rest.rstrip(")"):
             if ch in "RLC" and ch not in bucket:
                 bucket.append(ch)
-    stems = sorted(
-        groups,
-        key=lambda s: (_STEM_ORDER.get(s, 50), s),
-    )
+
+    normalized: dict[str, list[str]] = {}
+    for stem, sides in groups.items():
+        norm = _normalize_stem_sides(stem, sides)
+        if stem in _SIDELESS_STEMS:
+            normalized[stem] = []
+        elif norm:
+            normalized[stem] = norm
+
+    # Walk pitch order. Slash-merge only contiguous mergeable stems that share
+    # the exact same side set (DM / ST / mismatched sides break the run).
     parts: list[str] = []
-    for stem in stems:
-        sides = groups[stem]
-        if not sides:
-            parts.append(stem)
+    run_stems: list[str] = []
+    run_sides: frozenset[str] | None = None
+
+    def flush_run() -> None:
+        nonlocal run_stems, run_sides
+        if not run_stems or run_sides is None:
+            run_stems = []
+            run_sides = None
+            return
+        parts.append(
+            f"{'/'.join(run_stems)} ({_format_side_letters(run_sides)})"
+        )
+        run_stems = []
+        run_sides = None
+
+    for stem in sorted(normalized, key=lambda s: _STEM_ORDER.get(s, 50)):
+        sides = normalized[stem]
+        if (
+            stem in _SIDELESS_STEMS
+            or stem == "ST"
+            or stem not in _MERGEABLE_STEMS
+            or not sides
+        ):
+            flush_run()
+            if stem in _SIDELESS_STEMS or not sides:
+                parts.append(stem)
+            else:
+                parts.append(f"{stem} ({_format_side_letters(sides)})")
+            continue
+        side_key = frozenset(sides)
+        if run_stems and run_sides == side_key:
+            run_stems.append(stem)
         else:
-            # Moneyball / FM export convention: R, then L, then C.
-            ranked = sorted(
-                sides,
-                key=lambda s: {"R": 0, "L": 1, "C": 2}.get(s, 9),
-            )
-            parts.append(f"{stem} ({''.join(ranked)})")
+            flush_run()
+            run_stems = [stem]
+            run_sides = side_key
+    flush_run()
     return ", ".join(parts)
 
 
