@@ -5,11 +5,14 @@ import io
 import sys
 import time
 import warnings
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
+
+from config.paths import COMPETITION_NAMES_PATH
 
 Scope = Literal["squad", "all", "filtered"]
 
@@ -53,12 +56,12 @@ CLUB_NATION_OPTIONS: tuple[tuple[int, str], ...] = (
 )
 
 # Intentionally blank in v1 — save has no display labels / name maps.
+# Division is filled separately from league tables + competition-names.csv.
 BLANK_COLUMNS: tuple[str, ...] = (
     "Personality",
     "Media Handling",
     "Nation",
     "Based In",
-    "Division",
     "2nd Nat",
     "Best Role",
     "Style",
@@ -69,6 +72,27 @@ BLANK_COLUMNS: tuple[str, ...] = (
     "Potential Silver",
     "World Reputation Gold",
     "World Reputation Silver",
+)
+
+# Soft-penalize these when voting a club's domestic division from fixtures.
+_CUPISH_NAME_PARTS: tuple[str, ...] = (
+    "cup",
+    "cupa",
+    "copa",
+    "taça",
+    "taca",
+    "supercup",
+    "super cup",
+    "champions",
+    "europa",
+    "conference",
+    "qualification",
+    "playoff",
+    "play-off",
+    "friendly",
+    "shield",
+    "trophy",
+    "wcl",
 )
 
 # fmsave Attributes field → Moneyball CSV header (ATTR_MAP full names).
@@ -513,6 +537,97 @@ def _pick_season_row(
     return max(rows, key=lambda r: int(r.minutes or 0))
 
 
+def _is_division_shaped(table: Any) -> bool:
+    """True for a domestic league standings group (widened from fmsave's 18–26 note)."""
+    rows = getattr(table, "rows", None) or ()
+    if not rows:
+        return False
+    n = int(getattr(table, "club_count", 0) or 0)
+    rpv = getattr(rows[0], "rounds_per_venue", None)
+    if rpv is None:
+        return False
+    return 10 <= n <= 30 and int(rpv) == n - 1
+
+
+def _pick_named_competition(counts: Counter[tuple[int | None, str | None]]) -> str:
+    """Choose a display name from fixture (competition_id, name) counts."""
+    scored: list[tuple[int, int, str]] = []
+    for (_cid, name), n in counts.items():
+        label = (name or "").strip()
+        if not label:
+            continue
+        low = label.casefold()
+        pen = 1 if any(part in low for part in _CUPISH_NAME_PARTS) else 0
+        scored.append((pen, -int(n), label))
+    if not scored:
+        return ""
+    scored.sort()
+    return scored[0][2]
+
+
+def _build_club_divisions(career_save: Any) -> dict[int, str]:
+    """Map club_uid → domestic Division label for Moneyball.
+
+    League tables do not store a competition; fmsave votes one from fixtures, and that vote
+    often lands on an unnamed id. Prefer division-shaped first-team tables, revoting the name
+    from member fixtures when needed, then fall back to each club's slot-0 fixture majority.
+    """
+    fx_by_team: dict[int, Counter[tuple[int | None, str | None]]] = defaultdict(Counter)
+    for fixture in career_save.fixtures():
+        for team_id, competition_id, competition_name in (
+            (fixture.home_team_id, fixture.competition_id, fixture.competition_name),
+            (fixture.away_team_id, fixture.competition_id, fixture.competition_name),
+        ):
+            if team_id is None or competition_id is None:
+                continue
+            fx_by_team[int(team_id)][(competition_id, competition_name)] += 1
+
+    club_division: dict[int, str] = {}
+    for table in career_save.league_tables():
+        if not _is_division_shaped(table):
+            continue
+        rows = tuple(table.rows or ())
+        slot0 = [row for row in rows if getattr(row, "team_slot", None) == 0]
+        n = int(getattr(table, "club_count", 0) or 0)
+        if len(slot0) < max(8, n // 2):
+            continue
+        name = (getattr(table, "competition_name", None) or "").strip()
+        if not name:
+            member_counts: Counter[tuple[int | None, str | None]] = Counter()
+            for row in slot0:
+                team_id = getattr(row, "team_id", None)
+                if team_id is None:
+                    continue
+                team_fx = fx_by_team.get(int(team_id))
+                if team_fx:
+                    member_counts.update(team_fx)
+            name = _pick_named_competition(member_counts)
+        if not name:
+            continue
+        for row in slot0:
+            club_uid = getattr(row, "club_uid", None)
+            if club_uid is None:
+                continue
+            club_division.setdefault(int(club_uid), name)
+
+    for club in career_save.clubs():
+        club_uid = getattr(club, "uid", None)
+        if club_uid is None or int(club_uid) in club_division:
+            continue
+        for team in getattr(club, "teams", None) or ():
+            if getattr(team, "slot", None) != 0:
+                continue
+            team_id = getattr(team, "team_id", None)
+            if team_id is None:
+                break
+            name = _pick_named_competition(fx_by_team.get(int(team_id), Counter()))
+            if name:
+                club_division[int(club_uid)] = name
+            break
+
+    return club_division
+
+
 def _season_columns(stats: Any | None) -> dict[str, str]:
     empty = {
         "Appearances": "",
@@ -693,7 +808,7 @@ def _finance_columns(player: Any) -> dict[str, str]:
     return out
 
 
-def _identity_columns(player: Any) -> dict[str, str]:
+def _identity_columns(player: Any, *, division: str = "") -> dict[str, str]:
     ability = getattr(player, "ability", None)
     reputation = getattr(player, "reputation", None)
     return {
@@ -701,6 +816,7 @@ def _identity_columns(player: Any) -> dict[str, str]:
         "Unique ID": "" if player.unique_id is None else str(player.unique_id),
         "Age": "" if player.age is None else str(player.age),
         "Club": player.club_name or "",
+        "Division": division or "",
         "Best Pos": _best_pos(player.natural_positions),
         # Natural + accomplished in Position (Moneyball-style); accomplished alone in Sec.
         "Position": _combine_positions(
@@ -735,9 +851,14 @@ def _attribute_columns(player: Any) -> dict[str, str]:
     return out
 
 
-def _player_row(player: Any, season: Any | None) -> dict[str, str]:
+def _player_row(
+    player: Any,
+    season: Any | None,
+    *,
+    division: str = "",
+) -> dict[str, str]:
     row: dict[str, str] = {}
-    row.update(_identity_columns(player))
+    row.update(_identity_columns(player, division=division))
     row.update(_attribute_columns(player))
     row.update(_finance_columns(player))
     row.update(_season_columns(season))
@@ -867,10 +988,13 @@ def export_moneyball_csv(
 
     started = time.perf_counter()
     rows: list[dict[str, str]] = []
+    competition_names = (
+        COMPETITION_NAMES_PATH if COMPETITION_NAMES_PATH.is_file() else None
+    )
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with fmsave.open(path) as career_save:
+        with fmsave.open(path, competition_names=competition_names) as career_save:
             if scope == "squad":
                 managed = career_save.managed_clubs()
                 if not managed:
@@ -889,6 +1013,7 @@ def export_moneyball_csv(
 
             player_list = list(players)
             uid_set = {p.uid for p in player_list}
+            club_divisions = _build_club_divisions(career_save)
 
             season_by_uid: dict[int, list[Any]] = {}
             for record in career_save.player_season_stats():
@@ -903,7 +1028,10 @@ def export_moneyball_csv(
                     season_by_uid.get(player.uid, []),
                     club_uid=player.club_uid,
                 )
-                rows.append(_player_row(player, season))
+                division = ""
+                if player.club_uid is not None:
+                    division = club_divisions.get(int(player.club_uid), "")
+                rows.append(_player_row(player, season, division=division))
 
     if not rows:
         raise ValueError("No players matched the selected scope/filters.")
