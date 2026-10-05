@@ -54,8 +54,8 @@ def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
 def _default_path_hint() -> str:
     games = fms.default_fm26_games_dir()
     if games is None:
-        return "Paste a full path to a .fm save (OS games folder unknown on this platform)."
-    return f"Default games folder: {games}"
+        return "Choose a .fm save file. Default games folder is unknown on this platform."
+    return f"Chooser opens in: {games}"
 
 
 def layout(**_kwargs):
@@ -83,12 +83,24 @@ def layout(**_kwargs):
                             _card_header("1. Save & scope", PAGE_TIP, "sx-tip"),
                             dbc.CardBody(
                                 [
-                                    html.Label("Save path (.fm)", className="rs-field-label"),
-                                    dmc.TextInput(
-                                        id="sx-path",
-                                        value=default_path,
-                                        placeholder="/path/to/career.fm",
-                                        className="mb-1",
+                                    html.Label("Save file (.fm)", className="rs-field-label"),
+                                    html.Div(
+                                        [
+                                            dmc.TextInput(
+                                                id="sx-path",
+                                                value=default_path,
+                                                placeholder="No save selected",
+                                                readOnly=True,
+                                                className="sx-path-input",
+                                            ),
+                                            dmc.Button(
+                                                "Choose file…",
+                                                id="sx-browse",
+                                                n_clicks=0,
+                                                variant="default",
+                                            ),
+                                        ],
+                                        className="sx-path-row mb-1",
                                     ),
                                     html.P(
                                         _default_path_hint(),
@@ -374,6 +386,25 @@ def sx_poll_progress(_n):
 
 
 @callback(
+    Output("sx-path", "value"),
+    Output("sx-status", "children", allow_duplicate=True),
+    Input("sx-browse", "n_clicks"),
+    State("sx-path", "value"),
+    prevent_initial_call=True,
+)
+def sx_browse(n_clicks, current_path):
+    if not n_clicks:
+        return no_update, no_update
+    picked = fms.pick_fm_save_file(current_path or fms.default_save_path())
+    if not picked:
+        return no_update, no_update
+    return picked, html.P(
+        f"Selected: {picked}",
+        className="text-muted mb-0",
+    )
+
+
+@callback(
     Output("sx-download", "data"),
     Output("sx-status", "children"),
     Output("sx-rev", "data"),
@@ -416,7 +447,7 @@ def sx_generate(
     if not save_path:
         return (
             no_update,
-            html.P("Enter a path to a .fm save file.", className="text-danger mb-0"),
+            html.P("Choose a .fm save file first.", className="text-danger mb-0"),
             next_rev,
             "rs-shortlist-busy",
             True,

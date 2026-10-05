@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 import time
 import warnings
@@ -237,6 +238,126 @@ def default_save_path() -> str:
     if saves:
         return str(saves[0])
     return str(games)
+
+
+def _dialog_initial_dir(preferred: str | Path | None = None) -> Path:
+    """Existing folder to open in the save picker (preferred → OS games → home)."""
+
+    def _existing_dir(path: Path) -> Path | None:
+        if path.is_file():
+            return path.parent if path.parent.is_dir() else None
+        if path.is_dir():
+            return path
+        for parent in path.parents:
+            if parent.is_dir():
+                return parent
+        return None
+
+    if preferred:
+        found = _existing_dir(Path(str(preferred)).expanduser())
+        if found is not None:
+            return found
+    games = default_fm26_games_dir()
+    if games is not None:
+        found = _existing_dir(games)
+        if found is not None:
+            return found
+    return Path.home()
+
+
+def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
+    """Open a native file dialog for a ``.fm`` save. Returns path or None if cancelled."""
+    start = _dialog_initial_dir(initial_dir)
+    start_s = str(start)
+
+    if sys.platform == "darwin":
+        # AppleScript from a worker thread (Dash threaded=True); avoid tkinter.
+        escaped = start_s.replace("\\", "\\\\").replace('"', '\\"')
+        script = (
+            f'set defaultLoc to POSIX file "{escaped}"\n'
+            "try\n"
+            '  set theFile to choose file with prompt '
+            '"Select Football Manager save" default location defaultLoc\n'
+            "  return POSIX path of theFile\n"
+            "on error\n"
+            '  return ""\n'
+            "end try"
+        )
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=300,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        path = (result.stdout or "").strip()
+        return path or None
+
+    if sys.platform == "win32":
+        ps_dir = start_s.replace("'", "''")
+        ps = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d = New-Object System.Windows.Forms.OpenFileDialog; "
+            "$d.Filter = 'FM Save (*.fm)|*.fm|All files (*.*)|*.*'; "
+            f"$d.InitialDirectory = '{ps_dir}'; "
+            "$d.Title = 'Select Football Manager save'; "
+            "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+            "{ [Console]::Out.Write($d.FileName) }"
+        )
+        try:
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    ps,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=300,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        path = (result.stdout or "").strip()
+        return path or None
+
+    # Linux / other: zenity, then kdialog.
+    for cmd in (
+        [
+            "zenity",
+            "--file-selection",
+            "--title=Select Football Manager save",
+            f"--filename={start_s}/",
+            "--file-filter=FM Save | *.fm",
+            "--file-filter=All files | *",
+        ],
+        [
+            "kdialog",
+            "--getopenfilename",
+            start_s,
+            "*.fm|FM Save",
+        ],
+    ):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=300,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0:
+            path = (result.stdout or "").strip()
+            if path:
+                return path
+    return None
 
 
 def _format_money(amount: float | int | None, *, annual: bool = False) -> str:

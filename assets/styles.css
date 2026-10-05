@@ -11003,3 +11003,25 @@ body[data-theme="light"] .pf-depth-chart-section {
         justify-self: start;
     }
 }
+
+/* Save export — path chooser */
+.sx-path-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.sx-path-row .sx-path-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sx-path-row .sx-path-input .mantine-TextInput-root,
+.sx-path-row .sx-path-input .mantine-InputWrapper-root {
+    width: 100%;
+}
+
+.sx-path-row .mantine-Button-root {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
