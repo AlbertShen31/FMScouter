@@ -59,7 +59,6 @@ def _default_path_hint() -> str:
 
 
 def layout(**_kwargs):
-    default_path = fms.default_save_path()
     return dbc.Container(
         [
             dcc.Download(id="sx-download"),
@@ -88,7 +87,7 @@ def layout(**_kwargs):
                                         [
                                             dmc.TextInput(
                                                 id="sx-path",
-                                                value=default_path,
+                                                value="",
                                                 placeholder="No save selected",
                                                 readOnly=True,
                                                 className="sx-path-input",
@@ -239,6 +238,7 @@ def layout(**_kwargs):
                                         "Generate CSV",
                                         id="sx-generate",
                                         n_clicks=0,
+                                        disabled=True,
                                     ),
                                     html.P(
                                         "All / Filtered can take a while — leave this tab open.",
@@ -383,6 +383,14 @@ def sx_poll_progress(_n):
         props["bar_style"],
         props["detail"] or "",
     )
+
+
+@callback(
+    Output("sx-generate", "disabled"),
+    Input("sx-path", "value"),
+)
+def sx_generate_enabled(path):
+    return not bool((path or "").strip())
 
 
 @callback(
