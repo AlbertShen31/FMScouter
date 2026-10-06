@@ -15,7 +15,9 @@ import pandas as pd
 
 from config.paths import COMPETITION_NAMES_PATH
 
-Scope = Literal["squad", "all", "filtered"]
+Scope = Literal["squad", "all"]
+# Back-compat alias accepted by export_moneyball_csv (treated as "all").
+_LEGACY_FILTERED_SCOPE = "filtered"
 
 # fmsave ships no nation names; club_nation_id / nation_id are integers only.
 # Labels below are curated from FM26 club samples (Based In / league nation).
@@ -644,6 +646,31 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     return True
 
 
+def _filters_active(filters: dict[str, Any] | None) -> bool:
+    """True when at least one filter constraint is set."""
+    if not filters:
+        return False
+    if filters.get("age_min") is not None or filters.get("age_max") is not None:
+        return True
+    if filters.get("min_ca") is not None or filters.get("min_club_reputation") is not None:
+        return True
+    if (filters.get("club_contains") or "").strip():
+        return True
+    if filters.get("club_nation_ids") or filters.get("nation_ids"):
+        return True
+    if filters.get("position_groups"):
+        return True
+    return False
+
+
+def _normalize_scope(scope: str) -> Scope:
+    if scope == _LEGACY_FILTERED_SCOPE:
+        return "all"
+    if scope in {"squad", "all"}:
+        return scope  # type: ignore[return-value]
+    return "squad"
+
+
 def _pick_season_row(
     rows: list[Any],
     *,
@@ -1095,7 +1122,7 @@ def _column_order(sample: dict[str, str]) -> list[str]:
 def export_moneyball_csv(
     save_path: str,
     *,
-    scope: Scope = "squad",
+    scope: str = "squad",
     filters: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Return ``(csv_text, meta)`` with Moneyball headers (``;`` delimiter)."""
@@ -1107,6 +1134,7 @@ def export_moneyball_csv(
     if not path.is_file():
         raise FileNotFoundError(f"Save file not found: {path}")
 
+    scope_key = _normalize_scope(scope)
     started = time.perf_counter()
     rows: list[dict[str, str]] = []
     competition_names = (
@@ -1121,21 +1149,22 @@ def export_moneyball_csv(
         warnings.simplefilter("ignore")
         with fmsave.open(path, competition_names=competition_names) as career_save:
             compute_progress.update(phase="Loading players…")
-            if scope == "squad":
+            if scope_key == "squad":
                 managed = career_save.managed_clubs()
                 if not managed:
                     raise ValueError(
                         "No managed club in this save (between jobs?). "
-                        "Use All players or Filtered instead."
+                        "Use All players instead."
                     )
                 club_uid = managed[0].club_uid
                 players = career_save.players().where(club_uid=club_uid)
             else:
                 players = career_save.players()
-                if scope == "filtered":
-                    players = players.filter(
-                        lambda player: _passes_filters(player, filters)
-                    )
+
+            if _filters_active(filters):
+                players = players.filter(
+                    lambda player: _passes_filters(player, filters)
+                )
 
             player_list = list(players)
             uid_set = {p.uid for p in player_list}
@@ -1199,11 +1228,12 @@ def export_moneyball_csv(
         "row_count": len(rows),
         "column_count": len(columns),
         "elapsed_ms": elapsed_ms,
-        "scope": scope,
+        "scope": scope_key,
+        "filters_active": _filters_active(filters),
         "save_path": str(path),
         "eligibility": eligibility,
         "mapped_columns": mapped,
         "blank_columns": list(BLANK_COLUMNS),
-        "filename": f"fmsave_{scope}_{path.stem}.csv",
+        "filename": f"fmsave_{scope_key}_{path.stem}.csv",
     }
     return csv_text, meta

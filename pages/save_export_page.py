@@ -16,14 +16,13 @@ register_page(__name__, path="/save-export", name="Save export")
 PAGE_TIP = (
     "Read an FM26 .fm save with fmsave and write a Moneyball-shaped CSV "
     "(attributes + OVERALL season stats + contract finance). Upload the file "
-    "on Uploads, or check “Also add to Uploads library” here. All / Filtered "
-    "scopes can take tens of seconds on a full career."
+    "on Uploads, or check “Also add to Uploads library” here. All players "
+    "can take tens of seconds on a full career; optional filters narrow either scope."
 )
 
 _SCOPE_OPTIONS = [
     {"label": "Managed squad", "value": "squad"},
     {"label": "All players", "value": "all"},
-    {"label": "Filtered", "value": "filtered"},
 ]
 
 _POS_OPTIONS = [
@@ -106,126 +105,145 @@ def layout(**_kwargs):
                                         className="text-muted small mb-3",
                                     ),
                                     html.Label("Player scope", className="rs-field-label"),
-                                    dmc.RadioGroup(
-                                        children=[
-                                            dmc.Radio(
-                                                label=opt["label"],
-                                                value=opt["value"],
-                                            )
-                                            for opt in _SCOPE_OPTIONS
-                                        ],
+                                    dmc.SegmentedControl(
                                         id="sx-scope",
                                         value="squad",
-                                        className="mb-3",
+                                        data=_SCOPE_OPTIONS,
+                                        fullWidth=True,
+                                        className="sx-scope-control mb-3",
                                     ),
                                     html.Div(
                                         [
-                                            html.Label(
-                                                "Filters (Filtered scope only)",
-                                                className="rs-field-label",
-                                            ),
-                                            dbc.Row(
+                                            html.Div(
                                                 [
-                                                    dbc.Col(
-                                                        dmc.NumberInput(
-                                                            id="sx-age-min",
-                                                            label="Age min",
-                                                            value=None,
-                                                            min=15,
-                                                            max=45,
-                                                            hideControls=False,
-                                                        ),
-                                                        md=3,
+                                                    html.Span(
+                                                        "Optional filters",
+                                                        className="sx-filters-title",
                                                     ),
-                                                    dbc.Col(
-                                                        dmc.NumberInput(
-                                                            id="sx-age-max",
-                                                            label="Age max",
-                                                            value=None,
-                                                            min=15,
-                                                            max=45,
-                                                            hideControls=False,
-                                                        ),
-                                                        md=3,
-                                                    ),
-                                                    dbc.Col(
-                                                        dmc.NumberInput(
-                                                            id="sx-min-ca",
-                                                            label="Min CA",
-                                                            value=None,
-                                                            min=1,
-                                                            max=200,
-                                                            hideControls=False,
-                                                        ),
-                                                        md=3,
-                                                    ),
-                                                    dbc.Col(
-                                                        dmc.NumberInput(
-                                                            id="sx-min-club-rep",
-                                                            label="Min club rep",
-                                                            value=None,
-                                                            min=0,
-                                                            max=20000,
-                                                            hideControls=False,
-                                                        ),
-                                                        md=3,
+                                                    html.Span(
+                                                        "Apply to Managed squad or All players",
+                                                        className="sx-filters-subtitle",
                                                     ),
                                                 ],
-                                                className="g-2 mb-2",
+                                                className="sx-filters-heading",
                                             ),
-                                            dmc.TextInput(
-                                                id="sx-club-contains",
-                                                label="Club name contains",
-                                                placeholder="optional",
-                                                className="mb-2",
-                                            ),
-                                            dbc.Row(
+                                            html.Div(
                                                 [
-                                                    dbc.Col(
-                                                        dmc.MultiSelect(
-                                                            id="sx-club-nations",
-                                                            label="Club nation (Based In)",
-                                                            data=_NATION_OPTIONS,
-                                                            value=[],
-                                                            searchable=True,
-                                                            clearable=True,
-                                                            placeholder="Any",
-                                                        ),
-                                                        md=6,
+                                                    html.Div(
+                                                        [
+                                                            html.Div(
+                                                                "Limits",
+                                                                className="sx-filter-group-label",
+                                                            ),
+                                                            html.Div(
+                                                                [
+                                                                    dmc.NumberInput(
+                                                                        id="sx-age-min",
+                                                                        label="Age min",
+                                                                        value=None,
+                                                                        min=15,
+                                                                        max=45,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                    dmc.NumberInput(
+                                                                        id="sx-age-max",
+                                                                        label="Age max",
+                                                                        value=None,
+                                                                        min=15,
+                                                                        max=45,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                    dmc.NumberInput(
+                                                                        id="sx-min-ca",
+                                                                        label="Min CA",
+                                                                        value=None,
+                                                                        min=1,
+                                                                        max=200,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                    dmc.NumberInput(
+                                                                        id="sx-min-club-rep",
+                                                                        label="Min club rep",
+                                                                        value=None,
+                                                                        min=0,
+                                                                        max=20000,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                ],
+                                                                className="sx-filter-fields sx-filter-fields-limits",
+                                                            ),
+                                                        ],
+                                                        className="sx-filter-group",
                                                     ),
-                                                    dbc.Col(
-                                                        dmc.MultiSelect(
-                                                            id="sx-player-nations",
-                                                            label="Nationality",
-                                                            data=_NATION_OPTIONS,
-                                                            value=[],
-                                                            searchable=True,
-                                                            clearable=True,
-                                                            placeholder="Any",
-                                                        ),
-                                                        md=6,
+                                                    html.Div(
+                                                        [
+                                                            html.Div(
+                                                                "Club & nationality",
+                                                                className="sx-filter-group-label",
+                                                            ),
+                                                            html.Div(
+                                                                [
+                                                                    dmc.TextInput(
+                                                                        id="sx-club-contains",
+                                                                        label="Club name contains",
+                                                                        placeholder="optional",
+                                                                        className="sx-filter-club-contains",
+                                                                    ),
+                                                                    dmc.MultiSelect(
+                                                                        id="sx-club-nations",
+                                                                        label="Club nation (Based In)",
+                                                                        data=_NATION_OPTIONS,
+                                                                        value=[],
+                                                                        searchable=True,
+                                                                        clearable=True,
+                                                                        placeholder="Any",
+                                                                    ),
+                                                                    dmc.MultiSelect(
+                                                                        id="sx-player-nations",
+                                                                        label="Nationality",
+                                                                        data=_NATION_OPTIONS,
+                                                                        value=[],
+                                                                        searchable=True,
+                                                                        clearable=True,
+                                                                        placeholder="Any",
+                                                                    ),
+                                                                ],
+                                                                className="sx-filter-fields sx-filter-fields-club",
+                                                            ),
+                                                        ],
+                                                        className="sx-filter-group",
+                                                    ),
+                                                    html.Div(
+                                                        [
+                                                            html.Div(
+                                                                "Positions",
+                                                                className="sx-filter-group-label",
+                                                            ),
+                                                            dmc.CheckboxGroup(
+                                                                children=[
+                                                                    dmc.Checkbox(
+                                                                        label=opt["label"],
+                                                                        value=opt["value"],
+                                                                    )
+                                                                    for opt in _POS_OPTIONS
+                                                                ],
+                                                                id="sx-pos-groups",
+                                                                value=[],
+                                                                className="sx-pos-checks",
+                                                            ),
+                                                            html.P(
+                                                                "Leave empty for all positions.",
+                                                                className="sx-filter-hint mb-0",
+                                                            ),
+                                                        ],
+                                                        className="sx-filter-group",
                                                     ),
                                                 ],
-                                                className="g-2 mb-2",
-                                            ),
-                                            html.Label(
-                                                "Position groups",
-                                                className="rs-field-label",
-                                            ),
-                                            dmc.CheckboxGroup(
-                                                children=[
-                                                    dmc.Checkbox(
-                                                        label=opt["label"],
-                                                        value=opt["value"],
-                                                    )
-                                                    for opt in _POS_OPTIONS
-                                                ],
-                                                id="sx-pos-groups",
-                                                value=[],
+                                                className="sx-filters-grid",
                                             ),
                                         ],
                                         id="sx-filters",
-                                        className="sx-filters",
+                                        className="sx-filters mb-3",
                                     ),
                                     html.Hr(className="my-3"),
                                     dmc.Checkbox(
@@ -241,7 +259,7 @@ def layout(**_kwargs):
                                         disabled=True,
                                     ),
                                     html.P(
-                                        "All / Filtered can take a while — leave this tab open.",
+                                        "All players can take a while — leave this tab open.",
                                         className="text-muted small mt-2 mb-0",
                                     ),
                                 ]
@@ -320,7 +338,8 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
     return [
         html.P(
             f"{meta.get('row_count', 0)} players · {meta.get('column_count', 0)} columns · "
-            f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}",
+            f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}"
+            + (" · filters on" if meta.get("filters_active") else ""),
             className="mb-2",
         ),
         html.Div(flag_spans, className="mb-2"),
@@ -330,16 +349,6 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
         ),
         html.P(uploads_note, className="mb-0") if uploads_note else html.Span(),
     ]
-
-
-@callback(
-    Output("sx-filters", "style"),
-    Input("sx-scope", "value"),
-)
-def sx_toggle_filters(scope):
-    if scope == "filtered":
-        return {"display": "block"}
-    return {"display": "none"}
 
 
 clientside_callback(
@@ -460,7 +469,7 @@ def sx_generate(
             "rs-shortlist-busy",
             True,
         )
-    scope_key = scope if scope in {"squad", "all", "filtered"} else "squad"
+    scope_key = scope if scope in {"squad", "all"} else "squad"
     filters = _filters_payload(
         age_min,
         age_max,
@@ -476,8 +485,8 @@ def sx_generate(
         try:
             csv_text, meta = fms.export_moneyball_csv(
                 save_path,
-                scope=scope_key,  # type: ignore[arg-type]
-                filters=filters if scope_key == "filtered" else None,
+                scope=scope_key,
+                filters=filters,
             )
         except ImportError as exc:
             return (
