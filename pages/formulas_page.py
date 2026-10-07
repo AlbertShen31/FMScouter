@@ -477,6 +477,25 @@ fail  otherwise
                 """
             ),
         ),
+        _accordion(
+            "Goals from xG overperformance (PoC)",
+            _formula(
+                """
+xG-OP  =  Goals − xG          (expected-goals overperformance)
+
+Goals_recovered  =  xG + xG-OP
+Goals/90         =  Goals_recovered × 90 ÷ Minutes
+                """
+            ),
+            _para(
+                "Some national-team / Moneyball views export season Goals as 0 while "
+                "leaving xG and xG-OP intact (Goals per 90 may still be present but "
+                "heavily rounded). When the Goals total is missing, zero, or "
+                "inconsistent with the export /90 rate, FMScouter recovers goals from "
+                "xG + xG-OP and uses that total for a more precise Goals/90. "
+                "Intact Goals totals still win."
+            ),
+        ),
     )
 
 

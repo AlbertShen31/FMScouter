@@ -137,7 +137,7 @@ INTENTIONALLY_UNUSED: dict[str, str] = {
     "Team Goals": "Team context; not parsed",
     "Tgls/90": "Team goals per 90; not parsed",
     "Yellow Cards": "Stats percentile (ui_hidden; Aggressive Defender archetype)",
-    "xG-OP": "Open-play xG delta; not scored",
+    "xG-OP": "xG overperformance (Goals − xG); used to recover Goals/90 when Goals total is broken",
     "xG/shot": "Percentile (ui_hidden; Poacher archetype)",
 }
 

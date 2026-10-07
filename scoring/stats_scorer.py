@@ -1113,9 +1113,51 @@ def _should_prefer_export_per90(derived: float, export_per90: float) -> bool:
     return False
 
 
+def _goals_from_xg_overperformance(row: dict[str, str]) -> float | None:
+    """Recover season goals: Goals ≈ xG + xG-OP (expected-goals overperformance).
+
+    National-team / some Moneyball views zero out the Goals total while leaving
+    xG and xG-OP intact. Their sum reconstructs the integer goal count and a
+    more precise Goals/90 than FM's rounded export rate.
+    """
+    xg = parse_number(pick(row, ["xG"]))
+    xg_op = parse_number(pick(row, ["xG-OP"]))
+    if xg is None or xg_op is None:
+        return None
+    return xg + xg_op
+
+
+def _pick_goals_per90(row: dict[str, str], aliases: list[str]) -> float | None:
+    """Goals/90 with xG-OP recovery when the Goals total looks broken."""
+    totals, per90_aliases = _split_csv_aliases(aliases)
+    minutes = _minutes_for_per90(row)
+    export_per90 = _first_parsed(row, per90_aliases) if per90_aliases else None
+    total = _first_parsed(row, totals) if totals else None
+    recovered = _goals_from_xg_overperformance(row)
+
+    if minutes is not None and total is not None and total > 0:
+        derived = _per90_from_total(total, minutes)
+        if export_per90 is None or not _should_prefer_export_per90(
+            derived, export_per90
+        ):
+            return derived
+
+    # Broken/zero Goals total (or inconsistent with export /90): prefer xG + xG-OP.
+    if minutes is not None and recovered is not None:
+        return _per90_from_total(recovered, minutes)
+
+    if export_per90 is not None:
+        return export_per90
+    if minutes is not None and total is not None:
+        return _per90_from_total(total, minutes)
+    return None
+
+
 def _pick_metric_raw(row: dict[str, str], metric_id: str) -> float | None:
     meta = metric_defs()[metric_id]
     aliases = list(meta.get("csv") or [])
+    if metric_id == "goals" and meta.get("unit") == "per90":
+        return _pick_goals_per90(row, aliases)
     if meta.get("unit") == "per90":
         totals, per90_aliases = _split_csv_aliases(aliases)
         minutes = _minutes_for_per90(row)
