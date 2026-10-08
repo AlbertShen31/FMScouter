@@ -36,6 +36,20 @@ def is_romanian(player) -> bool:
     return ROMANIA_NATION_ID in (player.second_nation_ids or ())
 
 
+def drop_duplicate_players(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep one row per player (team-slot duplicates share name + unique_id)."""
+    if "unique_id" in df.columns:
+        subset = ["unique_id"]
+    elif "uid" in df.columns:
+        subset = ["uid"]
+    else:
+        subset = ["name"]
+    # Same name + same id collapses multi-team rows; different ids with same name stay.
+    if "name" in df.columns and subset != ["name"]:
+        subset = ["name", *subset]
+    return df.drop_duplicates(subset=subset, keep="first")
+
+
 def tier_counts(df: pd.DataFrame) -> dict[str, int]:
     """Counts where CA or PA is strictly above each tier."""
     ca = pd.to_numeric(df.get("ability_current"), errors="coerce")
@@ -58,14 +72,16 @@ for save_path in SAVES:
         competition_names=COMPETITION_NAMES if COMPETITION_NAMES.is_file() else None,
     ) as save:
         df = save.players().filter(is_romanian).to_pandas()
+    before = len(df)
+    df = drop_duplicate_players(df)
     frames[label] = df
     counts = tier_counts(df)
     rows.append({"save": label, **counts})
-    print(f"  {label}: {counts['romanian']} Romanian")
-    for tier in TIERS:
-        print(
-            f"    >{tier}: CA|PA={counts[f'CA|PA>{tier}']}  "
-        )
+    print(f"  {label}: {counts['romanian']} Romanian (dropped {before - len(df)} dupes)")
+    # for tier in TIERS:
+    #     print(
+    #         f"    >{tier}: CA|PA={counts[f'CA|PA>{tier}']}  "
+    #     )
 
 summary = pd.DataFrame(rows)
 print("\nSummary")
