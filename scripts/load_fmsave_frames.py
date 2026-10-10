@@ -160,6 +160,7 @@ def names_export_frame(
     cols = {
         "save": save_label,
         "name": sub["name"] if "name" in sub.columns else "",
+        "club": sub["club_name"] if "club_name" in sub.columns else "",
         "nation": nation_label(sub, nations),
     }
     if "unique_id" in sub.columns:
@@ -171,7 +172,9 @@ def names_export_frame(
     if "ability_potential" in sub.columns:
         cols["PA"] = pd.to_numeric(sub["ability_potential"], errors="coerce")
     out = pd.DataFrame(cols)
-    return out.sort_values(["nation", "name"], kind="stable").reset_index(drop=True)
+    return out.sort_values(["nation", "club", "name"], kind="stable").reset_index(
+        drop=True
+    )
 
 
 def main() -> None:
