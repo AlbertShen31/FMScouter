@@ -7,6 +7,8 @@ import sys
 import time
 import warnings
 from collections import Counter, defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
@@ -1119,6 +1121,56 @@ def _column_order(sample: dict[str, str]) -> list[str]:
     return ordered
 
 
+def _progress_step(total: int) -> int:
+    """Throttle UI ticks on large tables (same cadence as export loops)."""
+    return 1 if total <= 200 else max(1, total // 40)
+
+
+@contextmanager
+def _track_player_load_progress() -> Iterator[None]:
+    """Publish decode percentage while fmsave builds the players table.
+
+    fmsave has no progress callback; it locates every player record then decodes
+    each one. Hook those two private steps so the busy bar can show
+    ``done / total`` instead of an indeterminate spinner for the long phase.
+    """
+    from fmsave._context import SaveContext
+    from fmsave.readers.players import PlayerDecoder
+
+    import services.compute_progress as compute_progress
+
+    state = {"done": 0, "total": 0, "step": 1}
+    orig_build = SaveContext._build_player_records
+    orig_decode = PlayerDecoder.decode
+
+    def build_player_records(self):  # noqa: ANN001 — mirrors fmsave signature
+        records = orig_build(self)
+        total = len(records.record_offsets)
+        state["total"] = total
+        state["done"] = 0
+        state["step"] = _progress_step(total)
+        compute_progress.update(phase="Loading players…", done=0, total=total)
+        return records
+
+    def decode(self, *args, **kwargs):  # noqa: ANN001 — mirrors fmsave signature
+        result = orig_decode(self, *args, **kwargs)
+        state["done"] += 1
+        done = state["done"]
+        total = state["total"]
+        step = state["step"]
+        if total > 0 and (done == 1 or done >= total or done % step == 0):
+            compute_progress.tick(done, total, phase="Loading players…")
+        return result
+
+    SaveContext._build_player_records = build_player_records  # type: ignore[method-assign]
+    PlayerDecoder.decode = decode  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        SaveContext._build_player_records = orig_build  # type: ignore[method-assign]
+        PlayerDecoder.decode = orig_decode  # type: ignore[method-assign]
+
+
 def export_moneyball_csv(
     save_path: str,
     *,
@@ -1149,24 +1201,25 @@ def export_moneyball_csv(
         warnings.simplefilter("ignore")
         with fmsave.open(path, competition_names=competition_names) as career_save:
             compute_progress.update(phase="Loading players…")
-            if scope_key == "squad":
-                managed = career_save.managed_clubs()
-                if not managed:
-                    raise ValueError(
-                        "No managed club in this save (between jobs?). "
-                        "Use All players instead."
+            with _track_player_load_progress():
+                if scope_key == "squad":
+                    managed = career_save.managed_clubs()
+                    if not managed:
+                        raise ValueError(
+                            "No managed club in this save (between jobs?). "
+                            "Use All players instead."
+                        )
+                    club_uid = managed[0].club_uid
+                    players = career_save.players().where(club_uid=club_uid)
+                else:
+                    players = career_save.players()
+
+                if _filters_active(filters):
+                    players = players.filter(
+                        lambda player: _passes_filters(player, filters)
                     )
-                club_uid = managed[0].club_uid
-                players = career_save.players().where(club_uid=club_uid)
-            else:
-                players = career_save.players()
 
-            if _filters_active(filters):
-                players = players.filter(
-                    lambda player: _passes_filters(player, filters)
-                )
-
-            player_list = list(players)
+                player_list = list(players)
             uid_set = {p.uid for p in player_list}
             club_divisions = _build_club_divisions(career_save)
 
