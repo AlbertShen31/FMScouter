@@ -7,12 +7,16 @@ Fill in SAVES, then run::
     .venv/bin/python scripts/load_fmsave_frames.py -n 164
     .venv/bin/python scripts/load_fmsave_frames.py -n 164 173 55
     .venv/bin/python scripts/load_fmsave_frames.py -t 130
-    .venv/bin/python scripts/load_fmsave_frames.py -t 140 --export-names data/tier140_names.csv
+    .venv/bin/python scripts/load_fmsave_frames.py -t 140 --export-names data/names.csv
+    # → data/tier140_names_10.csv … _1.csv
+    .venv/bin/python scripts/load_fmsave_frames.py --export-names data/names.csv
+    # → data/tier{100,120,130,140}_names_{N…1}.csv
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -26,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from config.paths import NATION_NAMES_PATH  # noqa: E402
 from services.fmsave_export import (  # noqa: E402
     CLUB_NATION_OPTIONS,
     _CUPISH_NAME_PARTS,
@@ -33,6 +38,7 @@ from services.fmsave_export import (  # noqa: E402
 )
 
 COMPETITION_NAMES = ROOT / "data" / "competition-names.csv"
+NATION_NAMES = NATION_NAMES_PATH
 
 # Known FM nation ids → labels (pass any int via -n; unknown ids print as the number).
 KNOWN_NATIONS: dict[int, str] = {
@@ -44,18 +50,19 @@ KNOWN_NATIONS: dict[int, str] = {
 TIERS = (100, 120, 130, 140)
 
 # Fill these in yourself (absolute paths or ~/… to .fm files).
-# Order: latest first → earliest last (--export-names uses SAVES[0]).
+# Order: latest first → earliest last.
+# --export-names → tier{tier}_{name}_{N…1}.csv (SAVES[0]=N, SAVES[-1]=1).
 SAVES = [
     "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End.fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v02).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v03).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v04).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v05).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v06).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v07).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v08).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v09).fm",
-    # "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test.fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v02).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v03).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v04).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v05).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v06).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v07).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v08).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v09).fm",
+    "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test.fm",
 ]
 
 
@@ -77,17 +84,37 @@ def parse_args() -> argparse.Namespace:
         "-t",
         "--tier",
         type=int,
+        nargs="*",
         choices=TIERS,
-        help=f"Only report/export CA|PA>={{tier}}. Choices: {', '.join(map(str, TIERS))}",
+        metavar="TIER",
+        help=f"CA|PA>= tier(s) to report/export. Omit value to use all "
+        f"({', '.join(map(str, TIERS))}). With --export-names and no -t, "
+        f"exports every tier.",
     )
     parser.add_argument(
         "--export-names",
         type=Path,
-        metavar="CSV",
-        help="Write player names from the latest save (SAVES[0]) to this CSV "
-        "(filtered to --tier when set).",
+        metavar="NAME",
+        help="Export path prefix/name; writes "
+        "tier{{tier}}_{{name}}_{{N}}.csv … _1.csv per tier×save "
+        "(directory from path; stem is the default name; "
+        "SAVES[0]=N, SAVES[-1]=1).",
     )
     return parser.parse_args()
+
+
+def resolve_tiers(tier_arg: list[int] | None) -> tuple[int, ...]:
+    """None → all TIERS; [] (bare -t) → all TIERS; otherwise the given tiers."""
+    if tier_arg is None or len(tier_arg) == 0:
+        return TIERS
+    return tuple(tier_arg)
+
+
+def export_names_path(base: Path, *, tier: int, index: int, total: int) -> Path:
+    """tier{tier}_{name}_{N}.csv … _1.csv (SAVES[0]=N)."""
+    label = total - index
+    suffix = base.suffix or ".csv"
+    return base.with_name(f"tier{tier}_{base.stem}_{label}{suffix}")
 
 
 def resolve_nations(ids: list[int] | None) -> dict[int, str]:
@@ -145,9 +172,29 @@ def tier_counts(df: pd.DataFrame, tiers: tuple[int, ...] = TIERS) -> dict[str, i
     return out
 
 
+def load_nation_names(path: Path | None = None) -> dict[int, str]:
+    """Load ``database_id,name`` CSV (same shape as competition-names)."""
+    csv_path = path or NATION_NAMES
+    out: dict[int, str] = {}
+    if not csv_path.is_file():
+        return out
+    with csv_path.open(encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            raw_id = (row.get("database_id") or "").strip()
+            name = (row.get("name") or "").strip()
+            if not raw_id or not name:
+                continue
+            try:
+                out[int(raw_id)] = name
+            except ValueError:
+                continue
+    return out
+
+
 def nation_name_map() -> dict[int, str]:
-    """FM nation id → label (club options + script KNOWN_NATIONS)."""
-    return {**dict(CLUB_NATION_OPTIONS), **KNOWN_NATIONS}
+    """FM nation id → label (CSV, then club options / KNOWN_NATIONS)."""
+    return {**dict(CLUB_NATION_OPTIONS), **KNOWN_NATIONS, **load_nation_names()}
 
 
 def nation_label(df: pd.DataFrame, nations: dict[int, str]) -> pd.Series:
@@ -373,11 +420,11 @@ def main() -> None:
     args = parse_args()
     nations = resolve_nations(args.nations)
     target_ids = frozenset(nations)
-    active_tiers = (args.tier,) if args.tier is not None else TIERS
+    # Bare ``-t`` → []; omitted ``-t`` → None. Both mean all tiers for report+export.
+    active_tiers = resolve_tiers(args.tier)
 
     print("Nations:", ", ".join(f"{name} ({nid})" for nid, name in nations.items()))
-    if args.tier is not None:
-        print(f"Tier filter: CA|PA>={args.tier}")
+    print("Tiers:", ", ".join(f"CA|PA>={t}" for t in active_tiers))
 
     # SAVES is latest→earliest; walk earliest→latest for readable progress.
     save_paths = [Path(p).expanduser() for p in SAVES]
@@ -387,7 +434,7 @@ def main() -> None:
     frames: dict[str, pd.DataFrame] = {}
     club_competitions: dict[str, dict[int, ClubCompetitionInfo]] = {}
     rows: list[dict[str, object]] = []
-    export_label = save_paths[0].stem if args.export_names is not None else None
+    do_export = args.export_names is not None
 
     for path in reversed(save_paths):
         label = path.stem
@@ -401,7 +448,7 @@ def main() -> None:
                 .filter(lambda p: bool(player_nation_ids(p) & target_ids))
                 .to_pandas()
             )
-            if export_label is not None and label == export_label:
+            if do_export:
                 print("    Resolving club → competition…")
                 club_competitions[label] = build_club_competition_info(save)
         frames[label] = df
@@ -417,21 +464,34 @@ def main() -> None:
     print("\nSummary")
     print(summary.to_string(index=False))
 
-    if args.export_names is not None:
-        latest_label = save_paths[0].stem
-        export = names_export_frame(
-            frames[latest_label],
-            save_label=latest_label,
-            nations=nations,
-            tier=args.tier,
-            club_competition=club_competitions.get(latest_label),
+    if do_export:
+        base = args.export_names.expanduser()
+        if not base.is_absolute():
+            base = ROOT / base
+        base.parent.mkdir(parents=True, exist_ok=True)
+        total = len(save_paths)
+        print(
+            f"\nExporting {len(active_tiers)} tier(s) × {total} save(s) → "
+            f"tier{{tier}}_{base.stem}_{{N…1}}{base.suffix or '.csv'}"
         )
-        out_path = args.export_names.expanduser()
-        if not out_path.is_absolute():
-            out_path = ROOT / out_path
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        export.to_csv(out_path, index=False)
-        print(f"\nWrote {len(export)} name rows (latest={latest_label}) → {out_path}")
+        for tier in active_tiers:
+            for index, path in enumerate(save_paths):
+                label = path.stem
+                export = names_export_frame(
+                    frames[label],
+                    save_label=label,
+                    nations=nations,
+                    tier=tier,
+                    club_competition=club_competitions.get(label),
+                )
+                out_path = export_names_path(
+                    base, tier=tier, index=index, total=total
+                )
+                export.to_csv(out_path, index=False)
+                print(
+                    f"  tier{tier} [{total - index}] {label}: "
+                    f"{len(export)} rows → {out_path.name}"
+                )
 
 
 if __name__ == "__main__":

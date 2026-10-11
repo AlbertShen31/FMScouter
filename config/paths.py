@@ -52,6 +52,9 @@ UNKNOWN_DIVISIONS_PATH = DATA_DIR / "unknown_divisions.json"
 # Editor database_id → competition display name for fmsave (save stores no names).
 COMPETITION_NAMES_PATH = DATA_DIR / "competition-names.csv"
 
+# FM save nation_id / club_nation_id → display name (save stores no nation names).
+NATION_NAMES_PATH = DATA_DIR / "nation-names.csv"
+
 # Pre-reorg locations (still read once, then moved into role_weights/).
 LEGACY_ROLE_PACKS_DIR = CONFIG_DIR / "packs"
 LEGACY_ROLE_ACTIVE_PATH = CONFIG_DIR / "active_pack.json"
