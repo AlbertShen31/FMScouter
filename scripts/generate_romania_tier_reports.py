@@ -9,6 +9,25 @@ YEARS = range(1, 11)
 UNASSIGNED = "(Unassigned)"
 
 
+def resolve_year_csv(input_dir: Path, tier: int, year: int) -> Path:
+    """Resolve YR-60 (`tier100_romania_year_1.csv`) or tagged (`tier100_100yr_romania_year_1.csv`) names."""
+    plain = input_dir / f"tier{tier}_romania_year_{year}.csv"
+    if plain.exists():
+        return plain
+    matches = sorted(input_dir.glob(f"tier{tier}_*_romania_year_{year}.csv"))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        names = ", ".join(p.name for p in matches)
+        raise FileNotFoundError(
+            f"Ambiguous input for tier {tier} year {year} in {input_dir}: {names}"
+        )
+    raise FileNotFoundError(
+        f"Missing input for tier {tier} year {year} in {input_dir} "
+        f"(expected tier{tier}_romania_year_{year}.csv or tier{tier}_*_romania_year_{year}.csv)"
+    )
+
+
 def generate(input_dir: Path, output_dir: Path, tiers=TIERS):
     output_dir.mkdir(parents=True, exist_ok=True)
     count_rows, id_rows, nation_rows = [], [], []
@@ -16,9 +35,7 @@ def generate(input_dir: Path, output_dir: Path, tiers=TIERS):
     for tier in tiers:
         yearly = {}
         for year in YEARS:
-            path = input_dir / f"tier{tier}_romania_year_{year}.csv"
-            if not path.exists():
-                raise FileNotFoundError(f"Missing input: {path}")
+            path = resolve_year_csv(input_dir, tier, year)
             df = pd.read_csv(path, dtype={"uid": "string"})
             for column in ("uid", "competition_nation"):
                 if column not in df.columns:
