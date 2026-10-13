@@ -65,15 +65,15 @@ TIERS = (100, 120, 130, 140)
 #     "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test.fm",
 # ]
 SAVES = [
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End.fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v02).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v03).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v04).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v05).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v06).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v07).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v08).fm",
-        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test Year 1 End (v09).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End.fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v02).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v03).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v04).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v05).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v06).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v07).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v08).fm",
+        "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR Year End (v09).fm",
         "/Users/albertwshen/Library/Application Support/Sports Interactive/Football Manager 26/games/Romania Test 100 YR.fm",
 ]
 
