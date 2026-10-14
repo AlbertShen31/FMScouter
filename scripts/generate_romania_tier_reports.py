@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Generate Romania player population reports across tiers and yearly snapshots."""
+"""Generate Romania player population reports across tiers and yearly snapshots.
+
+Standalone::
+
+    .venv/bin/python scripts/generate_romania_tier_reports.py \\
+        --input-dir "scripts/exports/YR 100" \\
+        --output-dir "scripts/exports/YR 100/reports"
+
+After a fresh export from load_fmsave_frames::
+
+    .venv/bin/python scripts/run_romania_tier_pipeline.py \\
+        -n 164 --export-names "scripts/exports/YR 100/100yr_romania_year.csv"
+"""
 from pathlib import Path
 import argparse
 import pandas as pd

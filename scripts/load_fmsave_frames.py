@@ -11,6 +11,11 @@ Fill in SAVES, then run::
     # → data/tier140_names_10.csv … _1.csv
     .venv/bin/python scripts/load_fmsave_frames.py --export-names data/names.csv
     # → data/tier{100,120,130,140}_names_{N…1}.csv
+
+Export then generate Romania tier reports in one go::
+
+    .venv/bin/python scripts/run_romania_tier_pipeline.py \\
+        -n 164 --export-names "scripts/exports/YR 100/100yr_romania_year.csv"
 """
 
 from __future__ import annotations
