@@ -744,12 +744,16 @@ def select_options(
     *,
     page: str | None = None,
     include_cache: bool = True,
-) -> list[dict[str, str]]:
+) -> list[dict]:
     """Dash Select / Mantine options for eligible files.
 
     When ``include_cache`` is True and ``page`` is ``role_scores`` or ``stats``,
     labels include Ready / Stale / Not computed from upload precompute status.
     Ready files are listed first.
+
+    Labels always lead with ``Single year`` or ``Multi-year (Y…)`` so the closed
+    Select shows the kind. When both kinds are present, options are grouped under
+    those headings for easier scanning.
     """
     entries = list_files(page=page)
     show_cache = bool(include_cache and page in {"role_scores", "stats"})
@@ -782,16 +786,22 @@ def select_options(
         )
         entries = sorted(entries, key=_status_rank)
 
-    opts = []
+    single_opts: list[dict[str, str]] = []
+    multi_opts: list[dict[str, str]] = []
     for entry in entries:
         name = display_label(entry)
         when = (entry.get("saved_at") or "")[:10]
         note = (entry.get("user_note") or "").strip()
-        label = f"{name}" + (f" · {when}" if when else "")
         if is_multi_year(entry):
             years = configured_years(entry)
             slots = "+".join(f"Y{k}" for k in YEAR_KEYS if k in years)
-            label = f"{label} · Multi-year ({slots})"
+            kind = f"Multi-year ({slots})" if slots else "Multi-year"
+            bucket = multi_opts
+        else:
+            kind = "Single year"
+            bucket = single_opts
+        # Kind first so long names / closed Select still show single vs multi.
+        label = f"{kind} · {name}" + (f" · {when}" if when else "")
         if note:
             short = note if len(note) <= 40 else note[:37] + "…"
             label = f"{label} — {short}"
@@ -800,8 +810,14 @@ def select_options(
             cache_label = st.get("label")
             if cache_label and cache_label != "—":
                 label = f"{label} · {cache_label}"
-        opts.append({"value": entry["id"], "label": label})
-    return opts
+        bucket.append({"value": entry["id"], "label": label})
+
+    if single_opts and multi_opts:
+        return [
+            {"group": "Single year", "items": single_opts},
+            {"group": "Multi-year", "items": multi_opts},
+        ]
+    return single_opts + multi_opts
 
 
 def list_view_files() -> list[Path]:
