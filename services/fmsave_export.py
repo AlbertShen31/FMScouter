@@ -789,6 +789,9 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         "Asts/90": "",
         "xG": "",
         "xG/90": "",
+        "xG-OP": "",
+        "NP-xG": "",
+        "NP-xG/90": "",
         "xA": "",
         "xA/90": "",
         "Shots": "",
@@ -806,6 +809,7 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         "Progressive Passes per 90": "",
         "PsP": "",
         "Possession Won per 90": "",
+        "Possession Lost per 90": "",
         "Interceptions": "",
         "Interceptions per 90": "",
         "Clearances": "",
@@ -843,20 +847,14 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         return empty
 
     apps = int(stats.starts or 0) + int(stats.substitute_appearances or 0)
-    progressive = getattr(stats, "progressive_passes", None)
-    progressive_90 = getattr(stats, "progressive_passes_per_90", None)
-    blocks = getattr(stats, "blocks", None)
-    blocks_90 = getattr(stats, "blocks_per_90", None)
-    headers_att = getattr(stats, "aerial_challenges_attempted", None)
-    headers_att_90 = getattr(stats, "aerial_challenges_attempted_per_90", None)
-    op_cross = getattr(stats, "open_play_crosses_completed", None)
-    op_cross_90 = getattr(stats, "open_play_crosses_completed_per_90", None)
-    sprints = getattr(stats, "high_intensity_sprints", None)
-    sprints_90 = getattr(stats, "high_intensity_sprints_per_90", None)
     fouls_90 = None
     minutes = int(stats.minutes or 0)
     if minutes > 0 and stats.fouls_made is not None:
         fouls_90 = (float(stats.fouls_made) * 90.0) / minutes
+
+    xg_op = None
+    if stats.goals is not None and stats.expected_goals is not None:
+        xg_op = float(stats.goals) - float(stats.expected_goals)
 
     return {
         "Appearances": _num(apps),
@@ -867,6 +865,9 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         "Asts/90": _num(stats.assists_per_90, digits=3),
         "xG": _num(stats.expected_goals, digits=2),
         "xG/90": _num(stats.expected_goals_per_90, digits=3),
+        "xG-OP": _num(xg_op, digits=2),
+        "NP-xG": _num(stats.non_penalty_expected_goals, digits=2),
+        "NP-xG/90": _num(stats.non_penalty_expected_goals_per_90, digits=3),
         "xA": _num(stats.expected_assists, digits=2),
         "xA/90": _num(stats.expected_assists_per_90, digits=3),
         "Shots": _num(stats.shots),
@@ -881,19 +882,22 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         "Passes Attempted": _num(stats.passes_attempted),
         "Passes Attempted per 90": _num(stats.passes_attempted_per_90, digits=3),
         "Pass Completion Ratio": _pct(stats.pass_completion_percent),
-        "Progressive Passes per 90": _num(progressive_90, digits=3),
-        "PsP": _num(progressive),
+        "Progressive Passes per 90": _num(stats.progressive_passes_per_90, digits=3),
+        "PsP": _num(stats.progressive_passes),
         "Possession Won per 90": _num(stats.possession_won_per_90, digits=3),
+        "Possession Lost per 90": _num(stats.possession_lost_per_90, digits=3),
         "Interceptions": _num(stats.interceptions),
         "Interceptions per 90": _num(stats.interceptions_per_90, digits=3),
         "Clearances": _num(stats.clearances),
         "Clearances per 90": _num(stats.clearances_per_90, digits=3),
-        "Blk": _num(blocks),
-        "Blk/90": _num(blocks_90, digits=3),
+        "Blk": _num(stats.blocks),
+        "Blk/90": _num(stats.blocks_per_90, digits=3),
         "Headers Won": _num(stats.headers_won),
         "Headers Won per 90": _num(stats.headers_won_per_90, digits=3),
-        "Headers Attempted": _num(headers_att),
-        "Headers Attempted per 90": _num(headers_att_90, digits=3),
+        "Headers Attempted": _num(stats.aerial_challenges_attempted),
+        "Headers Attempted per 90": _num(
+            stats.aerial_challenges_attempted_per_90, digits=3
+        ),
         "Headers Won Percentage": _pct(stats.headers_won_percent),
         "Tackles Attempted": _num(stats.tackles_attempted),
         "Tackles Completed": _num(stats.tackles_completed),
@@ -904,10 +908,10 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
         "Pressures Attempted": _num(stats.pressures_attempted),
         "Pressures Attempted per 90": _num(stats.pressures_attempted_per_90, digits=3),
         "Crosses Completed": _num(stats.crosses_completed),
-        "Open Play Crosses Completed": _num(op_cross),
-        "OP Cr C/90": _num(op_cross_90, digits=3),
-        "Sprints": _num(sprints),
-        "Sprints per 90": _num(sprints_90, digits=3),
+        "Open Play Crosses Completed": _num(stats.open_play_crosses_completed),
+        "OP Cr C/90": _num(stats.open_play_crosses_completed_per_90, digits=3),
+        "Sprints": _num(stats.high_intensity_sprints),
+        "Sprints per 90": _num(stats.high_intensity_sprints_per_90, digits=3),
         "Goals Allowed": _num(stats.goals_allowed),
         "xGP": _num(stats.expected_goals_prevented, digits=2),
         "xGP/90": _num(stats.expected_goals_prevented_per_90, digits=3),
@@ -1058,6 +1062,9 @@ def _column_order(sample: dict[str, str]) -> list[str]:
         "Asts/90",
         "xG",
         "xG/90",
+        "xG-OP",
+        "NP-xG",
+        "NP-xG/90",
         "xA",
         "xA/90",
         "Shots",
@@ -1075,6 +1082,7 @@ def _column_order(sample: dict[str, str]) -> list[str]:
         "PsP",
         "Progressive Passes per 90",
         "Possession Won per 90",
+        "Possession Lost per 90",
         "Interceptions",
         "Interceptions per 90",
         "Clearances",
@@ -1231,10 +1239,10 @@ def export_moneyball_csv(
             )
 
             season_by_uid: dict[int, list[Any]] = {}
-            for record in career_save.player_season_stats():
+            for record in career_save.player_season_stats().where(
+                kind=SeasonStatsKind.OVERALL
+            ):
                 if record.player_uid not in uid_set:
-                    continue
-                if record.kind != SeasonStatsKind.OVERALL:
                     continue
                 season_by_uid.setdefault(record.player_uid, []).append(record)
 
