@@ -155,7 +155,7 @@ def layout(**_kwargs):
                                                                     ),
                                                                     dmc.NumberInput(
                                                                         id="sx-min-ca",
-                                                                        label="Min CA",
+                                                                        label="Min CA (1–200)",
                                                                         value=None,
                                                                         min=1,
                                                                         max=200,
@@ -163,7 +163,7 @@ def layout(**_kwargs):
                                                                     ),
                                                                     dmc.NumberInput(
                                                                         id="sx-min-club-rep",
-                                                                        label="Min club rep",
+                                                                        label="Min club rep (0–20,000)",
                                                                         value=None,
                                                                         min=0,
                                                                         max=20000,
