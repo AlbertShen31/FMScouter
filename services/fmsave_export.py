@@ -674,6 +674,18 @@ def _normalize_scope(scope: str) -> Scope:
     return "squad"
 
 
+def _export_filename(
+    scope_key: str,
+    save_path: Path,
+    game_date: date | None,
+) -> str:
+    """Uploads/download name: ``fmsave_{scope}_{stem}_{YYYY-MM}.csv`` when dated."""
+    stem = save_path.stem or "export"
+    if game_date is not None:
+        return f"fmsave_{scope_key}_{stem}_{game_date.year:04d}-{game_date.month:02d}.csv"
+    return f"fmsave_{scope_key}_{stem}.csv"
+
+
 def _pick_season_row(
     rows: list[Any],
     *,
@@ -1206,9 +1218,11 @@ def export_moneyball_csv(
 
     compute_progress.update(phase="Opening save…", done=0, total=0)
 
+    game_date: date | None = None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with fmsave.open(path, competition_names=competition_names) as career_save:
+            game_date = career_save.info.game_date
             compute_progress.update(phase="Loading players…")
             with _track_player_load_progress():
                 if scope_key == "squad":
@@ -1293,9 +1307,10 @@ def export_moneyball_csv(
         "scope": scope_key,
         "filters_active": _filters_active(filters),
         "save_path": str(path),
+        "game_date": game_date.isoformat() if game_date else None,
         "eligibility": eligibility,
         "mapped_columns": mapped,
         "blank_columns": list(BLANK_COLUMNS),
-        "filename": f"fmsave_{scope_key}_{path.stem}.csv",
+        "filename": _export_filename(scope_key, path, game_date),
     }
     return csv_text, meta
