@@ -98,16 +98,85 @@ app.layout = dmc.MantineProvider(
                     dbc.NavbarBrand("FMScouter", href="/"),
                     dbc.Nav(
                         [
-                            dbc.NavItem(dbc.NavLink("Uploads", href="/uploads")),
-                            dbc.NavItem(dbc.NavLink("Save export", href="/save-export")),
-                            dbc.NavItem(dbc.NavLink("Role scores", href="/")),
-                            dbc.NavItem(dbc.NavLink("Player stats", href="/stats")),
-                            dbc.NavItem(dbc.NavLink("Profiles", href="/profiles")),
-                            dbc.NavItem(dbc.NavLink("Squad finance", href="/squad-finance")),
-                            dbc.NavItem(dbc.NavLink("Role configs", href="/role-config")),
-                            dbc.NavItem(dbc.NavLink("Formations", href="/formations")),
-                            dbc.NavItem(dbc.NavLink("Docs", href="/formulas")),
-                            dbc.NavItem(dbc.NavLink("Settings", href="/settings")),
+                            dbc.NavItem(
+                                dbc.NavLink(
+                                    "Role scores",
+                                    href="/",
+                                    id="nav-link-role-scores",
+                                )
+                            ),
+                            dbc.NavItem(
+                                dbc.NavLink(
+                                    "Player stats",
+                                    href="/stats",
+                                    id="nav-link-player-stats",
+                                )
+                            ),
+                            dbc.NavItem(
+                                dbc.NavLink(
+                                    "Profiles",
+                                    href="/profiles",
+                                    id="nav-link-profiles",
+                                )
+                            ),
+                            dbc.DropdownMenu(
+                                [
+                                    dbc.DropdownMenuItem(
+                                        "Uploads",
+                                        href="/uploads",
+                                        id="nav-item-uploads",
+                                    ),
+                                    dbc.DropdownMenuItem(
+                                        "Save export",
+                                        href="/save-export",
+                                        id="nav-item-save-export",
+                                    ),
+                                ],
+                                label="Data",
+                                id="nav-menu-data",
+                                nav=True,
+                                in_navbar=True,
+                                caret=True,
+                                toggle_class_name="app-nav-toggle",
+                                class_name="app-nav-dropdown app-nav-groups-start",
+                            ),
+                            dbc.DropdownMenu(
+                                [
+                                    dbc.DropdownMenuItem(
+                                        "Squad finance",
+                                        href="/squad-finance",
+                                        id="nav-item-squad-finance",
+                                    ),
+                                    dbc.DropdownMenuItem(
+                                        "Role configs",
+                                        href="/role-config",
+                                        id="nav-item-role-configs",
+                                    ),
+                                    dbc.DropdownMenuItem(
+                                        "Formations",
+                                        href="/formations",
+                                        id="nav-item-formations",
+                                    ),
+                                    dbc.DropdownMenuItem(divider=True),
+                                    dbc.DropdownMenuItem(
+                                        "Docs",
+                                        href="/formulas",
+                                        id="nav-item-docs",
+                                    ),
+                                    dbc.DropdownMenuItem(
+                                        "Settings",
+                                        href="/settings",
+                                        id="nav-item-settings",
+                                    ),
+                                ],
+                                label="Setup",
+                                id="nav-menu-setup",
+                                nav=True,
+                                in_navbar=True,
+                                caret=True,
+                                toggle_class_name="app-nav-toggle",
+                                class_name="app-nav-dropdown",
+                            ),
                             dbc.NavItem(
                                 dmc.Button(
                                     "Light mode",
@@ -142,6 +211,51 @@ app.clientside_callback(
     """,
     Output("theme-toggle", "children"),
     Input("theme", "data"),
+)
+
+app.clientside_callback(
+    """
+    function(pathname) {
+        const path = pathname || "/";
+        const on = (href) => path === href;
+        const toggleCls = (active) =>
+            active ? "app-nav-toggle active" : "app-nav-toggle";
+        const dataOn = on("/uploads") || on("/save-export");
+        const setupOn =
+            on("/squad-finance") ||
+            on("/role-config") ||
+            on("/formations") ||
+            on("/formulas") ||
+            on("/settings");
+        return [
+            on("/") || path === "",
+            on("/stats"),
+            on("/profiles"),
+            toggleCls(dataOn),
+            toggleCls(setupOn),
+            on("/uploads"),
+            on("/save-export"),
+            on("/squad-finance"),
+            on("/role-config"),
+            on("/formations"),
+            on("/formulas"),
+            on("/settings"),
+        ];
+    }
+    """,
+    Output("nav-link-role-scores", "active"),
+    Output("nav-link-player-stats", "active"),
+    Output("nav-link-profiles", "active"),
+    Output("nav-menu-data", "toggle_class_name"),
+    Output("nav-menu-setup", "toggle_class_name"),
+    Output("nav-item-uploads", "active"),
+    Output("nav-item-save-export", "active"),
+    Output("nav-item-squad-finance", "active"),
+    Output("nav-item-role-configs", "active"),
+    Output("nav-item-formations", "active"),
+    Output("nav-item-docs", "active"),
+    Output("nav-item-settings", "active"),
+    Input("_pages_location", "pathname"),
 )
 
 app.clientside_callback(

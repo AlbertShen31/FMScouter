@@ -109,8 +109,73 @@ body {
     color: var(--app-text) !important;
 }
 
-.app-navbar .nav-link:hover {
+.app-navbar .nav-link:hover,
+.app-navbar .nav-link:focus {
     color: var(--app-accent) !important;
+}
+
+.app-navbar .nav-link.active,
+.app-navbar .app-nav-toggle.active {
+    color: var(--app-accent) !important;
+}
+
+.app-navbar .app-nav-groups-start {
+    margin-left: 4px;
+    padding-left: 12px;
+    border-left: 1px solid var(--app-line);
+}
+
+.app-navbar .dropdown-toggle {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+}
+
+.app-navbar .dropdown-toggle:hover,
+.app-navbar .dropdown-toggle:focus,
+.app-navbar .dropdown-toggle.show,
+.app-navbar .dropdown-toggle.active {
+    background: transparent !important;
+    color: var(--app-accent) !important;
+}
+
+.app-navbar .dropdown-menu {
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    padding: 6px;
+    min-width: 180px;
+}
+
+.app-navbar .dropdown-item {
+    color: var(--app-text);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 10px;
+}
+
+.app-navbar .dropdown-item:hover,
+.app-navbar .dropdown-item:focus {
+    background: var(--app-hover);
+    color: var(--app-accent);
+}
+
+.app-navbar .dropdown-item.active,
+.app-navbar .dropdown-item:active {
+    background: var(--app-active);
+    color: var(--app-accent);
+}
+
+.app-navbar .dropdown-divider {
+    border-top-color: var(--app-line);
+    margin: 6px 4px;
+}
+
+html[data-theme="light"] .app-navbar .dropdown-menu,
+body[data-theme="light"] .app-navbar .dropdown-menu {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .theme-toggle {
