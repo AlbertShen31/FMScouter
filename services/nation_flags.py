@@ -1,7 +1,12 @@
-"""FM nationality / Based In labels → flag emoji (primary left of second)."""
+"""FM nationality / Based In labels → Flagpedia icons (primary left of second).
+
+Icons are the 20×15 waving set from https://flagpedia.net/download/icons
+(ISO 3166-1 alpha-2 / ISO 3166-2:GB filenames), served from ``assets/flags/``.
+"""
 from __future__ import annotations
 
 import re
+from html import escape as html_escape
 from typing import Any
 
 from scoring.division_tiers import _fold
@@ -359,6 +364,15 @@ _FLAG_RUN = re.compile(
     r")"
     r"(?:\u00a0|\s)*"
 )
+_FLAG_HTML = re.compile(
+    r'(?:<span\b[^>]*\bnation-flags\b[^>]*>.*?</span>)'
+    r'|(?:<img\b[^>]*\bnation-flag\b[^>]*/?>)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+FLAG_ICON_WIDTH = 20
+FLAG_ICON_HEIGHT = 15
+FLAG_ASSET_PREFIX = "/assets/flags"
 
 
 def _iso_to_flag(code: str) -> str:
@@ -392,6 +406,53 @@ def _nation_iso2(raw: Any) -> str:
     return ""
 
 
+def nation_iso2(raw: Any) -> str:
+    """Single nationality → ISO 3166 code (``GB-ENG`` for home nations), or empty."""
+    return _nation_iso2(raw)
+
+
+def flag_icon_src(code: str) -> str:
+    """Local Flagpedia icon URL for an ISO code (``gb-eng.png`` style)."""
+    slug = str(code or "").strip().lower()
+    if not slug:
+        return ""
+    return f"{FLAG_ASSET_PREFIX}/{slug}.png"
+
+
+def iter_nation_flags(
+    primary: Any = None,
+    second: Any = None,
+) -> list[tuple[str, str, str]]:
+    """Unique ``(iso2, src, alt)`` pairs, primary then second nationality."""
+    out: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for raw in (primary, second):
+        code = _nation_iso2(raw)
+        if not code or code in seen:
+            continue
+        src = flag_icon_src(code)
+        if not src:
+            continue
+        seen.add(code)
+        alt = str(raw or "").strip() or code
+        out.append((code, src, alt))
+    return out
+
+
+def nation_flag_html(primary: Any = None, second: Any = None) -> str:
+    """Markdown/HTML span of Flagpedia icons (primary left). Empty when none map."""
+    parts: list[str] = []
+    for _code, src, alt in iter_nation_flags(primary, second):
+        parts.append(
+            f'<img class="nation-flag" src="{html_escape(src, quote=True)}" '
+            f'width="{FLAG_ICON_WIDTH}" height="{FLAG_ICON_HEIGHT}" '
+            f'alt="{html_escape(alt, quote=True)}" />'
+        )
+    if not parts:
+        return ""
+    return f'<span class="nation-flags">{"".join(parts)}</span>'
+
+
 def nation_flag_emoji(raw: Any) -> str:
     """Single nationality → one flag emoji, or empty when unknown."""
     return _iso_to_flag(_nation_iso2(raw))
@@ -411,10 +472,11 @@ def nation_flag_emojis(primary: Any = None, second: Any = None) -> str:
 
 
 def strip_nation_flags(text: Any) -> str:
-    """Remove leading flag emoji runs (for Name sort keys)."""
+    """Remove leading flag emoji / Flagpedia markup (for Name sort keys)."""
     value = str(text or "")
     while True:
-        updated = _FLAG_RUN.sub("", value, count=1)
+        updated = _FLAG_HTML.sub("", value, count=1)
+        updated = _FLAG_RUN.sub("", updated, count=1)
         if updated == value:
             break
         value = updated.lstrip("\u00a0 ")

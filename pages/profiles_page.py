@@ -33,7 +33,7 @@ from components.player_table import (
     is_dark_theme,
     name_sort_text,
     nation_cell,
-    nation_flags_text,
+    nation_flag_nodes,
     nation_tooltip_entry,
     nation_tooltip_text,
     page_size_select_data,
@@ -647,18 +647,6 @@ def _blank(value) -> str:
     return str(value)
 
 
-def _entry_nation_flags(entry: dict | None, row: dict | None = None) -> str:
-    """Primary-then-second flag emoji for depth / set-piece name cells."""
-    record = row if isinstance(row, dict) else {}
-    player = {}
-    if isinstance(entry, dict) and isinstance(entry.get("player"), dict):
-        player = entry["player"]
-    return nation_flags_text(
-        nation=record.get("Nation") or player.get("nation"),
-        second_nation=record.get("Second Nation") or player.get("second_nation"),
-    )
-
-
 def _entry_nation_tooltip(entry: dict | None, row: dict | None = None) -> str:
     """Primary [/ second] nationality labels for depth / set-piece name hover."""
     record = row if isinstance(row, dict) else {}
@@ -678,17 +666,26 @@ def _depth_name_label(
     row: dict | None = None,
     status=None,
 ):
-    """Name with nationality flags (primary left); optional multi-year status pill."""
+    """Name with Flagpedia icons (primary left); optional multi-year status pill."""
     label = name or "Player"
-    flags = _entry_nation_flags(entry, row)
-    if flags:
-        label = f"{flags}\u00a0{label}"
+    record = row if isinstance(row, dict) else {}
+    player = {}
+    if isinstance(entry, dict) and isinstance(entry.get("player"), dict):
+        player = entry["player"]
+    flags = nation_flag_nodes(
+        nation=record.get("Nation") or player.get("nation"),
+        second_nation=record.get("Second Nation") or player.get("second_nation"),
+    )
+    line = html.Span(
+        [*flags, html.Span(label, className="pf-depth-chart-name-text")],
+        className="pf-depth-chart-name-line",
+    )
     if not status:
-        return label
+        return line
     from components.multi_year_ui import status_pill
 
     return html.Span(
-        [label, status_pill(status)],
+        [line, status_pill(status)],
         className="pf-depth-chart-name-inner",
     )
 
@@ -4357,7 +4354,7 @@ def _role_table_columns(
     cols = []
     for col in _profile_identity_columns("role_scores", settings):
         spec = {"name": identity_header_name(col), "id": col}
-        if col in ("Feet", "Injury"):
+        if col in ("Feet", "Injury", "Name", "Nation"):
             spec["presentation"] = "markdown"
         cols.append(spec)
         if multi_year and col == "Name":

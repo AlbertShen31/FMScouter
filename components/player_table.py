@@ -62,11 +62,38 @@ def nation_flags_text(
     nation=None,
     second_nation=None,
 ) -> str:
-    """Primary-then-second flag emoji string (no trailing space)."""
-    from services.nation_flags import nation_flag_emojis
+    """Primary-then-second Flagpedia icon HTML (empty when none map)."""
+    from services.nation_flags import nation_flag_html
 
     primary, second = nation_fields(row, nation=nation, second_nation=second_nation)
-    return nation_flag_emojis(primary, second)
+    return nation_flag_html(primary, second)
+
+
+def nation_flag_nodes(
+    row: dict | None = None,
+    *,
+    nation=None,
+    second_nation=None,
+):
+    """Dash ``html.Img`` nodes for depth / set-piece name cells."""
+    from dash import html
+    from services.nation_flags import FLAG_ICON_HEIGHT, FLAG_ICON_WIDTH, iter_nation_flags
+
+    primary, second = nation_fields(row, nation=nation, second_nation=second_nation)
+    imgs = [
+        html.Img(
+            src=src,
+            alt=alt,
+            width=FLAG_ICON_WIDTH,
+            height=FLAG_ICON_HEIGHT,
+            className="nation-flag",
+            draggable="false",
+        )
+        for _code, src, alt in iter_nation_flags(primary, second)
+    ]
+    if not imgs:
+        return []
+    return [html.Span(imgs, className="nation-flags")]
 
 
 def with_nation_flags(
@@ -76,14 +103,18 @@ def with_nation_flags(
     nation=None,
     second_nation=None,
 ) -> str:
-    """Prefix a Name cell with nationality flags (primary furthest left)."""
+    """Prefix a markdown Name cell with Flagpedia icons (primary furthest left)."""
+    from html import escape as html_escape
+
     flags = nation_flags_text(row, nation=nation, second_nation=second_nation)
     text = str(name_html or "")
+    if text and not text.lstrip().startswith("<"):
+        text = html_escape(text)
     if not flags:
         return text
     if not text:
         return flags
-    return f"{flags}\u00a0{text}"
+    return f"{flags}{text}"
 
 
 def name_sort_text(value) -> str:
@@ -101,12 +132,14 @@ def nation_cell(
     *,
     row: dict | None = None,
 ) -> str:
-    """Nation column: flags (primary left) then primary label."""
+    """Nation column: Flagpedia icons (primary left) then primary label."""
+    from html import escape as html_escape
+
     primary, second_nat = nation_fields(row, nation=value, second_nation=second)
     flags = nation_flags_text(nation=primary, second_nation=second_nat)
-    label = primary or "—"
+    label = html_escape(primary) if primary else "—"
     if flags and primary:
-        return f"{flags}\u00a0{label}"
+        return f"{flags}{label}"
     if flags:
         return flags
     return label
@@ -1176,8 +1209,8 @@ def identity_data_styles(
             "if": {"column_id": "Name"},
             "fontWeight": "600",
             "textAlign": "left",
-            "minWidth": "168px",
-            "maxWidth": "240px",
+            "minWidth": "192px",
+            "maxWidth": "260px",
             "borderRight": "1px solid var(--app-line)",
             "cursor": "pointer",
             "color": "var(--app-accent)",

@@ -1284,7 +1284,7 @@ def _table_columns(
             ),
             "id": col,
         }
-        if col in ("Feet", "Injury", "Status") or (
+        if col in ("Feet", "Injury", "Status", "Name", "Nation") or (
             highlight_source and col == "Name"
         ):
             spec["presentation"] = "markdown"

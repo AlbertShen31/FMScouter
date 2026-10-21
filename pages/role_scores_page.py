@@ -1780,7 +1780,7 @@ def _cell_number(value) -> float:
 
 
 TABLE_TEXT_COLS = IDENTITY_TEXT_COLS
-TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status"}
+TABLE_MARKDOWN_COLS = {"Feet", "Injury", "Status", "Name", "Nation"}
 
 
 def _inject_multi_year_status_col(cols: list[str], rows: list[dict] | None) -> list[str]:
