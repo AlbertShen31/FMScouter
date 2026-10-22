@@ -163,7 +163,12 @@ def _source_select_data(*, page: str | None = None) -> list[dict[str, str]]:
         opts.append(
             {
                 "value": entry["id"],
-                "label": f"{label}" + (f" · {when}" if when else "") + elig,
+                "label": (
+                    f"{label}"
+                    + lib.player_count_suffix(entry)
+                    + (f" · {when}" if when else "")
+                    + elig
+                ),
             }
         )
     return opts
@@ -176,7 +181,11 @@ def _pack_select_data(*, page: str | None = None) -> list[dict[str, str]]:
         slots = "+".join(f"Y{k}" for k in lib.YEAR_KEYS if k in years)
         when = (entry.get("updated_at") or entry.get("saved_at") or "")[:10]
         label = lib.display_label(entry)
-        suffix = f" · {slots}" + (f" · {when}" if when else "")
+        suffix = (
+            lib.player_count_suffix(entry)
+            + f" · {slots}"
+            + (f" · {when}" if when else "")
+        )
         opts.append({"value": entry["id"], "label": f"{label}{suffix}"})
     return opts
 
@@ -185,7 +194,9 @@ def _year_slot_label(file_id: str | None) -> str:
     if not file_id:
         return "— empty —"
     entry = lib.get_file(file_id)
-    return lib.display_label(entry) if entry else f"(missing {file_id})"
+    if not entry:
+        return f"(missing {file_id})"
+    return lib.display_label(entry) + lib.player_count_suffix(entry)
 
 
 def _roll_preview(pack_id: str | None, new_year_id: str | None) -> html.Div:
@@ -248,6 +259,22 @@ def _roll_preview(pack_id: str | None, new_year_id: str | None) -> html.Div:
     return html.Div(rows, className="up-roll-preview")
 
 
+def _players_cell(entry: dict) -> html.Span:
+    n = lib.player_count_of(entry)
+    if n is None:
+        return html.Span(
+            "—",
+            className="text-muted",
+            title="Count appears after the file is on disk",
+        )
+    phrase = lib.player_count_phrase(n)
+    return html.Span(
+        f"{n:,}",
+        className="up-player-count",
+        title=phrase,
+    )
+
+
 def _kind_cell(entry: dict) -> html.Span:
     if lib.is_multi_year(entry):
         years = lib.configured_years(entry)
@@ -271,6 +298,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         [
             html.Th("Name"),
             html.Th("Type"),
+            html.Th("Players"),
             html.Th("Saved"),
             html.Th("Role scores"),
             html.Th("Player stats"),
@@ -332,6 +360,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
                         title=title,
                     ),
                     html.Td(_kind_cell(entry)),
+                    html.Td(_players_cell(entry)),
                     html.Td((entry.get("saved_at") or "")[:19].replace("T", " ")),
                     html.Td(_yes_no(bool(entry.get("role_scores")))),
                     html.Td(_yes_no(bool(entry.get("stats")))),

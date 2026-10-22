@@ -204,6 +204,153 @@ def display_label(entry: dict[str, Any] | None) -> str:
     )
 
 
+def _header_alias_indexes(header: list[str], aliases: list[str]) -> list[int]:
+    names = set(aliases)
+    return [
+        i
+        for i, col in enumerate(header)
+        if col in names or col.split(".")[0] in names
+    ]
+
+
+def _first_cell(raw: list[str], indexes: list[int]) -> str:
+    for i in indexes:
+        if i < len(raw):
+            val = str(raw[i]).strip()
+            if val:
+                return val
+    return ""
+
+
+def _iter_csv_player_keys(text: str):
+    """Yield ``Name|Unique ID`` (name-only fallback) for each named CSV row."""
+    if not text or not text.strip():
+        return
+    delim = sniff_delimiter(text)
+    reader = csv.reader(io.StringIO(text), delimiter=delim)
+    try:
+        raw_header = next(reader)
+    except StopIteration:
+        return
+    header = unique_headers(raw_header)
+    name_idxs = _header_alias_indexes(header, IDENTITY["Name"])
+    uid_idxs = _header_alias_indexes(header, IDENTITY["UniqueID"])
+    for raw in reader:
+        if not raw or all(not str(cell).strip() for cell in raw):
+            continue
+        name = _first_cell(raw, name_idxs)
+        if not name:
+            continue
+        uid = _first_cell(raw, uid_idxs)
+        yield f"{name}|{uid}" if uid else name
+
+
+def count_csv_players(text: str) -> int:
+    """Count named player rows in CSV text (header excluded, blanks skipped)."""
+    return sum(1 for _ in _iter_csv_player_keys(text))
+
+
+def csv_player_keys(text: str) -> set[str]:
+    """Identity keys for named rows — used to union multi-year sources."""
+    return set(_iter_csv_player_keys(text))
+
+
+def player_count_of(entry: dict[str, Any] | None) -> int | None:
+    """Stored player count for a library row, if known."""
+    if not entry:
+        return None
+    raw = entry.get("player_count")
+    if raw is None:
+        raw = (entry.get("cache") or {}).get("n_players")
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 0 else None
+
+
+def player_count_phrase(n: int | None) -> str:
+    if n is None:
+        return ""
+    return f"{n:,} player" if n == 1 else f"{n:,} players"
+
+
+def player_count_suffix(entry: dict[str, Any] | None) -> str:
+    phrase = player_count_phrase(player_count_of(entry))
+    return f" · {phrase}" if phrase else ""
+
+
+def _read_stored_csv_text(entry: dict[str, Any] | None) -> str | None:
+    if not entry or is_multi_year(entry):
+        return None
+    path = UPLOADS_DIR / (entry.get("stored_name") or "")
+    if not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def unique_player_count_from_sources(
+    file_ids: list[str],
+    by_id: dict[str, dict[str, Any]],
+    *,
+    texts: dict[str, str] | None = None,
+) -> int | None:
+    """Union of player identity keys across single-file sources."""
+    texts = texts if texts is not None else {}
+    keys: set[str] = set()
+    any_src = False
+    for fid in file_ids:
+        src = by_id.get(fid)
+        if not src or is_multi_year(src):
+            continue
+        text = texts.get(fid)
+        if text is None:
+            text = _read_stored_csv_text(src)
+            if text is not None:
+                texts[fid] = text
+        if not text:
+            continue
+        keys |= csv_player_keys(text)
+        any_src = True
+    if not any_src:
+        return None
+    return len(keys)
+
+
+def _backfill_index_player_counts(index: list[dict[str, Any]]) -> bool:
+    """Stamp missing counts from CSVs on disk. Returns True if written."""
+    by_id = {e.get("id"): e for e in index if e.get("id")}
+    texts: dict[str, str] = {}
+    changed = False
+    for entry in index:
+        if player_count_of(entry) is not None:
+            continue
+        if is_multi_year(entry):
+            years = configured_years(entry)
+            n = unique_player_count_from_sources(
+                list(years.values()), by_id, texts=texts
+            )
+            if n is None:
+                continue
+            entry["player_count"] = n
+            changed = True
+            continue
+        fid = str(entry.get("id") or "")
+        text = texts.get(fid)
+        if text is None:
+            text = _read_stored_csv_text(entry)
+            if text is not None and fid:
+                texts[fid] = text
+        if text is None:
+            continue
+        entry["player_count"] = count_csv_players(text)
+        changed = True
+    return changed
+
+
 def is_multi_year(entry: dict[str, Any] | None) -> bool:
     return bool(entry) and entry.get("kind") == KIND_MULTI_YEAR
 
@@ -272,6 +419,8 @@ def list_files(*, page: str | None = None) -> list[dict[str, Any]]:
     """Return index entries newest-first. Optional ``page`` filters eligibility."""
     ensure_dirs()
     raw_index = _read_index()
+    if _backfill_index_player_counts(raw_index):
+        _write_index(raw_index)
     by_id = {e.get("id"): e for e in raw_index if e.get("id")}
     entries = []
     for entry in raw_index:
@@ -517,6 +666,12 @@ def save_multi_year_pack(
         "has_player_info": elig["has_player_info"],
         "eligibility_notes": elig["eligibility_notes"],
     }
+    pack_count = unique_player_count_from_sources(
+        [fid for fid in year_map.values() if fid],
+        {src["id"]: src for src in sources if src.get("id")},
+    )
+    if pack_count is not None:
+        entry["player_count"] = pack_count
     if existing:
         for i, item in enumerate(index):
             if item.get("id") == file_id:
@@ -592,6 +747,7 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
         "has_fees": eligibility["has_fees"],
         "has_player_info": eligibility["has_player_info"],
         "eligibility_notes": eligibility["notes"],
+        "player_count": count_csv_players(text),
     }
     index = _read_index()
     index.append(entry)
@@ -801,7 +957,9 @@ def select_options(
             kind = "Single year"
             bucket = single_opts
         # Kind first so long names / closed Select still show single vs multi.
-        label = f"{kind} · {name}" + (f" · {when}" if when else "")
+        label = f"{kind} · {name}" + player_count_suffix(entry)
+        if when:
+            label = f"{label} · {when}"
         if note:
             short = note if len(note) <= 40 else note[:37] + "…"
             label = f"{label} — {short}"

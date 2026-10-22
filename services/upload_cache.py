@@ -285,12 +285,29 @@ def is_fresh(
     return True
 
 
+def _n_players_from_payload(payload: dict[str, Any] | None) -> int | None:
+    if not payload:
+        return None
+    for key in ("role_scores", "stats"):
+        block = payload.get(key)
+        if isinstance(block, dict) and block.get("n_players") is not None:
+            try:
+                return int(block["n_players"])
+            except (TypeError, ValueError):
+                continue
+    players = payload.get("players")
+    if isinstance(players, list):
+        return len(players)
+    return None
+
+
 def _patch_index_cache(
     file_id: str,
     cache_meta: dict[str, Any],
     *,
     limited_tracking_divisions: list[str] | None = None,
     limited_tracking_by_nation: list[dict[str, Any]] | None = None,
+    player_count: int | None = None,
 ) -> None:
     index = lib._read_index()
     changed = False
@@ -301,6 +318,8 @@ def _patch_index_cache(
                 entry["limited_tracking_divisions"] = list(limited_tracking_divisions)
             if limited_tracking_by_nation is not None:
                 entry["limited_tracking_by_nation"] = list(limited_tracking_by_nation)
+            if player_count is not None:
+                entry["player_count"] = int(player_count)
             changed = True
             break
     if changed:
@@ -956,6 +975,7 @@ def compute_file(file_id: str) -> dict[str, Any]:
     errors = list(payload.pop("_errors", []) or [])
     limited_divisions = list(payload.get("limited_tracking_divisions") or [])
     limited_by_nation = list(payload.get("limited_tracking_by_nation") or [])
+    n_players = _n_players_from_payload(payload)
 
     if not payload.get("role_scores") and not payload.get("stats"):
         meta = {
@@ -989,6 +1009,8 @@ def compute_file(file_id: str) -> dict[str, Any]:
         "limited_tracking_by_nation": limited_by_nation,
         "multi_year": bool(lib.is_multi_year(entry)),
     }
+    if n_players is not None:
+        meta["n_players"] = n_players
     if lib.is_multi_year(entry):
         from scoring.multi_year import pack_signature_bits
 
@@ -998,6 +1020,7 @@ def compute_file(file_id: str) -> dict[str, Any]:
         meta,
         limited_tracking_divisions=limited_divisions,
         limited_tracking_by_nation=limited_by_nation,
+        player_count=n_players,
     )
     return payload
 

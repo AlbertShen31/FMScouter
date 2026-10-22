@@ -7922,6 +7922,11 @@ body[data-theme="light"] .up-elig.yes {
 .up-kind.single {
     color: var(--app-muted);
 }
+.up-player-count {
+    color: var(--app-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
 .up-my-year-field .up-my-select {
     max-width: 36rem;
 }
