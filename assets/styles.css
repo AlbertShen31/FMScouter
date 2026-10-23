@@ -7843,6 +7843,14 @@ body[data-theme="light"] .st-compare-cohort-note {
 .up-compute-all-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+.up-files-actions,
+.up-bulk-actions {
+    display: flex;
+    align-items: center;
     gap: 6px;
 }
 .up-view-file-list,
@@ -7899,6 +7907,32 @@ body[data-theme="light"] .st-compare-cohort-note {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--app-muted);
+}
+.up-files-table th.up-select-col,
+.up-files-table td.up-select-col {
+    width: 2rem;
+    padding-left: 0.45rem;
+    padding-right: 0.25rem;
+    text-align: center;
+    vertical-align: middle;
+}
+.up-select-check {
+    display: flex;
+    justify-content: center;
+}
+.up-select-check .mantine-Checkbox-input,
+.up-select-check input {
+    cursor: pointer;
+}
+.up-delete-list {
+    margin: 0.35rem 0 0;
+    padding-left: 1.25rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    color: var(--app-text);
+}
+.up-delete-modal .up-delete-list {
+    color: var(--app-text);
 }
 .up-elig.yes {
     color: #3dff88;

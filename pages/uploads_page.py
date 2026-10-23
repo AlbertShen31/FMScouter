@@ -92,6 +92,52 @@ def _any_computable() -> bool:
     return any(e.get("role_scores") or e.get("stats") for e in lib.list_files())
 
 
+def _any_files() -> bool:
+    return bool(lib.list_files())
+
+
+def _selected_file_ids(checked, ids) -> list[str]:
+    out: list[str] = []
+    for on, spec in zip(checked or [], ids or []):
+        fid = spec.get("id") if isinstance(spec, dict) else None
+        if on and fid and fid != "_":
+            out.append(str(fid))
+    return out
+
+
+def _delete_preview_body(file_ids: list[str]) -> html.Div:
+    preview = lib.preview_delete(file_ids)
+    selected = preview["selected"]
+    cascaded = preview["cascaded"]
+    if not selected:
+        return html.Div("No files selected.", className="text-muted")
+    n = len(selected)
+    names = [lib.display_label(entry) for entry in selected]
+    shown = names[:12]
+    extra = n - len(shown)
+    items = [html.Li(name) for name in shown]
+    if extra:
+        items.append(html.Li(f"and {extra} more"))
+    bits: list = [
+        html.P(
+            f"Delete {n} saved file{'' if n == 1 else 's'}? This cannot be undone.",
+            className="mb-2",
+        ),
+        html.Ul(items, className="up-delete-list"),
+    ]
+    if cascaded:
+        pack_names = ", ".join(lib.display_label(entry) for entry in cascaded)
+        bits.append(
+            html.P(
+                "Also removes multi-year pack"
+                f"{'' if len(cascaded) == 1 else 's'} that use the selected "
+                f"CSV{'' if n == 1 else 's'}: {pack_names}.",
+                className="text-muted small mt-3 mb-0",
+            )
+        )
+    return html.Div(bits)
+
+
 def _limited_tooltip(entry: dict, limited: list[str]) -> str:
     raw = entry.get("limited_tracking_by_nation") or []
     nation_counts = None
@@ -296,6 +342,7 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         )
     header = html.Tr(
         [
+            html.Th("", className="up-select-col"),
             html.Th("Name"),
             html.Th("Type"),
             html.Th("Players"),
@@ -347,6 +394,16 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         rows.append(
             html.Tr(
                 [
+                    html.Td(
+                        dmc.Checkbox(
+                            id={"type": "up-select", "id": file_id},
+                            checked=False,
+                            size="xs",
+                            className="up-select-check",
+                            **{"aria-label": f"Select {label}"},
+                        ),
+                        className="up-select-col",
+                    ),
                     html.Td(
                         [
                             html.Div(label, className="up-file-name"),
@@ -752,6 +809,44 @@ def _edit_modal() -> dbc.Modal:
     )
 
 
+def _delete_modal() -> dbc.Modal:
+    return dbc.Modal(
+        [
+            dbc.ModalHeader(
+                dbc.ModalTitle("Delete saved files"),
+                close_button=True,
+            ),
+            dbc.ModalBody(
+                [
+                    dcc.Store(id="up-delete-ids", data=[]),
+                    html.Div(id="up-delete-modal-body"),
+                ]
+            ),
+            dbc.ModalFooter(
+                [
+                    dmc.Button(
+                        "Cancel",
+                        id="up-delete-cancel",
+                        variant="default",
+                        n_clicks=0,
+                        className="me-2",
+                    ),
+                    dmc.Button(
+                        "Delete",
+                        id="up-delete-confirm",
+                        color="red",
+                        n_clicks=0,
+                    ),
+                ]
+            ),
+        ],
+        id="up-delete-modal",
+        className="up-edit-modal up-delete-modal",
+        is_open=False,
+        centered=True,
+    )
+
+
 def layout(**_kwargs):
     lib.ensure_dirs()
     return dbc.Container(
@@ -781,10 +876,15 @@ def layout(**_kwargs):
                         n_clicks=0,
                         children="stub",
                     ),
+                    dmc.Checkbox(
+                        id={"type": "up-select", "id": "_"},
+                        checked=False,
+                    ),
                 ],
                 hidden=True,
             ),
             _edit_modal(),
+            _delete_modal(),
             html.Div(
                 [
                     html.H1("Uploads", className="mt-2 mb-0"),
@@ -857,15 +957,46 @@ def layout(**_kwargs):
                                 [
                                     html.Div(
                                         [
-                                            dmc.Button(
-                                                "Compute All",
-                                                id="up-compute-all",
-                                                size="sm",
-                                                variant="light",
-                                                n_clicks=0,
-                                                disabled=not _any_computable(),
+                                            html.Div(
+                                                [
+                                                    dmc.Button(
+                                                        "Compute All",
+                                                        id="up-compute-all",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                        disabled=not _any_computable(),
+                                                    ),
+                                                    *help_icon(
+                                                        UP_COMPUTE_ALL_TIP,
+                                                        "up-help-compute-all",
+                                                    ),
+                                                ],
+                                                className="up-files-actions",
                                             ),
-                                            *help_icon(UP_COMPUTE_ALL_TIP, "up-help-compute-all"),
+                                            html.Div(
+                                                [
+                                                    dmc.Button(
+                                                        "Select all",
+                                                        id="up-select-all",
+                                                        size="sm",
+                                                        variant="light",
+                                                        n_clicks=0,
+                                                        disabled=not _any_files(),
+                                                    ),
+                                                    dmc.Button(
+                                                        "Delete selected",
+                                                        id="up-delete-selected",
+                                                        size="sm",
+                                                        variant="light",
+                                                        color="red",
+                                                        n_clicks=0,
+                                                        disabled=True,
+                                                        className="rs-squad-clear-btn",
+                                                    ),
+                                                ],
+                                                className="up-bulk-actions",
+                                            ),
                                         ],
                                         className="up-compute-all-row mb-3",
                                     ),
@@ -1001,6 +1132,132 @@ def delete_saved(n_clicks, rev):
         src,
         src,
         packs,
+    )
+
+
+@callback(
+    Output({"type": "up-select", "id": ALL}, "checked"),
+    Input("up-select-all", "n_clicks"),
+    State({"type": "up-select", "id": ALL}, "id"),
+    State({"type": "up-select", "id": ALL}, "checked"),
+    prevent_initial_call=True,
+)
+def toggle_select_all(n_clicks, ids, checked):
+    if not n_clicks:
+        return no_update
+    ids = ids or []
+    checked = checked or []
+    real_on = [
+        bool(on)
+        for spec, on in zip(ids, checked)
+        if isinstance(spec, dict) and spec.get("id") not in (None, "_")
+    ]
+    turn_on = bool(real_on) and not all(real_on)
+    return [
+        (
+            turn_on
+            if isinstance(spec, dict) and spec.get("id") not in (None, "_")
+            else False
+        )
+        for spec in ids
+    ]
+
+
+@callback(
+    Output("up-delete-selected", "disabled"),
+    Output("up-delete-selected", "children"),
+    Output("up-select-all", "disabled"),
+    Output("up-select-all", "children"),
+    Input({"type": "up-select", "id": ALL}, "checked"),
+    State({"type": "up-select", "id": ALL}, "id"),
+)
+def sync_bulk_delete_controls(checked, ids):
+    selected = _selected_file_ids(checked, ids)
+    n_real = sum(
+        1
+        for spec in (ids or [])
+        if isinstance(spec, dict) and spec.get("id") not in (None, "_")
+    )
+    n_sel = len(selected)
+    delete_label = "Delete selected" if n_sel == 0 else f"Delete selected ({n_sel})"
+    select_label = "Clear selection" if n_real and n_sel == n_real else "Select all"
+    return n_sel == 0, delete_label, n_real == 0, select_label
+
+
+@callback(
+    Output("up-delete-modal", "is_open"),
+    Output("up-delete-modal-body", "children"),
+    Output("up-delete-ids", "data"),
+    Input("up-delete-selected", "n_clicks"),
+    Input("up-delete-cancel", "n_clicks"),
+    State({"type": "up-select", "id": ALL}, "checked"),
+    State({"type": "up-select", "id": ALL}, "id"),
+    prevent_initial_call=True,
+)
+def open_bulk_delete(n_delete, n_cancel, checked, ids):
+    triggered = ctx.triggered_id
+    if triggered == "up-delete-cancel":
+        return False, no_update, no_update
+    selected = _selected_file_ids(checked, ids)
+    if not selected:
+        return False, no_update, no_update
+    return True, _delete_preview_body(selected), selected
+
+
+@callback(
+    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-rev", "data", allow_duplicate=True),
+    Output("up-compute-all", "disabled", allow_duplicate=True),
+    Output("up-my-year-1", "data", allow_duplicate=True),
+    Output("up-my-year-2", "data", allow_duplicate=True),
+    Output("up-my-year-3", "data", allow_duplicate=True),
+    Output("up-roll-new-year", "data", allow_duplicate=True),
+    Output("up-roll-pack", "data", allow_duplicate=True),
+    Output("up-delete-modal", "is_open", allow_duplicate=True),
+    Output("up-upload-status", "children", allow_duplicate=True),
+    Input("up-delete-confirm", "n_clicks"),
+    State("up-delete-ids", "data"),
+    State("up-rev", "data"),
+    prevent_initial_call=True,
+)
+def confirm_bulk_delete(n_clicks, file_ids, rev):
+    if not n_clicks:
+        return tuple([no_update] * 10)
+    ids = [str(fid) for fid in (file_ids or []) if fid]
+    if not ids:
+        return tuple([no_update] * 8 + [False, no_update])
+    result = lib.delete_files(ids)
+    removed = int(result.get("removed") or 0)
+    cascaded = int(result.get("cascaded") or 0)
+    if removed:
+        msg = f"Deleted {removed} saved file{'' if removed == 1 else 's'}."
+        if cascaded:
+            msg += (
+                f" Also removed {cascaded} multi-year pack"
+                f"{'' if cascaded == 1 else 's'} that used those CSVs."
+            )
+        status = html.Div(
+            [
+                html.Span("✓ ", className="rs-upload-ok"),
+                html.Span(msg),
+            ],
+            className="up-save-row",
+        )
+    else:
+        status = html.Div("No matching files to delete.", className="text-muted")
+    src = _source_select_data()
+    packs = _pack_select_data()
+    return (
+        _files_table(),
+        int(rev or 0) + 1,
+        not _any_computable(),
+        src,
+        src,
+        src,
+        src,
+        packs,
+        False,
+        status,
     )
 
 
@@ -1640,15 +1897,21 @@ clientside_callback(
 
 clientside_callback(
     """
-    function(deleteClicks) {
+    function(deleteClicks, confirmClicks) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        var clicks = deleteClicks || [];
+        var prop = String(trig[0].prop_id || "");
+        var fromConfirm = prop.indexOf("up-delete-confirm") !== -1;
         var any = false;
-        for (var i = 0; i < clicks.length; i++) {
-            if (clicks[i]) { any = true; break; }
+        if (fromConfirm) {
+            any = !!confirmClicks;
+        } else {
+            var clicks = deleteClicks || [];
+            for (var i = 0; i < clicks.length; i++) {
+                if (clicks[i]) { any = true; break; }
+            }
         }
         if (!any) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -1664,6 +1927,7 @@ clientside_callback(
     Output("up-busy", "className", allow_duplicate=True),
     Output("up-progress-poll", "disabled", allow_duplicate=True),
     Input({"type": "up-delete", "id": ALL}, "n_clicks"),
+    Input("up-delete-confirm", "n_clicks"),
     prevent_initial_call=True,
 )
 

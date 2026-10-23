@@ -858,6 +858,52 @@ def delete_file(file_id: str) -> bool:
     return True
 
 
+def preview_delete(file_ids: list[str] | None) -> dict[str, list[dict[str, Any]]]:
+    """Resolve selected library rows and packs that would be removed as a side effect."""
+    by_id = {e.get("id"): e for e in list_files() if e.get("id")}
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in file_ids or []:
+        fid = str(raw or "").strip()
+        if not fid or fid in seen:
+            continue
+        entry = by_id.get(fid)
+        if not entry:
+            continue
+        seen.add(fid)
+        selected.append(entry)
+    cascaded: list[dict[str, Any]] = []
+    cascaded_ids: set[str] = set()
+    for entry in selected:
+        if is_multi_year(entry):
+            continue
+        for pack in packs_referencing(str(entry.get("id") or "")):
+            pid = str(pack.get("id") or "")
+            if not pid or pid in seen or pid in cascaded_ids:
+                continue
+            cascaded_ids.add(pid)
+            cascaded.append(pack)
+    return {"selected": selected, "cascaded": cascaded}
+
+
+def delete_files(file_ids: list[str] | None) -> dict[str, Any]:
+    """Delete selected library rows. Source CSV deletes still drop referencing packs."""
+    preview = preview_delete(file_ids)
+    before = {e.get("id") for e in list_files() if e.get("id")}
+    for entry in preview["selected"]:
+        fid = str(entry.get("id") or "")
+        if fid and get_file(fid):
+            delete_file(fid)
+    after = {e.get("id") for e in list_files() if e.get("id")}
+    removed_ids = [fid for fid in before if fid not in after]
+    return {
+        "removed_ids": removed_ids,
+        "removed": len(removed_ids),
+        "selected": len(preview["selected"]),
+        "cascaded": len(preview["cascaded"]),
+    }
+
+
 def packs_referencing(file_id: str) -> list[dict[str, Any]]:
     """Multi-year packs that use ``file_id`` as a season source."""
     return [
