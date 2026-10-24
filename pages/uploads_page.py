@@ -18,9 +18,11 @@ import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 
 from components.player_filters import help_icon
+from components.player_table import default_page_size_value, page_size_select_data
 from components.scouting_shell import decode_upload, job_busy_overlay, upload_error
 import services.compute_progress as compute_progress
 import services.export_library as lib
+import services.ui_settings as us
 import services.upload_cache as upload_cache
 from scoring.stats_availability import limited_tracking_tooltip
 
@@ -94,6 +96,39 @@ def _any_computable() -> bool:
 
 def _any_files() -> bool:
     return bool(lib.list_files())
+
+
+def _normalize_page_size(value, settings=None) -> int:
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        size = 0
+    if size <= 0:
+        size = us.page_size(settings)
+    return max(1, size)
+
+
+def _page_bounds(total: int, page, page_size: int) -> tuple[int, int, int]:
+    """Return 1-indexed page, page count, and slice start."""
+    page_count = max(1, (total + page_size - 1) // page_size) if total else 1
+    try:
+        page_idx = int(page or 1)
+    except (TypeError, ValueError):
+        page_idx = 1
+    page_idx = max(1, min(page_idx, page_count))
+    return page_idx, page_count, (page_idx - 1) * page_size
+
+
+def _files_caption(total: int, page: int, page_size: int) -> str:
+    if total <= 0:
+        return ""
+    if total == 1:
+        return "1 file"
+    start = (page - 1) * page_size + 1
+    end = min(total, page * page_size)
+    if start == 1 and end == total:
+        return f"{total} files"
+    return f"{start}–{end} of {total} files"
 
 
 def _selected_file_ids(checked, ids) -> list[str]:
@@ -333,13 +368,20 @@ def _kind_cell(entry: dict) -> html.Span:
     return html.Span("Single", className="up-kind single")
 
 
-def _files_table(entries: list[dict] | None = None) -> html.Div:
+def _files_table(
+    entries: list[dict] | None = None,
+    *,
+    page: int = 1,
+    page_size: int = 50,
+) -> html.Div:
     entries = entries if entries is not None else lib.list_files()
     if not entries:
         return html.Div(
             "No saved files yet. Upload one or more CSVs above.",
             className="text-muted small",
         )
+    page, _page_count, start = _page_bounds(len(entries), page, page_size)
+    page_entries = entries[start : start + page_size]
     header = html.Tr(
         [
             html.Th("", className="up-select-col"),
@@ -357,8 +399,8 @@ def _files_table(entries: list[dict] | None = None) -> html.Div:
         ]
     )
     rows = []
-    sig_key = upload_cache.signature_key() if entries else None
-    for entry in entries:
+    sig_key = upload_cache.signature_key() if page_entries else None
+    for entry in page_entries:
         file_id = entry["id"]
         label = lib.display_label(entry)
         original = entry.get("original_name") or ""
@@ -849,10 +891,15 @@ def _delete_modal() -> dbc.Modal:
 
 def layout(**_kwargs):
     lib.ensure_dirs()
+    settings = us.load()
+    page_size = us.page_size(settings)
+    entries = lib.list_files()
+    page, page_count, _start = _page_bounds(len(entries), 1, page_size)
     return dbc.Container(
         [
             dcc.Download(id="up-view-download"),
             dcc.Store(id="up-rev", data=0),
+            dcc.Store(id="up-table-tick", data=0),
             dcc.Interval(
                 id="up-progress-poll",
                 interval=1500,
@@ -1000,7 +1047,63 @@ def layout(**_kwargs):
                                         ],
                                         className="up-compute-all-row mb-3",
                                     ),
-                                    html.Div(id="up-files-table", children=_files_table()),
+                                    html.Div(
+                                        id="up-files-table",
+                                        children=_files_table(
+                                            entries,
+                                            page=page,
+                                            page_size=page_size,
+                                        ),
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                id="up-table-caption",
+                                                children=_files_caption(
+                                                    len(entries), page, page_size
+                                                ),
+                                                className="up-files-caption text-muted",
+                                            ),
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        [
+                                                            html.Label(
+                                                                "Rows per page",
+                                                                className="rs-field-label",
+                                                            ),
+                                                            dmc.Select(
+                                                                id="up-page-size",
+                                                                data=page_size_select_data(
+                                                                    settings
+                                                                ),
+                                                                value=default_page_size_value(
+                                                                    settings
+                                                                ),
+                                                                clearable=False,
+                                                                searchable=False,
+                                                            ),
+                                                        ],
+                                                        className="rs-table-page-size",
+                                                    ),
+                                                    dmc.Pagination(
+                                                        id="up-pagination",
+                                                        total=page_count,
+                                                        value=page,
+                                                        size="sm",
+                                                        hideWithOnePage=True,
+                                                        siblings=1,
+                                                        boundaries=1,
+                                                        className="up-pagination",
+                                                    ),
+                                                ],
+                                                className="up-files-pager-actions",
+                                            ),
+                                        ],
+                                        id="up-files-pager",
+                                        className="up-files-pager",
+                                        hidden=not bool(entries),
+                                    ),
                                 ]
                             ),
                         ],
@@ -1022,7 +1125,6 @@ def layout(**_kwargs):
 
 @callback(
     Output("up-upload-status", "children"),
-    Output("up-files-table", "children"),
     Output("up-rev", "data"),
     Output("up-compute-all", "disabled"),
     Output("up-my-year-1", "data"),
@@ -1037,7 +1139,7 @@ def layout(**_kwargs):
 )
 def save_uploads(contents_list, filenames, rev):
     if not contents_list:
-        return tuple([no_update] * 9)
+        return tuple([no_update] * 8)
     if isinstance(contents_list, str):
         contents_list = [contents_list]
         filenames = [filenames]
@@ -1083,12 +1185,11 @@ def save_uploads(contents_list, filenames, rev):
     finally:
         compute_progress.end()
     if not messages:
-        return tuple([no_update] * 9)
+        return tuple([no_update] * 8)
     src = _source_select_data()
     packs = _pack_select_data()
     return (
         html.Div(messages),
-        _files_table(),
         int(rev or 0) + 1,
         not _any_computable(),
         src,
@@ -1100,7 +1201,6 @@ def save_uploads(contents_list, filenames, rev):
 
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
     Output("up-my-year-1", "data", allow_duplicate=True),
@@ -1114,17 +1214,16 @@ def save_uploads(contents_list, filenames, rev):
 )
 def delete_saved(n_clicks, rev):
     if not ctx.triggered_id or not any(n_clicks or []):
-        return tuple([no_update] * 8)
+        return tuple([no_update] * 7)
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
-        return tuple([no_update] * 8)
+        return tuple([no_update] * 7)
     if not any((n or 0) > 0 for n in (n_clicks or [])):
-        return tuple([no_update] * 8)
+        return tuple([no_update] * 7)
     lib.delete_file(file_id)
     src = _source_select_data()
     packs = _pack_select_data()
     return (
-        _files_table(),
         int(rev or 0) + 1,
         not _any_computable(),
         src,
@@ -1205,7 +1304,6 @@ def open_bulk_delete(n_delete, n_cancel, checked, ids):
 
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
     Output("up-my-year-1", "data", allow_duplicate=True),
@@ -1222,10 +1320,10 @@ def open_bulk_delete(n_delete, n_cancel, checked, ids):
 )
 def confirm_bulk_delete(n_clicks, file_ids, rev):
     if not n_clicks:
-        return tuple([no_update] * 10)
+        return tuple([no_update] * 9)
     ids = [str(fid) for fid in (file_ids or []) if fid]
     if not ids:
-        return tuple([no_update] * 8 + [False, no_update])
+        return tuple([no_update] * 7 + [False, no_update])
     result = lib.delete_files(ids)
     removed = int(result.get("removed") or 0)
     cascaded = int(result.get("cascaded") or 0)
@@ -1248,7 +1346,6 @@ def confirm_bulk_delete(n_clicks, file_ids, rev):
     src = _source_select_data()
     packs = _pack_select_data()
     return (
-        _files_table(),
         int(rev or 0) + 1,
         not _any_computable(),
         src,
@@ -1263,7 +1360,6 @@ def confirm_bulk_delete(n_clicks, file_ids, rev):
 
 @callback(
     Output("up-my-status", "children"),
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
     Output("up-my-name", "value"),
@@ -1283,7 +1379,7 @@ def confirm_bulk_delete(n_clicks, file_ids, rev):
 )
 def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
     if not n_clicks:
-        return tuple([no_update] * 10)
+        return tuple([no_update] * 9)
     years = {"1": y1 or "", "2": y2 or "", "3": y3 or ""}
     compute_progress.begin(
         "Creating multi-year pack…",
@@ -1306,7 +1402,6 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
         )
         return (
             msg,
-            _files_table(),
             int(rev or 0) + 1,
             not _any_computable(),
             "",
@@ -1319,7 +1414,6 @@ def create_multi_year_pack(n_clicks, name, note, y1, y2, y3, rev):
     except Exception as exc:
         return (
             upload_error(str(exc)),
-            no_update,
             no_update,
             no_update,
             no_update,
@@ -1360,7 +1454,6 @@ def prefill_roll_meta(pack_id):
 
 @callback(
     Output("up-roll-status", "children"),
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
     Output("up-roll-pack", "data", allow_duplicate=True),
@@ -1379,7 +1472,7 @@ def prefill_roll_meta(pack_id):
 )
 def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
     if not n_clicks:
-        return tuple([no_update] * 10)
+        return tuple([no_update] * 9)
     compute_progress.begin(
         "Creating pack with latest year…",
         phase="Creating pack with latest year…",
@@ -1403,7 +1496,6 @@ def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
         packs = _pack_select_data()
         return (
             msg,
-            _files_table(),
             int(rev or 0) + 1,
             not _any_computable(),
             packs,
@@ -1416,7 +1508,6 @@ def apply_roll_forward(n_clicks, pack_id, new_year_id, name, note, rev):
     except Exception as exc:
         return (
             upload_error(str(exc)),
-            no_update,
             no_update,
             no_update,
             no_update,
@@ -1646,21 +1737,21 @@ def edit_modal(
     return tuple([no_update] * 17)
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
+    Output("up-table-tick", "data"),
     Input("up-edit-modal", "is_open"),
+    State("up-table-tick", "data"),
     prevent_initial_call=True,
 )
-def refresh_table_after_edit(is_open):
+def refresh_table_after_edit(is_open, tick):
     # Refresh when the edit modal closes after a save/cancel.
     # Do not bump up-rev here: multi-year save keeps the busy overlay on until
     # recompute_after_multi_year_edit finishes and bumps rev itself.
     if is_open:
         return no_update
-    return _files_table()
+    return int(tick or 0) + 1
 
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-edit-recompute", "data", allow_duplicate=True),
     Output("up-upload-status", "children", allow_duplicate=True),
@@ -1672,7 +1763,7 @@ def refresh_table_after_edit(is_open):
 def recompute_after_multi_year_edit(pack_id, rev):
     """Finish multi-year edit: recompute cache after the modal already closed."""
     if not pack_id:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     entry = lib.get_file(pack_id)
     label = lib.display_label(entry) if entry else pack_id
     compute_progress.begin(
@@ -1695,7 +1786,6 @@ def recompute_after_multi_year_edit(pack_id, rev):
     finally:
         compute_progress.end()
     return (
-        _files_table(),
         int(rev or 0) + 1,
         None,
         msg,
@@ -1705,7 +1795,6 @@ def recompute_after_multi_year_edit(pack_id, rev):
 
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-upload-status", "children", allow_duplicate=True),
     Input({"type": "up-compute", "id": ALL}, "n_clicks"),
@@ -1714,15 +1803,15 @@ def recompute_after_multi_year_edit(pack_id, rev):
 )
 def compute_saved(n_clicks, rev):
     if not ctx.triggered_id or not any(n_clicks or []):
-        return no_update, no_update, no_update
+        return no_update, no_update
     file_id = ctx.triggered_id.get("id")
     if not file_id or file_id == "_":
-        return no_update, no_update, no_update
+        return no_update, no_update
     if not any((n or 0) > 0 for n in (n_clicks or [])):
-        return no_update, no_update, no_update
+        return no_update, no_update
     entry = lib.get_file(file_id)
     if not entry:
-        return no_update, no_update, no_update
+        return no_update, no_update
     compute_progress.begin(
         f"Precomputing {lib.display_label(entry)}…",
         phase="Precomputing…",
@@ -1742,11 +1831,10 @@ def compute_saved(n_clicks, rev):
         msg = upload_error(f"Compute failed: {exc}")
     finally:
         compute_progress.end()
-    return _files_table(), int(rev or 0) + 1, msg
+    return int(rev or 0) + 1, msg
 
 
 @callback(
-    Output("up-files-table", "children", allow_duplicate=True),
     Output("up-rev", "data", allow_duplicate=True),
     Output("up-upload-status", "children", allow_duplicate=True),
     Output("up-compute-all", "disabled", allow_duplicate=True),
@@ -1756,7 +1844,7 @@ def compute_saved(n_clicks, rev):
 )
 def compute_all_saved(n_clicks, rev):
     if not n_clicks:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update
     eligible = [
         entry
         for entry in lib.list_files()
@@ -1764,7 +1852,6 @@ def compute_all_saved(n_clicks, rev):
     ]
     if not eligible:
         return (
-            _files_table(),
             int(rev or 0) + 1,
             html.Div("No eligible files to precompute.", className="text-muted"),
             True,
@@ -1803,7 +1890,52 @@ def compute_all_saved(n_clicks, rev):
     ]
     for err in errors:
         rows.append(upload_error(err))
-    return _files_table(), int(rev or 0) + 1, html.Div(rows), not _any_computable()
+    return int(rev or 0) + 1, html.Div(rows), not _any_computable()
+
+
+@callback(
+    Output("up-files-table", "children"),
+    Output("up-table-caption", "children"),
+    Output("up-pagination", "total"),
+    Output("up-pagination", "value"),
+    Output("up-files-pager", "hidden"),
+    Input("up-rev", "data"),
+    Input("up-table-tick", "data"),
+    Input("up-page-size", "value"),
+    Input("up-pagination", "value"),
+    State("ui-settings", "data"),
+    prevent_initial_call=True,
+)
+def render_files_table(_rev, _tick, page_size, page, settings):
+    size = _normalize_page_size(page_size, settings)
+    requested = 1 if ctx.triggered_id == "up-page-size" else page
+    entries = lib.list_files()
+    page_idx, page_count, _start = _page_bounds(len(entries), requested, size)
+    try:
+        current = int(page or 1)
+    except (TypeError, ValueError):
+        current = 1
+    page_out = page_idx if page_idx != current else no_update
+    return (
+        _files_table(entries, page=page_idx, page_size=size),
+        _files_caption(len(entries), page_idx, size),
+        page_count,
+        page_out,
+        not bool(entries),
+    )
+
+
+@callback(
+    Output("up-page-size", "data"),
+    Output("up-page-size", "value"),
+    Input("ui-settings", "data"),
+    State("up-page-size", "value"),
+)
+def sync_up_page_size_from_settings(settings, page_size):
+    settings = us.normalize(settings)
+    data = page_size_select_data(settings)
+    default = default_page_size_value(settings)
+    return data, us.clamp_choice(page_size, data, default)
 
 
 @callback(

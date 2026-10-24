@@ -7833,6 +7833,42 @@ body[data-theme="light"] .st-compare-cohort-note {
 .up-page .up-files-wrap {
     overflow-x: auto;
 }
+.up-files-pager {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+}
+.up-files-caption {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+.up-files-pager-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+.up-page .up-pagination .mantine-Pagination-control {
+    color: var(--app-text);
+    background: var(--app-input);
+    border: 1px solid var(--app-line);
+}
+.up-page .up-pagination .mantine-Pagination-control:hover {
+    background: var(--app-hover);
+}
+.up-page .up-pagination .mantine-Pagination-control[data-active] {
+    background: var(--app-accent);
+    border-color: var(--app-accent);
+    color: #0b1118;
+}
+html[data-theme="light"] .up-page .up-pagination .mantine-Pagination-control[data-active],
+body[data-theme="light"] .up-page .up-pagination .mantine-Pagination-control[data-active] {
+    color: #fff;
+}
 .up-page .up-busy-host {
     position: relative;
     min-height: 12rem;
