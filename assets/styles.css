@@ -7899,7 +7899,9 @@ body[data-theme="light"] .up-page .up-pagination .mantine-Pagination-control[dat
     padding-left: 1.25rem;
 }
 .up-view-file-list code,
-.up-view-install code {
+.up-view-install code,
+.up-view-path-row code,
+.up-view-map code {
     color: var(--app-accent);
     background: var(--app-input);
     padding: 0.1rem 0.35rem;
@@ -7913,6 +7915,78 @@ body[data-theme="light"] .up-page .up-pagination .mantine-Pagination-control[dat
     border: 1px solid var(--app-line);
     border-radius: 10px;
 }
+.up-view-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+}
+.up-view-step {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0.15rem 0.85rem;
+    align-items: start;
+}
+.up-view-step-num {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    background: var(--app-elev);
+    border: 1px solid var(--app-line);
+    color: var(--app-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.up-view-step-title {
+    font-weight: 650;
+    color: var(--app-text);
+    margin: 0.2rem 0 0.4rem;
+}
+.up-view-step-body {
+    color: var(--app-muted);
+    font-size: 0.92rem;
+}
+.up-view-step-body > p:last-child {
+    margin-bottom: 0;
+}
+.up-view-map {
+    width: 100%;
+    max-width: 36rem;
+    border-collapse: collapse;
+    margin-bottom: 0.75rem;
+    color: var(--app-text);
+}
+.up-view-map th,
+.up-view-map td {
+    padding: 0.4rem 0.55rem 0.4rem 0;
+    border-bottom: 1px solid var(--app-line);
+    text-align: left;
+    vertical-align: middle;
+}
+.up-view-map th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--app-muted);
+}
+.up-view-os {
+    margin-bottom: 0.55rem;
+}
+.up-view-path-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.up-view-path-row code {
+    word-break: break-all;
+}
+.up-view-actions {
+    margin: 0 0 0.85rem;
+}
 .up-view-install {
     padding-left: 1.25rem;
 }
@@ -7922,9 +7996,6 @@ body[data-theme="light"] .up-page .up-pagination .mantine-Pagination-control[dat
 .up-view-path-list {
     padding-left: 1.1rem;
     list-style: disc;
-}
-.up-view-actions {
-    margin-top: 0.75rem;
 }
 .up-files-table {
     width: 100%;

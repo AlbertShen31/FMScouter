@@ -1,6 +1,8 @@
 """Upload library: save CSVs on disk and inspect page eligibility."""
 from __future__ import annotations
 
+import sys
+
 from dash import (
     ALL,
     Input,
@@ -36,10 +38,20 @@ UP_PAGE_TIP = (
     "do not need. Multi-year packs combine seasons with recency weights on Uploads."
 )
 UP_VIEW_TIP = (
-    "Download the custom views pack, put the .fmf files in Football Manager’s views folder, "
-    "then Import View on Squad, Player Search, National Squad, and National Team. One export "
-    "shape covers attributes, Moneyball stats, salary/fees, and player identity."
+    "Download the views pack, drop the .fmf files into Football Manager’s views folder, "
+    "then Import View on each matching screen. One export shape covers attributes, "
+    "Moneyball stats, wages, and player identity."
 )
+VIEW_SCREEN_FILES = (
+    ("Squad", "Squad View All.fmf"),
+    ("Player Search", "Player Search All.fmf"),
+    ("National Squad", "National Squad View All.fmf"),
+    ("National Team", "National Team All.fmf"),
+)
+VIEW_FOLDER_PATHS = {
+    "mac": "~/Library/Application Support/Sports Interactive/Football Manager 26/views/",
+    "windows": "Documents\\Sports Interactive\\Football Manager 26\\views\\",
+}
 UP_ELIGIBILITY_TIP = (
     "Eligible means the file has Name/Player, enough player info (Club/Age/Position), plus: "
     "attributes for Role scores; stats markers for Player stats; Salary and match fees for "
@@ -647,107 +659,164 @@ def _roll_year_panel() -> html.Div:
     )
 
 
+def _view_os_default() -> str:
+    return "mac" if sys.platform == "darwin" else "windows"
+
+
+def _view_folder_path(os_id: str | None) -> str:
+    return VIEW_FOLDER_PATHS.get(os_id or "", VIEW_FOLDER_PATHS[_view_os_default()])
+
+
+def _view_map_rows(present: set[str]) -> list:
+    known = {name for _screen, name in VIEW_SCREEN_FILES}
+    rows = []
+    for screen, name in VIEW_SCREEN_FILES:
+        file_cell = (
+            html.Code(name)
+            if name in present
+            else html.Span("Missing from pack", className="text-muted")
+        )
+        rows.append(html.Tr([html.Td(screen), html.Td(file_cell)]))
+    extras = sorted(present - known)
+    for name in extras:
+        rows.append(
+            html.Tr(
+                [
+                    html.Td("Other", className="text-muted"),
+                    html.Td(html.Code(name)),
+                ]
+            )
+        )
+    return rows
+
+
+def _view_step(num: int, title: str, body) -> html.Div:
+    return html.Div(
+        [
+            html.Div(str(num), className="up-view-step-num", **{"aria-hidden": "true"}),
+            html.Div(
+                [
+                    html.P(title, className="up-view-step-title"),
+                    html.Div(body, className="up-view-step-body"),
+                ]
+            ),
+        ],
+        className="up-view-step",
+    )
+
+
 def _view_panel() -> html.Div:
     views = lib.list_view_files()
+    present = {path.name for path in views}
+    os_id = _view_os_default()
+    folder = _view_folder_path(os_id)
     if views:
-        names = html.Ul(
-            [html.Li(html.Code(p.name)) for p in views],
-            className="up-view-file-list mb-2",
-        )
-        status = html.Div(
-            [
-                html.P(
-                    [
-                        f"{len(views)} view file"
-                        f"{'' if len(views) == 1 else 's'} ready to download:"
-                    ],
-                    className="mb-1",
+        download_body = [
+            html.P(
+                "One zip, four screens. Import each file on the matching FM screen.",
+                className="mb-2",
+            ),
+            html.Div(
+                dmc.Button(
+                    "Download FM export views",
+                    id="up-view-download-btn",
+                    disabled=False,
                 ),
-                names,
-            ]
-        )
-        disabled = False
-    else:
-        status = html.P(
-            [
-                "No view files found yet. Place FM custom views (",
-                html.Code(".fmf"),
-                ") in ",
-                html.Code("data/views/"),
-                ", then refresh this page.",
-            ],
-            className="mb-2 text-muted",
-        )
-        disabled = True
-
-    install = html.Div(
-        [
-            html.P("After downloading:", className="mb-1 fw-semibold"),
-            html.Ol(
+                className="up-view-actions",
+            ),
+            html.Table(
                 [
-                    html.Li(
+                    html.Thead(
+                        html.Tr([html.Th("FM screen"), html.Th("View file")])
+                    ),
+                    html.Tbody(_view_map_rows(present)),
+                ],
+                className="up-view-map",
+            ),
+        ]
+    else:
+        download_body = [
+            html.P(
+                [
+                    "No view files found. Place FM custom views (",
+                    html.Code(".fmf"),
+                    ") in ",
+                    html.Code("data/views/"),
+                    ", then refresh this page.",
+                ],
+                className="mb-2",
+            ),
+            dmc.Button(
+                "Download FM export views",
+                id="up-view-download-btn",
+                disabled=True,
+            ),
+        ]
+    return html.Div(
+        [
+            _view_step(1, "Download the views pack", download_body),
+            _view_step(
+                2,
+                "Put the files in Football Manager",
+                [
+                    html.P(
                         [
                             "Extract the zip and move the ",
                             html.Code(".fmf"),
-                            " files into your FM views folder:",
-                            html.Ul(
-                                [
-                                    html.Li(
-                                        [
-                                            "Windows: ",
-                                            html.Code(
-                                                "Documents\\Sports Interactive\\"
-                                                "Football Manager 26\\views\\"
-                                            ),
-                                        ]
-                                    ),
-                                    html.Li(
-                                        [
-                                            "Mac: ",
-                                            html.Code(
-                                                "~/Library/Application Support/Sports Interactive/"
-                                                "Football Manager 26/views/"
-                                            ),
-                                        ]
-                                    ),
-                                ],
-                                className="up-view-path-list mt-1 mb-1",
-                            ),
-                            "Create the folder if it does not exist.",
-                        ]
+                            " files into the views folder. Create the folder if it does not exist.",
+                        ],
+                        className="mb-2",
                     ),
-                    html.Li(
-                        "In-game, open Squad, Player Search, National Squad, or National Team."
+                    dmc.SegmentedControl(
+                        id="up-view-os",
+                        data=[
+                            {"label": "Mac", "value": "mac"},
+                            {"label": "Windows", "value": "windows"},
+                        ],
+                        value=os_id,
+                        size="xs",
+                        className="up-view-os",
                     ),
-                    html.Li(
+                    html.Div(
                         [
-                            "Right-click any column header → ",
-                            html.Strong("Import View"),
-                            ", then load the matching custom view.",
-                        ]
+                            html.Code(folder, id="up-view-path-text"),
+                            dmc.CopyButton(
+                                id="up-view-path-copy",
+                                value=folder,
+                                children="Copy path",
+                                copiedChildren="Copied",
+                                timeout=1600,
+                                variant="light",
+                                size="xs",
+                            ),
+                        ],
+                        className="up-view-path-row",
                     ),
                 ],
-                className="up-view-install mb-3",
+            ),
+            _view_step(
+                3,
+                "Import each view in-game",
+                html.Ol(
+                    [
+                        html.Li(
+                            "Open Squad, Player Search, National Squad, or National Team."
+                        ),
+                        html.Li(
+                            [
+                                "Right-click any column header → ",
+                                html.Strong("Import View."),
+                            ]
+                        ),
+                        html.Li(
+                            "Load the matching file from step 1, then repeat on the other screens."
+                        ),
+                    ],
+                    className="up-view-install mb-0",
+                ),
             ),
         ],
-        className="up-view-install-block",
-    )
-
-    return html.Div(
-        [
-            status,
-            install,
-            html.Div(
-                [
-                    dmc.Button(
-                        "Download FM export views",
-                        id="up-view-download-btn",
-                        disabled=disabled,
-                    ),
-                ],
-                className="up-view-actions",
-            ),
-        ]
+        className="up-view-steps",
     )
 
 
@@ -1950,6 +2019,16 @@ def download_view(n_clicks):
     if not payload:
         return no_update
     return dcc.send_bytes(payload, "FMScouter-FM26-views.zip")
+
+
+@callback(
+    Output("up-view-path-text", "children"),
+    Output("up-view-path-copy", "value"),
+    Input("up-view-os", "value"),
+)
+def sync_view_folder_path(os_id):
+    path = _view_folder_path(os_id)
+    return path, path
 
 
 clientside_callback(
