@@ -34,7 +34,7 @@ _POS_OPTIONS = [
 
 _NATION_OPTIONS = [
     {"label": label, "value": str(nid)}
-    for nid, label in sorted(fms.CLUB_NATION_OPTIONS, key=lambda item: item[1].casefold())
+    for nid, label in fms.nation_filter_options()
 ]
 
 

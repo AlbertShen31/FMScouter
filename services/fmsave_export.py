@@ -1,6 +1,7 @@
 """Export FM26 save players to Moneyball-compatible CSV via fmsave."""
 from __future__ import annotations
 
+import csv
 import io
 import subprocess
 import sys
@@ -10,12 +11,14 @@ from collections import Counter, defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
 
-from config.paths import COMPETITION_NAMES_PATH
+from config.paths import COMPETITION_NAMES_PATH, NATION_NAMES_PATH
+from services.division_catalog import nation_abbreviation
 
 Scope = Literal["squad", "all"]
 # Back-compat alias accepted by export_moneyball_csv (treated as "all").
@@ -61,14 +64,92 @@ CLUB_NATION_OPTIONS: tuple[tuple[int, str], ...] = (
     (191, "Colombia"),
 )
 
-# Intentionally blank in v1 — save has no display labels / name maps.
+
+@lru_cache(maxsize=1)
+def nation_name_map() -> dict[int, str]:
+    """FM nation_id / club_nation_id → display name (CSV, then curated fallback)."""
+    out = dict(CLUB_NATION_OPTIONS)
+    path = NATION_NAMES_PATH
+    if path.is_file():
+        with path.open(encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                raw_id = (row.get("database_id") or "").strip()
+                name = (row.get("name") or "").strip()
+                if not raw_id or not name:
+                    continue
+                try:
+                    out[int(raw_id)] = name
+                except ValueError:
+                    continue
+    return out
+
+
+@lru_cache(maxsize=1)
+def competition_name_map() -> dict[int, str]:
+    """Editor database_id → competition display name.
+
+    Our CSV also has a ``type`` column; fmsave 0.6+ only accepts a 2-column file,
+    so we load the map ourselves and pass the dict into ``fmsave.open``.
+    """
+    path = COMPETITION_NAMES_PATH
+    out: dict[int, str] = {}
+    if not path.is_file():
+        return out
+    with path.open(encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            raw_id = (row.get("database_id") or "").strip()
+            name = (row.get("name") or "").strip()
+            if not raw_id or not name:
+                continue
+            try:
+                out[int(raw_id)] = name
+            except ValueError:
+                continue
+    return out
+
+
+def nation_filter_options() -> tuple[tuple[int, str], ...]:
+    """Sorted (id, label) pairs for Save-export nationality filters."""
+    return tuple(
+        sorted(nation_name_map().items(), key=lambda item: item[1].casefold())
+    )
+
+
+def _nation_display_name(nation_id: int | None) -> str:
+    if nation_id is None:
+        return ""
+    try:
+        nid = int(nation_id)
+    except (TypeError, ValueError):
+        return ""
+    return nation_name_map().get(nid, "")
+
+
+def _nation_code(nation_id: int | None) -> str:
+    label = _nation_display_name(nation_id)
+    if not label:
+        return ""
+    return nation_abbreviation(label) or label
+
+
+def _second_nation_codes(ids: tuple[int, ...] | list[int] | None) -> str:
+    codes: list[str] = []
+    seen: set[str] = set()
+    for raw in ids or ():
+        code = _nation_code(raw)
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return "/".join(codes)
+
+# Display labels the save still does not store (hidden attrs ≠ Personality string).
+# Nation / Based In / 2nd Nat come from nation-names.csv + nation_id fields.
 # Division is filled separately from league tables + competition-names.csv.
 BLANK_COLUMNS: tuple[str, ...] = (
     "Personality",
     "Media Handling",
-    "Nation",
-    "Based In",
-    "2nd Nat",
     "Best Role",
     "Style",
     "Picked",
@@ -700,6 +781,34 @@ def _pick_season_row(
     return max(rows, key=lambda r: int(r.minutes or 0))
 
 
+def _season_has_minutes(stats: Any | None) -> bool:
+    return stats is not None and int(getattr(stats, "minutes", 0) or 0) > 0
+
+
+def _pick_history_row(
+    rows: list[Any],
+    *,
+    club_uid: int | None,
+) -> Any | None:
+    """Newest archived OVERALL row with minutes, preferring the current club."""
+    if not rows:
+        return None
+    usable = [r for r in rows if int(getattr(r, "minutes", 0) or 0) > 0]
+    pool = usable or rows
+
+    def _key(row: Any) -> tuple[int, int]:
+        return (
+            int(getattr(row, "season_year", 0) or 0),
+            int(getattr(row, "minutes", 0) or 0),
+        )
+
+    if club_uid is not None:
+        same = [r for r in pool if getattr(r, "club_uid", None) == club_uid]
+        if same:
+            return max(same, key=_key)
+    return max(pool, key=_key)
+
+
 def _is_division_shaped(table: Any) -> bool:
     """True for a domestic league standings group (widened from fmsave's 18–26 note)."""
     rows = getattr(table, "rows", None) or ()
@@ -978,12 +1087,18 @@ def _finance_columns(player: Any) -> dict[str, str]:
 def _identity_columns(player: Any, *, division: str = "") -> dict[str, str]:
     ability = getattr(player, "ability", None)
     reputation = getattr(player, "reputation", None)
+    based_in = _nation_display_name(getattr(player, "club_fa_nation_id", None))
+    if not based_in:
+        based_in = _nation_display_name(getattr(player, "club_nation_id", None))
     return {
         "Player": player.name or "",
         "Unique ID": "" if player.unique_id is None else str(player.unique_id),
         "Age": "" if player.age is None else str(player.age),
         "Club": player.club_name or "",
         "Division": division or "",
+        "Nation": _nation_code(getattr(player, "nation_id", None)),
+        "Based In": based_in,
+        "2nd Nat": _second_nation_codes(getattr(player, "second_nation_ids", None)),
         "Best Pos": _best_pos(player.natural_positions),
         # Natural + accomplished in Position (Moneyball-style); accomplished alone in Sec.
         "Position": _combine_positions(
@@ -1041,6 +1156,7 @@ def _column_order(sample: dict[str, str]) -> list[str]:
         "Division",
         "Nation",
         "Based In",
+        "2nd Nat",
         "Best Pos",
         "Position",
         "Sec. Position",
@@ -1210,9 +1326,7 @@ def export_moneyball_csv(
     scope_key = _normalize_scope(scope)
     started = time.perf_counter()
     rows: list[dict[str, str]] = []
-    competition_names = (
-        COMPETITION_NAMES_PATH if COMPETITION_NAMES_PATH.is_file() else None
-    )
+    competition_names = competition_name_map() or None
 
     import services.compute_progress as compute_progress
 
@@ -1260,6 +1374,35 @@ def export_moneyball_csv(
                     continue
                 season_by_uid.setdefault(record.player_uid, []).append(record)
 
+            history_by_uid: dict[int, list[Any]] = {}
+            need_history_uids = {
+                player.uid
+                for player in player_list
+                if not _season_has_minutes(
+                    _pick_season_row(
+                        season_by_uid.get(player.uid, []),
+                        club_uid=player.club_uid,
+                    )
+                )
+            }
+            if need_history_uids:
+                compute_progress.update(
+                    phase="Loading season history…",
+                    done=0,
+                    total=len(need_history_uids),
+                )
+                try:
+                    for record in career_save.player_season_history().where(
+                        kind=SeasonStatsKind.OVERALL
+                    ):
+                        if record.player_uid not in need_history_uids:
+                            continue
+                        history_by_uid.setdefault(record.player_uid, []).append(
+                            record
+                        )
+                except fmsave.ReaderCheckError:
+                    history_by_uid = {}
+
             total_players = len(player_list)
             step = 1 if total_players <= 200 else max(1, total_players // 40)
             compute_progress.update(
@@ -1272,6 +1415,14 @@ def export_moneyball_csv(
                     season_by_uid.get(player.uid, []),
                     club_uid=player.club_uid,
                 )
+                if not _season_has_minutes(season):
+                    season = (
+                        _pick_history_row(
+                            history_by_uid.get(player.uid, []),
+                            club_uid=player.club_uid,
+                        )
+                        or season
+                    )
                 division = ""
                 if player.club_uid is not None:
                     division = club_divisions.get(int(player.club_uid), "")

@@ -21,7 +21,6 @@ Export then generate Romania tier reports in one go::
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -35,15 +34,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config.paths import NATION_NAMES_PATH  # noqa: E402
 from services.fmsave_export import (  # noqa: E402
-    CLUB_NATION_OPTIONS,
     _CUPISH_NAME_PARTS,
     _is_division_shaped,
+    competition_name_map,
+    nation_name_map as export_nation_name_map,
 )
-
-COMPETITION_NAMES = ROOT / "data" / "competition-names.csv"
-NATION_NAMES = NATION_NAMES_PATH
 
 # Known FM nation ids → labels (pass any int via -n; unknown ids print as the number).
 KNOWN_NATIONS: dict[int, str] = {
@@ -189,29 +185,9 @@ def tier_counts(df: pd.DataFrame, tiers: tuple[int, ...] = TIERS) -> dict[str, i
     return out
 
 
-def load_nation_names(path: Path | None = None) -> dict[int, str]:
-    """Load ``database_id,name`` CSV (same shape as competition-names)."""
-    csv_path = path or NATION_NAMES
-    out: dict[int, str] = {}
-    if not csv_path.is_file():
-        return out
-    with csv_path.open(encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            raw_id = (row.get("database_id") or "").strip()
-            name = (row.get("name") or "").strip()
-            if not raw_id or not name:
-                continue
-            try:
-                out[int(raw_id)] = name
-            except ValueError:
-                continue
-    return out
-
-
 def nation_name_map() -> dict[int, str]:
-    """FM nation id → label (CSV, then club options / KNOWN_NATIONS)."""
-    return {**dict(CLUB_NATION_OPTIONS), **KNOWN_NATIONS, **load_nation_names()}
+    """FM nation id → label (export CSV map, then script KNOWN_NATIONS)."""
+    return {**export_nation_name_map(), **KNOWN_NATIONS}
 
 
 def nation_label(df: pd.DataFrame, nations: dict[int, str]) -> pd.Series:
@@ -458,7 +434,7 @@ def main() -> None:
         print(f"Opening {path}…")
         with fmsave.open(
             path,
-            competition_names=COMPETITION_NAMES if COMPETITION_NAMES.is_file() else None,
+            competition_names=competition_name_map() or None,
         ) as save:
             df = (
                 save.players()

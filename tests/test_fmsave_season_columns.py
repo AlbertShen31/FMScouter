@@ -93,3 +93,22 @@ def test_season_columns_empty_when_missing():
     assert cols["NP-xG"] == ""
     assert cols["NP-xG/90"] == ""
     assert cols["Possession Lost per 90"] == ""
+
+
+def test_pick_history_row_prefers_newest_same_club():
+    older = SimpleNamespace(club_uid=1, season_year=2027, minutes=2000)
+    newer_other = SimpleNamespace(club_uid=2, season_year=2028, minutes=900)
+    newer_same = SimpleNamespace(club_uid=1, season_year=2028, minutes=800)
+    picked = fms._pick_history_row(
+        [older, newer_other, newer_same],
+        club_uid=1,
+    )
+    assert picked is newer_same
+
+
+def test_pick_history_row_skips_zero_minute_rows():
+    empty = SimpleNamespace(club_uid=1, season_year=2028, minutes=0)
+    prior = SimpleNamespace(club_uid=1, season_year=2027, minutes=1200)
+    assert fms._pick_history_row([empty, prior], club_uid=1) is prior
+    assert not fms._season_has_minutes(empty)
+    assert fms._season_has_minutes(prior)
