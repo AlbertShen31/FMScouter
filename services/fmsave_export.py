@@ -691,18 +691,6 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     if age_max is not None and age is not None and age > int(age_max):
         return False
 
-    min_ca = filters.get("min_ca")
-    if min_ca is not None:
-        ca = getattr(getattr(player, "ability", None), "current", None)
-        if ca is None or ca < int(min_ca):
-            return False
-
-    min_rep = filters.get("min_club_reputation")
-    if min_rep is not None:
-        rep = player.club_reputation
-        if rep is None or rep < int(min_rep):
-            return False
-
     club_contains = (filters.get("club_contains") or "").strip().casefold()
     if club_contains:
         club = (player.club_name or "").casefold()
@@ -735,8 +723,6 @@ def _filters_active(filters: dict[str, Any] | None) -> bool:
     if not filters:
         return False
     if filters.get("age_min") is not None or filters.get("age_max") is not None:
-        return True
-    if filters.get("min_ca") is not None or filters.get("min_club_reputation") is not None:
         return True
     if (filters.get("club_contains") or "").strip():
         return True
