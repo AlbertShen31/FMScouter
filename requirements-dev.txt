@@ -1,0 +1,4 @@
+# Test runner + coverage (not required to run the app)
+pytest>=8.3
+pytest-cov>=6.0
+coverage>=7.6

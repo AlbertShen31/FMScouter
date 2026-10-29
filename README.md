@@ -10,6 +10,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python scripts/run_coverage.py
+```
+
+Prints a package coverage table and writes `htmlcov/index.html`. GitHub Actions runs the same command on push/PR, posts the table on the job summary, and uploads the HTML report as an artifact.
+
 How the scorer, role groups, packs, and naming are wired: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Code layout: `pages/` (routes), `components/` (shared UI), `scoring/` (parse/score), `services/` (packs/settings), `config/` (data).

@@ -1,0 +1,33 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore:The hookimpl pytest_addhooks:pytest.PytestRemovedIn10Warning",
+]
+
+[tool.coverage.run]
+relative_files = true
+source = ["scoring", "services", "components", "pages", "config"]
+omit = [
+    "tests/*",
+    "scripts/*",
+    "archive/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == [\"']__main__[\"']:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.json]
+output = "coverage.json"
+pretty_print = true
