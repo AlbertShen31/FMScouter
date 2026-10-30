@@ -7,11 +7,15 @@ filterwarnings = [
 
 [tool.coverage.run]
 relative_files = true
-source = ["scoring", "services", "components", "pages", "config"]
+# Unit tests target scoring/services/config. Dash UI is excluded.
+source = ["scoring", "services", "config"]
 omit = [
     "tests/*",
     "scripts/*",
     "archive/*",
+    "pages/*",
+    "components/*",
+    "app.py",
     "*/__pycache__/*",
 ]
 
@@ -20,6 +24,7 @@ skip_empty = true
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == [\"']__main__[\"']:",
+    "if TYPE_CHECKING:",
 ]
 
 [tool.coverage.html]

@@ -17,7 +17,7 @@ pip install -r requirements-dev.txt
 python scripts/run_coverage.py
 ```
 
-Prints a package coverage table and writes `htmlcov/index.html`. GitHub Actions runs the same command on push/PR, posts the table on the job summary, and uploads the HTML report as an artifact.
+Prints a package coverage table for `scoring`, `services`, and `config` (Dash `pages/` and `components/` are omitted) and writes `htmlcov/index.html`. GitHub Actions runs the same command on push/PR, posts the table on the job summary, and uploads the HTML report as an artifact.
 
 How the scorer, role groups, packs, and naming are wired: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

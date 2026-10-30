@@ -40,6 +40,13 @@ def _sample() -> dict:
                     "percent_covered": 0.0,
                 }
             },
+            "components/player_table.py": {
+                "summary": {
+                    "num_statements": 50,
+                    "covered_lines": 10,
+                    "percent_covered": 20.0,
+                }
+            },
         },
     }
 
@@ -50,7 +57,8 @@ def test_package_rows_roll_up_by_top_level():
     assert rows["scoring"]["covered"] == 60
     assert rows["scoring"]["percent"] == 75.0
     assert rows["services"]["statements"] == 20
-    assert rows["pages"]["percent"] == 0.0
+    assert "pages" not in rows
+    assert "components" not in rows
 
 
 def test_file_rows_skip_fully_covered_and_sort_lowest_first():
@@ -60,6 +68,7 @@ def test_file_rows_skip_fully_covered_and_sort_lowest_first():
         "services/export_library.py",
     ]
     assert "pages/stats_page.py" not in [row["file"] for row in rows]
+    assert "components/player_table.py" not in [row["file"] for row in rows]
 
 
 def test_markdown_includes_total_and_weak_files():

@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COVERAGE_JSON = ROOT / "coverage.json"
 HTML_DIR = ROOT / "htmlcov"
-PACKAGES = ("scoring", "services", "components", "pages", "config")
+PACKAGES = ("scoring", "services", "config")
 
 
 def _require_dev_deps() -> None:
