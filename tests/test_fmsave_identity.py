@@ -6,10 +6,23 @@ from types import SimpleNamespace
 import services.fmsave_export as fms
 
 
-def test_competition_name_map_reads_three_column_csv():
-    names = fms.competition_name_map()
-    assert names
-    assert any(label == "Liga I" for label in names.values())
+def test_competition_name_map_reads_three_column_csv(tmp_path, monkeypatch):
+    # data/competition-names.csv is gitignored; the extra `type` column is ours.
+    csv_path = tmp_path / "competition-names.csv"
+    csv_path.write_text(
+        "database_id,name,type\n"
+        "7540024,Liga I,league\n"
+        "11,Premier League,league\n"
+        "bad,Skip Me,league\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(fms, "COMPETITION_NAMES_PATH", csv_path)
+    fms.competition_name_map.cache_clear()
+    try:
+        names = fms.competition_name_map()
+        assert names == {7540024: "Liga I", 11: "Premier League"}
+    finally:
+        fms.competition_name_map.cache_clear()
 
 
 def test_nation_name_map_includes_known_ids():
