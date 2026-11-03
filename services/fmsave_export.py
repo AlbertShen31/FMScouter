@@ -1,4 +1,4 @@
-"""Export FM26 save players to Moneyball-compatible CSV via fmsave."""
+"""Export FM26 / FM27 save players to Moneyball-compatible CSV via fmsave."""
 from __future__ import annotations
 
 import csv
@@ -24,8 +24,14 @@ Scope = Literal["squad", "all"]
 # Back-compat alias accepted by export_moneyball_csv (treated as "all").
 _LEGACY_FILTERED_SCOPE = "filtered"
 
+# Prefer the newest edition that has a games folder on disk.
+_FM_GAMES_EDITIONS: tuple[str, ...] = (
+    "Football Manager 27",
+    "Football Manager 26",
+)
+
 # fmsave ships no nation names; club_nation_id / nation_id are integers only.
-# Labels below are curated from FM26 club samples (Based In / league nation).
+# Labels below are curated from FM club samples (Based In / league nation).
 CLUB_NATION_OPTIONS: tuple[tuple[int, str], ...] = (
     (120, "U.S.A."),
     (129, "Austria"),
@@ -89,7 +95,7 @@ def nation_name_map() -> dict[int, str]:
 def competition_name_map() -> dict[int, str]:
     """Editor database_id → competition display name.
 
-    Our CSV also has a ``type`` column; fmsave 0.6+ only accepts a 2-column file,
+    Our CSV also has a ``type`` column; fmsave only accepts a 2-column file,
     so we load the map ourselves and pass the dict into ``fmsave.open``.
     """
     path = COMPETITION_NAMES_PATH
@@ -286,8 +292,8 @@ _FOOT_BANDS: tuple[tuple[int, str], ...] = (
 )
 
 
-def default_fm26_games_dir() -> Path | None:
-    """Return the usual FM26 games folder for this OS, or None if unknown."""
+def _fm_games_dir_for_edition(edition_folder: str) -> Path | None:
+    """Usual Sports Interactive games folder for one FM edition, or None."""
     home = Path.home()
     if sys.platform == "darwin":
         return (
@@ -295,7 +301,7 @@ def default_fm26_games_dir() -> Path | None:
             / "Library"
             / "Application Support"
             / "Sports Interactive"
-            / "Football Manager 26"
+            / edition_folder
             / "games"
         )
     if sys.platform == "win32":
@@ -303,27 +309,49 @@ def default_fm26_games_dir() -> Path | None:
             home
             / "Documents"
             / "Sports Interactive"
-            / "Football Manager 26"
+            / edition_folder
             / "games"
         )
     return None
 
 
+def default_fm_games_dirs() -> tuple[Path, ...]:
+    """Games folders for supported editions that exist on disk (FM27 first)."""
+    found: list[Path] = []
+    for edition in _FM_GAMES_EDITIONS:
+        path = _fm_games_dir_for_edition(edition)
+        if path is not None and path.is_dir():
+            found.append(path)
+    return tuple(found)
+
+
+def default_fm_games_dir() -> Path | None:
+    """Preferred games folder: existing FM27/FM26 dir, else the FM27 path, else None."""
+    existing = default_fm_games_dirs()
+    if existing:
+        return existing[0]
+    return _fm_games_dir_for_edition(_FM_GAMES_EDITIONS[0])
+
+
+def default_fm26_games_dir() -> Path | None:
+    """Back-compat alias for :func:`default_fm_games_dir` (FM26 or FM27)."""
+    return default_fm_games_dir()
+
+
 def default_save_path() -> str:
-    """Newest ``*.fm`` under the OS games dir, else the dir path, else ``\"\"``."""
-    games = default_fm26_games_dir()
-    if games is None:
-        return ""
-    if not games.is_dir():
-        return str(games)
+    """Newest ``*.fm`` under FM27/FM26 games dirs, else a games path, else ``\"\"``."""
+    games_dirs = list(default_fm_games_dirs())
+    if not games_dirs:
+        games = default_fm_games_dir()
+        return str(games) if games is not None else ""
     saves = sorted(
-        (p for p in games.glob("*.fm") if p.is_file()),
+        (p for games in games_dirs for p in games.glob("*.fm") if p.is_file()),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
     if saves:
         return str(saves[0])
-    return str(games)
+    return str(games_dirs[0])
 
 
 def _dialog_initial_dir(preferred: str | Path | None = None) -> Path:
@@ -343,7 +371,11 @@ def _dialog_initial_dir(preferred: str | Path | None = None) -> Path:
         found = _existing_dir(Path(str(preferred)).expanduser())
         if found is not None:
             return found
-    games = default_fm26_games_dir()
+    for games in default_fm_games_dirs():
+        found = _existing_dir(games)
+        if found is not None:
+            return found
+    games = default_fm_games_dir()
     if games is not None:
         found = _existing_dir(games)
         if found is not None:
@@ -823,15 +855,29 @@ def _pick_named_competition(counts: Counter[tuple[int | None, str | None]]) -> s
     return scored[0][2]
 
 
+def _safe_table(reader: Any, *errors: type[BaseException]) -> Any:
+    """Return ``reader()`` or an empty table when FM27/strict checks refuse the section."""
+    try:
+        return reader()
+    except errors:
+        return ()
+
+
 def _build_club_divisions(career_save: Any) -> dict[int, str]:
     """Map club_uid → domestic Division label for Moneyball.
 
     League tables do not store a competition; fmsave votes one from fixtures, and that vote
     often lands on an unnamed id. Prefer division-shaped first-team tables, revoting the name
     from member fixtures when needed, then fall back to each club's slot-0 fixture majority.
+
+    On FM27 a failed reader check stops that reader even with ``strict=False``, so fixtures /
+    league tables / clubs may raise; leave Division blank rather than aborting the export.
     """
+    import fmsave
+
+    reader_errors = (fmsave.ReaderCheckError, fmsave.UnsupportedGameError)
     fx_by_team: dict[int, Counter[tuple[int | None, str | None]]] = defaultdict(Counter)
-    for fixture in career_save.fixtures():
+    for fixture in _safe_table(career_save.fixtures, *reader_errors):
         for team_id, competition_id, competition_name in (
             (fixture.home_team_id, fixture.competition_id, fixture.competition_name),
             (fixture.away_team_id, fixture.competition_id, fixture.competition_name),
@@ -841,7 +887,7 @@ def _build_club_divisions(career_save: Any) -> dict[int, str]:
             fx_by_team[int(team_id)][(competition_id, competition_name)] += 1
 
     club_division: dict[int, str] = {}
-    for table in career_save.league_tables():
+    for table in _safe_table(career_save.league_tables, *reader_errors):
         if not _is_division_shaped(table):
             continue
         rows = tuple(table.rows or ())
@@ -868,7 +914,7 @@ def _build_club_divisions(career_save: Any) -> dict[int, str]:
                 continue
             club_division.setdefault(int(club_uid), name)
 
-    for club in career_save.clubs():
+    for club in _safe_table(career_save.clubs, *reader_errors):
         club_uid = getattr(club, "uid", None)
         if club_uid is None or int(club_uid) in club_division:
             continue
@@ -1319,10 +1365,18 @@ def export_moneyball_csv(
     compute_progress.update(phase="Opening save…", done=0, total=0)
 
     game_date: date | None = None
+    game_label = ""
+    game_build = ""
+    known_build: bool | None = None
     with warnings.catch_warnings():
+        # UnknownBuildWarning fires for every FM27 open (fields unconfirmed) and unverified builds.
         warnings.simplefilter("ignore")
         with fmsave.open(path, competition_names=competition_names) as career_save:
-            game_date = career_save.info.game_date
+            info = career_save.info
+            game_date = info.game_date
+            game_label = str(getattr(info, "game", "") or "")
+            game_build = str(getattr(info, "build", "") or "")
+            known_build = getattr(info, "known_build", None)
             compute_progress.update(phase="Loading players…")
             with _track_player_load_progress():
                 if scope_key == "squad":
@@ -1353,12 +1407,16 @@ def export_moneyball_csv(
             )
 
             season_by_uid: dict[int, list[Any]] = {}
-            for record in career_save.player_season_stats().where(
-                kind=SeasonStatsKind.OVERALL
-            ):
-                if record.player_uid not in uid_set:
-                    continue
-                season_by_uid.setdefault(record.player_uid, []).append(record)
+            try:
+                for record in career_save.player_season_stats().where(
+                    kind=SeasonStatsKind.OVERALL
+                ):
+                    if record.player_uid not in uid_set:
+                        continue
+                    season_by_uid.setdefault(record.player_uid, []).append(record)
+            except (fmsave.ReaderCheckError, fmsave.UnsupportedGameError):
+                # FM27 stops a failed reader even with strict=False.
+                season_by_uid = {}
 
             history_by_uid: dict[int, list[Any]] = {}
             need_history_uids = {
@@ -1386,7 +1444,7 @@ def export_moneyball_csv(
                         history_by_uid.setdefault(record.player_uid, []).append(
                             record
                         )
-                except fmsave.ReaderCheckError:
+                except (fmsave.ReaderCheckError, fmsave.UnsupportedGameError):
                     history_by_uid = {}
 
             total_players = len(player_list)
@@ -1445,6 +1503,9 @@ def export_moneyball_csv(
         "filters_active": _filters_active(filters),
         "save_path": str(path),
         "game_date": game_date.isoformat() if game_date else None,
+        "game": game_label or None,
+        "build": game_build or None,
+        "known_build": known_build,
         "eligibility": eligibility,
         "mapped_columns": mapped,
         "blank_columns": list(BLANK_COLUMNS),

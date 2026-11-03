@@ -1,4 +1,4 @@
-"""Test page: export Moneyball CSV from an FM26 save via fmsave."""
+"""Export Moneyball CSV from an FM26 / FM27 save via fmsave."""
 from __future__ import annotations
 
 from dash import Input, Output, State, callback, clientside_callback, dcc, html, no_update, register_page
@@ -14,10 +14,11 @@ import services.fmsave_export as fms
 register_page(__name__, path="/save-export", name="Save export")
 
 PAGE_TIP = (
-    "Read an FM26 .fm save with fmsave and write a Moneyball-shaped CSV "
-    "(attributes + OVERALL season stats + contract finance). Upload the file "
-    "on Uploads, or check “Also add to Uploads library” here. All players "
-    "can take tens of seconds on a full career; optional filters narrow either scope."
+    "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
+    "(attributes + OVERALL season stats + contract finance). FM27 field meanings stay "
+    "unconfirmed in fmsave; Pressures columns are empty on FM27. Upload the file on "
+    "Uploads, or check “Also add to Uploads library” here. All players can take tens of "
+    "seconds on a full career; optional filters narrow either scope."
 )
 
 _SCOPE_OPTIONS = [
@@ -51,10 +52,17 @@ def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
 
 
 def _default_path_hint() -> str:
-    games = fms.default_fm26_games_dir()
+    existing = fms.default_fm_games_dirs()
+    if existing:
+        labels = " · ".join(str(path) for path in existing)
+        return f"Chooser prefers existing games folders: {labels}"
+    games = fms.default_fm_games_dir()
     if games is None:
-        return "Choose a .fm save file. Default games folder is unknown on this platform."
-    return f"Chooser opens in: {games}"
+        return (
+            "Choose a .fm save file (FM26 or FM27). "
+            "Default games folder is unknown on this platform."
+        )
+    return f"Chooser opens in: {games} (FM26 / FM27)"
 
 
 def layout(**_kwargs):
@@ -70,8 +78,8 @@ def layout(**_kwargs):
             ),
             html.H4("Save export", className="mb-2"),
             html.P(
-                "Generate a Moneyball-compatible CSV from an FM26 save for Role scores, "
-                "Player stats, and Squad finance.",
+                "Generate a Moneyball-compatible CSV from an FM26 or FM27 save for Role "
+                "scores, Player stats, and Squad finance. Requires fmsave 0.9.3+.",
                 className="text-muted mb-3",
             ),
             html.Div(
@@ -315,13 +323,23 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
             )
         )
     blank = ", ".join(meta.get("blank_columns") or [])
+    game_bits = []
+    if meta.get("game"):
+        game_bits.append(str(meta["game"]))
+    if meta.get("build"):
+        game_bits.append(str(meta["build"]))
+    if meta.get("known_build") is False:
+        game_bits.append("unverified build")
+    game_line = " · ".join(game_bits)
+    summary = (
+        f"{meta.get('row_count', 0)} players · {meta.get('column_count', 0)} columns · "
+        f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}"
+        + (" · filters on" if meta.get("filters_active") else "")
+    )
+    if game_line:
+        summary = f"{summary} · {game_line}"
     return [
-        html.P(
-            f"{meta.get('row_count', 0)} players · {meta.get('column_count', 0)} columns · "
-            f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}"
-            + (" · filters on" if meta.get("filters_active") else ""),
-            className="mb-2",
-        ),
+        html.P(summary, className="mb-2"),
         html.Div(flag_spans, className="mb-2"),
         html.P(
             f"Blank / unavailable: {blank}",
