@@ -11387,3 +11387,357 @@ body[data-theme="light"] .pf-depth-chart-section {
         max-width: none;
     }
 }
+
+/* ── Staff scores ─────────────────────────────────────────────────── */
+.ss-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.25rem 1.25rem 2.5rem;
+    color: var(--app-text);
+}
+
+.ss-hero {
+    margin-bottom: 1.1rem;
+}
+
+.ss-kicker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.ss-kicker {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    font-weight: 600;
+}
+
+.ss-title {
+    margin: 0;
+    font-size: 1.65rem;
+    font-weight: 750;
+    color: var(--app-text);
+}
+
+.ss-sub {
+    margin: 0.35rem 0 0;
+    color: var(--app-muted);
+    max-width: 46rem;
+}
+
+.ss-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.ss-panel {
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    border-radius: 12px;
+    padding: 0.9rem 1rem 1rem;
+}
+
+.ss-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.ss-panel-title {
+    font-weight: 650;
+    color: var(--app-text);
+}
+
+.ss-panel-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.ss-btn {
+    appearance: none;
+    border: 1px solid var(--app-line);
+    background: var(--app-elev);
+    color: var(--app-text);
+    border-radius: 8px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.ss-btn:hover {
+    background: var(--app-hover);
+}
+
+.ss-btn.ghost {
+    background: transparent;
+}
+
+.ss-attr-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.ss-group-card {
+    background: var(--app-inset);
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    padding: 0.65rem 0.7rem 0.75rem;
+}
+
+.ss-group-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    margin-bottom: 0.45rem;
+}
+
+.ss-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.ss-attr-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px 36px;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.3rem;
+    border-radius: 6px;
+    transition: background 0.12s ease, opacity 0.12s ease;
+}
+
+.ss-attr-row.is-unused {
+    opacity: 0.45;
+}
+
+.ss-attr-row.is-weighted {
+    background: rgba(61, 255, 136, 0.06);
+}
+
+.ss-attr-row.is-strong {
+    background: rgba(61, 255, 136, 0.1);
+}
+
+.ss-attr-row.is-key {
+    background: rgba(61, 255, 136, 0.16);
+}
+
+html[data-theme="light"] .ss-attr-row.is-weighted,
+body[data-theme="light"] .ss-attr-row.is-weighted {
+    background: rgba(13, 110, 253, 0.06);
+}
+
+html[data-theme="light"] .ss-attr-row.is-strong,
+body[data-theme="light"] .ss-attr-row.is-strong {
+    background: rgba(13, 110, 253, 0.1);
+}
+
+html[data-theme="light"] .ss-attr-row.is-key,
+body[data-theme="light"] .ss-attr-row.is-key {
+    background: rgba(13, 110, 253, 0.16);
+}
+
+.ss-attr-label {
+    font-size: 0.8rem;
+    color: var(--app-text);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.ss-attr-input {
+    width: 72px;
+}
+
+.ss-attr-input .mantine-NumberInput-input,
+.ss-attr-input input {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border-color: var(--app-line) !important;
+}
+
+.ss-weight-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--app-accent);
+    text-align: right;
+    min-height: 1em;
+}
+
+.ss-role-select {
+    min-width: 180px;
+    flex: 1;
+}
+
+.ss-role-select .mantine-Select-input,
+.ss-role-select input {
+    background: var(--app-input) !important;
+    color: var(--app-text) !important;
+    border-color: var(--app-line) !important;
+}
+
+.ss-focus {
+    background: var(--app-inset);
+    border: 1px solid var(--app-line);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.ss-focus-role {
+    font-size: 0.82rem;
+    color: var(--app-muted);
+    font-weight: 600;
+}
+
+.ss-focus-value {
+    font-size: 2rem;
+    font-weight: 750;
+    line-height: 1.15;
+    color: var(--app-accent);
+    margin: 0.15rem 0;
+}
+
+.ss-focus-meta {
+    font-size: 0.78rem;
+    color: var(--app-muted);
+}
+
+.ss-formula {
+    margin-top: 0.45rem;
+    font-size: 0.72rem;
+    color: var(--app-faint);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ss-section-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    margin: 0.35rem 0 0.4rem;
+}
+
+.ss-role-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-height: 280px;
+    overflow: auto;
+    margin-bottom: 0.75rem;
+    padding-right: 0.15rem;
+}
+
+.ss-role-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 52px 40px;
+    gap: 0.4rem;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--app-text);
+    border-radius: 8px;
+    padding: 0.35rem 0.45rem;
+    cursor: pointer;
+}
+
+.ss-role-item:hover {
+    background: var(--app-row-hover);
+}
+
+.ss-role-item.active {
+    background: var(--app-active);
+    border-color: var(--app-line);
+}
+
+.ss-role-name {
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ss-role-score {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.ss-role-cov {
+    font-size: 0.72rem;
+    color: var(--app-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ss-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.ss-bd-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36px 40px 48px;
+    gap: 0.35rem;
+    align-items: center;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.25rem;
+    border-radius: 5px;
+}
+
+.ss-bd-row.head {
+    color: var(--app-muted);
+    font-weight: 650;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ss-bd-row.missing {
+    opacity: 0.5;
+}
+
+.ss-bd-w,
+.ss-bd-v,
+.ss-bd-p {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ss-bd-name.head,
+.ss-bd-w.head,
+.ss-bd-v.head,
+.ss-bd-p.head {
+    color: var(--app-muted);
+}
+
+.ss-empty {
+    color: var(--app-muted);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.2rem;
+}
+
+@media (max-width: 960px) {
+    .ss-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .ss-attr-grid {
+        grid-template-columns: 1fr;
+    }
+}

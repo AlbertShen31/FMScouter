@@ -119,6 +119,13 @@ app.layout = dmc.MantineProvider(
                                     id="nav-link-profiles",
                                 )
                             ),
+                            dbc.NavItem(
+                                dbc.NavLink(
+                                    "Staff scores",
+                                    href="/staff-scores",
+                                    id="nav-link-staff-scores",
+                                )
+                            ),
                             dbc.DropdownMenu(
                                 [
                                     dbc.DropdownMenuItem(
@@ -231,6 +238,7 @@ app.clientside_callback(
             on("/") || path === "",
             on("/stats"),
             on("/profiles"),
+            on("/staff-scores"),
             toggleCls(dataOn),
             toggleCls(setupOn),
             on("/uploads"),
@@ -246,6 +254,7 @@ app.clientside_callback(
     Output("nav-link-role-scores", "active"),
     Output("nav-link-player-stats", "active"),
     Output("nav-link-profiles", "active"),
+    Output("nav-link-staff-scores", "active"),
     Output("nav-menu-data", "toggle_class_name"),
     Output("nav-menu-setup", "toggle_class_name"),
     Output("nav-item-uploads", "active"),

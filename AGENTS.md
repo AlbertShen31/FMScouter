@@ -20,6 +20,7 @@ Dash + dash-mantine-components scouting app for Football Manager exports.
 | Uploads / cache | `pages/uploads_page.py`, `services/upload_cache.py`, `services/export_library.py` |
 | Settings / UI prefs | `pages/settings_page.py`, `services/ui_settings.py` |
 | Squad finance | `pages/squad_finance_page.py`, `scoring/squad_finance.py` |
+| Staff scores | `pages/staff_scores_page.py`, `scoring/staff_scorer.py`, `config/staff_weights.json` |
 | Role config / formulas | `pages/role_config_page.py`, `pages/formulas_page.py`, `services/role_config.py` |
 | Shared UI | `components/player_table.py`, `player_filters.py`, `player_modal.py`, `scouting_shell.py` |
 | Scoring extras | `scoring/stats_availability.py`, personality, division tiers |
