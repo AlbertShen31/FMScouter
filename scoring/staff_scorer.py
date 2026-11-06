@@ -40,15 +40,16 @@ def role_weights(role_id: str) -> dict[str, int]:
 
 
 def parse_attr_value(value: Any) -> float | None:
+    """Parse a 1–20 attribute. Blank values default to 1."""
     if value is None or value == "":
-        return None
+        return 1.0
     try:
         num = float(value)
     except (TypeError, ValueError):
-        return None
+        return 1.0
     if num != num:  # NaN
-        return None
-    return max(0.0, min(20.0, num))
+        return 1.0
+    return max(1.0, min(20.0, num))
 
 
 def score_role(
@@ -59,8 +60,8 @@ def score_role(
 ) -> dict[str, Any]:
     """Weighted average for one role.
 
-    Missing attributes are skipped (numerator and denominator) unless
-    ``require_all`` is True, in which case missing weighted attrs yield no score.
+    Blank attributes count as 1. ``require_all`` still withholds a score when a
+    weighted attribute cannot be read as a number and was not defaulted.
     """
     weights = role_weights(role_id)
     labels = attribute_map()

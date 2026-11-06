@@ -25,8 +25,8 @@ _GROUP_ORDER = (
 PAGE_TIP = (
     "Enter staff attributes on the 1–20 scale. Scores use Football Manager 2024 "
     "Pre-Game Editor role weights (hidden staff CA / valuation estimate). "
-    "Blank fields are skipped for that role’s average; coverage shows how much "
-    "of the role’s weight you filled. Adaptability and Level of Discipline have "
+    "Blank fields count as 1. Coverage shows how much of the role’s weight "
+    "is included. Adaptability and Level of Discipline have "
     "weight 0 for every role in the editor table."
 )
 
@@ -47,13 +47,14 @@ def _attr_input(attr: dict) -> html.Div:
             html.Label(label, className="ss-attr-label", htmlFor=f"ss-attr-{attr_id}"),
             dmc.NumberInput(
                 id={"type": "ss-attr", "attr": attr_id},
-                min=0,
+                min=1,
                 max=20,
                 step=1,
                 decimalScale=0,
                 hideControls=False,
+                value=1,
                 debounce=200,
-                placeholder="—",
+                placeholder="1",
                 className="ss-attr-input",
                 size="sm",
             ),
@@ -328,7 +329,7 @@ def sync_role(n_clicks, select_value, current):
 def clear_attrs(n_clicks, ids):
     if not n_clicks:
         return no_update
-    return [None] * len(ids or [])
+    return [1] * len(ids or [])
 
 
 @callback(
