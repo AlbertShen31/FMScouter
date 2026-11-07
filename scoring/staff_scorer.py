@@ -39,10 +39,59 @@ def role_weights(role_id: str) -> dict[str, int]:
     return out
 
 
+# FM staff attribute word ratings → numeric midpoints for scoring.
+STAFF_BANDS: tuple[dict[str, Any], ...] = (
+    {"id": "elite", "label": "Elite", "lo": 20, "hi": 20, "score": 20.0},
+    {"id": "outstanding", "label": "Outstanding", "lo": 18, "hi": 19, "score": 18.5},
+    {"id": "very_good", "label": "Very Good", "lo": 15, "hi": 17, "score": 16.0},
+    {"id": "good", "label": "Good", "lo": 12, "hi": 14, "score": 13.0},
+    {"id": "average", "label": "Average", "lo": 10, "hi": 11, "score": 10.5},
+    {"id": "competent", "label": "Competent", "lo": 7, "hi": 9, "score": 8.0},
+    {"id": "reasonable", "label": "Reasonable", "lo": 4, "hi": 6, "score": 5.0},
+    {"id": "unsuited", "label": "Unsuited", "lo": 1, "hi": 3, "score": 2.0},
+)
+DEFAULT_BAND_ID = "unsuited"
+_BAND_BY_ID = {str(band["id"]): band for band in STAFF_BANDS}
+
+
+def staff_band_options() -> list[dict[str, str]]:
+    options = []
+    for band in STAFF_BANDS:
+        lo = int(band["lo"])
+        hi = int(band["hi"])
+        span = str(lo) if lo == hi else f"{lo}–{hi}"
+        options.append(
+            {
+                "value": str(band["id"]),
+                "label": f"{band['label']} ({span})",
+            }
+        )
+    return options
+
+
+def band_score(band_id: Any) -> float:
+    band = _BAND_BY_ID.get(str(band_id or ""))
+    if not band:
+        return float(_BAND_BY_ID[DEFAULT_BAND_ID]["score"])
+    return float(band["score"])
+
+
+def band_for_value(value: Any) -> str:
+    num = parse_attr_value(value)
+    if num is None:
+        return DEFAULT_BAND_ID
+    for band in STAFF_BANDS:
+        if float(band["lo"]) <= num <= float(band["hi"]):
+            return str(band["id"])
+    return DEFAULT_BAND_ID
+
+
 def parse_attr_value(value: Any) -> float | None:
-    """Parse a 1–20 attribute. Blank values default to 1."""
+    """Parse a 1–20 attribute. Blank / band ids resolve to a numeric score."""
     if value is None or value == "":
         return 1.0
+    if isinstance(value, str) and value in _BAND_BY_ID:
+        return band_score(value)
     try:
         num = float(value)
     except (TypeError, ValueError):

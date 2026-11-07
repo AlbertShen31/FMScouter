@@ -12,6 +12,7 @@ register_page(__name__, path="/staff-scores", name="Staff scores")
 _ATTRS = ss.attributes()
 _ROLES = ss.roles()
 _DEFAULT_ROLE = "coach"
+_DEFAULT_MODE = "numbers"
 _ROLE_CATEGORIES = ("Coaching", "Recruitment", "Medical")
 _GROUP_ORDER = (
     "Coaching",
@@ -22,13 +23,13 @@ _GROUP_ORDER = (
     "Medical",
     "Other",
 )
+_BAND_OPTIONS = ss.staff_band_options()
 
 PAGE_TIP = (
-    "Enter staff attributes on the 1–20 scale. Scores use Football Manager 2024 "
-    "Pre-Game Editor role weights (hidden staff CA / valuation estimate). "
-    "Blank fields count as 1. Coverage shows how much of the role’s weight "
-    "is included. Adaptability and Level of Discipline have "
-    "weight 0 for every role in the editor table."
+    "Enter staff attributes as 1–20 numbers or FM word ratings (Elite → Unsuited). "
+    "Word ratings use the midpoint of each band for scoring. Scores use Football "
+    "Manager 2024 Pre-Game Editor role weights (hidden staff CA / valuation estimate). "
+    "Adaptability and Level of Discipline have weight 0 for every role in the editor table."
 )
 
 
@@ -60,18 +61,33 @@ def _attr_input(attr: dict) -> html.Div:
     return html.Div(
         [
             html.Label(label, className="ss-attr-label", htmlFor=f"ss-attr-{attr_id}"),
-            dmc.NumberInput(
-                id={"type": "ss-attr", "attr": attr_id},
-                min=1,
-                max=20,
-                step=1,
-                decimalScale=0,
-                hideControls=False,
-                value=1,
-                debounce=200,
-                placeholder="1",
-                className="ss-attr-input",
-                size="sm",
+            html.Div(
+                [
+                    dmc.NumberInput(
+                        id={"type": "ss-attr", "attr": attr_id},
+                        min=1,
+                        max=20,
+                        step=1,
+                        decimalScale=0,
+                        hideControls=False,
+                        value=1,
+                        debounce=200,
+                        placeholder="1",
+                        className="ss-attr-input",
+                        size="sm",
+                    ),
+                    dmc.Select(
+                        id={"type": "ss-attr-band", "attr": attr_id},
+                        data=_BAND_OPTIONS,
+                        value=ss.DEFAULT_BAND_ID,
+                        searchable=False,
+                        clearable=False,
+                        allowDeselect=False,
+                        className="ss-attr-band",
+                        size="sm",
+                    ),
+                ],
+                className="ss-attr-control",
             ),
             html.Span("", id={"type": "ss-weight-badge", "attr": attr_id}, className="ss-weight-badge"),
         ],
@@ -132,6 +148,22 @@ def layout(**_kwargs):
                                     html.Span("Attributes", className="ss-panel-title"),
                                     html.Div(
                                         [
+                                            dmc.SegmentedControl(
+                                                id="ss-mode",
+                                                value=_DEFAULT_MODE,
+                                                data=[
+                                                    {
+                                                        "value": "numbers",
+                                                        "label": "Numbers",
+                                                    },
+                                                    {
+                                                        "value": "thresholds",
+                                                        "label": "Thresholds",
+                                                    },
+                                                ],
+                                                size="xs",
+                                                className="ss-mode-toggle",
+                                            ),
                                             html.Button(
                                                 "Clear",
                                                 id="ss-clear",
@@ -144,7 +176,21 @@ def layout(**_kwargs):
                                 ],
                                 className="ss-panel-head",
                             ),
-                            html.Div(_attr_groups(), className="ss-attr-grid"),
+                            html.Div(
+                                id="ss-band-legend",
+                                className="ss-band-legend",
+                                hidden=True,
+                                children=(
+                                    "Elite 20 · Outstanding 18–19 · Very Good 15–17 · Good 12–14 · "
+                                    "Average 10–11 · Competent 7–9 · Reasonable 4–6 · Unsuited 1–3 "
+                                    "(midpoint used for scores)"
+                                ),
+                            ),
+                            html.Div(
+                                _attr_groups(),
+                                className="ss-attr-grid is-numbers",
+                                id="ss-attr-grid",
+                            ),
                         ],
                         className="ss-panel ss-inputs",
                     ),
@@ -246,7 +292,22 @@ def _role_buttons() -> list:
     return items
 
 
-def _breakdown(result: dict) -> html.Div:
+def _fmt_contrib_value(value, mode: str) -> str:
+    if value is None:
+        return "—"
+    if mode == "thresholds":
+        band = next(
+            (b for b in ss.STAFF_BANDS if b["id"] == ss.band_for_value(value)),
+            None,
+        )
+        if band:
+            return str(band["label"])
+    if float(value) == int(value):
+        return f"{int(value)}"
+    return f"{value:g}"
+
+
+def _breakdown(result: dict, mode: str = _DEFAULT_MODE) -> html.Div:
     rows = []
     for item in result.get("contributions") or []:
         filled = bool(item.get("filled"))
@@ -257,7 +318,7 @@ def _breakdown(result: dict) -> html.Div:
                 [
                     html.Span(item.get("label") or item.get("id"), className="ss-bd-name"),
                     html.Span(f"×{item.get('weight')}", className="ss-bd-w"),
-                    html.Span("—" if value is None else f"{value:g}", className="ss-bd-v"),
+                    html.Span(_fmt_contrib_value(value, mode), className="ss-bd-v"),
                     html.Span(
                         "—" if product is None else f"{product:g}",
                         className="ss-bd-p",
@@ -295,12 +356,13 @@ def _weight_badges(role_id: str) -> list:
     return outs
 
 
-def _wrap_classes(role_id: str) -> list:
+def _wrap_classes(role_id: str, mode: str = _DEFAULT_MODE) -> list:
     weights = ss.role_weights(role_id)
+    mode_cls = " is-thresholds" if mode == "thresholds" else " is-numbers"
     outs = []
     for attr in _ATTRS:
         attr_id = str(attr["id"])
-        cls = "ss-attr-row"
+        cls = "ss-attr-row" + mode_cls
         if attr_id in weights:
             cls += " is-weighted"
             if weights[attr_id] >= 4:
@@ -311,6 +373,37 @@ def _wrap_classes(role_id: str) -> list:
             cls += " is-unused"
         outs.append(cls)
     return outs
+
+
+@callback(
+    Output("ss-band-legend", "hidden"),
+    Output("ss-attr-grid", "className"),
+    Output({"type": "ss-attr", "attr": ALL}, "value", allow_duplicate=True),
+    Output({"type": "ss-attr-band", "attr": ALL}, "value", allow_duplicate=True),
+    Input("ss-mode", "value"),
+    State({"type": "ss-attr", "attr": ALL}, "value"),
+    State({"type": "ss-attr-band", "attr": ALL}, "value"),
+    prevent_initial_call=True,
+)
+def sync_mode(mode, num_values, band_values):
+    mode = mode if mode in ("numbers", "thresholds") else _DEFAULT_MODE
+    n_num = len(num_values or [])
+    n_band = len(band_values or [])
+    if mode == "thresholds":
+        return (
+            False,
+            "ss-attr-grid is-thresholds",
+            [no_update] * n_num,
+            [ss.band_for_value(v) for v in (num_values or [])],
+        )
+    nums = [ss.band_score(v) for v in (band_values or [])]
+    nums = [int(v) if float(v) == int(v) else v for v in nums]
+    return (
+        True,
+        "ss-attr-grid is-numbers",
+        nums,
+        [no_update] * n_band,
+    )
 
 
 @callback(
@@ -339,14 +432,19 @@ def sync_role(n_clicks, select_value, current):
 
 @callback(
     Output({"type": "ss-attr", "attr": ALL}, "value"),
+    Output({"type": "ss-attr-band", "attr": ALL}, "value"),
     Input("ss-clear", "n_clicks"),
     State({"type": "ss-attr", "attr": ALL}, "id"),
+    State({"type": "ss-attr-band", "attr": ALL}, "id"),
     prevent_initial_call=True,
 )
-def clear_attrs(n_clicks, ids):
+def clear_attrs(n_clicks, num_ids, band_ids):
     if not n_clicks:
-        return no_update
-    return [1] * len(ids or [])
+        return no_update, no_update
+    return (
+        [1] * len(num_ids or []),
+        [ss.DEFAULT_BAND_ID] * len(band_ids or []),
+    )
 
 
 @callback(
@@ -358,13 +456,24 @@ def clear_attrs(n_clicks, ids):
     Output({"type": "ss-weight-badge", "attr": ALL}, "children"),
     Output({"type": "ss-attr-wrap", "attr": ALL}, "className"),
     Input({"type": "ss-attr", "attr": ALL}, "value"),
+    Input({"type": "ss-attr-band", "attr": ALL}, "value"),
     Input("ss-role", "data"),
+    Input("ss-mode", "value"),
     State({"type": "ss-attr", "attr": ALL}, "id"),
+    State({"type": "ss-attr-band", "attr": ALL}, "id"),
 )
-def recompute(values, role_id, ids):
+def recompute(num_values, band_values, role_id, mode, num_ids, band_ids):
     role_id = role_id or _DEFAULT_ROLE
-    attr_ids = [str(item.get("attr") or "") for item in (ids or [])]
-    attrs = ss.attrs_from_lists(attr_ids, values or [])
+    mode = mode if mode in ("numbers", "thresholds") else _DEFAULT_MODE
+    if mode == "thresholds":
+        attr_ids = [str(item.get("attr") or "") for item in (band_ids or [])]
+        attrs = {
+            attr_id: ss.band_score(value)
+            for attr_id, value in zip(attr_ids, band_values or [])
+        }
+    else:
+        attr_ids = [str(item.get("attr") or "") for item in (num_ids or [])]
+        attrs = ss.attrs_from_lists(attr_ids, num_values or [])
     rows = ss.score_all_roles(attrs)
     by_id = {row["role_id"]: row for row in rows}
     focus = by_id.get(role_id) or ss.score_role(role_id, attrs)
@@ -386,10 +495,10 @@ def recompute(values, role_id, ids):
             classes.append("ss-role-item" + (" active" if rid == role_id else ""))
     return (
         _focus_block(focus),
-        _breakdown(focus),
+        _breakdown(focus, mode),
         scores,
         coverages,
         classes,
         _weight_badges(role_id),
-        _wrap_classes(role_id),
+        _wrap_classes(role_id, mode),
     )

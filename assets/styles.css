@@ -11479,6 +11479,24 @@ body[data-theme="light"] .pf-depth-chart-section {
     background: transparent;
 }
 
+.ss-btn.active {
+    background: var(--app-active);
+    border-color: var(--app-accent);
+    color: var(--app-text);
+    font-weight: 650;
+}
+
+.ss-mode-toggle {
+    flex: 0 0 auto;
+}
+
+.ss-band-legend {
+    font-size: 0.72rem;
+    color: var(--app-muted);
+    margin: -0.25rem 0 0.75rem;
+    line-height: 1.35;
+}
+
 .ss-attr-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11515,6 +11533,14 @@ body[data-theme="light"] .pf-depth-chart-section {
     padding: 0.2rem 0.3rem;
     border-radius: 6px;
     transition: background 0.12s ease, opacity 0.12s ease;
+}
+
+.ss-attr-row.is-thresholds {
+    grid-template-columns: minmax(0, 1fr) minmax(132px, 158px) 36px;
+}
+
+.ss-attr-control {
+    min-width: 0;
 }
 
 .ss-attr-row.is-unused {
@@ -11559,8 +11585,22 @@ body[data-theme="light"] .ss-attr-row.is-key {
     width: 72px;
 }
 
+.ss-attr-band {
+    width: 100%;
+}
+
+.ss-attr-grid.is-numbers .ss-attr-band {
+    display: none !important;
+}
+
+.ss-attr-grid.is-thresholds .ss-attr-input {
+    display: none !important;
+}
+
 .ss-attr-input .mantine-NumberInput-input,
-.ss-attr-input input {
+.ss-attr-input input,
+.ss-attr-band .mantine-Select-input,
+.ss-attr-band input {
     background: var(--app-input) !important;
     color: var(--app-text) !important;
     border-color: var(--app-line) !important;
