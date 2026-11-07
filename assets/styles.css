@@ -11633,10 +11633,24 @@ body[data-theme="light"] .ss-attr-row.is-key {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    max-height: 280px;
+    max-height: 420px;
     overflow: auto;
     margin-bottom: 0.75rem;
     padding-right: 0.15rem;
+}
+
+.ss-role-cat {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    margin: 0.45rem 0 0.1rem;
+    padding: 0 0.15rem;
+}
+
+.ss-role-cat:first-child {
+    margin-top: 0.15rem;
 }
 
 .ss-role-item {

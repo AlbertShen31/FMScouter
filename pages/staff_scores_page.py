@@ -12,6 +12,7 @@ register_page(__name__, path="/staff-scores", name="Staff scores")
 _ATTRS = ss.attributes()
 _ROLES = ss.roles()
 _DEFAULT_ROLE = "coach"
+_ROLE_CATEGORIES = ("Coaching", "Recruitment", "Medical")
 _GROUP_ORDER = (
     "Coaching",
     "Goalkeeping",
@@ -31,8 +32,22 @@ PAGE_TIP = (
 )
 
 
-def _role_options() -> list[dict[str, str]]:
-    return [{"value": r["id"], "label": r["label"]} for r in _ROLES]
+def _roles_by_category() -> list[tuple[str, list[dict]]]:
+    grouped: dict[str, list[dict]] = {cat: [] for cat in _ROLE_CATEGORIES}
+    for role in _ROLES:
+        cat = str(role.get("category") or "Coaching")
+        grouped.setdefault(cat, []).append(role)
+    return [(cat, roles) for cat, roles in grouped.items() if roles]
+
+
+def _role_options() -> list[dict]:
+    return [
+        {
+            "group": category,
+            "items": [{"value": role["id"], "label": role["label"]} for role in roles],
+        }
+        for category, roles in _roles_by_category()
+    ]
 
 
 def _attr_input(attr: dict) -> html.Div:
@@ -151,7 +166,6 @@ def layout(**_kwargs):
                                 className="ss-panel-head",
                             ),
                             html.Div(id="ss-focus-score", className="ss-focus"),
-                            html.Div("All roles", className="ss-section-label"),
                             html.Div(_role_buttons(), className="ss-role-list"),
                             html.Div("Contribution", className="ss-section-label"),
                             html.Div(id="ss-breakdown", className="ss-breakdown"),
@@ -199,33 +213,36 @@ def _focus_block(result: dict) -> html.Div:
     )
 
 
+def _role_button(role: dict) -> html.Button:
+    role_id = str(role["id"])
+    active = " active" if role_id == _DEFAULT_ROLE else ""
+    return html.Button(
+        [
+            html.Span(role["label"], className="ss-role-name"),
+            html.Span(
+                "—",
+                id={"type": "ss-role-score", "role": role_id},
+                className="ss-role-score",
+            ),
+            html.Span(
+                "0%",
+                id={"type": "ss-role-cov", "role": role_id},
+                className="ss-role-cov",
+            ),
+        ],
+        id={"type": "ss-role-pick", "role": role_id},
+        n_clicks=0,
+        className="ss-role-item" + active,
+        title="Show contribution for this role",
+    )
+
+
 def _role_buttons() -> list:
     """Stable buttons so attribute edits don't remount the list and steal focus."""
     items = []
-    for role in _ROLES:
-        role_id = str(role["id"])
-        active = " active" if role_id == _DEFAULT_ROLE else ""
-        items.append(
-            html.Button(
-                [
-                    html.Span(role["label"], className="ss-role-name"),
-                    html.Span(
-                        "—",
-                        id={"type": "ss-role-score", "role": role_id},
-                        className="ss-role-score",
-                    ),
-                    html.Span(
-                        "0%",
-                        id={"type": "ss-role-cov", "role": role_id},
-                        className="ss-role-cov",
-                    ),
-                ],
-                id={"type": "ss-role-pick", "role": role_id},
-                n_clicks=0,
-                className="ss-role-item" + active,
-                title="Show contribution for this role",
-            )
-        )
+    for category, roles in _roles_by_category():
+        items.append(html.Div(category, className="ss-role-cat"))
+        items.extend(_role_button(role) for role in roles)
     return items
 
 
@@ -359,13 +376,14 @@ def recompute(values, role_id, ids):
     scores = []
     coverages = []
     classes = []
-    for role in _ROLES:
-        rid = str(role["id"])
-        row = by_id.get(rid) or {}
-        cov = float(row.get("coverage") or 0)
-        scores.append(_fmt_score(row.get("score")))
-        coverages.append(f"{int(round(cov * 100))}%")
-        classes.append("ss-role-item" + (" active" if rid == role_id else ""))
+    for _category, roles in _roles_by_category():
+        for role in roles:
+            rid = str(role["id"])
+            row = by_id.get(rid) or {}
+            cov = float(row.get("coverage") or 0)
+            scores.append(_fmt_score(row.get("score")))
+            coverages.append(f"{int(round(cov * 100))}%")
+            classes.append("ss-role-item" + (" active" if rid == role_id else ""))
     return (
         _focus_block(focus),
         _breakdown(focus),
