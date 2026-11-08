@@ -501,15 +501,35 @@ def _format_money(amount: float | int | None, *, annual: bool = False) -> str:
     return f"${value:.2f}{suffix}"
 
 
-def _format_height_cm(cm: int | None) -> str:
+def _height_total_inches(cm: int | float | None) -> int | None:
+    """Round cm → total inches the same way export Height strings are built."""
     if not cm:
-        return ""
+        return None
     try:
-        total_inches = round(float(cm) / 2.54)
+        return round(float(cm) / 2.54)
     except (TypeError, ValueError):
+        return None
+
+
+def _format_height_cm(cm: int | None) -> str:
+    total_inches = _height_total_inches(cm)
+    if total_inches is None:
         return ""
     feet, inches = divmod(total_inches, 12)
     return f"{feet}'{inches}\""
+
+
+def height_bound_inches(ft, inches) -> int | None:
+    """Combine ft + in filter fields into total inches; empty → None."""
+    if ft is None and inches is None:
+        return None
+    try:
+        feet = int(ft) if ft is not None else 0
+        inch = int(inches) if inches is not None else 0
+    except (TypeError, ValueError):
+        return None
+    inch = max(0, min(11, inch))
+    return feet * 12 + inch
 
 
 def _format_foot(raw: int | None) -> str:
@@ -723,12 +743,12 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     if age_max is not None and age is not None and age > int(age_max):
         return False
 
-    height = getattr(player, "height_cm", None)
-    height_min = filters.get("height_min")
-    height_max = filters.get("height_max")
-    if height_min is not None and height is not None and int(height) < int(height_min):
+    height_in = _height_total_inches(getattr(player, "height_cm", None))
+    height_min = filters.get("height_min_in")
+    height_max = filters.get("height_max_in")
+    if height_min is not None and height_in is not None and height_in < int(height_min):
         return False
-    if height_max is not None and height is not None and int(height) > int(height_max):
+    if height_max is not None and height_in is not None and height_in > int(height_max):
         return False
 
     club_contains = (filters.get("club_contains") or "").strip().casefold()
@@ -764,7 +784,7 @@ def _filters_active(filters: dict[str, Any] | None) -> bool:
         return False
     if filters.get("age_min") is not None or filters.get("age_max") is not None:
         return True
-    if filters.get("height_min") is not None or filters.get("height_max") is not None:
+    if filters.get("height_min_in") is not None or filters.get("height_max_in") is not None:
         return True
     if (filters.get("club_contains") or "").strip():
         return True

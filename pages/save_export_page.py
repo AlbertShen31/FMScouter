@@ -16,9 +16,9 @@ register_page(__name__, path="/save-export", name="Save export")
 PAGE_TIP = (
     "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
     "(attributes + OVERALL season stats + contract finance). FM27 field meanings stay "
-    "unconfirmed in fmsave; Pressures columns are empty on FM27. By default the export "
-    "is added to the Uploads library; optionally download a CSV as well. All players can "
-    "take tens of seconds on a full career; optional filters narrow either scope."
+    "unconfirmed in fmsave; Pressures columns are empty on FM27. Generate export always "
+    "adds the file to the Uploads library; optionally download a CSV as well. All players "
+    "can take tens of seconds on a full career; optional filters narrow either scope."
 )
 
 _SCOPE_OPTIONS = [
@@ -162,23 +162,43 @@ def layout(**_kwargs):
                                                                         hideControls=False,
                                                                     ),
                                                                     dmc.NumberInput(
-                                                                        id="sx-height-min",
-                                                                        label="Height min (cm)",
+                                                                        id="sx-height-min-ft",
+                                                                        label="Min ft",
                                                                         value=None,
-                                                                        min=140,
-                                                                        max=220,
+                                                                        min=4,
+                                                                        max=7,
                                                                         hideControls=False,
                                                                     ),
                                                                     dmc.NumberInput(
-                                                                        id="sx-height-max",
-                                                                        label="Height max (cm)",
+                                                                        id="sx-height-min-in",
+                                                                        label="Min in",
                                                                         value=None,
-                                                                        min=140,
-                                                                        max=220,
+                                                                        min=0,
+                                                                        max=11,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                    dmc.NumberInput(
+                                                                        id="sx-height-max-ft",
+                                                                        label="Max ft",
+                                                                        value=None,
+                                                                        min=4,
+                                                                        max=7,
+                                                                        hideControls=False,
+                                                                    ),
+                                                                    dmc.NumberInput(
+                                                                        id="sx-height-max-in",
+                                                                        label="Max in",
+                                                                        value=None,
+                                                                        min=0,
+                                                                        max=11,
                                                                         hideControls=False,
                                                                     ),
                                                                 ],
                                                                 className="sx-filter-fields sx-filter-fields-limits",
+                                                            ),
+                                                            html.P(
+                                                                "Height uses feet and inches (same as export Height).",
+                                                                className="sx-filter-hint mb-0",
                                                             ),
                                                         ],
                                                         className="sx-filter-group",
@@ -255,12 +275,6 @@ def layout(**_kwargs):
                                     ),
                                     html.Hr(className="my-3"),
                                     dmc.Checkbox(
-                                        id="sx-to-uploads",
-                                        label="Add to Uploads library",
-                                        checked=True,
-                                        className="mb-2",
-                                    ),
-                                    dmc.Checkbox(
                                         id="sx-download-csv",
                                         label="Also download CSV",
                                         checked=False,
@@ -273,7 +287,7 @@ def layout(**_kwargs):
                                         disabled=True,
                                     ),
                                     html.P(
-                                        "All players can take a while — leave this tab open.",
+                                        "Always adds to Uploads. All players can take a while — leave this tab open.",
                                         className="text-muted small mt-2 mb-0",
                                     ),
                                 ]
@@ -314,8 +328,10 @@ def _parse_nation_ids(values) -> list[int]:
 def _filters_payload(
     age_min,
     age_max,
-    height_min,
-    height_max,
+    height_min_ft,
+    height_min_in,
+    height_max_ft,
+    height_max_in,
     club_contains,
     club_nations,
     player_nations,
@@ -324,8 +340,8 @@ def _filters_payload(
     return {
         "age_min": age_min,
         "age_max": age_max,
-        "height_min": height_min,
-        "height_max": height_max,
+        "height_min_in": fms.height_bound_inches(height_min_ft, height_min_in),
+        "height_max_in": fms.height_bound_inches(height_max_ft, height_max_in),
         "club_contains": club_contains or "",
         "club_nation_ids": _parse_nation_ids(club_nations),
         "nation_ids": _parse_nation_ids(player_nations),
@@ -456,13 +472,14 @@ def sx_browse(n_clicks, current_path):
     State("sx-scope", "value"),
     State("sx-age-min", "value"),
     State("sx-age-max", "value"),
-    State("sx-height-min", "value"),
-    State("sx-height-max", "value"),
+    State("sx-height-min-ft", "value"),
+    State("sx-height-min-in", "value"),
+    State("sx-height-max-ft", "value"),
+    State("sx-height-max-in", "value"),
     State("sx-club-contains", "value"),
     State("sx-club-nations", "value"),
     State("sx-player-nations", "value"),
     State("sx-pos-groups", "value"),
-    State("sx-to-uploads", "checked"),
     State("sx-download-csv", "checked"),
     State("sx-rev", "data"),
     prevent_initial_call=True,
@@ -473,13 +490,14 @@ def sx_generate(
     scope,
     age_min,
     age_max,
-    height_min,
-    height_max,
+    height_min_ft,
+    height_min_in,
+    height_max_ft,
+    height_max_in,
     club_contains,
     club_nations,
     player_nations,
     pos_groups,
-    to_uploads,
     download_csv,
     rev,
 ):
@@ -495,23 +513,14 @@ def sx_generate(
             "rs-shortlist-busy",
             True,
         )
-    if not to_uploads and not download_csv:
-        return (
-            no_update,
-            html.P(
-                "Choose at least one destination: Uploads library and/or download CSV.",
-                className="text-danger mb-0",
-            ),
-            next_rev,
-            "rs-shortlist-busy",
-            True,
-        )
     scope_key = scope if scope in {"squad", "all"} else "squad"
     filters = _filters_payload(
         age_min,
         age_max,
-        height_min,
-        height_max,
+        height_min_ft,
+        height_min_in,
+        height_max_ft,
+        height_max_in,
         club_contains,
         club_nations,
         player_nations,
@@ -547,24 +556,23 @@ def sx_generate(
             )
 
         uploads_note = ""
-        if to_uploads:
-            try:
-                compute_progress.update(
-                    phase="Adding to Uploads…",
-                    message="Saving and precomputing…",
-                    done=0,
-                    total=0,
-                )
-                entry = lib.save_upload(
-                    meta.get("filename") or "fmsave_export.csv", csv_text
-                )
-                pages = ", ".join(entry.get("pages") or []) or "none"
-                uploads_note = (
-                    f"Saved to Uploads as “{entry.get('display_name')}” "
-                    f"(id={entry.get('id')}; pages: {pages})."
-                )
-            except Exception as exc:  # noqa: BLE001
-                uploads_note = f"Export built, but Uploads save failed: {exc}"
+        try:
+            compute_progress.update(
+                phase="Adding to Uploads…",
+                message="Saving and precomputing…",
+                done=0,
+                total=0,
+            )
+            entry = lib.save_upload(
+                meta.get("filename") or "fmsave_export.csv", csv_text
+            )
+            pages = ", ".join(entry.get("pages") or []) or "none"
+            uploads_note = (
+                f"Saved to Uploads as “{entry.get('display_name')}” "
+                f"(id={entry.get('id')}; pages: {pages})."
+            )
+        except Exception as exc:  # noqa: BLE001
+            uploads_note = f"Export built, but Uploads save failed: {exc}"
 
         download = no_update
         if download_csv:
