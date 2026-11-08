@@ -92,6 +92,8 @@ _LABEL_ISO2: dict[str, str] = {
     "fiji": "FJ",
     "finland": "FI",
     "france": "FR",
+    "french guiana": "GF",
+    "french polynesia": "PF",
     "gabon": "GA",
     "gambia": "GM",
     "georgia": "GE",
@@ -100,6 +102,7 @@ _LABEL_ISO2: dict[str, str] = {
     "gibraltar": "GI",
     "greece": "GR",
     "grenada": "GD",
+    "guadeloupe": "GP",
     "guam": "GU",
     "guatemala": "GT",
     "guinea": "GN",
@@ -145,8 +148,10 @@ _LABEL_ISO2: dict[str, str] = {
     "maldives": "MV",
     "mali": "ML",
     "malta": "MT",
+    "martinique": "MQ",
     "mauritania": "MR",
     "mauritius": "MU",
+    "mayotte": "YT",
     "mexico": "MX",
     "moldova": "MD",
     "mongolia": "MN",
@@ -179,9 +184,16 @@ _LABEL_ISO2: dict[str, str] = {
     "portugal": "PT",
     "puerto rico": "PR",
     "qatar": "QA",
+    "reunion": "RE",
+    "réunion": "RE",
     "romania": "RO",
     "russia": "RU",
     "rwanda": "RW",
+    "saint barthelemy": "BL",
+    "saint barthélemy": "BL",
+    "st barthelemy": "BL",
+    "saint martin": "MF",
+    "st martin": "MF",
     "samoa": "WS",
     "san marino": "SM",
     "saudi arabia": "SA",
@@ -237,6 +249,8 @@ _LABEL_ISO2: dict[str, str] = {
     "venezuela": "VE",
     "vietnam": "VN",
     "wales": "GB-WLS",
+    "wallis and futuna": "WF",
+    "wallis & futuna": "WF",
     "yemen": "YE",
     "zambia": "ZM",
     "zimbabwe": "ZW",
@@ -271,10 +285,13 @@ _CODE_ISO2: dict[str, str] = {
     "est": "EE",
     "fij": "FJ",
     "fin": "FI",
+    "fra": "FR",
     "gam": "GM",
     "gha": "GH",
+    "glp": "GP",
     "grn": "GD",
     "gua": "GT",
+    "guf": "GF",
     "gui": "GN",
     "guy": "GY",
     "hai": "HT",
@@ -304,8 +321,11 @@ _CODE_ISO2: dict[str, str] = {
     "mlt": "MT",
     "mne": "ME",
     "moz": "MZ",
+    "mq": "MQ",
     "mri": "MU",
     "mtn": "MR",
+    "mtq": "MQ",
+    "myt": "YT",
     "nam": "NA",
     "nga": "NG",
     "nzl": "NZ",
@@ -314,6 +334,7 @@ _CODE_ISO2: dict[str, str] = {
     "per": "PE",
     "phi": "PH",
     "prk": "KP",
+    "reu": "RE",
     "rsa": "ZA",
     "rwa": "RW",
     "sen": "SN",
@@ -338,6 +359,7 @@ _CODE_ISO2: dict[str, str] = {
     "uru": "UY",
     "uzb": "UZ",
     "ven": "VE",
+    "wlf": "WF",
     "zam": "ZM",
     "zim": "ZW",
     "eng": "GB-ENG",
@@ -403,7 +425,21 @@ def _nation_iso2(raw: Any) -> str:
         return _LABEL_ISO2[fold_lab]
     if fold_lab in _CODE_ISO2:
         return _CODE_ISO2[fold_lab]
+    # Bare ISO 3166-1 alpha-2 / GB home-nation tags used by some exports.
+    if len(folded) == 2 and folded.isalpha():
+        return folded.upper()
+    if folded.startswith("gb-") and len(folded) == 6:
+        return folded.upper()
     return ""
+
+
+def _nation_tokens(raw: Any) -> list[str]:
+    """Split FM dual-nat strings (``France/Martinique``, ``FRA, MTQ``)."""
+    text = str(raw or "").strip()
+    if not text or text in ("-", "—", "Unknown", "N/A"):
+        return []
+    parts = re.split(r"[/,]", text)
+    return [part.strip() for part in parts if part.strip()]
 
 
 def nation_iso2(raw: Any) -> str:
@@ -427,15 +463,15 @@ def iter_nation_flags(
     out: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for raw in (primary, second):
-        code = _nation_iso2(raw)
-        if not code or code in seen:
-            continue
-        src = flag_icon_src(code)
-        if not src:
-            continue
-        seen.add(code)
-        alt = str(raw or "").strip() or code
-        out.append((code, src, alt))
+        for token in _nation_tokens(raw):
+            code = _nation_iso2(token)
+            if not code or code in seen:
+                continue
+            src = flag_icon_src(code)
+            if not src:
+                continue
+            seen.add(code)
+            out.append((code, src, token))
     return out
 
 
@@ -463,11 +499,12 @@ def nation_flag_emojis(primary: Any = None, second: Any = None) -> str:
     flags: list[str] = []
     seen: set[str] = set()
     for raw in (primary, second):
-        emoji = nation_flag_emoji(raw)
-        if not emoji or emoji in seen:
-            continue
-        seen.add(emoji)
-        flags.append(emoji)
+        for token in _nation_tokens(raw):
+            emoji = nation_flag_emoji(token)
+            if not emoji or emoji in seen:
+                continue
+            seen.add(emoji)
+            flags.append(emoji)
     return "".join(flags)
 
 
