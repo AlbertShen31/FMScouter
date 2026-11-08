@@ -5,6 +5,7 @@ import csv
 import io
 import subprocess
 import sys
+import threading
 import time
 import warnings
 from collections import Counter, defaultdict
@@ -13,6 +14,7 @@ from contextlib import contextmanager
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import pandas as pd
@@ -831,6 +833,202 @@ def _normalize_scope(scope: str) -> Scope:
     if scope in {"squad", "all"}:
         return scope  # type: ignore[return-value]
     return "squad"
+
+
+# Lightweight filter snapshots from the last preloaded save (not Dash-storeable).
+_preload_lock = threading.Lock()
+_preload_cache: dict[str, Any] | None = None
+
+
+def clear_preload_cache() -> None:
+    global _preload_cache
+    with _preload_lock:
+        _preload_cache = None
+
+
+def _player_filter_snapshot(player: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        age=getattr(player, "age", None),
+        height_cm=getattr(player, "height_cm", None),
+        club_name=getattr(player, "club_name", None) or "",
+        club_nation_id=getattr(player, "club_nation_id", None),
+        nation_id=getattr(player, "nation_id", None),
+        natural_positions=tuple(getattr(player, "natural_positions", None) or ()),
+        club_uid=getattr(player, "club_uid", None),
+    )
+
+
+def _preload_cache_key(path: Path) -> tuple[str, int]:
+    return str(path.resolve()), int(path.stat().st_mtime_ns)
+
+
+def _preload_public_meta(entry: dict[str, Any]) -> dict[str, Any]:
+    return dict(entry.get("meta") or {})
+
+
+def _scope_player_snapshots(
+    players: list[SimpleNamespace],
+    *,
+    scope_key: Scope,
+    managed_club_uid: int | None,
+) -> list[SimpleNamespace]:
+    if scope_key != "squad":
+        return list(players)
+    if managed_club_uid is None:
+        return []
+    wanted = int(managed_club_uid)
+    return [
+        player
+        for player in players
+        if player.club_uid is not None and int(player.club_uid) == wanted
+    ]
+
+
+def get_preloaded_save(save_path: str) -> dict[str, Any] | None:
+    """Return public preload meta when ``save_path`` matches the in-memory cache."""
+    path = Path(save_path).expanduser()
+    if not path.is_file():
+        return None
+    key = _preload_cache_key(path)
+    with _preload_lock:
+        entry = _preload_cache
+    if not entry or entry.get("key") != key:
+        return None
+    return _preload_public_meta(entry)
+
+
+def preload_save_players(save_path: str) -> dict[str, Any]:
+    """Open a save once and cache filterable player snapshots for live counts.
+
+    Returns public meta (no player payloads). Raises on I/O / fmsave errors.
+    """
+    global _preload_cache
+    import fmsave
+
+    path = Path(save_path).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"Save file not found: {path}")
+
+    key = _preload_cache_key(path)
+    with _preload_lock:
+        entry = _preload_cache
+    if entry and entry.get("key") == key:
+        return _preload_public_meta(entry)
+
+    import services.compute_progress as compute_progress
+
+    compute_progress.update(phase="Opening save…", done=0, total=0)
+    competition_names = competition_name_map() or None
+    started = time.perf_counter()
+
+    managed_club_uid = None
+    managed_club_name = ""
+    game_date = None
+    game_label = ""
+    game_build = ""
+    snapshots: list[SimpleNamespace] = []
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with fmsave.open(path, competition_names=competition_names) as career_save:
+            info = career_save.info
+            game_date = info.game_date
+            game_label = str(getattr(info, "game", "") or "")
+            game_build = str(getattr(info, "build", "") or "")
+            managed = career_save.managed_clubs()
+            if managed:
+                managed_club_uid = managed[0].club_uid
+                managed_club_name = str(
+                    getattr(managed[0], "club_name", None)
+                    or getattr(managed[0], "name", None)
+                    or ""
+                )
+            compute_progress.update(phase="Loading players…")
+            with _track_player_load_progress():
+                snapshots = [
+                    _player_filter_snapshot(player) for player in career_save.players()
+                ]
+
+    squad_total = len(
+        _scope_player_snapshots(
+            snapshots,
+            scope_key="squad",
+            managed_club_uid=managed_club_uid,
+        )
+    )
+    meta = {
+        "ok": True,
+        "save_path": str(path.resolve()),
+        "save_total": len(snapshots),
+        "squad_total": squad_total,
+        "managed_club_uid": managed_club_uid,
+        "managed_club_name": managed_club_name or None,
+        "game_date": game_date.isoformat() if game_date else None,
+        "game": game_label or None,
+        "build": game_build or None,
+        "elapsed_ms": int((time.perf_counter() - started) * 1000),
+    }
+    new_entry = {
+        "key": key,
+        "players": snapshots,
+        "managed_club_uid": managed_club_uid,
+        "meta": meta,
+    }
+    with _preload_lock:
+        _preload_cache = new_entry
+    return dict(meta)
+
+
+def count_matching_players(
+    save_path: str,
+    *,
+    scope: str = "squad",
+    filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Count preloaded players that match scope + filters (fast, in-memory)."""
+    path = Path(save_path).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"Save file not found: {path}")
+    key = _preload_cache_key(path)
+    with _preload_lock:
+        entry = _preload_cache
+    if not entry or entry.get("key") != key:
+        raise LookupError("Save is not preloaded. Choose the save again.")
+
+    scope_key = _normalize_scope(scope)
+    managed_club_uid = entry.get("managed_club_uid")
+    if scope_key == "squad" and managed_club_uid is None:
+        return {
+            "ok": False,
+            "error": (
+                "No managed club in this save (between jobs?). "
+                "Use All players instead."
+            ),
+            "matched": 0,
+            "scope_total": 0,
+            "save_total": int((entry.get("meta") or {}).get("save_total") or 0),
+            "scope": scope_key,
+            "filters_active": _filters_active(filters),
+        }
+
+    scoped = _scope_player_snapshots(
+        entry["players"],
+        scope_key=scope_key,
+        managed_club_uid=managed_club_uid,
+    )
+    if _filters_active(filters):
+        matched = sum(1 for player in scoped if _passes_filters(player, filters))
+    else:
+        matched = len(scoped)
+    return {
+        "ok": True,
+        "matched": matched,
+        "scope_total": len(scoped),
+        "save_total": int((entry.get("meta") or {}).get("save_total") or len(entry["players"])),
+        "scope": scope_key,
+        "filters_active": _filters_active(filters),
+        "managed_club_name": (entry.get("meta") or {}).get("managed_club_name"),
+    }
 
 
 def _export_filename(

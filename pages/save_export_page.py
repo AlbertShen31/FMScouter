@@ -1,6 +1,8 @@
 """Export Moneyball CSV from an FM26 / FM27 save via fmsave."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from dash import Input, Output, State, callback, clientside_callback, dcc, html, no_update, register_page
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
@@ -16,9 +18,9 @@ register_page(__name__, path="/save-export", name="Save export")
 PAGE_TIP = (
     "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
     "(attributes + OVERALL season stats + contract finance). FM27 field meanings stay "
-    "unconfirmed in fmsave; Pressures columns are empty on FM27. Generate export always "
-    "adds the file to the Uploads library; optionally download a CSV as well. All players "
-    "can take tens of seconds on a full career; optional filters narrow either scope."
+    "unconfirmed in fmsave; Pressures columns are empty on FM27. Choosing a save preloads "
+    "players so filter changes show a live export count. Generate export always adds the "
+    "file to the Uploads library; optionally download a CSV as well."
 )
 
 _SCOPE_OPTIONS = [
@@ -73,6 +75,7 @@ def layout(**_kwargs):
         [
             dcc.Download(id="sx-download"),
             dcc.Store(id="sx-rev", data=0),
+            dcc.Store(id="sx-preload", data=None),
             dcc.Interval(
                 id="sx-progress-poll",
                 interval=1500,
@@ -198,6 +201,7 @@ def layout(**_kwargs):
                                                                         id="sx-club-contains",
                                                                         label="Club name contains",
                                                                         placeholder="optional",
+                                                                        debounce=True,
                                                                         className="sx-filter-club-contains",
                                                                     ),
                                                                     dmc.MultiSelect(
@@ -256,6 +260,11 @@ def layout(**_kwargs):
                                         id="sx-filters",
                                         className="sx-filters mb-3",
                                     ),
+                                    html.Div(
+                                        id="sx-match-count",
+                                        className="sx-match-count mb-3",
+                                        children="Select a save to preload players and preview export size.",
+                                    ),
                                     html.Hr(className="my-3"),
                                     dmc.Checkbox(
                                         id="sx-download-csv",
@@ -270,7 +279,8 @@ def layout(**_kwargs):
                                         disabled=True,
                                     ),
                                     html.P(
-                                        "Always adds to Uploads. All players can take a while — leave this tab open.",
+                                        "Always adds to Uploads. Preload runs when you pick a save; "
+                                        "export still reads season stats afterward.",
                                         className="text-muted small mt-2 mb-0",
                                     ),
                                 ]
@@ -331,6 +341,62 @@ def _filters_payload(
     }
 
 
+def _preload_status_children(meta: dict) -> list:
+    club = meta.get("managed_club_name")
+    club_bit = f" · managed club: {club}" if club else " · no managed club"
+    game_bits = []
+    if meta.get("game"):
+        game_bits.append(str(meta["game"]))
+    if meta.get("build"):
+        game_bits.append(f"build {meta['build']}")
+    if meta.get("game_date"):
+        game_bits.append(str(meta["game_date"]))
+    game_line = " · ".join(game_bits)
+    summary = (
+        f"Preloaded {meta.get('save_total', 0):,} players "
+        f"({meta.get('squad_total', 0):,} in managed squad) "
+        f"in {meta.get('elapsed_ms', 0)} ms{club_bit}."
+    )
+    children = [html.P(summary, className="mb-2")]
+    if game_line:
+        children.append(html.P(game_line, className="text-muted small mb-0"))
+    return children
+
+
+def _match_count_children(result: dict | None, *, preload: dict | None = None):
+    if not preload or not preload.get("ok"):
+        if preload and preload.get("error"):
+            return html.Span(
+                str(preload.get("error")),
+                className="sx-match-count-error",
+            )
+        return "Select a save to preload players and preview export size."
+    if not result:
+        return "Adjust scope or filters to preview export size."
+    if not result.get("ok"):
+        return html.Span(
+            str(result.get("error") or "Could not count players."),
+            className="sx-match-count-error",
+        )
+    matched = int(result.get("matched") or 0)
+    scope_total = int(result.get("scope_total") or 0)
+    save_total = int(result.get("save_total") or 0)
+    scope_label = (
+        "Managed squad" if result.get("scope") == "squad" else "All players"
+    )
+    if result.get("filters_active"):
+        text = (
+            f"Export will process {matched:,} of {scope_total:,} players "
+            f"({scope_label}; {save_total:,} in save)."
+        )
+    else:
+        text = (
+            f"Export will process {matched:,} players "
+            f"({scope_label}; {save_total:,} in save)."
+        )
+    return html.Span(text, className="sx-match-count-value")
+
+
 def _status_children(meta: dict, *, uploads_note: str = "") -> list:
     elig = meta.get("eligibility") or {}
     flags = [
@@ -375,12 +441,23 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
 
 clientside_callback(
     """
-    function(n) {
-        if (!n) {
+    function(n, path) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        var prop = String(trig[0].prop_id || "");
+        var fromGenerate = prop.indexOf("sx-generate") !== -1;
+        if (fromGenerate && !n) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        if (!fromGenerate && !path) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var label = document.getElementById("sx-busy-label");
-        if (label) { label.textContent = "Reading save…"; }
+        if (label) {
+            label.textContent = fromGenerate ? "Reading save…" : "Preloading save…";
+        }
         var detail = document.getElementById("sx-busy-detail");
         if (detail) { detail.textContent = ""; }
         var track = document.getElementById("sx-busy-track");
@@ -393,6 +470,25 @@ clientside_callback(
     Output("sx-busy", "className"),
     Output("sx-progress-poll", "disabled"),
     Input("sx-generate", "n_clicks"),
+    Input("sx-path", "value"),
+    prevent_initial_call=True,
+)
+
+
+clientside_callback(
+    """
+    function(_preload, _rev) {
+        var el = document.getElementById("sx-busy");
+        if (!el || el.className.indexOf("is-on") === -1) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        return ["rs-shortlist-busy", true];
+    }
+    """,
+    Output("sx-busy", "className", allow_duplicate=True),
+    Output("sx-progress-poll", "disabled", allow_duplicate=True),
+    Input("sx-preload", "data"),
+    Input("sx-rev", "data"),
     prevent_initial_call=True,
 )
 
@@ -418,37 +514,123 @@ def sx_poll_progress(_n):
 
 @callback(
     Output("sx-generate", "disabled"),
+    Input("sx-preload", "data"),
     Input("sx-path", "value"),
 )
-def sx_generate_enabled(path):
-    return not bool((path or "").strip())
+def sx_generate_enabled(preload, path):
+    if not (path or "").strip():
+        return True
+    if not isinstance(preload, dict) or not preload.get("ok"):
+        return True
+    try:
+        resolved = str(Path(path).expanduser().resolve())
+    except OSError:
+        return True
+    return str(preload.get("save_path") or "") != resolved
 
 
 @callback(
     Output("sx-path", "value"),
-    Output("sx-status", "children", allow_duplicate=True),
     Input("sx-browse", "n_clicks"),
     State("sx-path", "value"),
     prevent_initial_call=True,
 )
 def sx_browse(n_clicks, current_path):
     if not n_clicks:
-        return no_update, no_update
+        return no_update
     picked = fms.pick_fm_save_file(current_path or fms.default_save_path())
     if not picked:
-        return no_update, no_update
-    return picked, html.P(
-        f"Selected: {picked}",
-        className="text-muted mb-0",
+        return no_update
+    return picked
+
+
+@callback(
+    Output("sx-preload", "data"),
+    Output("sx-status", "children"),
+    Input("sx-path", "value"),
+    prevent_initial_call=True,
+)
+def sx_preload_save(path):
+    save_path = (path or "").strip()
+    if not save_path:
+        return None, "Ready."
+    compute_progress.begin("Preloading save…", phase="Opening save…")
+    try:
+        try:
+            meta = fms.preload_save_players(save_path)
+        except ImportError as exc:
+            err = {
+                "ok": False,
+                "error": (
+                    f"fmsave is not installed (needs Python 3.12+): {exc}. "
+                    'Run: pip install "fmsave[pandas]"'
+                ),
+                "save_path": save_path,
+            }
+            return err, html.P(err["error"], className="text-danger mb-0")
+        except Exception as exc:  # noqa: BLE001
+            err = {"ok": False, "error": str(exc), "save_path": save_path}
+            return err, html.P(str(exc), className="text-danger mb-0")
+        return meta, _preload_status_children(meta)
+    finally:
+        compute_progress.end()
+
+
+@callback(
+    Output("sx-match-count", "children"),
+    Input("sx-preload", "data"),
+    Input("sx-scope", "value"),
+    Input("sx-age-min", "value"),
+    Input("sx-age-max", "value"),
+    Input("sx-height-min", "value"),
+    Input("sx-height-max", "value"),
+    Input("sx-club-contains", "value"),
+    Input("sx-club-nations", "value"),
+    Input("sx-player-nations", "value"),
+    Input("sx-pos-groups", "value"),
+)
+def sx_match_count(
+    preload,
+    scope,
+    age_min,
+    age_max,
+    height_min,
+    height_max,
+    club_contains,
+    club_nations,
+    player_nations,
+    pos_groups,
+):
+    if not isinstance(preload, dict) or not preload.get("ok"):
+        return _match_count_children(None, preload=preload if isinstance(preload, dict) else None)
+    save_path = preload.get("save_path") or ""
+    filters = _filters_payload(
+        age_min,
+        age_max,
+        height_min,
+        height_max,
+        club_contains,
+        club_nations,
+        player_nations,
+        pos_groups,
     )
+    try:
+        result = fms.count_matching_players(
+            save_path,
+            scope=scope if scope in {"squad", "all"} else "squad",
+            filters=filters,
+        )
+    except LookupError:
+        return "Save preload expired — choose the save again."
+    except Exception as exc:  # noqa: BLE001
+        return html.Span(str(exc), className="sx-match-count-error")
+    return _match_count_children(result, preload=preload)
 
 
 @callback(
     Output("sx-download", "data"),
-    Output("sx-status", "children"),
+    Output("sx-status", "children", allow_duplicate=True),
     Output("sx-rev", "data"),
-    Output("sx-busy", "className", allow_duplicate=True),
-    Output("sx-progress-poll", "disabled", allow_duplicate=True),
     Input("sx-generate", "n_clicks"),
     State("sx-path", "value"),
     State("sx-scope", "value"),
@@ -480,7 +662,7 @@ def sx_generate(
     rev,
 ):
     if not n_clicks:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update
     next_rev = int(rev or 0) + 1
     save_path = (path or "").strip()
     if not save_path:
@@ -488,8 +670,6 @@ def sx_generate(
             no_update,
             html.P("Choose a .fm save file first.", className="text-danger mb-0"),
             next_rev,
-            "rs-shortlist-busy",
-            True,
         )
     scope_key = scope if scope in {"squad", "all"} else "squad"
     filters = _filters_payload(
@@ -519,16 +699,12 @@ def sx_generate(
                     className="text-danger mb-0",
                 ),
                 next_rev,
-                "rs-shortlist-busy",
-                True,
             )
         except Exception as exc:  # noqa: BLE001 — surface any fmsave / IO error
             return (
                 no_update,
                 html.P(str(exc), className="text-danger mb-0"),
                 next_rev,
-                "rs-shortlist-busy",
-                True,
             )
 
         uploads_note = ""
@@ -561,8 +737,6 @@ def sx_generate(
             download,
             _status_children(meta, uploads_note=uploads_note),
             next_rev,
-            "rs-shortlist-busy",
-            True,
         )
     finally:
         compute_progress.end()

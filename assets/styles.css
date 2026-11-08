@@ -11375,6 +11375,30 @@ body[data-theme="light"] .pf-depth-chart-section {
     color: var(--app-muted);
 }
 
+.sx-match-count {
+    padding: 0.65rem 0.85rem;
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    border-radius: 8px;
+    color: var(--app-text);
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.sx-match-count-value {
+    color: var(--app-text);
+    font-weight: 600;
+}
+
+.sx-match-count-error {
+    color: #f87171;
+}
+
+html[data-theme="light"] .sx-match-count-error,
+body[data-theme="light"] .sx-match-count-error {
+    color: #b91c1c;
+}
+
 @media (max-width: 992px) {
     .sx-filters-grid {
         grid-template-columns: 1fr;
