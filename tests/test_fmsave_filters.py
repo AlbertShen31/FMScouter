@@ -36,17 +36,36 @@ def test_passes_filters_still_applies_age():
     assert fms._passes_filters(player, {"age_max": 20}) is True
 
 
+def test_height_select_options_cover_fm_range():
+    opts = fms.height_select_options()
+    assert opts[0] == {"label": "4'11\"", "value": str(fms.HEIGHT_IN_MIN)}
+    assert opts[-1] == {"label": "6'11\"", "value": str(fms.HEIGHT_IN_MAX)}
+    assert len(opts) == fms.HEIGHT_IN_MAX - fms.HEIGHT_IN_MIN + 1
+
+
+def test_normalize_height_bounds_full_range_is_inactive():
+    assert fms.normalize_height_bounds(fms.HEIGHT_IN_MIN, fms.HEIGHT_IN_MAX) == (
+        None,
+        None,
+    )
+    assert fms.normalize_height_bounds(str(fms.HEIGHT_IN_MIN), str(fms.HEIGHT_IN_MAX)) == (
+        None,
+        None,
+    )
+    assert fms._filters_active(
+        {
+            "height_min_in": None,
+            "height_max_in": None,
+        }
+    ) is False
+
+
 def test_passes_filters_applies_height_ft_in():
     # 178 cm → round(178/2.54) = 70 in → 5'10"
     player = _player(height_cm=178)
-    assert fms.height_bound_inches(5, 11) == 71
+    lo, hi = fms.normalize_height_bounds("71", str(fms.HEIGHT_IN_MAX))
+    assert (lo, hi) == (71, fms.HEIGHT_IN_MAX)
     assert fms._passes_filters(player, {"height_min_in": 71}) is False
     assert fms._passes_filters(player, {"height_max_in": 70}) is True
     assert fms._passes_filters(player, {"height_min_in": 70, "height_max_in": 72}) is True
     assert fms._filters_active({"height_min_in": 71}) is True
-
-
-def test_height_bound_inches_empty_and_partial():
-    assert fms.height_bound_inches(None, None) is None
-    assert fms.height_bound_inches(6, None) == 72
-    assert fms.height_bound_inches(None, 10) == 10

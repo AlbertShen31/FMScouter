@@ -501,6 +501,13 @@ def _format_money(amount: float | int | None, *, annual: bool = False) -> str:
     return f"${value:.2f}{suffix}"
 
 
+# fmsave layout height_range_cm (FM26+); export Height labels use round(cm/2.54).
+HEIGHT_CM_MIN = 150
+HEIGHT_CM_MAX = 210
+HEIGHT_IN_MIN = round(HEIGHT_CM_MIN / 2.54)  # 59 → 4'11"
+HEIGHT_IN_MAX = round(HEIGHT_CM_MAX / 2.54)  # 83 → 6'11"
+
+
 def _height_total_inches(cm: int | float | None) -> int | None:
     """Round cm → total inches the same way export Height strings are built."""
     if not cm:
@@ -511,25 +518,48 @@ def _height_total_inches(cm: int | float | None) -> int | None:
         return None
 
 
+def format_height_inches(total_inches: int) -> str:
+    feet, inches = divmod(int(total_inches), 12)
+    return f"{feet}'{inches}\""
+
+
 def _format_height_cm(cm: int | None) -> str:
     total_inches = _height_total_inches(cm)
     if total_inches is None:
         return ""
-    feet, inches = divmod(total_inches, 12)
-    return f"{feet}'{inches}\""
+    return format_height_inches(total_inches)
 
 
-def height_bound_inches(ft, inches) -> int | None:
-    """Combine ft + in filter fields into total inches; empty → None."""
-    if ft is None and inches is None:
+def height_select_options() -> list[dict[str, str]]:
+    """Select options for every inch from FM min height to max height."""
+    return [
+        {"label": format_height_inches(total), "value": str(total)}
+        for total in range(HEIGHT_IN_MIN, HEIGHT_IN_MAX + 1)
+    ]
+
+
+def parse_height_select(value) -> int | None:
+    if value is None or value == "":
         return None
     try:
-        feet = int(ft) if ft is not None else 0
-        inch = int(inches) if inches is not None else 0
+        return int(value)
     except (TypeError, ValueError):
         return None
-    inch = max(0, min(11, inch))
-    return feet * 12 + inch
+
+
+def normalize_height_bounds(height_min, height_max) -> tuple[int | None, int | None]:
+    """Drop full-range bounds so default selects do not count as an active filter."""
+    lo = parse_height_select(height_min)
+    hi = parse_height_select(height_max)
+    if lo is None and hi is None:
+        return None, None
+    if lo is None:
+        lo = HEIGHT_IN_MIN
+    if hi is None:
+        hi = HEIGHT_IN_MAX
+    if lo <= HEIGHT_IN_MIN and hi >= HEIGHT_IN_MAX:
+        return None, None
+    return lo, hi
 
 
 def _format_foot(raw: int | None) -> str:

@@ -37,6 +37,9 @@ _NATION_OPTIONS = [
     {"label": label, "value": str(nid)}
     for nid, label in fms.nation_filter_options()
 ]
+_HEIGHT_OPTIONS = fms.height_select_options()
+_HEIGHT_MIN_DEFAULT = str(fms.HEIGHT_IN_MIN)
+_HEIGHT_MAX_DEFAULT = str(fms.HEIGHT_IN_MAX)
 
 
 def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
@@ -161,44 +164,24 @@ def layout(**_kwargs):
                                                                         max=45,
                                                                         hideControls=False,
                                                                     ),
-                                                                    dmc.NumberInput(
-                                                                        id="sx-height-min-ft",
-                                                                        label="Min ft",
-                                                                        value=None,
-                                                                        min=4,
-                                                                        max=7,
-                                                                        hideControls=False,
+                                                                    dmc.Select(
+                                                                        id="sx-height-min",
+                                                                        label="Height min",
+                                                                        data=_HEIGHT_OPTIONS,
+                                                                        value=_HEIGHT_MIN_DEFAULT,
+                                                                        searchable=True,
+                                                                        allowDeselect=False,
                                                                     ),
-                                                                    dmc.NumberInput(
-                                                                        id="sx-height-min-in",
-                                                                        label="Min in",
-                                                                        value=None,
-                                                                        min=0,
-                                                                        max=11,
-                                                                        hideControls=False,
-                                                                    ),
-                                                                    dmc.NumberInput(
-                                                                        id="sx-height-max-ft",
-                                                                        label="Max ft",
-                                                                        value=None,
-                                                                        min=4,
-                                                                        max=7,
-                                                                        hideControls=False,
-                                                                    ),
-                                                                    dmc.NumberInput(
-                                                                        id="sx-height-max-in",
-                                                                        label="Max in",
-                                                                        value=None,
-                                                                        min=0,
-                                                                        max=11,
-                                                                        hideControls=False,
+                                                                    dmc.Select(
+                                                                        id="sx-height-max",
+                                                                        label="Height max",
+                                                                        data=_HEIGHT_OPTIONS,
+                                                                        value=_HEIGHT_MAX_DEFAULT,
+                                                                        searchable=True,
+                                                                        allowDeselect=False,
                                                                     ),
                                                                 ],
                                                                 className="sx-filter-fields sx-filter-fields-limits",
-                                                            ),
-                                                            html.P(
-                                                                "Height uses feet and inches (same as export Height).",
-                                                                className="sx-filter-hint mb-0",
                                                             ),
                                                         ],
                                                         className="sx-filter-group",
@@ -328,20 +311,19 @@ def _parse_nation_ids(values) -> list[int]:
 def _filters_payload(
     age_min,
     age_max,
-    height_min_ft,
-    height_min_in,
-    height_max_ft,
-    height_max_in,
+    height_min,
+    height_max,
     club_contains,
     club_nations,
     player_nations,
     pos_groups,
 ) -> dict:
+    height_min_in, height_max_in = fms.normalize_height_bounds(height_min, height_max)
     return {
         "age_min": age_min,
         "age_max": age_max,
-        "height_min_in": fms.height_bound_inches(height_min_ft, height_min_in),
-        "height_max_in": fms.height_bound_inches(height_max_ft, height_max_in),
+        "height_min_in": height_min_in,
+        "height_max_in": height_max_in,
         "club_contains": club_contains or "",
         "club_nation_ids": _parse_nation_ids(club_nations),
         "nation_ids": _parse_nation_ids(player_nations),
@@ -472,10 +454,8 @@ def sx_browse(n_clicks, current_path):
     State("sx-scope", "value"),
     State("sx-age-min", "value"),
     State("sx-age-max", "value"),
-    State("sx-height-min-ft", "value"),
-    State("sx-height-min-in", "value"),
-    State("sx-height-max-ft", "value"),
-    State("sx-height-max-in", "value"),
+    State("sx-height-min", "value"),
+    State("sx-height-max", "value"),
     State("sx-club-contains", "value"),
     State("sx-club-nations", "value"),
     State("sx-player-nations", "value"),
@@ -490,10 +470,8 @@ def sx_generate(
     scope,
     age_min,
     age_max,
-    height_min_ft,
-    height_min_in,
-    height_max_ft,
-    height_max_in,
+    height_min,
+    height_max,
     club_contains,
     club_nations,
     player_nations,
@@ -517,10 +495,8 @@ def sx_generate(
     filters = _filters_payload(
         age_min,
         age_max,
-        height_min_ft,
-        height_min_in,
-        height_max_ft,
-        height_max_in,
+        height_min,
+        height_max,
         club_contains,
         club_nations,
         player_nations,

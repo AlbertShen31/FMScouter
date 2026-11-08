@@ -11351,6 +11351,7 @@ body[data-theme="light"] .pf-depth-chart-section {
 
 .sx-filter-fields .mantine-TextInput-root,
 .sx-filter-fields .mantine-NumberInput-root,
+.sx-filter-fields .mantine-Select-root,
 .sx-filter-fields .mantine-MultiSelect-root,
 .sx-filter-fields .mantine-InputWrapper-root {
     width: 100%;
