@@ -723,6 +723,14 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     if age_max is not None and age is not None and age > int(age_max):
         return False
 
+    height = getattr(player, "height_cm", None)
+    height_min = filters.get("height_min")
+    height_max = filters.get("height_max")
+    if height_min is not None and height is not None and int(height) < int(height_min):
+        return False
+    if height_max is not None and height is not None and int(height) > int(height_max):
+        return False
+
     club_contains = (filters.get("club_contains") or "").strip().casefold()
     if club_contains:
         club = (player.club_name or "").casefold()
@@ -755,6 +763,8 @@ def _filters_active(filters: dict[str, Any] | None) -> bool:
     if not filters:
         return False
     if filters.get("age_min") is not None or filters.get("age_max") is not None:
+        return True
+    if filters.get("height_min") is not None or filters.get("height_max") is not None:
         return True
     if (filters.get("club_contains") or "").strip():
         return True

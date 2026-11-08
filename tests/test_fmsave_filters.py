@@ -1,4 +1,4 @@
-"""Save-export filters: age/club/nation/position only — CA and club rep are cheats."""
+"""Save-export filters: age/height/club/nation/position — CA and club rep are cheats."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -9,6 +9,7 @@ import services.fmsave_export as fms
 def _player(**overrides):
     base = dict(
         age=24,
+        height_cm=185,
         club_name="FC Romania",
         club_nation_id=164,
         nation_id=164,
@@ -33,3 +34,11 @@ def test_passes_filters_still_applies_age():
     player = _player(age=18)
     assert fms._passes_filters(player, {"age_min": 21}) is False
     assert fms._passes_filters(player, {"age_max": 20}) is True
+
+
+def test_passes_filters_applies_height_cm():
+    player = _player(height_cm=178)
+    assert fms._passes_filters(player, {"height_min": 180}) is False
+    assert fms._passes_filters(player, {"height_max": 180}) is True
+    assert fms._passes_filters(player, {"height_min": 175, "height_max": 185}) is True
+    assert fms._filters_active({"height_min": 180}) is True
