@@ -16,9 +16,9 @@ register_page(__name__, path="/save-export", name="Save export")
 PAGE_TIP = (
     "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
     "(attributes + OVERALL season stats + contract finance). FM27 field meanings stay "
-    "unconfirmed in fmsave; Pressures columns are empty on FM27. Upload the file on "
-    "Uploads, or check “Also add to Uploads library” here. All players can take tens of "
-    "seconds on a full career; optional filters narrow either scope."
+    "unconfirmed in fmsave; Pressures columns are empty on FM27. By default the export "
+    "is added to the Uploads library; optionally download a CSV as well. All players can "
+    "take tens of seconds on a full career; optional filters narrow either scope."
 )
 
 _SCOPE_OPTIONS = [
@@ -240,12 +240,18 @@ def layout(**_kwargs):
                                     html.Hr(className="my-3"),
                                     dmc.Checkbox(
                                         id="sx-to-uploads",
-                                        label="Also add to Uploads library",
+                                        label="Add to Uploads library",
+                                        checked=True,
+                                        className="mb-2",
+                                    ),
+                                    dmc.Checkbox(
+                                        id="sx-download-csv",
+                                        label="Also download CSV",
                                         checked=False,
                                         className="mb-3",
                                     ),
                                     dmc.Button(
-                                        "Generate CSV",
+                                        "Generate export",
                                         id="sx-generate",
                                         n_clicks=0,
                                         disabled=True,
@@ -435,6 +441,7 @@ def sx_browse(n_clicks, current_path):
     State("sx-player-nations", "value"),
     State("sx-pos-groups", "value"),
     State("sx-to-uploads", "checked"),
+    State("sx-download-csv", "checked"),
     State("sx-rev", "data"),
     prevent_initial_call=True,
 )
@@ -449,6 +456,7 @@ def sx_generate(
     player_nations,
     pos_groups,
     to_uploads,
+    download_csv,
     rev,
 ):
     if not n_clicks:
@@ -459,6 +467,17 @@ def sx_generate(
         return (
             no_update,
             html.P("Choose a .fm save file first.", className="text-danger mb-0"),
+            next_rev,
+            "rs-shortlist-busy",
+            True,
+        )
+    if not to_uploads and not download_csv:
+        return (
+            no_update,
+            html.P(
+                "Choose at least one destination: Uploads library and/or download CSV.",
+                className="text-danger mb-0",
+            ),
             next_rev,
             "rs-shortlist-busy",
             True,
@@ -519,13 +538,15 @@ def sx_generate(
                     f"(id={entry.get('id')}; pages: {pages})."
                 )
             except Exception as exc:  # noqa: BLE001
-                uploads_note = f"CSV generated, but Uploads save failed: {exc}"
+                uploads_note = f"Export built, but Uploads save failed: {exc}"
 
-        download = dict(
-            content=csv_text,
-            filename=meta.get("filename") or "fmsave_export.csv",
-            type="text/csv",
-        )
+        download = no_update
+        if download_csv:
+            download = dict(
+                content=csv_text,
+                filename=meta.get("filename") or "fmsave_export.csv",
+                type="text/csv",
+            )
         return (
             download,
             _status_children(meta, uploads_note=uploads_note),
