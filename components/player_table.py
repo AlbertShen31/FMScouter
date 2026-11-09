@@ -1209,8 +1209,9 @@ def identity_data_styles(
             "if": {"column_id": "Name"},
             "fontWeight": "600",
             "textAlign": "left",
-            "minWidth": "192px",
-            "maxWidth": "260px",
+            # Min only — fill_width grows Name into spare space on wide / zoomed-out views.
+            "minWidth": "12rem",
+            "maxWidth": "none",
             "borderRight": "1px solid var(--app-line)",
             "cursor": "pointer",
             "color": "var(--app-accent)",
@@ -1221,20 +1222,22 @@ def identity_data_styles(
             "if": {"column_id": "Club"},
             "color": plain,
             "textAlign": "left",
-            "maxWidth": "200px",
+            "minWidth": "8rem",
+            "maxWidth": "none",
         },
         {
             "if": {"column_id": "Position"},
             "textAlign": "left",
             "color": plain,
+            "minWidth": "5.5rem",
+            "maxWidth": "none",
         },
         {
             "if": {"column_id": "Division"},
             "textAlign": "left",
-            # ~20 characters of body text (+ cell padding); ellipsis beyond that.
+            # ~20 characters floor; can grow with the table. Soft cap + ellipsis for outliers.
             "minWidth": "20ch",
-            "width": "21ch",
-            "maxWidth": "22ch",
+            "maxWidth": "28ch",
             "fontWeight": "600",
             "overflow": "hidden",
             "textOverflow": "ellipsis",

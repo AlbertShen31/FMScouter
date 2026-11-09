@@ -101,7 +101,9 @@ body {
 }
 
 .app-navbar > .container-fluid {
-    max-width: 1520px;
+    width: 100%;
+    /* Match page: ≥80vw when zoomed out; 1800px cap at normal zoom. */
+    max-width: min(calc(100vw - 2rem), max(1800px, 80vw));
 }
 
 .app-navbar .navbar-brand,
@@ -1162,13 +1164,16 @@ body[data-theme="light"] #rs-table .dash-spreadsheet-inner th.dash-header[data-d
 }
 
 .rs-page {
-    max-width: 1520px;
+    width: 100%;
+    /* Normal zoom: up to 1800px. Zoomed out: at least 80% of the viewport. */
+    max-width: min(calc(100vw - 2rem), max(1800px, 80vw));
     margin-left: auto;
     margin-right: auto;
     padding-top: 16px;
     padding-bottom: 32px;
     padding-left: 16px;
     padding-right: 16px;
+    box-sizing: border-box;
 }
 
 .Select__multi-value,
@@ -2514,6 +2519,21 @@ body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name
     background: var(--app-card);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
     margin-top: 4px;
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Role scores + Player stats: fill shell; identity cols grow into spare width. */
+#rs-table-shell,
+#st-table-shell,
+#rs-table-shell .dash-spreadsheet-container,
+#st-table-shell .dash-spreadsheet-container,
+#rs-table-shell .dash-spreadsheet-inner,
+#st-table-shell .dash-spreadsheet-inner,
+#rs-table-shell .dt-table-container,
+#st-table-shell .dt-table-container {
+    width: 100% !important;
+    max-width: 100%;
 }
 
 .rs-table-shell .dash-spreadsheet-container,
@@ -2525,6 +2545,7 @@ body[data-theme="light"] .rs-legend-chip.rs-phase-legend-chip.gk .rs-legend-name
 
 .rs-table-shell .dash-spreadsheet-inner table {
     width: 100% !important;
+    table-layout: auto;
 }
 
 /* Uniform body row height + vertical centering (Role scores + Player stats). */
@@ -2720,14 +2741,15 @@ body[data-theme="light"] .nation-flag {
     background-color: var(--table-hover-bg) !important;
 }
 
-/* Division: fit ≥20 characters; ellipsis beyond; full tip on hover. */
-.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
-.rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"],
+/* Division: ≥20ch floor; grow a bit with spare width; ellipsis beyond soft cap.
+   Scoped to Role scores / Player stats so Profiles keeps its own Division box. */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"],
 #st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Division"],
 #st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] {
     min-width: 20ch !important;
-    width: 21ch !important;
-    max-width: 22ch !important;
+    width: auto !important;
+    max-width: 28ch !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
@@ -2735,7 +2757,35 @@ body[data-theme="light"] .nation-flag {
     padding-right: 6px !important;
 }
 
-.rs-table-shell .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value,
+/* Name / Club / Position grow with available shell width (Role scores + Player stats). */
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Name"],
+#st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Name"] {
+    min-width: 12rem !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Club"],
+#st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Club"] {
+    min-width: 8rem !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+#rs-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"],
+#st-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Position"],
+#st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Position"] {
+    min-width: 5.5rem !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+#rs-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value,
 #st-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Division"] .dash-cell-value {
     display: block !important;
     max-width: 100% !important;
