@@ -39,6 +39,15 @@ TIER_KEYS = ("key", "preferred", "useful")
 HYBRID_KEYS = ("ip", "oop")
 TIER_BADGE_KEYS = ("key", "preferred", "useful")
 
+# Temporary: hide Injury UI until active/rehab injuries can be sourced reliably.
+SHOW_INJURY_COLUMNS = False
+
+
+def show_injury_columns() -> bool:
+    """Whether Injury columns/fields should appear in tables, modals, and depth charts."""
+    return bool(SHOW_INJURY_COLUMNS)
+
+
 ALLOWED_SHORTLIST_COLUMNS = (
     "Name",
     "Age",
@@ -91,7 +100,7 @@ DEFAULT_SHORTLIST_SCOPES = {
     "Position": "both",
     "Feet": "both",
     "Club": "both",
-    "Injury": "both",
+    "Injury": "off",
     "Division": "both",
     "Nation": "off",
     "Inf": "off",
@@ -143,8 +152,8 @@ DEFAULT_MODAL_IDENTITY_SCOPES = {
     "left_foot": "both",
     "right_foot": "both",
     "inf": "both",
-    "injury": "both",
-    "recurring_injury": "both",
+    "injury": "off",
+    "recurring_injury": "off",
     "national_team": "both",
     "int_apps": "both",
     "int_gls": "both",
@@ -603,7 +612,10 @@ def normalize_shortlist_columns(raw=None) -> dict[str, Any]:
     if isinstance(raw, (list, tuple)):
         cols = _normalize_column_list(raw, allowed=set(ALLOWED_SHORTLIST_COLUMNS))
         both = [col for col in cols if col != "Name"]
-        return _shortlist_buckets_to_order_scopes(both, [], [])
+        result = _shortlist_buckets_to_order_scopes(both, [], [])
+        if not show_injury_columns():
+            result["scopes"]["Injury"] = "off"
+        return result
 
     if isinstance(raw, dict) and "order" in raw:
         order = _normalize_column_list(
@@ -616,18 +628,26 @@ def normalize_shortlist_columns(raw=None) -> dict[str, Any]:
         for col in SHORTLIST_ASSIGNABLE:
             if col not in order:
                 order.append(col)
+        if not show_injury_columns():
+            scopes["Injury"] = "off"
         return {"order": order, "scopes": scopes}
 
     if isinstance(raw, dict) and (
         "both" in raw or "role_scores" in raw or "player_stats" in raw
     ):
-        return _shortlist_buckets_to_order_scopes(
+        result = _shortlist_buckets_to_order_scopes(
             list(raw.get("both") or []),
             list(raw.get("role_scores") or []),
             list(raw.get("player_stats") or []),
         )
+        if not show_injury_columns():
+            result["scopes"]["Injury"] = "off"
+        return result
 
-    return copy.deepcopy(defaults)
+    defaults_out = copy.deepcopy(defaults)
+    if not show_injury_columns():
+        defaults_out["scopes"]["Injury"] = "off"
+    return defaults_out
 
 
 def shortlist_column_scope(col: str, cfg: dict[str, Any]) -> str:
@@ -648,6 +668,8 @@ def shortlist_columns_for(page: str, settings=None) -> list[str]:
     page_key = "role_scores" if page == "role_scores" else "player_stats"
     out = ["Name"]
     for col in cfg.get("order") or []:
+        if col == "Injury" and not show_injury_columns():
+            continue
         scope = shortlist_column_scope(col, cfg)
         if scope == "both" or scope == page_key:
             out.append(col)
@@ -733,6 +755,9 @@ def normalize_modal_identity_fields(raw=None, *, legacy_extra=None) -> dict[str,
     allowed = {key for _label, key, _section in _modal_field_catalog()}
 
     if raw is None:
+        if not show_injury_columns():
+            defaults["scopes"]["injury"] = "off"
+            defaults["scopes"]["recurring_injury"] = "off"
         return defaults
 
     if isinstance(raw, dict) and "order" in raw:
@@ -754,8 +779,14 @@ def normalize_modal_identity_fields(raw=None, *, legacy_extra=None) -> dict[str,
         for _label, key, _section in _modal_field_catalog():
             if key not in order:
                 order.append(key)
+        if not show_injury_columns():
+            scopes["injury"] = "off"
+            scopes["recurring_injury"] = "off"
         return {"order": order, "scopes": scopes}
 
+    if not show_injury_columns():
+        defaults["scopes"]["injury"] = "off"
+        defaults["scopes"]["recurring_injury"] = "off"
     return defaults
 
 
@@ -776,6 +807,8 @@ def modal_identity_fields_for(page: str, settings=None) -> list[tuple[str, str, 
     out: list[tuple[str, str, str]] = []
     for key in cfg.get("order") or []:
         if key in STAR_ATTRIBUTES_BROKEN:
+            continue
+        if key in ("injury", "recurring_injury") and not show_injury_columns():
             continue
         scope = _normalize_scope((cfg.get("scopes") or {}).get(key))
         if scope in ("off",):

@@ -9978,6 +9978,22 @@ body[data-theme="light"] .pf-depth-undo-row {
     box-sizing: border-box;
 }
 
+.pf-setpiece-chart-cols.is-injury-hidden,
+.pf-setpiece-chart-row.is-injury-hidden {
+    grid-template-columns:
+        2.5rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        minmax(7.25rem, 1.15fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(5.5rem, 0.55fr)
+        3.35rem
+        4.25rem
+        2rem;
+    min-width: 48rem;
+}
+
 .pf-setpiece-chart.is-aerial .pf-setpiece-chart-cols,
 .pf-setpiece-chart.is-aerial .pf-setpiece-chart-row {
     grid-template-columns:
@@ -9994,6 +10010,23 @@ body[data-theme="light"] .pf-depth-undo-row {
         4.25rem
         2rem;
     min-width: 54rem;
+}
+
+.pf-setpiece-chart.is-aerial .pf-setpiece-chart-cols.is-injury-hidden,
+.pf-setpiece-chart.is-aerial .pf-setpiece-chart-row.is-injury-hidden {
+    grid-template-columns:
+        2.5rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        2.85rem
+        minmax(7.25rem, 1.15fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(5.5rem, 0.55fr)
+        3.35rem
+        4.25rem
+        2rem;
+    min-width: 51rem;
 }
 
 .pf-setpiece-chart-cols {
@@ -10332,6 +10365,25 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
     padding: 0.5rem 0.7rem;
     min-width: 64rem;
     box-sizing: border-box;
+}
+
+/* Temporary: Injury column hidden until active injuries can be sourced. */
+.pf-depth-chart-cols.is-injury-hidden,
+.pf-depth-chart-row.is-injury-hidden {
+    grid-template-columns:
+        3.65rem
+        minmax(6.75rem, 1.05fr)
+        2.35rem
+        2.85rem
+        minmax(7.25rem, 1.15fr)
+        3.5rem
+        minmax(4.75rem, 0.78fr)
+        minmax(5.5rem, 0.55fr)
+        3.35rem
+        2.95rem
+        var(--pf-depth-metric-cols, 2.95rem 2.95rem 2.95rem 2.95rem)
+        2rem;
+    min-width: 61rem;
 }
 
 .pf-depth-chart-cols {
@@ -11181,6 +11233,25 @@ body[data-theme="light"] .pf-depth-chart-section {
             "rank f3"
             "rank poss";
         min-width: 0;
+    }
+
+    .pf-depth-chart-row.is-injury-hidden {
+        grid-template-areas:
+            "rank name"
+            "rank age"
+            "rank height"
+            "rank pos"
+            "rank slot"
+            "rank role"
+            "rank feet"
+            "rank club"
+            "rank div"
+            "rank score"
+            "rank mins"
+            "rank ovr"
+            "rank def"
+            "rank f3"
+            "rank poss";
     }
 
     .pf-depth-chart-rank-cell,

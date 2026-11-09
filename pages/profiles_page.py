@@ -2922,7 +2922,14 @@ def _depth_mins_cell(value, settings=None, *, minutes_required=None) -> html.Spa
     )
 
 
+def _injury_hidden_mod() -> str:
+    """CSS modifier while Injury columns are temporarily disabled."""
+    return "" if us.show_injury_columns() else " is-injury-hidden"
+
+
 def _depth_injury_cell(row: dict, player: dict | None = None):
+    if not us.show_injury_columns():
+        return None
     player = player if isinstance(player, dict) else {}
     injury = row.get("Injury") if row.get("Injury") not in (None, "", "-", "—") else player.get("injury")
     tip = injury_tooltip_text(
@@ -3044,13 +3051,18 @@ def _depth_chart_player_row(
             html.Span("—", className="pf-depth-chart-feet"),
             html.Span("—", className="pf-depth-chart-club"),
             html.Span("—", className="pf-depth-chart-div"),
-            html.Span("—", className="pf-depth-chart-injury"),
-            html.Div(
-                html.Span("—", className="pf-depth-chart-metric"),
-                className="pf-depth-chart-score",
-            ),
-            html.Span("—", className="pf-depth-chart-mins"),
         ]
+        if us.show_injury_columns():
+            cells.append(html.Span("—", className="pf-depth-chart-injury"))
+        cells.extend(
+            [
+                html.Div(
+                    html.Span("—", className="pf-depth-chart-metric"),
+                    className="pf-depth-chart-score",
+                ),
+                html.Span("—", className="pf-depth-chart-mins"),
+            ]
+        )
         if stats_view == "percentiles":
             cells.extend(
                 [
@@ -3090,7 +3102,11 @@ def _depth_chart_player_row(
     if entry is None:
         return html.Div(
             empty_row_cells(),
-            className="pf-depth-chart-row is-empty" + (" is-odd" if index % 2 else ""),
+            className=(
+                "pf-depth-chart-row is-empty"
+                + (" is-odd" if index % 2 else "")
+                + _injury_hidden_mod()
+            ),
             style=row_style or None,
         )
     row = entry.get("row") or {}
@@ -3148,6 +3164,7 @@ def _depth_chart_player_row(
             "pf-depth-chart-row"
             + (" is-odd" if index % 2 else "")
             + (" is-sortable" if draggable and profile_id else "")
+            + _injury_hidden_mod()
         ),
         **({"data-profile-id": profile_id} if profile_id else {}),
     }
@@ -3212,24 +3229,30 @@ def _depth_chart_player_row(
             nation=row.get("Based In") or row.get("based_in") or row.get("Nation"),
             row=row,
         ),
-        _depth_injury_cell(row, player),
-        html.Div(
-            _depth_score_cell(
-                row.get("Score"),
-                settings,
-                theme=theme,
-                row=row,
-                player=player,
-                role_column=role_col,
-            ),
-            className="pf-depth-chart-score",
-        ),
-        _depth_mins_cell(
-            _profile_minutes_raw(entry, row, pct_basis=pct_basis),
-            settings,
-            minutes_required=mins_limit,
-        ),
     ]
+    injury_cell_el = _depth_injury_cell(row, player)
+    if injury_cell_el is not None:
+        cells.append(injury_cell_el)
+    cells.extend(
+        [
+            html.Div(
+                _depth_score_cell(
+                    row.get("Score"),
+                    settings,
+                    theme=theme,
+                    row=row,
+                    player=player,
+                    role_column=role_col,
+                ),
+                className="pf-depth-chart-score",
+            ),
+            _depth_mins_cell(
+                _profile_minutes_raw(entry, row, pct_basis=pct_basis),
+                settings,
+                minutes_required=mins_limit,
+            ),
+        ]
+    )
     if stats_view == "percentiles":
         cells.extend(
             _depth_percentile_cells(
@@ -3314,10 +3337,15 @@ def _depth_chart_col_headers(
         html.Span("Feet", className="pf-depth-chart-feet"),
         html.Span("Club", className="pf-depth-chart-club"),
         html.Span("Division", className="pf-depth-chart-div"),
-        html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
-        html.Span("Score", className="pf-depth-chart-score"),
-        html.Span("Mins", className="pf-depth-chart-mins"),
     ]
+    if us.show_injury_columns():
+        heads.append(html.Span("INJ", className="pf-depth-chart-injury", title="Injury"))
+    heads.extend(
+        [
+            html.Span("Score", className="pf-depth-chart-score"),
+            html.Span("Mins", className="pf-depth-chart-mins"),
+        ]
+    )
     if stats_view == "percentiles":
         f3_abbr = category_abbr("final_third", group=group) or "F3"
         f3_title = category_label("final_third", group=group) or "Final third"
@@ -3352,7 +3380,7 @@ def _depth_chart_col_headers(
     )
     return html.Div(
         heads,
-        className="pf-depth-chart-cols",
+        className="pf-depth-chart-cols" + _injury_hidden_mod(),
         style=grid_style or None,
     )
 
@@ -3535,7 +3563,12 @@ def _setpiece_chart_col_headers(*, show_height: bool, score_abbr: str) -> html.D
             html.Span("Feet", className="pf-depth-chart-feet"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
-            html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
+        ]
+    )
+    if us.show_injury_columns():
+        cells.append(html.Span("INJ", className="pf-depth-chart-injury", title="Injury"))
+    cells.extend(
+        [
             html.Span(
                 score_abbr or "Score",
                 className="pf-depth-chart-score",
@@ -3553,7 +3586,7 @@ def _setpiece_chart_col_headers(*, show_height: bool, score_abbr: str) -> html.D
             ),
         ]
     )
-    return html.Div(cells, className="pf-setpiece-chart-cols")
+    return html.Div(cells, className="pf-setpiece-chart-cols" + _injury_hidden_mod())
 
 
 def _setpiece_chart_player_row(
@@ -3588,7 +3621,12 @@ def _setpiece_chart_player_row(
                 html.Span("—", className="pf-depth-chart-feet"),
                 html.Span("—", className="pf-depth-chart-club"),
                 html.Span("—", className="pf-depth-chart-div"),
-                html.Span("—", className="pf-depth-chart-injury"),
+            ]
+        )
+        if us.show_injury_columns():
+            cells.append(html.Span("—", className="pf-depth-chart-injury"))
+        cells.extend(
+            [
                 html.Div(
                     html.Span("—", className="pf-depth-chart-metric"),
                     className="pf-depth-chart-score",
@@ -3599,7 +3637,7 @@ def _setpiece_chart_player_row(
         )
         return html.Div(
             cells,
-            className="pf-setpiece-chart-row is-empty" + odd,
+            className="pf-setpiece-chart-row is-empty" + odd + _injury_hidden_mod(),
         )
 
     row = entry.get("row") or {}
@@ -3692,7 +3730,13 @@ def _setpiece_chart_player_row(
                 or (player.get("nation") if player else None),
                 row=row,
             ),
-            _depth_injury_cell(row, player),
+        ]
+    )
+    injury_cell_el = _depth_injury_cell(row, player)
+    if injury_cell_el is not None:
+        cells.append(injury_cell_el)
+    cells.extend(
+        [
             html.Div(
                 _depth_score_cell(score, settings, theme=theme),
                 className="pf-depth-chart-score",
@@ -3719,7 +3763,7 @@ def _setpiece_chart_player_row(
     )
     return html.Div(
         cells,
-        className="pf-setpiece-chart-row" + odd,
+        className="pf-setpiece-chart-row" + odd + _injury_hidden_mod(),
         key=f"pf-sp-{index}-{profile_id or 'x'}",
         **({"data-profile-id": profile_id} if profile_id else {}),
     )
