@@ -141,6 +141,13 @@ def test_pick_named_competition_excludes_cups_and_continentals():
     assert fms._pick_named_competition(
         Counter({(639, "Europa League"): 4, (131, "Friendly"): 2})
     ) == ""
+    # "champions" must not match inside "Championship"
+    assert fms._is_cupish_competition_name("EFL Championship") is False
+    assert fms._is_cupish_competition_name("Champions League") is True
+    assert fms._is_cupish_competition_name("MLS Eastern Conference") is False
+    assert fms._pick_named_competition(
+        Counter({(8, "EFL Championship"): 20, (637, "Champions League"): 8})
+    ) == "EFL Championship"
 
 
 def test_build_club_divisions_fallback_unadded_nation_league(monkeypatch):

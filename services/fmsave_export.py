@@ -179,6 +179,7 @@ _INJURY_COLUMNS: tuple[str, ...] = (
 )
 
 # Exclude these when voting a club's domestic division from fixtures / tables.
+# Continental tokens are full competition phrases so "Championship" ≠ "Champions League".
 _CUPISH_NAME_PARTS: tuple[str, ...] = (
     "cup",
     "cupa",
@@ -187,17 +188,33 @@ _CUPISH_NAME_PARTS: tuple[str, ...] = (
     "taca",
     "supercup",
     "super cup",
-    "champions",
-    "europa",
-    "conference",
     "qualification",
     "playoff",
     "play-off",
     "friendly",
     "shield",
     "trophy",
-    "wcl",
     "testimonial",
+    # Continental / intercontinental (full names)
+    "champions league",
+    "champions' cup",
+    "champions cup",
+    "europa league",
+    "conference league",
+    "uefa wcl",
+    "uefa super cup",
+    "leagues cup",
+    "club world cup",
+    "club world championship",
+    "copa libertadores",
+    "copa sudamericana",
+    "recopa sudamericana",
+    "supercopa sudamericana",
+    "concacaf champions",
+    "concacaf league",
+    "afc champions league",
+    "caf champions league",
+    "ofc champions league",
 )
 
 # fmsave Attributes field → Moneyball CSV header (ATTR_MAP full names).
