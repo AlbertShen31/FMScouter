@@ -46,9 +46,18 @@ def _seed_cache(tmp_path: Path, players: list[SimpleNamespace], *, managed_club_
         "managed_club_uid": managed_club_uid,
         "managed_club_name": None if managed_club_uid is None else "FC Romania",
     }
+    squad = [
+        player
+        for player in players
+        if managed_club_uid is not None
+        and player.club_uid is not None
+        and int(player.club_uid) == int(managed_club_uid)
+    ]
     fms._preload_cache = {
         "key": key,
         "players": players,
+        "by_scope": {"all": players, "squad": squad},
+        "export_ready": False,
         "managed_club_uid": managed_club_uid,
         "meta": meta,
     }

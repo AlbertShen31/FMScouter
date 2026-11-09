@@ -9,11 +9,12 @@ import csv
 import io
 import json
 import re
+import threading
 import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from config.paths import UPLOADS_DIR, UPLOADS_INDEX_PATH, VIEWS_DIR
 from scoring.role_scorer import (
@@ -738,15 +739,85 @@ def save_multi_year_pack(
     return entry
 
 
+_async_compute_lock = threading.Lock()
+_async_compute_ids: set[str] = set()
+
+
+def schedule_upload_compute(file_id: str) -> None:
+    """Run ``upload_cache.compute_file`` on a daemon thread (deduped per id)."""
+    fid = str(file_id or "").strip()
+    if not fid:
+        return
+    with _async_compute_lock:
+        if fid in _async_compute_ids:
+            return
+        _async_compute_ids.add(fid)
+
+    def _run() -> None:
+        try:
+            import services.upload_cache as upload_cache
+
+            upload_cache.compute_file(fid)
+        except Exception as exc:  # noqa: BLE001 — persist without crashing the worker
+            entry = get_file(fid)
+            if not entry:
+                return
+            cache = {
+                "status": "error",
+                "error": str(exc),
+                "role_scores": False,
+                "stats": False,
+            }
+            index = _read_index()
+            for item in index:
+                if item.get("id") == fid:
+                    item["cache"] = cache
+                    break
+            _write_index(index)
+        finally:
+            with _async_compute_lock:
+                _async_compute_ids.discard(fid)
+
+    threading.Thread(
+        target=_run,
+        name=f"upload-cache-{fid}",
+        daemon=True,
+    ).start()
+
+
 def save_upload(
     filename: str,
     text: str,
     *,
     export_source: str | None = None,
+    eligibility: dict[str, Any] | None = None,
+    player_count: int | None = None,
+    precompute: bool | Literal["async"] = True,
 ) -> dict[str, Any]:
-    """Persist CSV text and append an index entry."""
+    """Persist CSV text and append an index entry.
+
+    Pass ``eligibility`` / ``player_count`` when the caller already classified the CSV
+    (Save export) to skip a second header/row scan. ``precompute="async"`` writes the
+    file immediately and scores in a background thread.
+    """
     ensure_dirs()
-    eligibility = classify_eligibility(text)
+    _elig_keys = (
+        "pages",
+        "role_scores",
+        "stats",
+        "squad_finance",
+        "has_attributes",
+        "has_stats",
+        "has_salary",
+        "has_transfer_value",
+        "has_fees",
+        "has_player_info",
+        "notes",
+    )
+    if isinstance(eligibility, dict) and all(key in eligibility for key in _elig_keys):
+        elig = eligibility
+    else:
+        elig = classify_eligibility(text)
     original = Path(filename or "export.csv").name
     safe = _safe_filename(original)
     file_id = uuid.uuid4().hex[:12]
@@ -756,6 +827,14 @@ def save_upload(
     source = str(export_source or "").strip()
     if not source and original.casefold().startswith("fmsave_"):
         source = EXPORT_SOURCE_FMSAVE
+    counted = player_count
+    if counted is None:
+        counted = count_csv_players(text)
+    else:
+        try:
+            counted = int(counted)
+        except (TypeError, ValueError):
+            counted = count_csv_players(text)
     entry = {
         "id": file_id,
         "kind": KIND_SINGLE,
@@ -765,24 +844,42 @@ def save_upload(
         "stored_name": stored,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "size_bytes": path.stat().st_size,
-        "pages": eligibility["pages"],
-        "role_scores": eligibility["role_scores"],
-        "stats": eligibility["stats"],
-        "squad_finance": eligibility["squad_finance"],
-        "has_attributes": eligibility["has_attributes"],
-        "has_stats": eligibility["has_stats"],
-        "has_salary": eligibility["has_salary"],
-        "has_transfer_value": eligibility["has_transfer_value"],
-        "has_fees": eligibility["has_fees"],
-        "has_player_info": eligibility["has_player_info"],
-        "eligibility_notes": eligibility["notes"],
-        "player_count": count_csv_players(text),
+        "pages": elig["pages"],
+        "role_scores": elig["role_scores"],
+        "stats": elig["stats"],
+        "squad_finance": elig["squad_finance"],
+        "has_attributes": elig["has_attributes"],
+        "has_stats": elig["has_stats"],
+        "has_salary": elig["has_salary"],
+        "has_transfer_value": elig["has_transfer_value"],
+        "has_fees": elig["has_fees"],
+        "has_player_info": elig["has_player_info"],
+        "eligibility_notes": elig["notes"],
+        "player_count": counted,
     }
     if source:
         entry["export_source"] = source
+
+    do_precompute = precompute is True
+    do_async = precompute == "async"
+    if do_async:
+        entry["cache"] = {
+            "status": "computing",
+            "role_scores": False,
+            "stats": False,
+        }
+
     index = _read_index()
     index.append(entry)
     _write_index(index)
+
+    if do_async:
+        schedule_upload_compute(file_id)
+        return entry
+
+    if not do_precompute:
+        return entry
+
     # Precompute role scores / stats percentiles for faster page loads.
     try:
         import services.compute_progress as compute_progress

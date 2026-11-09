@@ -753,7 +753,10 @@ def _expires(end: date | None) -> str:
     return f"{end.month}/{end.day}/{end.year}"
 
 
-def _player_in_pos_groups(natural: tuple[str, ...] | None, groups: list[str]) -> bool:
+def _player_in_pos_groups(
+    natural: tuple[str, ...] | None,
+    groups: list[str] | tuple[str, ...] | frozenset[str],
+) -> bool:
     if not groups:
         return True
     codes = {str(c).upper() for c in (natural or ())}
@@ -764,47 +767,71 @@ def _player_in_pos_groups(natural: tuple[str, ...] | None, groups: list[str]) ->
     return False
 
 
+def prepare_filters(filters: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Normalize filter payload once per callback (sets / casefold / groups)."""
+    if not filters:
+        return None
+    if filters.get("_prepared"):
+        return filters
+    club_nations = filters.get("club_nation_ids") or ()
+    player_nations = filters.get("nation_ids") or ()
+    groups = filters.get("position_groups") or ()
+    return {
+        "age_min": filters.get("age_min"),
+        "age_max": filters.get("age_max"),
+        "height_min_in": filters.get("height_min_in"),
+        "height_max_in": filters.get("height_max_in"),
+        "club_contains": (filters.get("club_contains") or "").strip().casefold(),
+        "club_nation_ids": frozenset(int(n) for n in club_nations),
+        "nation_ids": frozenset(int(n) for n in player_nations),
+        "position_groups": tuple(str(g).lower() for g in groups if g),
+        "_prepared": True,
+    }
+
+
 def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
     if not filters:
         return True
+    prepared = filters if filters.get("_prepared") else prepare_filters(filters)
+    if not prepared:
+        return True
+
     age = player.age
-    age_min = filters.get("age_min")
-    age_max = filters.get("age_max")
+    age_min = prepared.get("age_min")
+    age_max = prepared.get("age_max")
     if age_min is not None and age is not None and age < int(age_min):
         return False
     if age_max is not None and age is not None and age > int(age_max):
         return False
 
     height_in = _height_total_inches(getattr(player, "height_cm", None))
-    height_min = filters.get("height_min_in")
-    height_max = filters.get("height_max_in")
+    height_min = prepared.get("height_min_in")
+    height_max = prepared.get("height_max_in")
     if height_min is not None and height_in is not None and height_in < int(height_min):
         return False
     if height_max is not None and height_in is not None and height_in > int(height_max):
         return False
 
-    club_contains = (filters.get("club_contains") or "").strip().casefold()
+    club_contains = prepared.get("club_contains") or ""
     if club_contains:
         club = (player.club_name or "").casefold()
         if club_contains not in club:
             return False
 
-    club_nations = filters.get("club_nation_ids") or []
+    club_nations = prepared.get("club_nation_ids") or frozenset()
     if club_nations:
-        wanted = {int(n) for n in club_nations}
         club_nation = player.club_nation_id
-        if club_nation is None or int(club_nation) not in wanted:
+        if club_nation is None or int(club_nation) not in club_nations:
             return False
 
-    player_nations = filters.get("nation_ids") or []
+    player_nations = prepared.get("nation_ids") or frozenset()
     if player_nations:
-        wanted = {int(n) for n in player_nations}
         nation = player.nation_id
-        if nation is None or int(nation) not in wanted:
+        if nation is None or int(nation) not in player_nations:
             return False
 
-    groups = filters.get("position_groups") or []
-    if groups and not _player_in_pos_groups(player.natural_positions, list(groups)):
+    groups = prepared.get("position_groups") or ()
+    if groups and not _player_in_pos_groups(player.natural_positions, groups):
         return False
 
     return True
@@ -814,15 +841,17 @@ def _filters_active(filters: dict[str, Any] | None) -> bool:
     """True when at least one filter constraint is set."""
     if not filters:
         return False
-    if filters.get("age_min") is not None or filters.get("age_max") is not None:
+    prepared = filters if filters.get("_prepared") else filters
+    if prepared.get("age_min") is not None or prepared.get("age_max") is not None:
         return True
-    if filters.get("height_min_in") is not None or filters.get("height_max_in") is not None:
+    if prepared.get("height_min_in") is not None or prepared.get("height_max_in") is not None:
         return True
-    if (filters.get("club_contains") or "").strip():
+    club = prepared.get("club_contains") or ""
+    if isinstance(club, str) and club.strip():
         return True
-    if filters.get("club_nation_ids") or filters.get("nation_ids"):
+    if prepared.get("club_nation_ids") or prepared.get("nation_ids"):
         return True
-    if filters.get("position_groups"):
+    if prepared.get("position_groups"):
         return True
     return False
 
@@ -835,9 +864,11 @@ def _normalize_scope(scope: str) -> Scope:
     return "squad"
 
 
-# Lightweight filter snapshots from the last preloaded save (not Dash-storeable).
+# Export-ready player records from the last preloaded save (not Dash-storeable).
+# fmsave hands out dataclasses that remain valid after the save context closes.
 _preload_lock = threading.Lock()
 _preload_cache: dict[str, Any] | None = None
+_SCOPED_DIVISION_CLUB_LIMIT = 32
 
 
 def clear_preload_cache() -> None:
@@ -847,6 +878,7 @@ def clear_preload_cache() -> None:
 
 
 def _player_filter_snapshot(player: Any) -> SimpleNamespace:
+    """Test helper: lightweight stand-in with the fields live counts need."""
     return SimpleNamespace(
         age=getattr(player, "age", None),
         height_cm=getattr(player, "height_cm", None),
@@ -866,22 +898,43 @@ def _preload_public_meta(entry: dict[str, Any]) -> dict[str, Any]:
     return dict(entry.get("meta") or {})
 
 
-def _scope_player_snapshots(
-    players: list[SimpleNamespace],
-    *,
-    scope_key: Scope,
-    managed_club_uid: int | None,
-) -> list[SimpleNamespace]:
-    if scope_key != "squad":
-        return list(players)
-    if managed_club_uid is None:
+def _players_for_club(players: list[Any], club_uid: int | None) -> list[Any]:
+    if club_uid is None:
         return []
-    wanted = int(managed_club_uid)
+    wanted = int(club_uid)
     return [
         player
         for player in players
-        if player.club_uid is not None and int(player.club_uid) == wanted
+        if getattr(player, "club_uid", None) is not None
+        and int(player.club_uid) == wanted
     ]
+
+
+def _scope_player_list(
+    entry: dict[str, Any],
+    *,
+    scope_key: Scope,
+) -> list[Any]:
+    """Return the cached all/squad list without copying."""
+    by_scope = entry.get("by_scope") or {}
+    scoped = by_scope.get(scope_key)
+    if scoped is not None:
+        return scoped
+    players = entry.get("players") or []
+    if scope_key != "squad":
+        return players
+    return _players_for_club(players, entry.get("managed_club_uid"))
+
+
+def _export_ready_players(entry: dict[str, Any]) -> bool:
+    """True when preload kept full fmsave Player records (not test snapshots)."""
+    if entry.get("export_ready"):
+        return True
+    players = entry.get("players") or []
+    if not players:
+        return False
+    sample = players[0]
+    return hasattr(sample, "attributes") and hasattr(sample, "uid")
 
 
 def get_preloaded_save(save_path: str) -> dict[str, Any] | None:
@@ -898,7 +951,7 @@ def get_preloaded_save(save_path: str) -> dict[str, Any] | None:
 
 
 def preload_save_players(save_path: str) -> dict[str, Any]:
-    """Open a save once and cache filterable player snapshots for live counts.
+    """Open a save once and cache export-ready players for live counts + generate.
 
     Returns public meta (no player payloads). Raises on I/O / fmsave errors.
     """
@@ -926,7 +979,7 @@ def preload_save_players(save_path: str) -> dict[str, Any]:
     game_date = None
     game_label = ""
     game_build = ""
-    snapshots: list[SimpleNamespace] = []
+    players: list[Any] = []
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -945,22 +998,15 @@ def preload_save_players(save_path: str) -> dict[str, Any]:
                 )
             compute_progress.update(phase="Loading players…")
             with _track_player_load_progress():
-                snapshots = [
-                    _player_filter_snapshot(player) for player in career_save.players()
-                ]
+                # Materialize full Player dataclasses; they remain valid after close.
+                players = list(career_save.players())
 
-    squad_total = len(
-        _scope_player_snapshots(
-            snapshots,
-            scope_key="squad",
-            managed_club_uid=managed_club_uid,
-        )
-    )
+    squad_players = _players_for_club(players, managed_club_uid)
     meta = {
         "ok": True,
         "save_path": str(path.resolve()),
-        "save_total": len(snapshots),
-        "squad_total": squad_total,
+        "save_total": len(players),
+        "squad_total": len(squad_players),
         "managed_club_uid": managed_club_uid,
         "managed_club_name": managed_club_name or None,
         "game_date": game_date.isoformat() if game_date else None,
@@ -970,7 +1016,12 @@ def preload_save_players(save_path: str) -> dict[str, Any]:
     }
     new_entry = {
         "key": key,
-        "players": snapshots,
+        "players": players,
+        "by_scope": {
+            "all": players,
+            "squad": squad_players,
+        },
+        "export_ready": True,
         "managed_club_uid": managed_club_uid,
         "meta": meta,
     }
@@ -997,6 +1048,7 @@ def count_matching_players(
 
     scope_key = _normalize_scope(scope)
     managed_club_uid = entry.get("managed_club_uid")
+    prepared = prepare_filters(filters)
     if scope_key == "squad" and managed_club_uid is None:
         return {
             "ok": False,
@@ -1008,16 +1060,12 @@ def count_matching_players(
             "scope_total": 0,
             "save_total": int((entry.get("meta") or {}).get("save_total") or 0),
             "scope": scope_key,
-            "filters_active": _filters_active(filters),
+            "filters_active": _filters_active(prepared),
         }
 
-    scoped = _scope_player_snapshots(
-        entry["players"],
-        scope_key=scope_key,
-        managed_club_uid=managed_club_uid,
-    )
-    if _filters_active(filters):
-        matched = sum(1 for player in scoped if _passes_filters(player, filters))
+    scoped = _scope_player_list(entry, scope_key=scope_key)
+    if _filters_active(prepared):
+        matched = sum(1 for player in scoped if _passes_filters(player, prepared))
     else:
         matched = len(scoped)
     return {
@@ -1026,9 +1074,39 @@ def count_matching_players(
         "scope_total": len(scoped),
         "save_total": int((entry.get("meta") or {}).get("save_total") or len(entry["players"])),
         "scope": scope_key,
-        "filters_active": _filters_active(filters),
+        "filters_active": _filters_active(prepared),
         "managed_club_name": (entry.get("meta") or {}).get("managed_club_name"),
     }
+
+
+def _take_preloaded_export_players(
+    save_path: str,
+    *,
+    scope: str,
+    filters: dict[str, Any] | None,
+) -> list[Any] | None:
+    """Return scoped/filtered export-ready players from preload, or None."""
+    path = Path(save_path).expanduser()
+    if not path.is_file():
+        return None
+    key = _preload_cache_key(path)
+    with _preload_lock:
+        entry = _preload_cache
+    if not entry or entry.get("key") != key or not _export_ready_players(entry):
+        return None
+
+    scope_key = _normalize_scope(scope)
+    if scope_key == "squad" and entry.get("managed_club_uid") is None:
+        raise ValueError(
+            "No managed club in this save (between jobs?). "
+            "Use All players instead."
+        )
+
+    prepared = prepare_filters(filters)
+    scoped = _scope_player_list(entry, scope_key=scope_key)
+    if _filters_active(prepared):
+        return [player for player in scoped if _passes_filters(player, prepared)]
+    return list(scoped)
 
 
 def _export_filename(
@@ -1121,12 +1199,127 @@ def _safe_table(reader: Any, *errors: type[BaseException]) -> Any:
         return ()
 
 
-def _build_club_divisions(career_save: Any) -> dict[int, str]:
+def _club_slot0_team_id(club: Any) -> int | None:
+    for team in getattr(club, "teams", None) or ():
+        if getattr(team, "slot", None) != 0:
+            continue
+        team_id = getattr(team, "team_id", None)
+        if team_id is None:
+            return None
+        return int(team_id)
+    return None
+
+
+def _lookup_clubs_by_uid(clubs_table: Any, club_uids: set[int]) -> dict[int, Any]:
+    """Resolve club records for a small uid set (indexed lookup when available)."""
+    out: dict[int, Any] = {}
+    if not club_uids:
+        return out
+    get_by_uid = getattr(clubs_table, "get_by_uid", None)
+    if callable(get_by_uid):
+        for uid in club_uids:
+            try:
+                club = get_by_uid(uid)
+            except KeyError:
+                club = None
+            if club is not None:
+                out[uid] = club
+        return out
+    for club in clubs_table or ():
+        club_uid = getattr(club, "uid", None)
+        if club_uid is None:
+            continue
+        uid = int(club_uid)
+        if uid in club_uids:
+            out[uid] = club
+            if len(out) >= len(club_uids):
+                break
+    return out
+
+
+def _build_club_divisions_scoped(
+    career_save: Any,
+    wanted: set[int],
+    reader_errors: tuple[type[BaseException], ...],
+) -> dict[int, str]:
+    """Division labels for a small club set — skip global fixture/club sweeps when possible."""
+    club_division: dict[int, str] = {}
+
+    for table in _safe_table(career_save.league_tables, *reader_errors):
+        if len(club_division) >= len(wanted):
+            return club_division
+        if not _is_division_shaped(table):
+            continue
+        rows = tuple(table.rows or ())
+        slot0 = [row for row in rows if getattr(row, "team_slot", None) == 0]
+        n = int(getattr(table, "club_count", 0) or 0)
+        if len(slot0) < max(8, n // 2):
+            continue
+        name = (getattr(table, "competition_name", None) or "").strip()
+        if not name:
+            # Nameless tables need full-member fixture votes; defer to per-club fallback.
+            continue
+        for row in slot0:
+            club_uid = getattr(row, "club_uid", None)
+            if club_uid is None:
+                continue
+            uid = int(club_uid)
+            if uid in wanted:
+                club_division.setdefault(uid, name)
+
+    missing = wanted - club_division.keys()
+    if not missing:
+        return club_division
+
+    clubs_table = _safe_table(career_save.clubs, *reader_errors)
+    clubs_by_uid = _lookup_clubs_by_uid(clubs_table, missing)
+    team_to_club: dict[int, int] = {}
+    for uid in missing:
+        club = clubs_by_uid.get(uid)
+        if club is None:
+            continue
+        team_id = _club_slot0_team_id(club)
+        if team_id is not None:
+            team_to_club[team_id] = uid
+
+    if not team_to_club:
+        return club_division
+
+    fx_by_team: dict[int, Counter[tuple[int | None, str | None]]] = defaultdict(Counter)
+    interest = frozenset(team_to_club)
+    for fixture in _safe_table(career_save.fixtures, *reader_errors):
+        for team_id, competition_id, competition_name in (
+            (fixture.home_team_id, fixture.competition_id, fixture.competition_name),
+            (fixture.away_team_id, fixture.competition_id, fixture.competition_name),
+        ):
+            if team_id is None or competition_id is None:
+                continue
+            tid = int(team_id)
+            if tid not in interest:
+                continue
+            fx_by_team[tid][(competition_id, competition_name)] += 1
+
+    for team_id, club_uid in team_to_club.items():
+        if club_uid in club_division:
+            continue
+        name = _pick_named_competition(fx_by_team.get(team_id, Counter()))
+        if name:
+            club_division[club_uid] = name
+    return club_division
+
+
+def _build_club_divisions(
+    career_save: Any,
+    club_uids: set[int] | frozenset[int] | None = None,
+) -> dict[int, str]:
     """Map club_uid → domestic Division label for Moneyball.
 
     League tables do not store a competition; fmsave votes one from fixtures, and that vote
     often lands on an unnamed id. Prefer division-shaped first-team tables, revoting the name
     from member fixtures when needed, then fall back to each club's slot-0 fixture majority.
+
+    When ``club_uids`` is a small set (squad / filtered exports), use a scoped path that
+    skips unnamed-table fixture voting and only accumulates fixtures for missing clubs.
 
     On FM27 a failed reader check stops that reader even with ``strict=False``, so fixtures /
     league tables / clubs may raise; leave Division blank rather than aborting the export.
@@ -1134,6 +1327,13 @@ def _build_club_divisions(career_save: Any) -> dict[int, str]:
     import fmsave
 
     reader_errors = (fmsave.ReaderCheckError, fmsave.UnsupportedGameError)
+    if club_uids is not None:
+        wanted = {int(uid) for uid in club_uids}
+        if not wanted:
+            return {}
+        if len(wanted) <= _SCOPED_DIVISION_CLUB_LIMIT:
+            return _build_club_divisions_scoped(career_save, wanted, reader_errors)
+
     fx_by_team: dict[int, Counter[tuple[int | None, str | None]]] = defaultdict(Counter)
     for fixture in _safe_table(career_save.fixtures, *reader_errors):
         for team_id, competition_id, competition_name in (
@@ -1170,21 +1370,30 @@ def _build_club_divisions(career_save: Any) -> dict[int, str]:
             club_uid = getattr(row, "club_uid", None)
             if club_uid is None:
                 continue
-            club_division.setdefault(int(club_uid), name)
+            uid = int(club_uid)
+            if club_uids is not None and uid not in club_uids:
+                continue
+            club_division.setdefault(uid, name)
+
+    if club_uids is not None and len(club_division) >= len(club_uids):
+        return club_division
 
     for club in _safe_table(career_save.clubs, *reader_errors):
         club_uid = getattr(club, "uid", None)
-        if club_uid is None or int(club_uid) in club_division:
+        if club_uid is None:
             continue
-        for team in getattr(club, "teams", None) or ():
-            if getattr(team, "slot", None) != 0:
-                continue
-            team_id = getattr(team, "team_id", None)
-            if team_id is None:
-                break
-            name = _pick_named_competition(fx_by_team.get(int(team_id), Counter()))
-            if name:
-                club_division[int(club_uid)] = name
+        uid = int(club_uid)
+        if club_uids is not None and uid not in club_uids:
+            continue
+        if uid in club_division:
+            continue
+        team_id = _club_slot0_team_id(club)
+        if team_id is None:
+            continue
+        name = _pick_named_competition(fx_by_team.get(team_id, Counter()))
+        if name:
+            club_division[uid] = name
+        if club_uids is not None and len(club_division) >= len(club_uids):
             break
 
     return club_division
@@ -1614,6 +1823,7 @@ def export_moneyball_csv(
         raise FileNotFoundError(f"Save file not found: {path}")
 
     scope_key = _normalize_scope(scope)
+    prepared = prepare_filters(filters)
     started = time.perf_counter()
     rows: list[dict[str, str]] = []
     competition_names = competition_name_map() or None
@@ -1621,6 +1831,13 @@ def export_moneyball_csv(
     import services.compute_progress as compute_progress
 
     compute_progress.update(phase="Opening save…", done=0, total=0)
+
+    reused_players = _take_preloaded_export_players(
+        str(path),
+        scope=scope_key,
+        filters=prepared,
+    )
+    players_from_preload = reused_players is not None
 
     game_date: date | None = None
     game_label = ""
@@ -1635,28 +1852,47 @@ def export_moneyball_csv(
             game_label = str(getattr(info, "game", "") or "")
             game_build = str(getattr(info, "build", "") or "")
             known_build = getattr(info, "known_build", None)
-            compute_progress.update(phase="Loading players…")
-            with _track_player_load_progress():
-                if scope_key == "squad":
-                    managed = career_save.managed_clubs()
-                    if not managed:
-                        raise ValueError(
-                            "No managed club in this save (between jobs?). "
-                            "Use All players instead."
+
+            if players_from_preload:
+                player_list = reused_players or []
+                compute_progress.update(
+                    phase="Using preloaded players…",
+                    done=len(player_list),
+                    total=len(player_list),
+                )
+            else:
+                compute_progress.update(phase="Loading players…")
+                with _track_player_load_progress():
+                    if scope_key == "squad":
+                        managed = career_save.managed_clubs()
+                        if not managed:
+                            raise ValueError(
+                                "No managed club in this save (between jobs?). "
+                                "Use All players instead."
+                            )
+                        club_uid = managed[0].club_uid
+                        players = career_save.players().where(club_uid=club_uid)
+                    else:
+                        players = career_save.players()
+
+                    if _filters_active(prepared):
+                        players = players.filter(
+                            lambda player: _passes_filters(player, prepared)
                         )
-                    club_uid = managed[0].club_uid
-                    players = career_save.players().where(club_uid=club_uid)
-                else:
-                    players = career_save.players()
 
-                if _filters_active(filters):
-                    players = players.filter(
-                        lambda player: _passes_filters(player, filters)
-                    )
+                    player_list = list(players)
 
-                player_list = list(players)
-            uid_set = {p.uid for p in player_list}
-            club_divisions = _build_club_divisions(career_save)
+            uid_set = frozenset(p.uid for p in player_list)
+            club_uid_set = {
+                int(p.club_uid)
+                for p in player_list
+                if getattr(p, "club_uid", None) is not None
+            }
+            compute_progress.update(phase="Resolving divisions…")
+            club_divisions = _build_club_divisions(
+                career_save,
+                club_uid_set if club_uid_set else set(),
+            )
 
             compute_progress.update(
                 phase="Loading season stats…",
@@ -1688,16 +1924,17 @@ def export_moneyball_csv(
                 )
             }
             if need_history_uids:
+                need_history_uids_frozen = frozenset(need_history_uids)
                 compute_progress.update(
                     phase="Loading season history…",
                     done=0,
-                    total=len(need_history_uids),
+                    total=len(need_history_uids_frozen),
                 )
                 try:
                     for record in career_save.player_season_history().where(
                         kind=SeasonStatsKind.OVERALL
                     ):
-                        if record.player_uid not in need_history_uids:
+                        if record.player_uid not in need_history_uids_frozen:
                             continue
                         history_by_uid.setdefault(record.player_uid, []).append(
                             record
@@ -1758,7 +1995,8 @@ def export_moneyball_csv(
         "column_count": len(columns),
         "elapsed_ms": elapsed_ms,
         "scope": scope_key,
-        "filters_active": _filters_active(filters),
+        "filters_active": _filters_active(prepared),
+        "players_from_preload": players_from_preload,
         "save_path": str(path),
         "game_date": game_date.isoformat() if game_date else None,
         "game": game_label or None,

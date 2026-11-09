@@ -19,8 +19,9 @@ PAGE_TIP = (
     "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
     "(attributes + OVERALL season stats + contract finance). FM27 field meanings stay "
     "unconfirmed in fmsave; Pressures columns are empty on FM27. Choosing a save preloads "
-    "players so filter changes show a live export count. Generate export always adds the "
-    "file to the Uploads library; optionally download a CSV as well."
+    "players so filter changes show a live export count. Generate reuses those players and "
+    "only reopens the save for season stats / divisions. The CSV always goes to Uploads "
+    "(precompute continues in the background); optionally download a CSV as well."
 )
 
 _SCOPE_OPTIONS = [
@@ -158,6 +159,7 @@ def layout(**_kwargs):
                                                                         min=15,
                                                                         max=45,
                                                                         hideControls=False,
+                                                                        debounce=300,
                                                                     ),
                                                                     dmc.NumberInput(
                                                                         id="sx-age-max",
@@ -166,6 +168,7 @@ def layout(**_kwargs):
                                                                         min=15,
                                                                         max=45,
                                                                         hideControls=False,
+                                                                        debounce=300,
                                                                     ),
                                                                     dmc.Select(
                                                                         id="sx-height-min",
@@ -174,6 +177,7 @@ def layout(**_kwargs):
                                                                         value=_HEIGHT_MIN_DEFAULT,
                                                                         searchable=True,
                                                                         allowDeselect=False,
+                                                                        debounce=300,
                                                                     ),
                                                                     dmc.Select(
                                                                         id="sx-height-max",
@@ -182,6 +186,7 @@ def layout(**_kwargs):
                                                                         value=_HEIGHT_MAX_DEFAULT,
                                                                         searchable=True,
                                                                         allowDeselect=False,
+                                                                        debounce=300,
                                                                     ),
                                                                 ],
                                                                 className="sx-filter-fields sx-filter-fields-limits",
@@ -201,7 +206,7 @@ def layout(**_kwargs):
                                                                         id="sx-club-contains",
                                                                         label="Club name contains",
                                                                         placeholder="optional",
-                                                                        debounce=True,
+                                                                        debounce=300,
                                                                         className="sx-filter-club-contains",
                                                                     ),
                                                                     dmc.MultiSelect(
@@ -212,6 +217,7 @@ def layout(**_kwargs):
                                                                         searchable=True,
                                                                         clearable=True,
                                                                         placeholder="Any",
+                                                                        debounce=300,
                                                                     ),
                                                                     dmc.MultiSelect(
                                                                         id="sx-player-nations",
@@ -221,6 +227,7 @@ def layout(**_kwargs):
                                                                         searchable=True,
                                                                         clearable=True,
                                                                         placeholder="Any",
+                                                                        debounce=300,
                                                                     ),
                                                                 ],
                                                                 className="sx-filter-fields sx-filter-fields-club",
@@ -279,8 +286,10 @@ def layout(**_kwargs):
                                         disabled=True,
                                     ),
                                     html.P(
-                                        "Always adds to Uploads. Preload runs when you pick a save; "
-                                        "export still reads season stats afterward.",
+                                        "Always adds to Uploads (scoring continues in the "
+                                        "background). Preload runs when you pick a save; "
+                                        "export reuses those players and still reads season "
+                                        "stats afterward.",
                                         className="text-muted small mt-2 mb-0",
                                     ),
                                 ]
@@ -425,6 +434,7 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
         f"{meta.get('row_count', 0)} players · {meta.get('column_count', 0)} columns · "
         f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}"
         + (" · filters on" if meta.get("filters_active") else "")
+        + (" · reused preload" if meta.get("players_from_preload") else "")
     )
     if game_line:
         summary = f"{summary} · {game_line}"
@@ -711,7 +721,7 @@ def sx_generate(
         try:
             compute_progress.update(
                 phase="Adding to Uploads…",
-                message="Saving and precomputing…",
+                message="Saving…",
                 done=0,
                 total=0,
             )
@@ -719,11 +729,15 @@ def sx_generate(
                 meta.get("filename") or "fmsave_export.csv",
                 csv_text,
                 export_source=lib.EXPORT_SOURCE_FMSAVE,
+                eligibility=meta.get("eligibility"),
+                player_count=meta.get("row_count"),
+                precompute="async",
             )
             pages = ", ".join(entry.get("pages") or []) or "none"
             uploads_note = (
                 f"Saved to Uploads as “{entry.get('display_name')}” "
-                f"(id={entry.get('id')}; pages: {pages})."
+                f"(id={entry.get('id')}; pages: {pages}). "
+                "Precompute running in the background."
             )
         except Exception as exc:  # noqa: BLE001
             uploads_note = f"Export built, but Uploads save failed: {exc}"

@@ -383,6 +383,15 @@ def cache_status_light(
                 "stats": stats_ok,
             }
 
+    if meta.get("status") == "computing" and not has_blob:
+        return {
+            "status": "computing",
+            "label": "Computing…",
+            "detail": "Background precompute in progress",
+            "role_scores": role_ok,
+            "stats": stats_ok,
+        }
+
     if not has_blob or not page_ready:
         return {
             "status": "missing",
