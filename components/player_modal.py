@@ -122,7 +122,6 @@ PLAYER_IDENTITY_SECTIONS = [
                 ("Height", "height"),
                 ("Left foot", "left_foot"),
                 ("Right foot", "right_foot"),
-                ("Rec", "rec"),
                 ("Inf", "inf"),
                 ("Injury", "injury"),
                 ("Recurring injury", "recurring_injury"),
@@ -595,13 +594,6 @@ def player_identity_item(
     formatter = (field_formatters or {}).get(key)
     text = formatter(raw) if formatter else str(raw or "—")
     style = dict((field_styles or {}).get(key) or {})
-    if key == "rec":
-        from components.player_table import rec_identity_style
-
-        rec_style = rec_identity_style(text, theme)
-        if rec_style:
-            value_class += " rs-identity-pill"
-            style = {**rec_style, **style}
     if key in ("avg_rating_club", "avg_rating_int", "last_5_club", "last_5_int"):
         from components.player_table import avg_rating_identity_style
 

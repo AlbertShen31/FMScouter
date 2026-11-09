@@ -998,12 +998,10 @@ body[data-theme="light"] .rs-busy-progress {
     padding-right: 4px;
 }
 
-/* Short identity cols (Age / Rec / Height): shared Role scores + Player stats.
+/* Short identity cols (Age / Height): shared Role scores + Player stats.
    Room for label + sort chevron; header name stays on one line. */
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
-.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Age"],
-.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Rec"] {
+.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Age"] {
     min-width: 48px !important;
     width: 48px !important;
     max-width: 52px !important;
@@ -1023,19 +1021,16 @@ body[data-theme="light"] .rs-busy-progress {
 }
 
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] {
     padding-right: 14px !important;
 }
 
 .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Age"],
-.rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Rec"],
 .rs-table-shell .dash-spreadsheet-inner td[data-dash-column="Height"] {
     padding-right: 4px !important;
 }
 
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name,
-.rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name,
 .rs-table-shell .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name {
     overflow: hidden !important;
     text-overflow: clip !important;
@@ -8724,22 +8719,18 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Age"],
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Rec"] {
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Age"] {
     min-width: 48px !important;
     max-width: 52px !important;
     width: 48px !important;
     padding-left: 4px !important;
 }
 
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"],
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] {
+#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] {
     padding-right: 14px !important;
 }
 
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Age"],
-#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Rec"] {
+#pf-table .dash-spreadsheet-inner td.dash-cell[data-dash-column="Age"] {
     padding-right: 4px !important;
 }
 
@@ -8832,7 +8823,6 @@ body[data-theme="light"] .up-edit-modal .btn-close {
 }
 
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Age"] .column-header-name,
-#pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rec"] .column-header-name,
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Height"] .column-header-name,
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Rank"] .column-header-name,
 #pf-table .dash-spreadsheet-inner th.dash-header[data-dash-column="Score"] .column-header-name {
@@ -9964,7 +9954,7 @@ body[data-theme="light"] .pf-depth-undo-row {
 }
 
 /* Mirror Starting XI stretch pattern: Name / Pos / Club / Division flex.
-   Rec→Rk use fixed tracks so header and body grids share the same edges. */
+   Injury→Rk use fixed tracks so header and body grids share the same edges. */
 .pf-setpiece-chart-cols,
 .pf-setpiece-chart-row {
     display: grid;
@@ -9976,7 +9966,6 @@ body[data-theme="light"] .pf-depth-undo-row {
         3.5rem
         minmax(4.75rem, 0.78fr)
         minmax(5.5rem, 0.55fr)
-        2.85rem
         2.5rem
         3.35rem
         4.25rem
@@ -9984,7 +9973,7 @@ body[data-theme="light"] .pf-depth-undo-row {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 54rem;
+    min-width: 51rem;
     width: 100%;
     box-sizing: border-box;
 }
@@ -10000,12 +9989,11 @@ body[data-theme="light"] .pf-depth-undo-row {
         3.5rem
         minmax(4.75rem, 0.78fr)
         minmax(5.5rem, 0.55fr)
-        2.85rem
         2.5rem
         3.35rem
         4.25rem
         2rem;
-    min-width: 57rem;
+    min-width: 54rem;
 }
 
 .pf-setpiece-chart-cols {
@@ -10027,7 +10015,6 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-setpiece-chart-cols .pf-depth-chart-club,
 .pf-setpiece-chart-cols .pf-depth-chart-age,
 .pf-setpiece-chart-cols .pf-depth-chart-height,
-.pf-setpiece-chart-cols .pf-depth-chart-rec,
 .pf-setpiece-chart-cols .pf-depth-chart-injury,
 .pf-setpiece-chart-cols .pf-depth-chart-score,
 .pf-setpiece-chart-cols .pf-setpiece-chart-slot,
@@ -10043,8 +10030,7 @@ body[data-theme="light"] .pf-depth-undo-row {
 .pf-setpiece-chart-cols .pf-depth-chart-rank,
 .pf-setpiece-chart-cols .pf-depth-chart-age,
 .pf-setpiece-chart-cols .pf-depth-chart-height,
-.pf-setpiece-chart-cols .pf-depth-chart-feet,
-.pf-setpiece-chart-cols .pf-depth-chart-rec {
+.pf-setpiece-chart-cols .pf-depth-chart-feet {
     text-align: center;
 }
 
@@ -10055,7 +10041,7 @@ body[data-theme="light"] .pf-depth-undo-row {
     text-align: left;
 }
 
-/* Injury / score / slot cols stretch; Rec stays a compact pill like depth chart. */
+/* Injury / score / slot cols stretch. */
 .pf-setpiece-chart-cols .pf-depth-chart-injury,
 .pf-setpiece-chart-cols .pf-depth-chart-score,
 .pf-setpiece-chart-cols .pf-setpiece-chart-slot,
@@ -10336,7 +10322,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
         3.5rem
         minmax(4.75rem, 0.78fr)
         minmax(5.5rem, 0.55fr)
-        2.85rem
         2.5rem
         3.35rem
         2.95rem
@@ -10345,7 +10330,7 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
     gap: 0.3rem 0.4rem;
     align-items: center;
     padding: 0.5rem 0.7rem;
-    min-width: 67rem;
+    min-width: 64rem;
     box-sizing: border-box;
 }
 
@@ -10374,7 +10359,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 .pf-depth-chart-cols .pf-depth-chart-club,
 .pf-depth-chart-cols .pf-depth-chart-age,
 .pf-depth-chart-cols .pf-depth-chart-height,
-.pf-depth-chart-cols .pf-depth-chart-rec,
 .pf-depth-chart-cols .pf-depth-chart-injury,
 .pf-depth-chart-cols .pf-depth-chart-mins,
 .pf-depth-chart-cols .pf-depth-chart-score,
@@ -10396,7 +10380,6 @@ body[data-theme="light"] .pf-depth-chart-drop-line {
 .pf-depth-chart-cols .pf-depth-chart-age,
 .pf-depth-chart-cols .pf-depth-chart-height,
 .pf-depth-chart-cols .pf-depth-chart-feet,
-.pf-depth-chart-cols .pf-depth-chart-rec,
 .pf-depth-chart-cols .pf-depth-chart-injury,
 .pf-depth-chart-cols .pf-depth-chart-mins,
 .pf-depth-chart-cols .pf-depth-chart-score,
@@ -10942,7 +10925,6 @@ body[data-theme="light"] .pf-depth-chart-div.pf-div-amateur.pf-div-limited {
 .pf-depth-chart-age,
 .pf-depth-chart-height,
 .pf-depth-chart-mins,
-.pf-depth-chart-rec,
 .pf-depth-chart-injury {
     text-align: center;
     justify-self: center;
@@ -11037,21 +11019,6 @@ body[data-theme="light"] .pf-depth-chart-pos.is-partial {
 .pf-depth-chart-pos.is-ineligible {
     color: var(--app-danger);
     font-weight: 700;
-}
-
-.pf-depth-chart-rec {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.7rem;
-    padding: 0.12rem 0.35rem;
-    border-radius: 6px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.pf-depth-chart-rec.is-graded {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
 }
 
 .pf-depth-chart-mins.is-meet,
@@ -11206,7 +11173,6 @@ body[data-theme="light"] .pf-depth-chart-section {
             "rank feet"
             "rank club"
             "rank div"
-            "rank rec"
             "rank injury"
             "rank score"
             "rank mins"
@@ -11261,11 +11227,6 @@ body[data-theme="light"] .pf-depth-chart-section {
 
     .pf-depth-chart-div {
         grid-area: div;
-        justify-self: start;
-    }
-
-    .pf-depth-chart-rec {
-        grid-area: rec;
         justify-self: start;
     }
 

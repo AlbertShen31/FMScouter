@@ -1,4 +1,4 @@
-"""Shared player DataTable shell, identity styles, Feet cells, and Rec coloring."""
+"""Shared player DataTable shell, identity styles, and Feet cells."""
 from __future__ import annotations
 
 import re
@@ -17,7 +17,6 @@ IDENTITY_TEXT_COLS = frozenset(
         "Position",
         "Feet",
         "Club",
-        "Rec",
         "Injury",
         "Division",
         "Nation",
@@ -217,9 +216,6 @@ _SALARY_PERIOD_LABEL = re.compile(
     r"\s*(?:p/[amw]|per\s+(?:annum|year|month|week)|/?\s*(?:pa|pw|pm))\b.*$",
     re.IGNORECASE,
 )
-
-_REC_SUFFIX = {"+": 0, "": 1, "-": 2}
-_REC_PATTERN = re.compile(r"^([A-Za-z])\s*([+-])?$")
 
 FOOT_STRENGTH_COLORS = {
     FootStrength.VERY_WEAK: "#7f1d1d",
@@ -724,19 +720,6 @@ def feet_sort_key(row: dict) -> tuple:
     return (0, max(l_n, r_n), l_n + r_n) if (l_n or r_n) else (1, 0, 0)
 
 
-def rec_sort_key(value) -> tuple:
-    """A+ before A before A- before B+, with blanks last."""
-    text = str(value or "").strip()
-    if not text or text in ("-", "—"):
-        return (2, 99, 99, text)
-    match = _REC_PATTERN.match(text)
-    if not match:
-        return (1, 99, 99, text.casefold())
-    letter = match.group(1).upper()
-    suffix = match.group(2) or ""
-    return (0, ord(letter) - ord("A"), _REC_SUFFIX[suffix], text)
-
-
 def style_table() -> dict:
     return {
         "overflowX": "auto",
@@ -1033,53 +1016,8 @@ def table_css(
     return rules
 
 
-def _rec_grades() -> list[str]:
-    grades = [f"{letter}{suffix}" for letter in "ABCDE" for suffix in ("+", "", "-")]
-    grades.append("F")
-    return grades
-
-
 def _lerp_channel(a: int, b: int, t: float) -> int:
     return int(round(a + (b - a) * t))
-
-
-def rec_grade_style(value, theme: str | None = None) -> dict[str, str] | None:
-    """Inline bg/color for a Rec grade (A+…F), matching table highlights."""
-    text = str(value or "").strip()
-    if not text or text in ("-", "—"):
-        return None
-    grades = _rec_grades()
-    try:
-        index = grades.index(text)
-    except ValueError:
-        # Tolerate spaced forms like "A +"
-        compact = re.sub(r"\s+", "", text)
-        try:
-            index = grades.index(compact)
-        except ValueError:
-            return None
-    dark = is_dark_theme(theme)
-    green_bg = (22, 101, 52) if dark else (220, 252, 231)
-    red_bg = (127, 29, 29) if dark else (254, 226, 226)
-    green_fg = (74, 222, 128) if dark else (21, 128, 61)
-    red_fg = (252, 165, 165) if dark else (185, 28, 28)
-    last = max(len(grades) - 1, 1)
-    t = index / last
-    bg = "#{:02x}{:02x}{:02x}".format(
-        _lerp_channel(green_bg[0], red_bg[0], t),
-        _lerp_channel(green_bg[1], red_bg[1], t),
-        _lerp_channel(green_bg[2], red_bg[2], t),
-    )
-    fg = "#{:02x}{:02x}{:02x}".format(
-        _lerp_channel(green_fg[0], red_fg[0], t),
-        _lerp_channel(green_fg[1], red_fg[1], t),
-        _lerp_channel(green_fg[2], red_fg[2], t),
-    )
-    return {
-        "backgroundColor": bg,
-        "color": fg,
-        "fontWeight": "750",
-    }
 
 
 def _identity_pill_chrome(*, font_weight: str = "700") -> dict[str, str]:
@@ -1089,15 +1027,6 @@ def _identity_pill_chrome(*, font_weight: str = "700") -> dict[str, str]:
         "padding": "2px 8px",
         "fontWeight": font_weight,
     }
-
-
-def rec_identity_style(value, theme: str | None = None) -> dict[str, str] | None:
-    """Rec grade pill for player modals (matches shortlist table colors)."""
-    base = rec_grade_style(value, theme)
-    if not base:
-        return None
-    weight = str(base.get("fontWeight", "750"))
-    return {**base, **_identity_pill_chrome(font_weight=weight)}
 
 
 _RATING_COLOR_RED = (255, 92, 92)
@@ -1162,27 +1091,6 @@ def avg_rating_identity_style(value, theme: str | None = None) -> dict[str, str]
         "backgroundColor": bg,
         "color": fg,
     }
-
-
-def rec_highlight_styles(theme: str | None = None) -> list[dict]:
-    """Color Rec from green (A+) to red (F)."""
-    rules = []
-    grades = _rec_grades()
-    for grade in grades:
-        style = rec_grade_style(grade, theme)
-        if not style:
-            continue
-        rules.append(
-            {
-                "if": {
-                    "filter_query": f'{{Rec}} = "{grade}"',
-                    "column_id": "Rec",
-                },
-                "backgroundColor": style["backgroundColor"],
-                "color": style["color"],
-            }
-        )
-    return rules
 
 
 def identity_data_styles(
@@ -1252,20 +1160,6 @@ def identity_data_styles(
             "minWidth": "84px",
             "width": "84px",
             "overflow": "visible",
-        },
-        {
-            "if": {"column_id": "Rec"},
-            "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-            "fontSize": "13px",
-            "letterSpacing": "0.03em",
-            "fontWeight": "700",
-            "textAlign": "center",
-            # Fits "A+" / header "Rec" + sort chevron.
-            "minWidth": "48px",
-            "width": "48px",
-            "maxWidth": "52px",
-            "paddingLeft": "4px",
-            "paddingRight": "4px",
         },
         {
             "if": {"column_id": "Age"},
@@ -1366,7 +1260,6 @@ def identity_data_styles(
                 },
             ]
         )
-    rules.extend(rec_highlight_styles(theme))
     rules.extend(division_highlight_styles(theme))
     rules.extend(personality_highlight_styles(theme, settings=settings))
     if extra:

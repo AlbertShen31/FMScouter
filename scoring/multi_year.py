@@ -137,7 +137,6 @@ IDENTITY_COPY_KEYS = (
     "height",
     "left_foot",
     "right_foot",
-    "rec",
     "inf",
     "injury",
     "injured_on",

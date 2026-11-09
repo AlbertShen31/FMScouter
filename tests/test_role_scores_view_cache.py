@@ -66,11 +66,11 @@ def test_project_role_rows_keeps_identity_and_roles():
     }
     assert projected[1] == {"Name": "Ben", "VOL": 10}
     with_extra = cache.project_role_rows(
-        [{"Name": "Ada", "Rec": "A"}],
+        [{"Name": "Ada", "Inf": "Inj Prone"}],
         role_labels=[],
-        extra_keys={"Rec"},
+        extra_keys={"Inf"},
     )
-    assert with_extra == [{"Name": "Ada", "Rec": "A"}]
+    assert with_extra == [{"Name": "Ada", "Inf": "Inj Prone"}]
 
 
 def test_clear_markdown(monkeypatch):

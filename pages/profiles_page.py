@@ -38,8 +38,6 @@ from components.player_table import (
     nation_tooltip_text,
     page_size_select_data,
     player_data_table,
-    rec_grade_style,
-    rec_sort_key,
     slot_foot_req_icons,
     style_cell,
     style_cell_conditional,
@@ -481,8 +479,6 @@ def _profile_sort_key(column_id: str, row: dict) -> tuple:
     else:
         if column_id == "Feet":
             return feet_sort_key(row)
-        if column_id == "Rec":
-            return rec_sort_key(row.get(column_id))
         if column_id in TABLE_TEXT_COLS:
             text = (
                 name_sort_text(row.get(column_id))
@@ -507,7 +503,7 @@ def _profile_sort_key(column_id: str, row: dict) -> tuple:
 def _is_percentile_sort_column(column_id: str) -> bool:
     if not column_id or column_id in TABLE_TEXT_COLS:
         return False
-    if column_id in ("Feet", "Rec", "Minutes", "Age", "Height"):
+    if column_id in ("Feet", "Minutes", "Age", "Height"):
         return False
     return column_id in PCT_COLS or column_id in ("Score",)
 
@@ -2926,18 +2922,6 @@ def _depth_mins_cell(value, settings=None, *, minutes_required=None) -> html.Spa
     )
 
 
-def _depth_rec_cell(value, theme=None) -> html.Span:
-    text = _blank(value)
-    style = rec_grade_style(text, theme) if text != "—" else None
-    props = {
-        "className": "pf-depth-chart-rec" + (" is-graded" if style else ""),
-        **_depth_tip_attrs(text if text != "—" else None),
-    }
-    if style:
-        props["style"] = style
-    return html.Span(text, **props)
-
-
 def _depth_injury_cell(row: dict, player: dict | None = None):
     player = player if isinstance(player, dict) else {}
     injury = row.get("Injury") if row.get("Injury") not in (None, "", "-", "—") else player.get("injury")
@@ -3060,7 +3044,6 @@ def _depth_chart_player_row(
             html.Span("—", className="pf-depth-chart-feet"),
             html.Span("—", className="pf-depth-chart-club"),
             html.Span("—", className="pf-depth-chart-div"),
-            html.Span("—", className="pf-depth-chart-rec"),
             html.Span("—", className="pf-depth-chart-injury"),
             html.Div(
                 html.Span("—", className="pf-depth-chart-metric"),
@@ -3229,7 +3212,6 @@ def _depth_chart_player_row(
             nation=row.get("Based In") or row.get("based_in") or row.get("Nation"),
             row=row,
         ),
-        _depth_rec_cell(row.get("Rec"), theme=theme),
         _depth_injury_cell(row, player),
         html.Div(
             _depth_score_cell(
@@ -3332,7 +3314,6 @@ def _depth_chart_col_headers(
         html.Span("Feet", className="pf-depth-chart-feet"),
         html.Span("Club", className="pf-depth-chart-club"),
         html.Span("Division", className="pf-depth-chart-div"),
-        html.Span("Rec", className="pf-depth-chart-rec"),
         html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
         html.Span("Score", className="pf-depth-chart-score"),
         html.Span("Mins", className="pf-depth-chart-mins"),
@@ -3554,7 +3535,6 @@ def _setpiece_chart_col_headers(*, show_height: bool, score_abbr: str) -> html.D
             html.Span("Feet", className="pf-depth-chart-feet"),
             html.Span("Club", className="pf-depth-chart-club"),
             html.Span("Division", className="pf-depth-chart-div"),
-            html.Span("Rec", className="pf-depth-chart-rec"),
             html.Span("INJ", className="pf-depth-chart-injury", title="Injury"),
             html.Span(
                 score_abbr or "Score",
@@ -3608,7 +3588,6 @@ def _setpiece_chart_player_row(
                 html.Span("—", className="pf-depth-chart-feet"),
                 html.Span("—", className="pf-depth-chart-club"),
                 html.Span("—", className="pf-depth-chart-div"),
-                html.Span("—", className="pf-depth-chart-rec"),
                 html.Span("—", className="pf-depth-chart-injury"),
                 html.Div(
                     html.Span("—", className="pf-depth-chart-metric"),
@@ -3713,7 +3692,6 @@ def _setpiece_chart_player_row(
                 or (player.get("nation") if player else None),
                 row=row,
             ),
-            _depth_rec_cell(row.get("Rec"), theme=theme),
             _depth_injury_cell(row, player),
             html.Div(
                 _depth_score_cell(score, settings, theme=theme),
@@ -4392,7 +4370,6 @@ _PF_COL_MIN_WIDTHS: dict[str, str] = {
     "Age": "48px",
     "Height": "52px",
     "Feet": "72px",
-    "Rec": "48px",
     "Injury": "40px",
     "Nation": "64px",
     "Inf": "40px",
@@ -4445,14 +4422,14 @@ def _pf_col_box(column_id: str, *, header: bool = False) -> dict:
             box["padding"] = "8px 14px 8px 6px"
         else:
             box["padding"] = "8px 4px"
-        if column_id in ("Rank", "Score", "overall", "Age", "Rec"):
+        if column_id in ("Rank", "Score", "overall", "Age"):
             box["fontWeight"] = "700"
         elif column_id not in _PF_LEFT_COLS:
             box["fontWeight"] = "600"
     else:
-        if column_id in ("Rank", "Age", "Rec", "Score", "Minutes", *PCT_COLS):
+        if column_id in ("Rank", "Age", "Score", "Minutes", *PCT_COLS):
             box["fontVariantNumeric"] = "tabular-nums"
-        if column_id in ("Rank", "Rec"):
+        if column_id == "Rank":
             box["fontWeight"] = "700"
         elif column_id == "Minutes":
             box["fontWeight"] = "650"
@@ -4474,7 +4451,6 @@ def _table_header_styles(*, include_role: bool = False, include_score: bool = Fa
         "Age",
         "Height",
         "Feet",
-        "Rec",
         "Injury",
         "Nation",
         "Inf",
@@ -4503,7 +4479,6 @@ def _role_metric_styles() -> list[dict]:
         "Age",
         "Height",
         "Feet",
-        "Rec",
         "Injury",
         "Nation",
         "Inf",
@@ -4525,7 +4500,6 @@ def _pct_metric_styles() -> list[dict]:
         "Age",
         "Height",
         "Feet",
-        "Rec",
         "Injury",
         "Nation",
         "Inf",

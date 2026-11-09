@@ -63,7 +63,6 @@ from components.player_table import (
     nation_cell,
     nation_tooltip_entry,
     player_data_table,
-    rec_sort_key,
     resolve_division_highlight,
     style_cell,
     style_cell_conditional,
@@ -921,8 +920,6 @@ def _column_sort_key(
 ) -> tuple:
     if column_id == "Feet" and row is not None:
         return feet_sort_key(row)
-    if column_id == "Rec":
-        return rec_sort_key(value)
     if column_id in ("Salary", "Transfer Value"):
         return finance_sort_key(row, column_id, desc=desc)
     if column_id in TABLE_TEXT_COLS:
@@ -947,7 +944,7 @@ def _is_percentile_sort_column(column_id: str) -> bool:
     """Avg percentile cols + metric cells (colored rates / %)."""
     if not column_id or column_id in TABLE_TEXT_COLS:
         return False
-    if column_id in ("Feet", "Rec", "Minutes", "Age", "Height"):
+    if column_id in ("Feet", "Minutes", "Age", "Height"):
         return False
     return True
 
@@ -1362,7 +1359,6 @@ def _identity_cells(
         "Height": lambda: _display_blank(player.get("height")),
         "Position": lambda: player.get("position") or "—",
         "Club": lambda: player.get("club") or "—",
-        "Rec": lambda: _display_blank(player.get("rec")),
         "Injury": lambda: injury_cell(player.get("injury")),
         "Division": lambda: _display_blank(player.get("division")),
         "Nation": lambda: nation_cell(

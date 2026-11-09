@@ -115,7 +115,6 @@ from components.player_table import (
     nation_cell,
     nation_tooltip_entry,
     player_data_table,
-    rec_sort_key,
     style_cell,
     style_cell_conditional,
     style_header,
@@ -2041,8 +2040,6 @@ def _column_sort_key(
 ):
     if column_id == "Feet" and row is not None:
         return feet_sort_key(row)
-    if column_id == "Rec":
-        return rec_sort_key(value)
     if column_id in ("Salary", "Transfer Value"):
         return finance_sort_key(row, column_id, desc=desc)
     blank = value in (None, "", "-")

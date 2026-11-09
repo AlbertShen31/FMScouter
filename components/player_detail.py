@@ -432,7 +432,6 @@ def _merge_stats_identity(display_player: dict, stats_player: dict) -> dict:
         "height",
         "left_foot",
         "right_foot",
-        "rec",
         "injury",
         "recurring_injury",
         "injured_on",
