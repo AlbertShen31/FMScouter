@@ -184,6 +184,8 @@ _CUPISH_NAME_PARTS: tuple[str, ...] = (
     "cup",
     "cupa",
     "copa",
+    "coupe",
+    "beker",
     "taça",
     "taca",
     "supercup",
