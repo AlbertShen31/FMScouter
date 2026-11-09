@@ -178,5 +178,7 @@ data/views/*
 data/profiles/*
 !data/profiles/.gitkeep
 !data/profiles/README.md
+data/careers/*
+!data/careers/.gitkeep
 # Auto-collected leagues with no known tier (extend scoring/division_tiers.py from these)
 data/unknown_divisions.json

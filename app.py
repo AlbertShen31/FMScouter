@@ -138,6 +138,11 @@ app.layout = dmc.MantineProvider(
                                         href="/save-export",
                                         id="nav-item-save-export",
                                     ),
+                                    dbc.DropdownMenuItem(
+                                        "Careers",
+                                        href="/careers",
+                                        id="nav-item-careers",
+                                    ),
                                 ],
                                 label="Data",
                                 id="nav-menu-data",
@@ -227,7 +232,7 @@ app.clientside_callback(
         const on = (href) => path === href;
         const toggleCls = (active) =>
             active ? "app-nav-toggle active" : "app-nav-toggle";
-        const dataOn = on("/uploads") || on("/save-export");
+        const dataOn = on("/uploads") || on("/save-export") || on("/careers");
         const setupOn =
             on("/squad-finance") ||
             on("/role-config") ||
@@ -243,6 +248,7 @@ app.clientside_callback(
             toggleCls(setupOn),
             on("/uploads"),
             on("/save-export"),
+            on("/careers"),
             on("/squad-finance"),
             on("/role-config"),
             on("/formations"),
@@ -259,6 +265,7 @@ app.clientside_callback(
     Output("nav-menu-setup", "toggle_class_name"),
     Output("nav-item-uploads", "active"),
     Output("nav-item-save-export", "active"),
+    Output("nav-item-careers", "active"),
     Output("nav-item-squad-finance", "active"),
     Output("nav-item-role-configs", "active"),
     Output("nav-item-formations", "active"),

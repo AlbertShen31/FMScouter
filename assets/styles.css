@@ -11902,3 +11902,94 @@ body[data-theme="light"] .ss-attr-row.is-key {
         grid-template-columns: 1fr;
     }
 }
+
+/* Careers page */
+.cr-inline-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.cr-inline-row .cr-inline-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cr-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.cr-csv-drop {
+    border: 1px dashed var(--app-line);
+    border-radius: 10px;
+    background: var(--app-input);
+    color: var(--app-muted);
+    padding: 0.85rem 1rem;
+    text-align: center;
+    cursor: pointer;
+}
+
+.cr-csv-drop:hover {
+    border-color: var(--app-accent);
+    color: var(--app-text);
+}
+
+.cr-seasons-table {
+    background: var(--app-card);
+    color: var(--app-text);
+}
+
+.cr-seasons-table th {
+    color: var(--app-muted);
+    font-weight: 600;
+    border-color: var(--app-line);
+}
+
+.cr-seasons-table td {
+    border-color: var(--app-line);
+    vertical-align: middle;
+}
+
+.cr-season-row.is-active {
+    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-card));
+}
+
+.cr-season-label.is-active {
+    color: var(--app-accent);
+    font-weight: 600;
+}
+
+.cr-slot {
+    display: inline-block;
+    font-size: 0.82rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    border: 1px solid var(--app-line);
+}
+
+.cr-slot.empty {
+    color: var(--app-muted);
+    background: transparent;
+}
+
+.cr-slot.filled {
+    color: var(--app-text);
+    background: color-mix(in srgb, var(--app-input) 80%, var(--app-card));
+}
+
+html[data-theme="light"] .cr-csv-drop,
+body[data-theme="light"] .cr-csv-drop {
+    background: var(--app-input);
+}
+
+.cr-status-alert {
+    border: 1px solid var(--app-line);
+}
+
+.cr-page .rs-shortlist-busy-host {
+    position: relative;
+    min-height: 12rem;
+}

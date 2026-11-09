@@ -46,6 +46,11 @@ PROFILES_PACKS_DIR = PROFILES_DIR / "packs"
 PROFILES_ACTIVE_PATH = PROFILES_DIR / "active.json"
 PROFILES_BACKUPS_DIR = PROFILES_DIR / "backups"
 
+# FM career game containers (separate from formation profile libraries).
+CAREERS_DIR = DATA_DIR / "careers"
+CAREERS_PACKS_DIR = CAREERS_DIR / "packs"
+CAREERS_ACTIVE_PATH = CAREERS_DIR / "active.json"
+
 # Leagues with no known tier (filled while browsing; used to extend division_tiers).
 UNKNOWN_DIVISIONS_PATH = DATA_DIR / "unknown_divisions.json"
 
