@@ -17,12 +17,12 @@ register_page(__name__, path="/save-export", name="Save export")
 
 PAGE_TIP = (
     "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
-    "(attributes + OVERALL season stats + contract finance + current injuries). FM27 field "
-    "meanings stay unconfirmed in fmsave; Pressures columns are empty on FM27; Recurring "
-    "Injury stays blank. Choosing a save preloads players so filter changes show a live "
-    "export count. Generate reuses those players and only reopens the save for season stats "
-    "/ divisions / injuries. The CSV always goes to Uploads (precompute continues in the "
-    "background); optionally download a CSV as well."
+    "(attributes + OVERALL season stats + contract finance). Injury columns stay blank. "
+    "FM27 field meanings stay unconfirmed in fmsave; Pressures columns are empty on FM27. "
+    "Choosing a save preloads players so filter changes show a live export count. Generate "
+    "reuses those players and only reopens the save for season stats / divisions. The CSV "
+    "always goes to Uploads (precompute continues in the background); optionally download a "
+    "CSV as well."
 )
 
 _SCOPE_OPTIONS = [
