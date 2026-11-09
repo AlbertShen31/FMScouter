@@ -446,6 +446,72 @@ def extract_players_from_csv(
     return players, meta
 
 
+def peek_classification(
+    *,
+    save_path: str | Path | None = None,
+    csv_text: str | None = None,
+    source_name: str = "",
+    game_date_override: str | None = None,
+) -> dict[str, Any]:
+    """Return season/slot/date classification without extracting players.
+
+    For .fm saves this only opens the save header (``info.game_date``).
+    For CSV, classification comes from the date override (CSV has no save date).
+    """
+    override = _parse_date(game_date_override)
+    if override is not None:
+        classification = classify_import(override)
+        source = "fmsave" if save_path else ("csv" if csv_text is not None else "override")
+        return {
+            "classification": classification,
+            "meta": {
+                "source": source,
+                "source_name": (
+                    Path(save_path).name
+                    if save_path
+                    else (source_name or ("upload.csv" if csv_text is not None else ""))
+                ),
+                "game_date": override.isoformat(),
+            },
+        }
+
+    if save_path:
+        import fmsave
+
+        path = Path(save_path).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(f"Save file not found: {path}")
+        competition_names = fms.competition_name_map() or None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with fmsave.open(path, competition_names=competition_names) as career_save:
+                game_date = career_save.info.game_date
+        classification = classify_import(game_date)
+        return {
+            "classification": classification,
+            "meta": {
+                "source": "fmsave",
+                "source_name": path.name,
+                "game_date": game_date.isoformat() if game_date else None,
+            },
+        }
+
+    if csv_text is not None:
+        if not str(csv_text).strip():
+            raise ValueError("CSV is empty")
+        classification = classify_import(None)
+        return {
+            "classification": classification,
+            "meta": {
+                "source": "csv",
+                "source_name": source_name or "upload.csv",
+                "game_date": classification.get("game_date"),
+            },
+        }
+
+    raise ValueError("Choose a .fm save or drop a Moneyball CSV first.")
+
+
 def preview_import(
     *,
     save_path: str | Path | None = None,
@@ -454,7 +520,7 @@ def preview_import(
     scope: str = "all",
     game_date_override: str | None = None,
 ) -> dict[str, Any]:
-    """Extract players and return classification preview without writing."""
+    """Extract players and return classification without writing (Import path)."""
     override = _parse_date(game_date_override)
     if save_path:
         players, meta = extract_players_from_fm(save_path, scope=scope)

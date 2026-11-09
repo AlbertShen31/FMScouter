@@ -167,3 +167,20 @@ def test_manual_slot_override(career_root):
     assert season["label"] == "Custom 26/27"
     assert season["slots"]["end"] is not None
     assert season["slots"]["mid"] is None
+
+
+def test_peek_classification_uses_date_without_players():
+    csv_text = (
+        "Player;Unique ID;Age\n"
+        "Ada;1001;24\n"
+    )
+    peek = career_import.peek_classification(
+        csv_text=csv_text,
+        source_name="mid.csv",
+        game_date_override="2026-12-20",
+    )
+    assert peek["classification"]["label"] == "2026/27"
+    assert peek["classification"]["slot"] == "mid"
+    assert peek["classification"]["game_date"] == "2026-12-20"
+    assert peek["meta"]["source"] == "csv"
+    assert "players" not in peek

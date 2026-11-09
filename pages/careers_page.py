@@ -159,8 +159,9 @@ def layout(**_kwargs):
             html.H4("Careers", className="mb-2"),
             html.P(
                 "Separate from Uploads and formation Profiles. One career per FM game, "
-                "with mid/end snapshots per season. Preview/Import of full .fm saves can "
-                "take a while — a progress overlay covers this page while they run.",
+                "with mid/end snapshots per season. Preview only reads the save date to "
+                "fill season/slot; Import extracts players and can take a while — a "
+                "progress overlay covers this page while it runs.",
                 className="text-muted mb-3",
             ),
             html.Div(
@@ -255,8 +256,9 @@ def layout(**_kwargs):
                                         _card_header(
                                             "2. Import snapshot",
                                             "Import .fm (preferred) or Moneyball CSV. "
-                                            "Season label and mid/end slot are suggested "
-                                            "from the save date; override before "
+                                            "Use Preview to fill season label / slot / "
+                                            "game date from the save header, then Import "
+                                            "to extract players. Override fields before "
                                             "confirming. Occupied slots can be replaced.",
                                             "cr-import-tip",
                                         ),
@@ -683,7 +685,7 @@ clientside_callback(
             if (!previewN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
-            labelText = "Previewing save…";
+            labelText = "Reading save date…";
         } else if (prop.indexOf("cr-import") !== -1) {
             if (!importN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -813,7 +815,22 @@ def cr_preview_or_import(
             next_tick,
         )
 
-    def _load_preview():
+    def _peek():
+        if fm_path and str(fm_path).strip():
+            return career_import.peek_classification(
+                save_path=str(fm_path).strip(),
+                game_date_override=game_date or None,
+            )
+        if csv_contents:
+            text = decode_upload(csv_contents)
+            return career_import.peek_classification(
+                csv_text=text,
+                source_name=csv_filename or "upload.csv",
+                game_date_override=game_date or None,
+            )
+        raise ValueError("Choose a .fm save or drop a Moneyball CSV first.")
+
+    def _load_extract():
         if fm_path and str(fm_path).strip():
             return career_import.preview_import(
                 save_path=str(fm_path).strip(),
@@ -843,23 +860,22 @@ def cr_preview_or_import(
         )
 
     if triggered == "cr-preview":
-        compute_progress.begin("Previewing save…", phase="Opening save…")
-        preview = None
+        compute_progress.begin("Reading save date…", phase="Opening save…")
+        peek = None
         try:
-            preview = _load_preview()
+            peek = _peek()
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc), pending_out=None)
         compute_progress.end()
-        classification = preview["classification"]
-        meta = preview["meta"]
+        classification = peek["classification"]
+        meta = peek["meta"]
         summary = (
-            f"Preview complete — {meta.get('player_count', 0):,} players · "
-            f"source={meta.get('source')} · "
-            f"suggested {classification.get('label')} / {classification.get('slot')}"
+            f"Preview complete — suggested {classification.get('label')} / "
+            f"{classification.get('slot')} · "
+            f"date={classification.get('game_date') or '—'} · "
+            f"source={meta.get('source')}"
         )
-        if meta.get("managed_club_name"):
-            summary += f" · club={meta['managed_club_name']}"
         return (
             classification.get("label"),
             classification.get("slot"),
@@ -868,7 +884,6 @@ def cr_preview_or_import(
             {
                 "classification": classification,
                 "source": meta.get("source"),
-                "player_count": meta.get("player_count"),
             },
             False,
             no_update,
@@ -888,10 +903,11 @@ def cr_preview_or_import(
             phase="Opening save…",
         )
         try:
-            preview = _load_preview()
-            players = preview["players"]
-            meta = preview["meta"]
-            classification = preview["classification"]
+            # Form game_date/season_label/slot come from Preview (or manual edits).
+            extracted = _load_extract()
+            players = extracted["players"]
+            meta = extracted["meta"]
+            classification = extracted["classification"]
             if season_label:
                 classification = {
                     **classification,
