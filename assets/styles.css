@@ -11937,24 +11937,55 @@ body[data-theme="light"] .ss-attr-row.is-key {
     color: var(--app-text);
 }
 
-.cr-seasons-table {
-    background: var(--app-card);
+.cr-seasons-table,
+.cr-seasons-table.table {
+    --bs-table-bg: var(--app-card);
+    --bs-table-color: var(--app-text);
+    --bs-table-border-color: var(--app-line);
+    --bs-table-striped-bg: color-mix(in srgb, var(--app-input) 55%, var(--app-card));
+    --bs-table-striped-color: var(--app-text);
+    --bs-table-hover-bg: var(--app-row-hover);
+    --bs-table-hover-color: var(--app-text);
+    --bs-table-accent-bg: transparent;
+    background-color: var(--app-card);
     color: var(--app-text);
+    border-color: var(--app-line);
+}
+
+.cr-seasons-table > :not(caption) > * > * {
+    background-color: var(--bs-table-bg);
+    color: var(--bs-table-color);
+    border-bottom-color: var(--app-line);
 }
 
 .cr-seasons-table th {
     color: var(--app-muted);
     font-weight: 600;
     border-color: var(--app-line);
+    background-color: var(--app-card);
 }
 
 .cr-seasons-table td {
+    color: var(--app-text);
     border-color: var(--app-line);
     vertical-align: middle;
+    background-color: var(--app-card);
 }
 
-.cr-season-row.is-active {
-    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-card));
+.cr-seasons-table.table-hover > tbody > tr:hover > * {
+    --bs-table-color-state: var(--app-text);
+    --bs-table-bg-state: var(--table-hover-bg);
+    color: var(--app-text);
+    background-color: var(--table-hover-bg);
+}
+
+.cr-season-row.is-active > * {
+    background: color-mix(in srgb, var(--app-accent) 12%, var(--app-card)) !important;
+    color: var(--app-text);
+}
+
+.cr-season-label {
+    color: var(--app-text);
 }
 
 .cr-season-label.is-active {
