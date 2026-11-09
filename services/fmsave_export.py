@@ -167,6 +167,15 @@ BLANK_COLUMNS: tuple[str, ...] = (
     "Potential Silver",
     "World Reputation Gold",
     "World Reputation Silver",
+    # fmsave injury table has no recurring flag (Moneyball column kept empty).
+    "Recurring Injury",
+)
+
+_INJURY_COLUMNS: tuple[str, ...] = (
+    "Injury",
+    "Injured On",
+    "Time Missed",
+    "Recurring Injury",
 )
 
 # Soft-penalize these when voting a club's domestic division from fixtures.
@@ -1543,6 +1552,111 @@ def _season_columns(stats: Any | None) -> dict[str, str]:
     }
 
 
+def _format_injury_date(value: date | None) -> str:
+    if value is None:
+        return ""
+    return f"{value.month}/{value.day}/{value.year}"
+
+
+def _format_time_missed(days: int | None) -> str:
+    if days is None or days <= 0:
+        return ""
+    if days == 1:
+        return "1 day"
+    if days % 7 == 0:
+        weeks = days // 7
+        return "1 week" if weeks == 1 else f"{weeks} weeks"
+    return f"{days} days"
+
+
+def _empty_injury_columns() -> dict[str, str]:
+    return {col: "" for col in _INJURY_COLUMNS}
+
+
+def _injury_columns_for_player(
+    injury_by_uid: dict[int, dict[str, str]] | None,
+    player_uid: int | None,
+) -> dict[str, str]:
+    if injury_by_uid and player_uid is not None:
+        found = injury_by_uid.get(int(player_uid))
+        if found:
+            return {col: found.get(col, "") for col in _INJURY_COLUMNS}
+    return _empty_injury_columns()
+
+
+def _build_current_injury_by_uid(
+    career_save: Any,
+    *,
+    game_date: date | None,
+    uid_set: frozenset[int],
+) -> dict[int, dict[str, str]]:
+    """Map player uid → Moneyball Injury / Injured On / Time Missed for open injuries.
+
+    Current episodes are fmsave ``TYPED`` rows whose return date is on/after the
+    in-game date. ``Injured On`` / ``Time Missed`` come from the latest matching
+    ``HISTORY`` row on or before that return date (same pairing fmsave documents).
+    """
+    if game_date is None or not uid_set:
+        return {}
+    try:
+        import fmsave
+        from fmsave.models.injuries import InjuryRecordKind
+    except ImportError:
+        return {}
+
+    typed_by_uid: dict[int, Any] = {}
+    history_by_uid: dict[int, list[Any]] = {}
+    try:
+        for record in career_save.injuries():
+            player_uid = getattr(record, "player_uid", None)
+            if player_uid is None or int(player_uid) not in uid_set:
+                continue
+            uid = int(player_uid)
+            kind = getattr(record, "kind", None)
+            if kind == InjuryRecordKind.TYPED or kind == "typed":
+                ret = getattr(record, "date", None)
+                if ret is None or ret < game_date:
+                    continue
+                previous = typed_by_uid.get(uid)
+                # Furthest return date wins when multiple open episodes exist.
+                if previous is None or (
+                    getattr(previous, "date", None) is not None
+                    and ret > previous.date
+                ):
+                    typed_by_uid[uid] = record
+            elif kind == InjuryRecordKind.HISTORY or kind == "history":
+                history_by_uid.setdefault(uid, []).append(record)
+    except (fmsave.ReaderCheckError, fmsave.UnsupportedGameError, OSError, ValueError):
+        # Missing / unreadable injury section: leave Injury blank rather than fail export.
+        return {}
+
+    out: dict[int, dict[str, str]] = {}
+    for uid, typed in typed_by_uid.items():
+        type_name = (getattr(typed, "type_name", None) or "").strip()
+        injury_label = type_name or "Injured"
+        injured_on = ""
+        time_missed = ""
+        typed_date = getattr(typed, "date", None)
+        before_dates = [
+            row.date
+            for row in history_by_uid.get(uid, ())
+            if getattr(row, "date", None) is not None
+            and typed_date is not None
+            and row.date <= typed_date
+        ]
+        if before_dates and typed_date is not None:
+            onset = max(before_dates)
+            injured_on = _format_injury_date(onset)
+            time_missed = _format_time_missed((typed_date - onset).days)
+        out[uid] = {
+            "Injury": injury_label,
+            "Injured On": injured_on,
+            "Time Missed": time_missed,
+            "Recurring Injury": "",
+        }
+    return out
+
+
 def _finance_columns(player: Any) -> dict[str, str]:
     out: dict[str, str] = {
         "Salary": "",
@@ -1637,9 +1751,13 @@ def _player_row(
     season: Any | None,
     *,
     division: str = "",
+    injury_by_uid: dict[int, dict[str, str]] | None = None,
 ) -> dict[str, str]:
     row: dict[str, str] = {}
     row.update(_identity_columns(player, division=division))
+    row.update(
+        _injury_columns_for_player(injury_by_uid, getattr(player, "uid", None))
+    )
     row.update(_attribute_columns(player))
     row.update(_finance_columns(player))
     row.update(_season_columns(season))
@@ -1660,6 +1778,10 @@ def _column_order(sample: dict[str, str]) -> list[str]:
         "Position",
         "Sec. Position",
         "Height",
+        "Injury",
+        "Injured On",
+        "Time Missed",
+        "Recurring Injury",
         "Personality",
         "Left Foot",
         "Right Foot",
@@ -1942,6 +2064,13 @@ def export_moneyball_csv(
                 except (fmsave.ReaderCheckError, fmsave.UnsupportedGameError):
                     history_by_uid = {}
 
+            compute_progress.update(phase="Loading injuries…")
+            injury_by_uid = _build_current_injury_by_uid(
+                career_save,
+                game_date=game_date,
+                uid_set=uid_set,
+            )
+
             total_players = len(player_list)
             step = 1 if total_players <= 200 else max(1, total_players // 40)
             compute_progress.update(
@@ -1965,7 +2094,14 @@ def export_moneyball_csv(
                 division = ""
                 if player.club_uid is not None:
                     division = club_divisions.get(int(player.club_uid), "")
-                rows.append(_player_row(player, season, division=division))
+                rows.append(
+                    _player_row(
+                        player,
+                        season,
+                        division=division,
+                        injury_by_uid=injury_by_uid,
+                    )
+                )
                 if (
                     player_idx == 1
                     or player_idx == total_players
