@@ -2566,6 +2566,16 @@ def _pos_bar(rows: list[dict], active: str, foot: str, foot_thresholds=None) -> 
     )
 
 
+def _empty_depth_card_stats(meta: dict) -> dict:
+    return {
+        "meta": meta,
+        "avg": None,
+        "counts": {"elite": 0, "good": 0, "ok": 0, "poor": 0},
+        "total": 0,
+        "names": "",
+    }
+
+
 def _depth_card_stats(meta: dict, rows: list[dict], bands: dict) -> dict | None:
     column = meta["column"]
     eligible = [
@@ -2597,9 +2607,29 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
     column = meta["column"]
     avg = stats["avg"]
     counts = stats["counts"]
-    total = stats["total"]
+    total = int(stats["total"] or 0)
+    empty = total <= 0 or avg is None
     active = " active" if column in _focus_roles(focus_roles) else ""
+    empty_cls = " is-empty" if empty else ""
     label = meta.get("short_label") or meta["name"]
+    if empty:
+        avg_el = html.Span("—", className="rs-depth-avg")
+        bar_children = []
+        names = stats["names"] or "No eligible players"
+    else:
+        avg_el = html.Span(
+            f"{float(avg):.1f}",
+            className=f"rs-depth-avg rs-band-{score_band(float(avg), **bands)}",
+        )
+        bar_children = [
+            html.Div(
+                className=f"rs-depth-seg {band}",
+                style={"width": f"{counts[band] / total * 100:.1f}%"},
+            )
+            for band in ("elite", "good", "ok", "poor")
+            if counts[band]
+        ]
+        names = stats["names"]
     children = [
         html.Div(
             [
@@ -2620,24 +2650,11 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
         html.Div(
             [
                 html.Span("Avg", className="rs-depth-avg-label"),
-                html.Span(
-                    f"{avg:.1f}",
-                    className=f"rs-depth-avg rs-band-{score_band(avg, **bands)}",
-                ),
+                avg_el,
             ],
             className="rs-depth-avg-row",
         ),
-        html.Div(
-            [
-                html.Div(
-                    className=f"rs-depth-seg {band}",
-                    style={"width": f"{counts[band] / total * 100:.1f}%"},
-                )
-                for band in ("elite", "good", "ok", "poor")
-                if counts[band]
-            ],
-            className="rs-depth-bar",
-        ),
+        html.Div(bar_children, className="rs-depth-bar"),
         html.Div(
             [
                 html.Div(
@@ -2656,13 +2673,13 @@ def _depth_card_from_stats(stats: dict, focus_roles, bands: dict) -> html.Button
             ],
             className="rs-depth-tiers",
         ),
-        html.Div(stats["names"], className="rs-depth-players"),
+        html.Div(names, className="rs-depth-players"),
     ]
     return html.Button(
         children,
         id={"type": "rs-depth", "role": meta.get("ref") or meta["id"]},
         n_clicks=0,
-        className="rs-depth-card" + active,
+        className="rs-depth-card" + active + empty_cls,
         title=meta.get("compact") or meta["name"],
         **{"data-rs-role": column},
     )
@@ -2680,13 +2697,19 @@ def _depth_panel(
     *,
     hybrids_only: bool = False,
 ) -> list:
-    """Cards for every role scored in section 2; focus_roles drives table + active highlight."""
-    if not rows or not (role_ids or combos):
+    """Cards for every role scored in section 2; focus_roles drives table + active highlight.
+
+    Formation / hybrid combo roles always get a card (empty when no eligible players).
+    Plain role cards still omit roles with zero eligible players.
+    """
+    if not (role_ids or combos):
         return []
     bands = us.normalize(bands)["bands"]
     combo_items = normalize_combos(combos)
+    row_list = list(rows or [])
     sig = (
-        id(rows),
+        id(rows) if rows is not None else None,
+        len(row_list),
         tuple(role_ids),
         tuple((item["ip"], item["oop"]) for item in combo_items),
         bool(hybrids_only),
@@ -2700,16 +2723,16 @@ def _depth_panel(
         for item in combo_items:
             combo_parts.add(item["ip"])
             combo_parts.add(item["oop"])
-            payload = _depth_card_stats(
-                combo_meta(item["ip"], item["oop"]), rows, bands
+            meta = combo_meta(item["ip"], item["oop"])
+            payload = _depth_card_stats(meta, row_list, bands) or _empty_depth_card_stats(
+                meta
             )
-            if payload:
-                stats_list.append(payload)
+            stats_list.append(payload)
         if not hybrids_only:
             for role_id in role_ids:
                 if role_id in combo_parts:
                     continue
-                payload = _depth_card_stats(role_meta(role_id), rows, bands)
+                payload = _depth_card_stats(role_meta(role_id), row_list, bands)
                 if payload:
                     stats_list.append(payload)
         _DEPTH_STATS_CACHE["sig"] = sig
