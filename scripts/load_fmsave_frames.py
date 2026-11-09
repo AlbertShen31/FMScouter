@@ -223,19 +223,20 @@ def _series_int(df: pd.DataFrame, column: str) -> pd.Series:
 def _pick_named_competition_entry(
     counts: Counter[tuple[int | None, str | None]],
 ) -> tuple[int | None, str]:
-    """Choose (competition_id, name) from fixture counts; prefer non-cupish names."""
-    scored: list[tuple[int, int, str, int | None]] = []
+    """Choose (competition_id, name) from fixture counts; exclude cups/continentals."""
+    scored: list[tuple[int, str, int | None]] = []
     for (cid, name), n in counts.items():
         label = (name or "").strip()
         if not label:
             continue
         low = label.casefold()
-        pen = 1 if any(part in low for part in _CUPISH_NAME_PARTS) else 0
-        scored.append((pen, -int(n), label, cid))
+        if any(part in low for part in _CUPISH_NAME_PARTS):
+            continue
+        scored.append((-int(n), label, cid))
     if not scored:
         return None, ""
     scored.sort()
-    _pen, _n, label, cid = scored[0]
+    _n, label, cid = scored[0]
     return _as_int(cid), label
 
 

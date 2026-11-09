@@ -126,6 +126,55 @@ def test_build_club_divisions_scoped_skips_fixtures_when_named():
     career.fixtures.assert_not_called()
 
 
+def test_pick_named_competition_excludes_cups_and_continentals():
+    from collections import Counter
+
+    counts = Counter(
+        {
+            (639, "Europa League"): 4,
+            (131, "Friendly"): 2,
+            (2945, "Conference League"): 2,
+            (4, "Superliga"): 1,
+        }
+    )
+    assert fms._pick_named_competition(counts) == "Superliga"
+    assert fms._pick_named_competition(
+        Counter({(639, "Europa League"): 4, (131, "Friendly"): 2})
+    ) == ""
+
+
+def test_build_club_divisions_fallback_unadded_nation_league(monkeypatch):
+    monkeypatch.setattr(fms, "nation_name_map", lambda: {138: "Denmark"})
+
+    club = SimpleNamespace(
+        uid=525,
+        nation_id=138,
+        fa_nation_id=None,
+        teams=(SimpleNamespace(slot=0, team_id=432),),
+    )
+    fixtures = [
+        SimpleNamespace(
+            home_team_id=432,
+            away_team_id=999,
+            competition_id=639,
+            competition_name="Europa League",
+        ),
+        SimpleNamespace(
+            home_team_id=100,
+            away_team_id=432,
+            competition_id=131,
+            competition_name="Friendly",
+        ),
+    ]
+    career = SimpleNamespace(
+        league_tables=lambda: (),
+        clubs=lambda: (club,),
+        fixtures=lambda: fixtures,
+    )
+    out = fms._build_club_divisions(career, {525})
+    assert out == {525: "Unadded Denmark League"}
+
+
 def test_save_upload_reuses_eligibility_and_skips_sync_precompute(tmp_path, monkeypatch):
     monkeypatch.setattr(lib, "UPLOADS_DIR", tmp_path)
     monkeypatch.setattr(lib, "UPLOADS_INDEX_PATH", tmp_path / "index.json")

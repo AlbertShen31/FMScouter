@@ -178,7 +178,7 @@ _INJURY_COLUMNS: tuple[str, ...] = (
     "Recurring Injury",
 )
 
-# Soft-penalize these when voting a club's domestic division from fixtures.
+# Exclude these when voting a club's domestic division from fixtures / tables.
 _CUPISH_NAME_PARTS: tuple[str, ...] = (
     "cup",
     "cupa",
@@ -197,6 +197,7 @@ _CUPISH_NAME_PARTS: tuple[str, ...] = (
     "shield",
     "trophy",
     "wcl",
+    "testimonial",
 )
 
 # fmsave Attributes field → Moneyball CSV header (ATTR_MAP full names).
@@ -1184,20 +1185,46 @@ def _is_division_shaped(table: Any) -> bool:
     return 10 <= n <= 30 and int(rpv) == n - 1
 
 
+def _is_cupish_competition_name(name: str | None) -> bool:
+    """True for continental / cup / friendly labels that must not become Division."""
+    low = (name or "").strip().casefold()
+    if not low:
+        return False
+    return any(part in low for part in _CUPISH_NAME_PARTS)
+
+
+def _unadded_league_label(nation_id: int | None) -> str:
+    """Placeholder Division when no domestic league table/fixture vote exists."""
+    nation = _nation_display_name(nation_id).strip()
+    if nation:
+        return f"Unadded {nation} League"
+    return "Unadded League"
+
+
+def _club_nation_id(club: Any) -> int | None:
+    raw = getattr(club, "nation_id", None)
+    if raw is None:
+        raw = getattr(club, "fa_nation_id", None)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _pick_named_competition(counts: Counter[tuple[int | None, str | None]]) -> str:
-    """Choose a display name from fixture (competition_id, name) counts."""
-    scored: list[tuple[int, int, str]] = []
+    """Choose a domestic league name from fixture counts (cups/continentals excluded)."""
+    scored: list[tuple[int, str]] = []
     for (_cid, name), n in counts.items():
         label = (name or "").strip()
-        if not label:
+        if not label or _is_cupish_competition_name(label):
             continue
-        low = label.casefold()
-        pen = 1 if any(part in low for part in _CUPISH_NAME_PARTS) else 0
-        scored.append((pen, -int(n), label))
+        scored.append((-int(n), label))
     if not scored:
         return ""
     scored.sort()
-    return scored[0][2]
+    return scored[0][1]
 
 
 def _safe_table(reader: Any, *errors: type[BaseException]) -> Any:
@@ -1256,7 +1283,7 @@ def _build_club_divisions_scoped(
 
     for table in _safe_table(career_save.league_tables, *reader_errors):
         if len(club_division) >= len(wanted):
-            return club_division
+            break
         if not _is_division_shaped(table):
             continue
         rows = tuple(table.rows or ())
@@ -1265,8 +1292,8 @@ def _build_club_divisions_scoped(
         if len(slot0) < max(8, n // 2):
             continue
         name = (getattr(table, "competition_name", None) or "").strip()
-        if not name:
-            # Nameless tables need full-member fixture votes; defer to per-club fallback.
+        if not name or _is_cupish_competition_name(name):
+            # Nameless / cup tables: defer to per-club domestic fixture fallback.
             continue
         for row in slot0:
             club_uid = getattr(row, "club_uid", None)
@@ -1291,22 +1318,20 @@ def _build_club_divisions_scoped(
         if team_id is not None:
             team_to_club[team_id] = uid
 
-    if not team_to_club:
-        return club_division
-
     fx_by_team: dict[int, Counter[tuple[int | None, str | None]]] = defaultdict(Counter)
-    interest = frozenset(team_to_club)
-    for fixture in _safe_table(career_save.fixtures, *reader_errors):
-        for team_id, competition_id, competition_name in (
-            (fixture.home_team_id, fixture.competition_id, fixture.competition_name),
-            (fixture.away_team_id, fixture.competition_id, fixture.competition_name),
-        ):
-            if team_id is None or competition_id is None:
-                continue
-            tid = int(team_id)
-            if tid not in interest:
-                continue
-            fx_by_team[tid][(competition_id, competition_name)] += 1
+    if team_to_club:
+        interest = frozenset(team_to_club)
+        for fixture in _safe_table(career_save.fixtures, *reader_errors):
+            for team_id, competition_id, competition_name in (
+                (fixture.home_team_id, fixture.competition_id, fixture.competition_name),
+                (fixture.away_team_id, fixture.competition_id, fixture.competition_name),
+            ):
+                if team_id is None or competition_id is None:
+                    continue
+                tid = int(team_id)
+                if tid not in interest:
+                    continue
+                fx_by_team[tid][(competition_id, competition_name)] += 1
 
     for team_id, club_uid in team_to_club.items():
         if club_uid in club_division:
@@ -1314,6 +1339,12 @@ def _build_club_divisions_scoped(
         name = _pick_named_competition(fx_by_team.get(team_id, Counter()))
         if name:
             club_division[club_uid] = name
+
+    for uid in wanted - club_division.keys():
+        club = clubs_by_uid.get(uid)
+        club_division[uid] = _unadded_league_label(
+            _club_nation_id(club) if club is not None else None
+        )
     return club_division
 
 
@@ -1325,7 +1356,9 @@ def _build_club_divisions(
 
     League tables do not store a competition; fmsave votes one from fixtures, and that vote
     often lands on an unnamed id. Prefer division-shaped first-team tables, revoting the name
-    from member fixtures when needed, then fall back to each club's slot-0 fixture majority.
+    from member fixtures when needed, then fall back to each club's slot-0 fixture majority
+    (cups / continentals / friendlies excluded). Clubs still without a domestic league get
+    ``Unadded {Nation} League``.
 
     When ``club_uids`` is a small set (squad / filtered exports), use a scoped path that
     skips unnamed-table fixture voting and only accumulates fixtures for missing clubs.
@@ -1363,6 +1396,8 @@ def _build_club_divisions(
         if len(slot0) < max(8, n // 2):
             continue
         name = (getattr(table, "competition_name", None) or "").strip()
+        if _is_cupish_competition_name(name):
+            continue
         if not name:
             member_counts: Counter[tuple[int | None, str | None]] = Counter()
             for row in slot0:
@@ -1397,11 +1432,10 @@ def _build_club_divisions(
         if uid in club_division:
             continue
         team_id = _club_slot0_team_id(club)
-        if team_id is None:
-            continue
-        name = _pick_named_competition(fx_by_team.get(team_id, Counter()))
-        if name:
-            club_division[uid] = name
+        name = ""
+        if team_id is not None:
+            name = _pick_named_competition(fx_by_team.get(team_id, Counter()))
+        club_division[uid] = name or _unadded_league_label(_club_nation_id(club))
         if club_uids is not None and len(club_division) >= len(club_uids):
             break
 
