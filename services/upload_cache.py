@@ -24,7 +24,7 @@ import services.role_config as rc
 import scoring.role_scorer as rs
 import services.stats_threshold_packs as stp
 
-FORMULA_VERSION = "v50"
+FORMULA_VERSION = "v51"
 _BENCHMARKS_PATH = ROOT_DIR / "config" / "stats_benchmarks.json"
 _ARCHETYPES_PATH = ROOT_DIR / "config" / "player_archetypes.json"
 
@@ -282,6 +282,13 @@ def is_fresh(
         cached_bits = (cache.get("signature") or {}).get("multi_year_pack") or {}
         if cached_bits != bits:
             return False
+    # fmsave exports must not keep limited-tracking stripes / stripped metrics.
+    if entry and lib.is_fmsave_export(entry):
+        ltd = entry.get("limited_tracking_divisions") or cache.get(
+            "limited_tracking_divisions"
+        )
+        if isinstance(ltd, list) and any(str(x).strip() for x in ltd):
+            return False
     return True
 
 
@@ -397,6 +404,19 @@ def cache_status_light(
                     "status": "stale",
                     "label": "Stale",
                     "detail": "Season files changed — recompute on Uploads",
+                    "role_scores": role_ok,
+                    "stats": stats_ok,
+                    "computed_at": meta.get("computed_at"),
+                }
+        if lib.is_fmsave_export(entry):
+            ltd = entry.get("limited_tracking_divisions") or meta.get(
+                "limited_tracking_divisions"
+            )
+            if isinstance(ltd, list) and any(str(x).strip() for x in ltd):
+                return {
+                    "status": "stale",
+                    "label": "Stale",
+                    "detail": "Save export limited-tracking cleared — recompute on Uploads",
                     "role_scores": role_ok,
                     "stats": stats_ok,
                     "computed_at": meta.get("computed_at"),
@@ -654,7 +674,12 @@ def _compute_single_file(
             from scoring.stats_availability import nation_counts_for_limited_divisions
 
             compute_progress.update(phase="Parsing stats…", done=0, total=0)
-            players, limited_divisions = parse_stats_export_with_meta(text)
+            skip_limited = lib.is_fmsave_export(entry)
+            players, limited_divisions = parse_stats_export_with_meta(
+                text, apply_limited_tracking=not skip_limited
+            )
+            if skip_limited:
+                limited_divisions = []
             percentiles = _precompute_stats_percentiles(
                 players,
                 stp.load_tree(sig.get("stats_pack_id")),
@@ -784,7 +809,10 @@ def _compute_multi_year_pack(
                 if hit:
                     stats_by_year[year] = hit[0]
                 else:
-                    players, _limited = parse_stats_export_with_meta(_season_text())
+                    players, _limited = parse_stats_export_with_meta(
+                        _season_text(),
+                        apply_limited_tracking=not lib.is_fmsave_export(src_entry),
+                    )
                     stats_by_year[year] = players
             except Exception as exc:
                 errors.append(f"stats year {year}: {exc}")
@@ -806,6 +834,20 @@ def _compute_multi_year_pack(
         payload["_errors"] = errors + [str(exc)]
         traceback.print_exc()
         return payload
+
+    stats_src_ids = [
+        years[year]
+        for year in configured
+        if year in stats_by_year and years.get(year)
+    ]
+    if stats_src_ids and all(
+        lib.is_fmsave_export(lib.get_file(src_id)) for src_id in stats_src_ids
+    ):
+        limited_divisions = []
+        for player in merged:
+            player["stats_limited_tracking"] = False
+            player["limited_division_tracking"] = False
+            player["stats_unavailable"] = []
 
     role_ids = list(pc.all_positions.keys())
     tier_w = us.tier_weights(settings)

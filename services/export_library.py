@@ -36,8 +36,29 @@ KIND_SINGLE = "single"
 KIND_MULTI_YEAR = "multi_year"
 YEAR_KEYS = ("1", "2", "3")
 DEFAULT_YEAR_WEIGHTS = {"1": 0.5, "2": 0.75, "3": 1.0}
+EXPORT_SOURCE_FMSAVE = "fmsave"
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def is_fmsave_export(entry: dict[str, Any] | None) -> bool:
+    """True for CSVs produced by the Save export page / fmsave pipeline.
+
+    Tagged on save as ``export_source=fmsave``; older uploads are detected by the
+    ``fmsave_`` filename prefix used in :func:`services.fmsave_export._export_filename`.
+    """
+    if not entry:
+        return False
+    if str(entry.get("export_source") or "").strip().casefold() == EXPORT_SOURCE_FMSAVE:
+        return True
+    for key in ("original_name", "display_name", "stored_name"):
+        name = Path(str(entry.get(key) or "")).name
+        # stored_name is ``{id}_{safe}``; strip the id prefix when present.
+        if key == "stored_name" and "_" in name:
+            name = name.split("_", 1)[1]
+        if name.casefold().startswith("fmsave_"):
+            return True
+    return False
 
 
 def ensure_dirs() -> None:
@@ -717,7 +738,12 @@ def save_multi_year_pack(
     return entry
 
 
-def save_upload(filename: str, text: str) -> dict[str, Any]:
+def save_upload(
+    filename: str,
+    text: str,
+    *,
+    export_source: str | None = None,
+) -> dict[str, Any]:
     """Persist CSV text and append an index entry."""
     ensure_dirs()
     eligibility = classify_eligibility(text)
@@ -727,6 +753,9 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
     stored = f"{file_id}_{safe}"
     path = UPLOADS_DIR / stored
     path.write_text(text, encoding="utf-8")
+    source = str(export_source or "").strip()
+    if not source and original.casefold().startswith("fmsave_"):
+        source = EXPORT_SOURCE_FMSAVE
     entry = {
         "id": file_id,
         "kind": KIND_SINGLE,
@@ -749,6 +778,8 @@ def save_upload(filename: str, text: str) -> dict[str, Any]:
         "eligibility_notes": eligibility["notes"],
         "player_count": count_csv_players(text),
     }
+    if source:
+        entry["export_source"] = source
     index = _read_index()
     index.append(entry)
     _write_index(index)
@@ -921,10 +952,11 @@ def list_limited_tracking_divisions(
 
     When ``file_id`` is set, return that file's list. Otherwise union across the
     whole library (used by Profiles when snapshots span multiple exports).
+    Save (fmsave) exports never contribute — their season stats are full-detail.
     """
     if file_id:
         entry = get_file(file_id)
-        if not entry:
+        if not entry or is_fmsave_export(entry):
             return []
         raw = entry.get("limited_tracking_divisions") or []
         if isinstance(raw, list):
@@ -932,6 +964,8 @@ def list_limited_tracking_divisions(
         return []
     found: set[str] = set()
     for entry in list_files():
+        if is_fmsave_export(entry):
+            continue
         raw = entry.get("limited_tracking_divisions") or []
         if not isinstance(raw, list):
             continue

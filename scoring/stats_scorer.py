@@ -1199,16 +1199,29 @@ def _has_stats_columns(header: list[str]) -> bool:
     return bool(bases & markers)
 
 
-def parse_stats_export(text: str) -> list[dict[str, Any]]:
+def parse_stats_export(
+    text: str,
+    *,
+    apply_limited_tracking: bool = True,
+) -> list[dict[str, Any]]:
     """Parse a Moneyball stats CSV into player dicts."""
-    players, _limited = parse_stats_export_with_meta(text)
+    players, _limited = parse_stats_export_with_meta(
+        text, apply_limited_tracking=apply_limited_tracking
+    )
     return players
 
 
 def parse_stats_export_with_meta(
     text: str,
+    *,
+    apply_limited_tracking: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Like :func:`parse_stats_export`, plus limited-tracking division names."""
+    """Like :func:`parse_stats_export`, plus limited-tracking division names.
+
+    Pass ``apply_limited_tracking=False`` for fmsave / Save-export CSVs: those
+    carry real advanced stats (including GK xGP) even when outfield probes look
+    empty on a keeper-only filter.
+    """
     if not text or not text.strip():
         raise ValueError("The file is empty.")
     delim = sniff_delimiter(text)
@@ -1228,7 +1241,7 @@ def parse_stats_export_with_meta(
 
     from scoring.stats_availability import (
         analyze_division_availability,
-        apply_limited_tracking,
+        apply_limited_tracking as _apply_limited_tracking,
         collect_limited_tracking_divisions,
     )
 
@@ -1245,8 +1258,12 @@ def parse_stats_export_with_meta(
             continue
         raw_rows.append(row)
 
-    division_unavailable = analyze_division_availability(raw_rows)
-    limited_divisions = collect_limited_tracking_divisions(division_unavailable)
+    if apply_limited_tracking:
+        division_unavailable = analyze_division_availability(raw_rows)
+        limited_divisions = collect_limited_tracking_divisions(division_unavailable)
+    else:
+        division_unavailable = {}
+        limited_divisions = []
 
     players: list[dict[str, Any]] = []
     for row in raw_rows:
@@ -1269,15 +1286,21 @@ def parse_stats_export_with_meta(
             "stats": stats,
             "set_piece_stats": set_piece_stats,
         }
-        apply_limited_tracking(
-            player_payload, row, division_unavailable=division_unavailable
-        )
+        if apply_limited_tracking:
+            _apply_limited_tracking(
+                player_payload, row, division_unavailable=division_unavailable
+            )
+        else:
+            player_payload["stats_limited_tracking"] = False
+            player_payload["stats_unavailable"] = []
         stats = player_payload["stats"]
         division_name = pick(row, IDENTITY["Division"])
         div_key = str(division_name or "").strip()
         if div_key in ("-", "—"):
             div_key = ""
-        limited_division_tracking = bool(div_key and div_key in division_unavailable)
+        limited_division_tracking = bool(
+            apply_limited_tracking and div_key and div_key in division_unavailable
+        )
         all_attrs = extract_attrs(row)
         attrs = {
             code: all_attrs[code]

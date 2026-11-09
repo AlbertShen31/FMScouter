@@ -716,7 +716,9 @@ def sx_generate(
                 total=0,
             )
             entry = lib.save_upload(
-                meta.get("filename") or "fmsave_export.csv", csv_text
+                meta.get("filename") or "fmsave_export.csv",
+                csv_text,
+                export_source=lib.EXPORT_SOURCE_FMSAVE,
             )
             pages = ", ".join(entry.get("pages") or []) or "none"
             uploads_note = (

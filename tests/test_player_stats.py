@@ -547,6 +547,43 @@ class TestParseStatsExport(unittest.TestCase):
         self.assertIn("key_passes", player["stats_unavailable"])
         self.assertNotIn("expected_assists", player["stats_unavailable"])
 
+    def test_skip_limited_tracking_keeps_advanced_metrics(self):
+        text = _csv(
+            [
+                _outfield_limited_row("Ada", leftover_key_passes=0),
+                _outfield_limited_row("Bea", leftover_key_passes=0),
+                {
+                    "Name": "Nic",
+                    "Division": "EFL Championship",
+                    "Best Pos": "GK",
+                    "Position": "GK",
+                    "Minutes": 3690,
+                    "Passes Attempted": 100,
+                    "Passes Attempted per 90": 2.4,
+                    "Goals Allowed": 50,
+                    "xGP": 3.36,
+                    "xGP/90": 0.082,
+                    "Interceptions": 0,
+                    "Interceptions per 90": 0.146,
+                    "Key Passes": 0,
+                    "Key Passes per 90": 0,
+                    "Progressive Passes per 90": 0.268,
+                    "Clearances": 0,
+                    "Clearances per 90": 0,
+                },
+            ]
+        )
+        players, limited = ss.parse_stats_export_with_meta(
+            text, apply_limited_tracking=False
+        )
+        self.assertEqual(limited, [])
+        gk = next(p for p in players if p["name"] == "Nic")
+        self.assertFalse(gk["stats_limited_tracking"])
+        self.assertFalse(gk["limited_division_tracking"])
+        self.assertEqual(gk["stats_unavailable"], [])
+        self.assertIn("xg_prevented", gk["stats"])
+        self.assertAlmostEqual(gk["stats"]["xg_prevented"], 0.082, places=2)
+
     def test_set_piece_stats_extracted_by_group(self):
         text = _csv(
             [
