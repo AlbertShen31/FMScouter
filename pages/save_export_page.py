@@ -77,6 +77,7 @@ def layout(**_kwargs):
         [
             dcc.Download(id="sx-download"),
             dcc.Store(id="sx-rev", data=0),
+            dcc.Store(id="sx-pick-rev", data=0),
             dcc.Store(id="sx-preload", data=None),
             dcc.Interval(
                 id="sx-progress-poll",
@@ -452,17 +453,21 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
 
 clientside_callback(
     """
-    function(n, path) {
+    function(n, path, pickRev) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var prop = String(trig[0].prop_id || "");
         var fromGenerate = prop.indexOf("sx-generate") !== -1;
+        var fromPick = prop.indexOf("sx-pick-rev") !== -1;
         if (fromGenerate && !n) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        if (!fromGenerate && !path) {
+        if (!fromGenerate && !fromPick && !path) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        if (fromPick && !path) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var label = document.getElementById("sx-busy-label");
@@ -482,6 +487,7 @@ clientside_callback(
     Output("sx-progress-poll", "disabled"),
     Input("sx-generate", "n_clicks"),
     Input("sx-path", "value"),
+    Input("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
 
@@ -542,26 +548,31 @@ def sx_generate_enabled(preload, path):
 
 @callback(
     Output("sx-path", "value"),
+    Output("sx-pick-rev", "data"),
     Input("sx-browse", "n_clicks"),
     State("sx-path", "value"),
+    State("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
-def sx_browse(n_clicks, current_path):
+def sx_browse(n_clicks, current_path, pick_rev):
     if not n_clicks:
-        return no_update
+        return no_update, no_update
     picked = fms.pick_fm_save_file(current_path or fms.default_save_path())
     if not picked:
-        return no_update
-    return picked
+        return no_update, no_update
+    # Always bump pick-rev so re-choosing the same .fm retriggers preload
+    # (Dash skips Output updates when sx-path value is unchanged).
+    return picked, int(pick_rev or 0) + 1
 
 
 @callback(
     Output("sx-preload", "data"),
     Output("sx-status", "children"),
     Input("sx-path", "value"),
+    Input("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
-def sx_preload_save(path):
+def sx_preload_save(path, _pick_rev):
     save_path = (path or "").strip()
     if not save_path:
         return None, "Ready."

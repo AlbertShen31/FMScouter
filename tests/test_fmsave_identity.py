@@ -39,6 +39,8 @@ def test_identity_columns_fill_nation_fields():
         unique_id=123,
         age=24,
         club_name="FC Romania",
+        on_loan=False,
+        loan_parent_club_name=None,
         nation_id=164,
         second_nation_ids=(139, 175),
         club_nation_id=164,
@@ -56,6 +58,7 @@ def test_identity_columns_fill_nation_fields():
     assert cols["Based In"] == "Romania"
     assert cols["2nd Nat"] == "ENG/WAL"
     assert cols["Division"] == "Liga I"
+    assert cols["Club"] == "FC Romania"
     assert "Nation" not in fms.BLANK_COLUMNS
     assert "Based In" not in fms.BLANK_COLUMNS
     assert "2nd Nat" not in fms.BLANK_COLUMNS
@@ -67,6 +70,8 @@ def test_based_in_prefers_fa_nation_for_cross_border_clubs():
         unique_id=1,
         age=22,
         club_name="Swansea",
+        on_loan=False,
+        loan_parent_club_name=None,
         nation_id=175,
         second_nation_ids=(),
         club_nation_id=139,
@@ -82,3 +87,63 @@ def test_based_in_prefers_fa_nation_for_cross_border_clubs():
     cols = fms._identity_columns(player)
     assert cols["Based In"] == "Wales"
     assert cols["Nation"] == "WAL"
+
+
+def test_club_display_shows_loan_parent_in_parens():
+    loaned = SimpleNamespace(
+        club_name="Spezia",
+        on_loan=True,
+        loan_parent_club_name="AS Roma",
+    )
+    assert fms._format_club_display(loaned) == "Spezia (AS Roma)"
+    assert fms._format_club_display(
+        SimpleNamespace(club_name="AS Roma", on_loan=False, loan_parent_club_name=None)
+    ) == "AS Roma"
+    assert fms._format_club_display(
+        SimpleNamespace(
+            club_name="AS Roma",
+            on_loan=True,
+            loan_parent_club_name="AS Roma",
+        )
+    ) == "AS Roma"
+
+
+def test_club_contains_matches_loan_parent():
+    player = SimpleNamespace(
+        age=22,
+        height_cm=180,
+        club_name="Spezia",
+        on_loan=True,
+        loan_parent_club_name="AS Roma",
+        club_nation_id=114,
+        nation_id=114,
+        natural_positions=("ST",),
+    )
+    prepared = fms.prepare_filters({"club_contains": "roma"})
+    assert fms._passes_filters(player, prepared) is True
+    prepared_miss = fms.prepare_filters({"club_contains": "napoli"})
+    assert fms._passes_filters(player, prepared_miss) is False
+
+
+def test_identity_columns_loan_club_format():
+    player = SimpleNamespace(
+        name="Loanee",
+        unique_id=9,
+        age=21,
+        club_name="Spezia",
+        on_loan=True,
+        loan_parent_club_name="AS Roma",
+        nation_id=114,
+        second_nation_ids=(),
+        club_nation_id=114,
+        club_fa_nation_id=114,
+        natural_positions=("ST",),
+        accomplished_positions=(),
+        height_cm=180,
+        left_foot=12,
+        right_foot=20,
+        ability=None,
+        reputation=None,
+    )
+    cols = fms._identity_columns(player)
+    assert cols["Club"] == "Spezia (AS Roma)"

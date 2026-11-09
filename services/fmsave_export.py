@@ -552,6 +552,28 @@ def format_height_inches(total_inches: int) -> str:
     return f"{feet}'{inches}\""
 
 
+def _format_club_display(player: Any) -> str:
+    """Active club; when on loan, ``Loaned Club (Parent Club)``."""
+    club = str(getattr(player, "club_name", None) or "").strip()
+    if not getattr(player, "on_loan", False):
+        return club
+    parent = str(getattr(player, "loan_parent_club_name", None) or "").strip()
+    if not parent or parent.casefold() == club.casefold():
+        return club
+    if club:
+        return f"{club} ({parent})"
+    return f"({parent})"
+
+
+def _club_search_text(player: Any) -> str:
+    """Club text for contains-filter: active club plus loan parent when present."""
+    parts = [str(getattr(player, "club_name", None) or "")]
+    parent = getattr(player, "loan_parent_club_name", None)
+    if parent:
+        parts.append(str(parent))
+    return " ".join(parts).casefold()
+
+
 def _format_height_cm(cm: int | None) -> str:
     total_inches = _height_total_inches(cm)
     if total_inches is None:
@@ -841,8 +863,7 @@ def _passes_filters(player: Any, filters: dict[str, Any] | None) -> bool:
 
     club_contains = prepared.get("club_contains") or ""
     if club_contains:
-        club = (player.club_name or "").casefold()
-        if club_contains not in club:
+        if club_contains not in _club_search_text(player):
             return False
 
     club_nations = prepared.get("club_nation_ids") or frozenset()
@@ -910,6 +931,8 @@ def _player_filter_snapshot(player: Any) -> SimpleNamespace:
         age=getattr(player, "age", None),
         height_cm=getattr(player, "height_cm", None),
         club_name=getattr(player, "club_name", None) or "",
+        on_loan=bool(getattr(player, "on_loan", False)),
+        loan_parent_club_name=getattr(player, "loan_parent_club_name", None) or "",
         club_nation_id=getattr(player, "club_nation_id", None),
         nation_id=getattr(player, "nation_id", None),
         natural_positions=tuple(getattr(player, "natural_positions", None) or ()),
@@ -1758,7 +1781,7 @@ def _identity_columns(player: Any, *, division: str = "") -> dict[str, str]:
         "Player": player.name or "",
         "Unique ID": "" if player.unique_id is None else str(player.unique_id),
         "Age": "" if player.age is None else str(player.age),
-        "Club": player.club_name or "",
+        "Club": _format_club_display(player),
         "Division": division or "",
         "Nation": _nation_code(getattr(player, "nation_id", None)),
         "Based In": based_in,
