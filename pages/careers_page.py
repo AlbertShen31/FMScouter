@@ -29,11 +29,10 @@ import services.fmsave_export as fms
 register_page(__name__, path="/careers", name="Careers")
 
 PAGE_TIP = (
-    "Each Career is one Football Manager game. Import one or more .fm saves "
-    "(or Moneyball CSVs) into mid/end season slots — at most two snapshots per "
-    "season. Raw saves are not kept; only compact player attributes + OVERALL "
-    "season stats. Switch seasons here; playground pages will use the active "
-    "career/season later."
+    "Each Career is one Football Manager game. Stage .fm saves or Moneyball CSVs, "
+    "then drag each into a mid/end season slot — at most two snapshots per season. "
+    "Raw saves are not kept; only compact player attributes + OVERALL season stats. "
+    "Switch seasons here; playground pages will use the active career/season later."
 )
 
 
@@ -88,28 +87,99 @@ def _slot_badge(meta: dict | None, label: str) -> html.Span:
     )
 
 
-def _seasons_table(career_id: str | None, active_season_id: str | None) -> html.Div:
+def _slot_drop_target(season: dict, slot: str, meta: dict | None) -> html.Div:
+    label = "Mid" if slot == "mid" else "End"
+    return html.Div(
+        _slot_badge(meta, label),
+        className="cr-slot-drop"
+        + (" is-filled" if meta else " is-empty")
+        + (" is-suggested" if season.get("suggested_slot") == slot else ""),
+        **{
+            "data-season-id": season["id"],
+            "data-slot": slot,
+            "data-label": season.get("label") or season["id"],
+            "data-year-start": str(season.get("year_start") or ""),
+            "data-year-end": str(season.get("year_end") or ""),
+        },
+    )
+
+
+def _merge_seasons_with_staging(
+    seasons: list[dict],
+    staging_items: list[dict],
+) -> list[dict]:
+    by_id: dict[str, dict] = {}
+    for season in seasons:
+        by_id[season["id"]] = {
+            **season,
+            "phantom": False,
+            "suggested_slot": None,
+        }
+    for item in staging_items:
+        sid = item.get("season_id")
+        if not sid:
+            continue
+        if sid not in by_id:
+            by_id[sid] = {
+                "id": sid,
+                "label": item.get("season_label") or sid,
+                "year_start": item.get("year_start") or 0,
+                "year_end": item.get("year_end") or 0,
+                "slots": {"mid": None, "end": None},
+                "phantom": True,
+                "suggested_slot": item.get("suggested_slot"),
+            }
+        elif by_id[sid].get("suggested_slot") is None:
+            by_id[sid]["suggested_slot"] = item.get("suggested_slot")
+    out = list(by_id.values())
+    out.sort(key=lambda s: (s.get("year_start") or 0, s.get("label") or ""))
+    return out
+
+
+def _seasons_table(
+    career_id: str | None,
+    active_season_id: str | None,
+    staging_items: list[dict] | None = None,
+) -> html.Div:
     if not career_id:
         return html.P("Create or select a career first.", className="text-muted mb-0")
-    seasons = careers.list_seasons(career_id)
+    seasons = _merge_seasons_with_staging(
+        careers.list_seasons(career_id),
+        staging_items if staging_items is not None else careers.list_staging(career_id),
+    )
     if not seasons:
-        return html.P("No seasons imported yet.", className="text-muted mb-0")
+        return html.P(
+            "No seasons yet — stage files, then drag them onto Mid/End slots "
+            "(suggested seasons appear automatically).",
+            className="text-muted mb-0",
+        )
     rows = []
     for season in reversed(seasons):
         sid = season["id"]
         active = sid == active_season_id
+        phantom = bool(season.get("phantom"))
+        label_children = [
+            html.Span(
+                season["label"],
+                className="cr-season-label"
+                + (" is-active" if active else "")
+                + (" is-phantom" if phantom else ""),
+            )
+        ]
+        if phantom:
+            label_children.append(
+                html.Span("new", className="cr-season-phantom-tag")
+            )
         rows.append(
             html.Tr(
                 [
+                    html.Td(html.Div(label_children, className="cr-season-label-wrap")),
                     html.Td(
-                        html.Span(
-                            season["label"],
-                            className="cr-season-label"
-                            + (" is-active" if active else ""),
-                        )
+                        _slot_drop_target(season, "mid", season["slots"].get("mid"))
                     ),
-                    html.Td(_slot_badge(season["slots"].get("mid"), "Mid")),
-                    html.Td(_slot_badge(season["slots"].get("end"), "End")),
+                    html.Td(
+                        _slot_drop_target(season, "end", season["slots"].get("end"))
+                    ),
                     html.Td(
                         dmc.Button(
                             "Active" if active else "Set active",
@@ -117,11 +187,18 @@ def _seasons_table(career_id: str | None, active_season_id: str | None) -> html.
                             n_clicks=0,
                             size="xs",
                             variant="filled" if active else "default",
-                            disabled=active,
+                            disabled=active or phantom,
+                        )
+                        if not phantom
+                        else html.Span(
+                            "Drop to create",
+                            className="cr-season-drop-hint text-muted",
                         )
                     ),
                 ],
-                className="cr-season-row" + (" is-active" if active else ""),
+                className="cr-season-row"
+                + (" is-active" if active else "")
+                + (" is-phantom" if phantom else ""),
             )
         )
     return dbc.Table(
@@ -145,17 +222,125 @@ def _seasons_table(career_id: str | None, active_season_id: str | None) -> html.
     )
 
 
+def _staging_panel(career_id: str | None) -> html.Div:
+    items = careers.list_staging(career_id) if career_id else []
+    if not career_id:
+        body: html.Div | html.P = html.P(
+            "Select a career, then stage .fm / CSV files here.",
+            className="text-muted mb-0",
+        )
+    elif not items:
+        body = html.P(
+            "Staging is empty. Choose saves or CSVs above, then click Stage.",
+            className="text-muted mb-0",
+        )
+    else:
+        cards = []
+        for item in items:
+            suggested = (
+                f"{item.get('season_label') or item.get('season_id') or '—'} / "
+                f"{item.get('suggested_slot') or '—'}"
+            )
+            cards.append(
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.Span(
+                                            item.get("source_name") or item["id"],
+                                            className="cr-stage-name",
+                                        ),
+                                        html.Span(
+                                            "⋮⋮",
+                                            className="cr-stage-handle",
+                                            title="Drag onto a Mid/End slot",
+                                        ),
+                                    ],
+                                    className="cr-stage-card-top",
+                                ),
+                                html.Div(
+                                    [
+                                        html.Span(
+                                            f"Suggested {suggested}",
+                                            className="cr-stage-meta",
+                                        ),
+                                        html.Span(
+                                            f"{int(item.get('player_count') or 0):,} players",
+                                            className="cr-stage-meta",
+                                        ),
+                                        html.Span(
+                                            f"date={item.get('game_date') or '—'}",
+                                            className="cr-stage-meta",
+                                        ),
+                                    ],
+                                    className="cr-stage-card-meta",
+                                ),
+                            ],
+                            className="cr-stage-card-drag",
+                            draggable="true",
+                            title="Drag onto a Mid/End slot",
+                            **{"data-staging-id": item["id"]},
+                        ),
+                        dmc.Button(
+                            "Remove",
+                            id={"type": "cr-stage-remove", "index": item["id"]},
+                            n_clicks=0,
+                            size="xs",
+                            variant="subtle",
+                            color="gray",
+                            className="cr-stage-remove",
+                        ),
+                    ],
+                    className="cr-stage-card"
+                    + (
+                        f" suggests-{item.get('suggested_slot')}"
+                        if item.get("suggested_slot")
+                        else ""
+                    ),
+                )
+            )
+        body = html.Div(cards, className="cr-stage-list")
+    return html.Div(
+        [
+            body,
+            html.Div(
+                [
+                    dmc.Button(
+                        "Clear staging",
+                        id="cr-stage-clear",
+                        n_clicks=0,
+                        size="xs",
+                        variant="light",
+                        color="gray",
+                        disabled=not items,
+                    ),
+                    html.Span(
+                        "Drag a card onto a Mid or End slot below.",
+                        className="cr-stage-hint text-muted",
+                    ),
+                ],
+                className="cr-stage-footer",
+            ),
+        ],
+        className="cr-stage-panel",
+    )
+
+
 def _career_shell(active: dict | None = None) -> tuple:
     active = active or careers.get_active()
     career_id = active.get("career_id")
     options = careers.career_options()
     meta = careers.get_career(career_id) if career_id else {"show_hidden_attrs": False}
+    staging_items = careers.list_staging(career_id) if career_id else []
     return (
         options,
         career_id,
         bool(meta.get("show_hidden_attrs")),
         active,
-        _seasons_table(career_id, active.get("season_id")),
+        _staging_panel(career_id),
+        _seasons_table(career_id, active.get("season_id"), staging_items),
     )
 
 
@@ -171,6 +356,7 @@ def layout(**_kwargs):
             dcc.Store(id="cr-active", data=active),
             dcc.Store(id="cr-pending", data=None),
             dcc.Store(id="cr-fm-paths", data=[]),
+            dcc.Store(id="cr-stage-drop", data=None),
             dcc.Store(id="cr-job-tick", data=0),
             dcc.Interval(
                 id="cr-progress-poll",
@@ -180,10 +366,10 @@ def layout(**_kwargs):
             ),
             html.H4("Careers", className="mb-2"),
             html.P(
-                "Separate from Uploads and formation Profiles. One career per FM game, "
-                "with mid/end snapshots per season. Preview only reads the save date to "
-                "fill season/slot; Import extracts players and can take a while — a "
-                "progress overlay covers this page while it runs.",
+                "Separate from Uploads and formation Profiles. One career per FM game. "
+                "Stage extracts players into a holding area (can take a while), then drag "
+                "each file onto a Mid/End season slot. A progress overlay covers this page "
+                "while Stage / assign runs.",
                 className="text-muted mb-3",
             ),
             html.Div(
@@ -276,14 +462,13 @@ def layout(**_kwargs):
                                 dbc.Card(
                                     [
                                         _card_header(
-                                            "2. Import snapshot",
-                                            "Import one or more .fm saves (preferred) or "
-                                            "Moneyball CSVs. Multi-file imports classify "
-                                            "each file from its own game date. Preview "
-                                            "fills season/slot/date for a single file; for "
-                                            "batches it lists each suggestion. Override "
-                                            "fields apply only when importing one file. "
-                                            "Occupied slots can be replaced.",
+                                            "2. Stage files",
+                                            "Choose one or more .fm saves (preferred) or "
+                                            "Moneyball CSVs, then Stage to extract players "
+                                            "into the holding area. Each file keeps its own "
+                                            "suggested season/slot from the save date. "
+                                            "Game date override applies only when staging a "
+                                            "single file (needed for CSVs).",
                                             "cr-import-tip",
                                         ),
                                         dbc.CardBody(
@@ -322,62 +507,30 @@ def layout(**_kwargs):
                                                     className="cr-csv-drop mb-3",
                                                     multiple=True,
                                                 ),
-                                                html.Label(
-                                                    "Scope (.fm)",
-                                                    className="rs-field-label",
-                                                ),
-                                                dmc.SegmentedControl(
-                                                    id="cr-scope",
-                                                    data=[
-                                                        {
-                                                            "label": "All players",
-                                                            "value": "all",
-                                                        },
-                                                        {
-                                                            "label": "Managed squad",
-                                                            "value": "squad",
-                                                        },
-                                                    ],
-                                                    value="all",
-                                                    className="mb-3",
-                                                ),
                                                 dbc.Row(
                                                     [
                                                         dbc.Col(
                                                             [
                                                                 html.Label(
-                                                                    "Season label",
-                                                                    className="rs-field-label",
-                                                                ),
-                                                                dmc.TextInput(
-                                                                    id="cr-season-label",
-                                                                    placeholder="2026/27",
-                                                                ),
-                                                            ],
-                                                            md=4,
-                                                        ),
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Slot",
+                                                                    "Scope (.fm)",
                                                                     className="rs-field-label",
                                                                 ),
                                                                 dmc.SegmentedControl(
-                                                                    id="cr-slot",
+                                                                    id="cr-scope",
                                                                     data=[
                                                                         {
-                                                                            "label": "Mid",
-                                                                            "value": "mid",
+                                                                            "label": "All players",
+                                                                            "value": "all",
                                                                         },
                                                                         {
-                                                                            "label": "End",
-                                                                            "value": "end",
+                                                                            "label": "Managed squad",
+                                                                            "value": "squad",
                                                                         },
                                                                     ],
-                                                                    value="end",
+                                                                    value="all",
                                                                 ),
                                                             ],
-                                                            md=4,
+                                                            md=6,
                                                         ),
                                                         dbc.Col(
                                                             [
@@ -390,7 +543,7 @@ def layout(**_kwargs):
                                                                     placeholder="YYYY-MM-DD",
                                                                 ),
                                                             ],
-                                                            md=4,
+                                                            md=6,
                                                         ),
                                                     ],
                                                     className="mb-3 g-2",
@@ -404,8 +557,8 @@ def layout(**_kwargs):
                                                             variant="default",
                                                         ),
                                                         dmc.Button(
-                                                            "Import",
-                                                            id="cr-import",
+                                                            "Stage",
+                                                            id="cr-stage",
                                                             n_clicks=0,
                                                             variant="filled",
                                                         ),
@@ -425,10 +578,28 @@ def layout(**_kwargs):
                     dbc.Card(
                         [
                             _card_header(
-                                "3. Seasons",
-                                "Switch the active season for this career. Later "
-                                "playground pages will read from the active mid/end "
-                                "snapshots.",
+                                "3. Staging",
+                                "Extracted snapshots wait here until you drag them onto "
+                                "a Mid or End season slot. Suggested season rows appear "
+                                "below automatically for new seasons.",
+                                "cr-staging-tip",
+                            ),
+                            dbc.CardBody(
+                                html.Div(
+                                    id="cr-staging-body",
+                                    children=_staging_panel(career_id),
+                                )
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                    dbc.Card(
+                        [
+                            _card_header(
+                                "4. Seasons",
+                                "Drop staged files onto Mid/End slots. Occupied slots "
+                                "ask before replace. Switch the active season for this "
+                                "career — playground pages will read from it later.",
                                 "cr-seasons-tip",
                             ),
                             dbc.CardBody(
@@ -536,6 +707,7 @@ def layout(**_kwargs):
     Output("cr-career-select", "value"),
     Output("cr-show-hidden", "checked"),
     Output("cr-active", "data"),
+    Output("cr-staging-body", "children"),
     Output("cr-seasons-body", "children"),
     Input("cr-rev", "data"),
 )
@@ -720,7 +892,7 @@ def cr_clear_fm_on_csv(contents):
 
 clientside_callback(
     """
-    function(previewN, importN, replaceN) {
+    function(previewN, stageN, replaceN, dropData) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -732,11 +904,16 @@ clientside_callback(
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
             labelText = "Reading save date…";
-        } else if (prop.indexOf("cr-import") !== -1) {
-            if (!importN) {
+        } else if (prop.indexOf("cr-stage") !== -1 && prop.indexOf("cr-stage-drop") === -1) {
+            if (!stageN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
-            labelText = "Importing snapshot…";
+            labelText = "Staging snapshot…";
+        } else if (prop.indexOf("cr-stage-drop") !== -1) {
+            if (!dropData) {
+                return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+            }
+            labelText = "Assigning to season slot…";
         } else if (prop.indexOf("cr-replace-confirm") !== -1) {
             if (!replaceN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -759,8 +936,9 @@ clientside_callback(
     Output("cr-busy", "className"),
     Output("cr-progress-poll", "disabled"),
     Input("cr-preview", "n_clicks"),
-    Input("cr-import", "n_clicks"),
+    Input("cr-stage", "n_clicks"),
     Input("cr-replace-confirm", "n_clicks"),
+    Input("cr-stage-drop", "data"),
     prevent_initial_call=True,
 )
 
@@ -802,8 +980,6 @@ def cr_poll_progress(_n):
 
 
 @callback(
-    Output("cr-season-label", "value"),
-    Output("cr-slot", "value"),
     Output("cr-game-date", "value"),
     Output("cr-import-status", "children"),
     Output("cr-pending", "data"),
@@ -812,16 +988,15 @@ def cr_poll_progress(_n):
     Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-job-tick", "data"),
     Input("cr-preview", "n_clicks"),
-    Input("cr-import", "n_clicks"),
+    Input("cr-stage", "n_clicks"),
     Input("cr-replace-confirm", "n_clicks"),
     Input("cr-replace-cancel", "n_clicks"),
+    Input("cr-stage-drop", "data"),
     State("cr-fm-paths", "data"),
     State("cr-fm-path", "value"),
     State("cr-csv-upload", "contents"),
     State("cr-csv-upload", "filename"),
     State("cr-scope", "value"),
-    State("cr-season-label", "value"),
-    State("cr-slot", "value"),
     State("cr-game-date", "value"),
     State("cr-career-select", "value"),
     State("cr-pending", "data"),
@@ -829,18 +1004,17 @@ def cr_poll_progress(_n):
     State("cr-job-tick", "data"),
     prevent_initial_call=True,
 )
-def cr_preview_or_import(
+def cr_preview_stage_or_assign(
     _preview_clicks,
-    _import_clicks,
+    _stage_clicks,
     _replace_confirm,
     _replace_cancel,
+    drop_data,
     fm_paths,
     fm_path,
     csv_contents,
     csv_filename,
     scope,
-    season_label,
-    slot,
     game_date,
     career_id,
     pending,
@@ -853,9 +1027,7 @@ def cr_preview_or_import(
     if triggered == "cr-replace-cancel":
         return (
             no_update,
-            no_update,
-            no_update,
-            _status_alert("Import cancelled.", color="secondary"),
+            _status_alert("Assign cancelled.", color="secondary"),
             None,
             False,
             no_update,
@@ -867,7 +1039,6 @@ def cr_preview_or_import(
         paths = [str(p).strip() for p in _as_list(fm_paths) if str(p).strip()]
         if paths:
             return paths
-        # Fallback when store is empty but a single real path is shown.
         single = str(fm_path or "").strip()
         if not single or " saves: " in single:
             return []
@@ -913,20 +1084,6 @@ def cr_preview_or_import(
             game_date_override=date_override,
         )
 
-    def _extract_one(source: dict, *, date_override: str | None):
-        if source["kind"] == "fm":
-            return career_import.preview_import(
-                save_path=source["path"],
-                scope=scope or "all",
-                game_date_override=date_override,
-            )
-        text = decode_upload(source["contents"])
-        return career_import.preview_import(
-            csv_text=text,
-            source_name=source["filename"],
-            game_date_override=date_override,
-        )
-
     def _source_label(source: dict) -> str:
         if source["kind"] == "fm":
             return Path(source["path"]).name
@@ -935,13 +1092,89 @@ def cr_preview_or_import(
     def _fail(message: str, *, pending_out=None, modal=False, body=no_update, color="danger"):
         return (
             no_update,
-            no_update,
-            no_update,
             _status_alert(str(message), color=color),
             pending if pending_out is None else pending_out,
             modal,
             body,
             no_update,
+            next_tick,
+        )
+
+    def _assign_staging(*, replace: bool, payload: dict):
+        staging_id = str(payload.get("staging_id") or "").strip()
+        season_id = str(payload.get("season_id") or "").strip()
+        slot = str(payload.get("slot") or "").strip().lower()
+        if not career_id:
+            return _fail("Select or create a career first.", color="warning")
+        if not staging_id or not season_id or slot not in careers.SLOTS:
+            return _fail("Invalid drop target.", color="warning")
+        year_start = payload.get("year_start")
+        year_end = payload.get("year_end")
+        try:
+            year_start_i = int(year_start) if year_start not in (None, "") else None
+        except (TypeError, ValueError):
+            year_start_i = None
+        try:
+            year_end_i = int(year_end) if year_end not in (None, "") else None
+        except (TypeError, ValueError):
+            year_end_i = None
+        season_label = str(payload.get("season_label") or "").strip() or None
+        compute_progress.begin(
+            "Replacing snapshot…" if replace else "Assigning to season slot…",
+            phase="Writing snapshot…",
+        )
+        try:
+            result = career_import.commit_staging_to_slot(
+                career_id,
+                staging_id,
+                season_id=season_id,
+                slot=slot,
+                season_label=season_label,
+                year_start=year_start_i,
+                year_end=year_end_i,
+                replace=replace,
+            )
+        except Exception as exc:  # noqa: BLE001
+            compute_progress.end()
+            return _fail(str(exc))
+        compute_progress.end()
+        if result.get("needs_replace"):
+            item = careers.get_staging_item(career_id, staging_id) or {}
+            body = (
+                f"The {slot} slot for season {season_id} already has a snapshot. "
+                f"Replace it with “{item.get('source_name') or staging_id}”?"
+            )
+            return (
+                no_update,
+                _status_alert(
+                    "Slot occupied — confirm replace in the dialog.",
+                    color="warning",
+                ),
+                {
+                    "staging_id": staging_id,
+                    "season_id": season_id,
+                    "slot": slot,
+                    "season_label": season_label,
+                    "year_start": year_start_i,
+                    "year_end": year_end_i,
+                },
+                True,
+                body,
+                no_update,
+                next_tick,
+            )
+        msg = (
+            f"Assigned {result.get('player_count', 0):,} players to "
+            f"{result.get('season_label')} / {result.get('slot')}"
+            + (" (replaced)." if result.get("replaced") else ".")
+        )
+        return (
+            no_update,
+            _status_alert(msg, color="success"),
+            None,
+            False,
+            no_update,
+            int(rev or 0) + 1,
             next_tick,
         )
 
@@ -955,9 +1188,11 @@ def cr_preview_or_import(
                 compute_progress.update(
                     phase=f"Reading {idx}/{len(sources)}: {_source_label(source)}",
                 )
-                # Date override only for single-file preview (batch uses each save date).
                 peeks.append(
-                    _peek_one(source, date_override=(game_date or None) if single else None)
+                    _peek_one(
+                        source,
+                        date_override=(game_date or None) if single else None,
+                    )
                 )
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
@@ -974,8 +1209,6 @@ def cr_preview_or_import(
                 f"source={meta.get('source_name') or meta.get('source')}"
             )
             return (
-                classification.get("label"),
-                classification.get("slot"),
                 classification.get("game_date") or game_date or "",
                 _status_alert(summary, color="info"),
                 {
@@ -996,10 +1229,8 @@ def cr_preview_or_import(
                 f"{classification.get('slot')} · "
                 f"date={classification.get('game_date') or '—'}"
             )
-        lines.append("Overrides are ignored for multi-file import; each file uses its own date.")
+        lines.append("Stage to extract, then drag each into a Mid/End slot.")
         return (
-            no_update,
-            no_update,
             no_update,
             _status_alert("\n".join(lines), color="info"),
             {"batch": True, "count": len(peeks)},
@@ -1009,180 +1240,48 @@ def cr_preview_or_import(
             next_tick,
         )
 
-    if triggered in {"cr-import", "cr-replace-confirm"}:
+    if triggered == "cr-stage":
         if not career_id:
-            return _fail(
-                "Select or create a career first.",
-                color="warning",
-            )
-        replace = triggered == "cr-replace-confirm"
-        compute_progress.begin(
-            "Replacing snapshot…" if replace else "Importing snapshot…",
-            phase="Opening save…",
-        )
+            return _fail("Select or create a career first.", color="warning")
+        compute_progress.begin("Staging snapshot…", phase="Opening save…")
         try:
             sources = _sources()
             single = len(sources) == 1
-            extracted_rows: list[dict] = []
+            staged = []
             for idx, source in enumerate(sources, start=1):
                 compute_progress.update(
-                    phase=f"Extracting {idx}/{len(sources)}: {_source_label(source)}",
+                    phase=f"Staging {idx}/{len(sources)}: {_source_label(source)}",
                 )
-                extracted = _extract_one(
-                    source,
-                    date_override=(game_date or None) if single else None,
-                )
-                classification = extracted["classification"]
-                chosen_slot = classification.get("slot") or "end"
-                chosen_label = classification.get("label")
-                if single:
-                    # Form overrides apply only for one-file imports.
-                    if season_label:
-                        chosen_label = season_label
-                    if slot:
-                        chosen_slot = slot
-                extracted_rows.append(
-                    {
-                        "source": source,
-                        "players": extracted["players"],
-                        "meta": extracted["meta"],
-                        "classification": {
-                            **classification,
-                            "label": chosen_label,
-                            "slot": chosen_slot,
-                        },
-                        "slot": chosen_slot,
-                    }
-                )
-
-            conflicts: list[dict] = []
-            if not replace:
-                seen_targets: set[tuple[str, str]] = set()
-                for row in extracted_rows:
-                    classification = row["classification"]
-                    sid = classification.get("id")
-                    chosen_slot = row["slot"]
-                    if not sid:
-                        continue
-                    key = (str(sid), str(chosen_slot))
-                    occupied = careers.slot_occupied(
-                        career_id, sid, chosen_slot
-                    ) or key in seen_targets
-                    if occupied:
-                        conflicts.append(
-                            {
-                                "source": _source_label(row["source"]),
-                                "season_id": sid,
-                                "slot": chosen_slot,
-                            }
-                        )
-                    seen_targets.add(key)
-
-            if conflicts:
-                compute_progress.end()
-                if len(conflicts) == 1 and len(extracted_rows) == 1:
-                    body = (
-                        f"The {conflicts[0]['slot']} slot for season "
-                        f"{conflicts[0]['season_id']} already has a snapshot. Replace it?"
+                if source["kind"] == "fm":
+                    result = career_import.stage_import(
+                        career_id,
+                        save_path=source["path"],
+                        scope=scope or "all",
+                        game_date_override=(game_date or None) if single else None,
                     )
                 else:
-                    body_lines = [
-                        f"{len(conflicts)} occupied slot(s) will be replaced:"
-                    ]
-                    body_lines.extend(
-                        f"• {c['source']} → {c['season_id']} / {c['slot']}"
-                        for c in conflicts
+                    text = decode_upload(source["contents"])
+                    result = career_import.stage_import(
+                        career_id,
+                        csv_text=text,
+                        source_name=source["filename"],
+                        game_date_override=(game_date or None) if single else None,
                     )
-                    body = html.Div(
-                        [html.Div(line) for line in body_lines],
-                        className="cr-replace-batch-body",
-                    )
-                return (
-                    no_update,
-                    no_update,
-                    no_update,
-                    _status_alert(
-                        "Slot occupied — confirm replace in the dialog.",
-                        color="warning",
-                    ),
-                    {
-                        "batch": len(extracted_rows) > 1,
-                        "conflicts": conflicts,
-                    },
-                    True,
-                    body,
-                    no_update,
-                    next_tick,
-                )
-
-            results: list[dict] = []
-            for idx, row in enumerate(extracted_rows, start=1):
-                compute_progress.update(
-                    phase=f"Writing {idx}/{len(extracted_rows)}: {_source_label(row['source'])}",
-                )
-                classification = row["classification"]
-                result = career_import.commit_import(
-                    career_id,
-                    players=row["players"],
-                    meta=row["meta"],
-                    season_label=classification.get("label"),
-                    season_id=classification.get("id"),
-                    year_start=classification.get("year_start"),
-                    year_end=classification.get("year_end"),
-                    slot=row["slot"],
-                    replace=replace,
-                    set_active_season=(idx == len(extracted_rows)),
-                )
-                if result.get("needs_replace"):
-                    # Race / unexpected: surface as a hard failure after partial writes.
-                    raise RuntimeError(
-                        f"Slot {result.get('slot')} for {result.get('season_id')} "
-                        "became occupied during import."
-                    )
-                results.append(result)
+                staged.append(result["item"])
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc))
         compute_progress.end()
-
-        if len(results) == 1:
-            result = results[0]
-            meta = extracted_rows[0]["meta"]
-            msg = (
-                f"Import complete — {result.get('player_count', 0):,} players saved to "
-                f"{result.get('season_label')} / {result.get('slot')}"
-                + (" (replaced)." if result.get("replaced") else ".")
-            )
-            return (
-                result.get("season_label"),
-                result.get("slot"),
-                (meta or {}).get("game_date") or game_date or "",
-                _status_alert(msg, color="success"),
-                None,
-                False,
-                no_update,
-                int(rev or 0) + 1,
-                next_tick,
-            )
-
-        total_players = sum(int(r.get("player_count") or 0) for r in results)
-        replaced_n = sum(1 for r in results if r.get("replaced"))
-        lines = [
-            f"Import complete — {len(results)} snapshots, {total_players:,} players total"
-            + (f" ({replaced_n} replaced)" if replaced_n else "")
-            + ":"
-        ]
-        for row, result in zip(extracted_rows, results):
+        lines = [f"Staged {len(staged)} file(s) — drag onto Mid/End slots:"]
+        for item in staged:
             lines.append(
-                f"• {_source_label(row['source'])} → {result.get('season_label')} / "
-                f"{result.get('slot')} ({result.get('player_count', 0):,} players)"
-                + (" [replaced]" if result.get("replaced") else "")
+                f"• {item.get('source_name') or item.get('id')} → "
+                f"{item.get('season_label') or item.get('season_id')} / "
+                f"{item.get('suggested_slot')} "
+                f"({int(item.get('player_count') or 0):,} players)"
             )
-        last = results[-1]
         return (
-            last.get("season_label"),
-            last.get("slot"),
-            (extracted_rows[-1]["meta"] or {}).get("game_date") or game_date or "",
+            (staged[0].get("game_date") or game_date or "") if len(staged) == 1 else no_update,
             _status_alert("\n".join(lines), color="success"),
             None,
             False,
@@ -1190,6 +1289,24 @@ def cr_preview_or_import(
             int(rev or 0) + 1,
             next_tick,
         )
+
+    if triggered == "cr-stage-drop":
+        if not isinstance(drop_data, dict) or not drop_data.get("staging_id"):
+            return (
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                no_update,
+                next_tick,
+            )
+        return _assign_staging(replace=False, payload=drop_data)
+
+    if triggered == "cr-replace-confirm":
+        if not isinstance(pending, dict) or not pending.get("staging_id"):
+            return _fail("Nothing pending to replace.", color="warning")
+        return _assign_staging(replace=True, payload=pending)
 
     return (
         no_update,
@@ -1199,8 +1316,51 @@ def cr_preview_or_import(
         no_update,
         no_update,
         no_update,
-        no_update,
-        no_update,
+    )
+
+
+@callback(
+    Output("cr-rev", "data", allow_duplicate=True),
+    Output("cr-import-status", "children", allow_duplicate=True),
+    Input({"type": "cr-stage-remove", "index": ALL}, "n_clicks"),
+    State("cr-career-select", "value"),
+    State("cr-rev", "data"),
+    prevent_initial_call=True,
+)
+def cr_stage_remove(n_clicks_list, career_id, rev):
+    if not any(n_clicks_list or []):
+        return no_update, no_update
+    triggered = ctx.triggered_id
+    if not isinstance(triggered, dict) or not career_id:
+        return no_update, no_update
+    staging_id = triggered.get("index")
+    if not staging_id:
+        return no_update, no_update
+    if careers.delete_staging_item(career_id, staging_id):
+        return (
+            int(rev or 0) + 1,
+            _status_alert(f"Removed staged file {staging_id}.", color="secondary"),
+        )
+    return no_update, _status_alert("Staging item not found.", color="warning")
+
+
+@callback(
+    Output("cr-rev", "data", allow_duplicate=True),
+    Output("cr-import-status", "children", allow_duplicate=True),
+    Input("cr-stage-clear", "n_clicks"),
+    State("cr-career-select", "value"),
+    State("cr-rev", "data"),
+    prevent_initial_call=True,
+)
+def cr_stage_clear(n_clicks, career_id, rev):
+    if not n_clicks:
+        return no_update, no_update
+    if not career_id:
+        return no_update, _status_alert("Select a career first.", color="warning")
+    cleared = careers.clear_staging(career_id)
+    return (
+        int(rev or 0) + 1,
+        _status_alert(f"Cleared {cleared} staged file(s).", color="secondary"),
     )
 
 

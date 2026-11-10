@@ -12011,9 +12011,157 @@ body[data-theme="light"] .ss-attr-row.is-key {
     background: color-mix(in srgb, var(--app-input) 80%, var(--app-card));
 }
 
+.cr-slot-drop {
+    min-height: 2.1rem;
+    padding: 0.25rem;
+    border-radius: 8px;
+    border: 1px dashed transparent;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.cr-slot-drop.is-suggested {
+    border-color: color-mix(in srgb, var(--app-accent) 45%, var(--app-line));
+    background: color-mix(in srgb, var(--app-accent) 8%, transparent);
+}
+
+body.cr-stage-dragging .cr-slot-drop {
+    border-color: var(--app-line);
+    background: color-mix(in srgb, var(--app-input) 55%, transparent);
+}
+
+body.cr-stage-dragging .cr-slot-drop.is-drop-target {
+    border-color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 16%, var(--app-card));
+}
+
+.cr-season-row.is-phantom > * {
+    background: color-mix(in srgb, var(--app-input) 40%, var(--app-card)) !important;
+}
+
+.cr-season-label-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.cr-season-label.is-phantom {
+    color: var(--app-muted);
+    font-style: italic;
+}
+
+.cr-season-phantom-tag {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--app-accent);
+    border: 1px solid color-mix(in srgb, var(--app-accent) 50%, var(--app-line));
+    border-radius: 999px;
+    padding: 0.05rem 0.4rem;
+}
+
+.cr-season-drop-hint {
+    font-size: 0.78rem;
+}
+
+.cr-stage-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.cr-stage-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.cr-stage-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 14rem;
+    max-width: 22rem;
+    padding: 0.55rem 0.65rem 0.45rem;
+    border-radius: 10px;
+    border: 1px solid var(--app-line);
+    background: var(--app-card);
+    color: var(--app-text);
+}
+
+.cr-stage-card.suggests-mid {
+    border-left: 3px solid #3d9a6a;
+}
+
+.cr-stage-card.suggests-end {
+    border-left: 3px solid #5b8def;
+}
+
+.cr-stage-card-drag {
+    cursor: grab;
+    user-select: none;
+}
+
+.cr-stage-card-drag.is-dragging,
+.cr-stage-card:has(.cr-stage-card-drag.is-dragging) {
+    opacity: 0.55;
+    cursor: grabbing;
+}
+
+.cr-stage-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.cr-stage-name {
+    font-weight: 600;
+    color: var(--app-text);
+    word-break: break-word;
+}
+
+.cr-stage-handle {
+    color: var(--app-muted);
+    letter-spacing: -0.08em;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.cr-stage-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.cr-stage-meta {
+    font-size: 0.78rem;
+    color: var(--app-muted);
+}
+
+.cr-stage-remove {
+    align-self: flex-start;
+}
+
+.cr-stage-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cr-stage-hint {
+    font-size: 0.82rem;
+}
+
 html[data-theme="light"] .cr-csv-drop,
 body[data-theme="light"] .cr-csv-drop {
     background: var(--app-input);
+}
+
+html[data-theme="light"] .cr-stage-card,
+body[data-theme="light"] .cr-stage-card {
+    background: var(--app-card);
 }
 
 .cr-status-alert {

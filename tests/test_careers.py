@@ -115,6 +115,72 @@ def test_batch_csv_imports_mid_and_end(career_root):
     assert season["slots"]["end"]["source_name"] == "end.csv"
 
 
+def test_stage_then_assign_to_slot(career_root):
+    careers.create_career("Stage Career")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\nBee;2;22\n"
+    staged = career_import.stage_import(
+        "stage-career",
+        csv_text=csv_text,
+        source_name="winter.csv",
+        game_date_override="2026-12-20",
+    )
+    assert staged["ok"] is True
+    item = staged["item"]
+    assert item["suggested_slot"] == "mid"
+    assert item["season_id"] == "2026-2027"
+    assert item["player_count"] == 2
+    assert len(careers.list_staging("stage-career")) == 1
+
+    blocked = career_import.commit_staging_to_slot(
+        "stage-career",
+        item["id"],
+        season_id="2026-2027",
+        slot="mid",
+        season_label="2026/27",
+        year_start=2026,
+        year_end=2027,
+        replace=False,
+    )
+    # First assign should succeed (empty slot).
+    assert blocked["ok"] is True
+    assert careers.list_staging("stage-career") == []
+    season = careers.get_season("stage-career", "2026-2027")
+    assert season["slots"]["mid"]["player_count"] == 2
+
+    # Stage another and require replace for occupied mid.
+    staged2 = career_import.stage_import(
+        "stage-career",
+        csv_text=csv_text.replace("Ada", "Ada2"),
+        source_name="winter2.csv",
+        game_date_override="2026-12-21",
+    )
+    conflict = career_import.commit_staging_to_slot(
+        "stage-career",
+        staged2["item"]["id"],
+        season_id="2026-2027",
+        slot="mid",
+        year_start=2026,
+        year_end=2027,
+        replace=False,
+    )
+    assert conflict["ok"] is False
+    assert conflict["needs_replace"] is True
+    assert len(careers.list_staging("stage-career")) == 1
+
+    replaced = career_import.commit_staging_to_slot(
+        "stage-career",
+        staged2["item"]["id"],
+        season_id="2026-2027",
+        slot="mid",
+        year_start=2026,
+        year_end=2027,
+        replace=True,
+    )
+    assert replaced["ok"] is True
+    assert replaced["replaced"] is True
+    assert careers.list_staging("stage-career") == []
+
+
 def test_csv_import_mid_end_replace(career_root):
     careers.create_career("Test Career")
     csv_text = (

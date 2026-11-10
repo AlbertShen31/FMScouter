@@ -697,3 +697,111 @@ def import_csv_to_career(
         slot=slot or classification["slot"],
         replace=replace,
     )
+
+
+def stage_extracted(
+    career_id: str,
+    *,
+    players: list[dict[str, Any]],
+    meta: dict[str, Any],
+    classification: dict[str, Any] | None = None,
+    suggested_slot: SlotName | None = None,
+) -> dict[str, Any]:
+    """Store an extracted snapshot in career staging for later drag/assign."""
+    classed = classification or meta.get("classification") or classify_import(
+        _parse_date(meta.get("game_date"))
+    )
+    slot = suggested_slot or classed.get("slot") or "end"
+    if slot not in careers.SLOTS:
+        slot = "end"
+    item = careers.add_staging_item(
+        career_id,
+        players=players,
+        meta=meta,
+        season_id=classed.get("id"),
+        season_label=classed.get("label"),
+        year_start=classed.get("year_start"),
+        year_end=classed.get("year_end"),
+        suggested_slot=slot,
+    )
+    return {"ok": True, "item": item}
+
+
+def stage_import(
+    career_id: str,
+    *,
+    save_path: str | Path | None = None,
+    csv_text: str | None = None,
+    source_name: str = "",
+    scope: str = "all",
+    game_date_override: str | None = None,
+) -> dict[str, Any]:
+    """Extract players and park them in staging (does not write a season slot)."""
+    preview = preview_import(
+        save_path=save_path,
+        csv_text=csv_text,
+        source_name=source_name,
+        scope=scope,
+        game_date_override=game_date_override,
+    )
+    return stage_extracted(
+        career_id,
+        players=preview["players"],
+        meta=preview["meta"],
+        classification=preview["classification"],
+    )
+
+
+def commit_staging_to_slot(
+    career_id: str,
+    staging_id: str,
+    *,
+    season_id: str,
+    slot: SlotName,
+    season_label: str | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    replace: bool = False,
+    set_active_season: bool = True,
+) -> dict[str, Any]:
+    """Move a staged snapshot into a season mid/end slot."""
+    item = careers.get_staging_item(career_id, staging_id)
+    if item is None:
+        raise ValueError(f"Unknown staging item: {staging_id}")
+    snapshot = careers.load_staging_snapshot(career_id, staging_id)
+    if not snapshot:
+        raise ValueError(f"Staging snapshot missing: {staging_id}")
+    players = list(snapshot.get("players") or [])
+    meta = {
+        "source": snapshot.get("source") or item.get("source"),
+        "source_name": snapshot.get("source_name") or item.get("source_name"),
+        "game_date": snapshot.get("game_date") or item.get("game_date"),
+        "managed_club_uid": snapshot.get("managed_club_uid")
+        or item.get("managed_club_uid"),
+        "managed_club_name": snapshot.get("managed_club_name")
+        or item.get("managed_club_name"),
+        "classification": {
+            "id": season_id or item.get("season_id"),
+            "label": season_label or item.get("season_label") or season_id,
+            "year_start": year_start or item.get("year_start"),
+            "year_end": year_end or item.get("year_end"),
+            "slot": slot,
+            "game_date": snapshot.get("game_date") or item.get("game_date"),
+        },
+    }
+    result = commit_import(
+        career_id,
+        players=players,
+        meta=meta,
+        season_label=season_label or item.get("season_label"),
+        season_id=season_id or item.get("season_id"),
+        year_start=year_start if year_start is not None else item.get("year_start"),
+        year_end=year_end if year_end is not None else item.get("year_end"),
+        slot=slot,
+        replace=replace,
+        set_active_season=set_active_season,
+    )
+    if result.get("ok"):
+        careers.delete_staging_item(career_id, staging_id)
+        result["staging_id"] = staging_id
+    return result

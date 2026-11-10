@@ -11,6 +11,8 @@ import gzip
 import json
 import re
 import shutil
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -54,6 +56,18 @@ def _snapshot_path(career_id: str, season_id: str, slot: SlotName) -> Path:
     if slot not in SLOTS:
         raise ValueError(f"Invalid slot: {slot}")
     return _season_dir(career_id, season_id) / f"{slot}.json.gz"
+
+
+def _staging_dir(career_id: str) -> Path:
+    return _career_dir(career_id) / "staging"
+
+
+def _staging_index_path(career_id: str) -> Path:
+    return _staging_dir(career_id) / "index.json"
+
+
+def _staging_snapshot_path(career_id: str, staging_id: str) -> Path:
+    return _staging_dir(career_id) / f"{_safe_id(staging_id)}.json.gz"
 
 
 def _read_json(path: Path, fallback: Any) -> Any:
@@ -486,3 +500,159 @@ def season_options(career_id: str) -> list[dict[str, str]]:
         {"label": season["label"], "value": season["id"]}
         for season in list_seasons(career_id)
     ]
+
+
+def _normalize_staging_item(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    staging_id = _safe_id(str(raw.get("id") or ""))
+    if not staging_id:
+        return None
+    suggested = str(raw.get("suggested_slot") or "end").strip().lower()
+    if suggested not in SLOTS:
+        suggested = "end"
+    return {
+        "id": staging_id,
+        "source": str(raw.get("source") or "").strip() or "unknown",
+        "source_name": str(raw.get("source_name") or "").strip(),
+        "game_date": str(raw.get("game_date") or "").strip() or None,
+        "season_id": _safe_id(str(raw.get("season_id") or "")) or None,
+        "season_label": str(raw.get("season_label") or "").strip() or None,
+        "year_start": int(raw.get("year_start") or 0) or None,
+        "year_end": int(raw.get("year_end") or 0) or None,
+        "suggested_slot": suggested,
+        "player_count": int(raw.get("player_count") or 0),
+        "managed_club_uid": raw.get("managed_club_uid"),
+        "managed_club_name": (
+            str(raw.get("managed_club_name") or "").strip() or None
+        ),
+        "staged_at": str(raw.get("staged_at") or "").strip() or None,
+    }
+
+
+def list_staging(career_id: str) -> list[dict[str, Any]]:
+    safe = _safe_id(career_id)
+    raw = _read_json(_staging_index_path(safe), {"items": []})
+    items_raw = raw.get("items") if isinstance(raw, dict) else []
+    out: list[dict[str, Any]] = []
+    if not isinstance(items_raw, list):
+        return out
+    for item in items_raw:
+        normalized = _normalize_staging_item(item)
+        if not normalized:
+            continue
+        snap_path = _staging_snapshot_path(safe, normalized["id"])
+        if not snap_path.is_file():
+            continue
+        out.append(normalized)
+    out.sort(key=lambda item: (item.get("staged_at") or "", item.get("id") or ""))
+    return out
+
+
+def get_staging_item(career_id: str, staging_id: str) -> dict[str, Any] | None:
+    safe_id = _safe_id(staging_id)
+    for item in list_staging(career_id):
+        if item["id"] == safe_id:
+            return item
+    return None
+
+
+def add_staging_item(
+    career_id: str,
+    *,
+    players: list[dict[str, Any]],
+    meta: dict[str, Any],
+    season_id: str | None = None,
+    season_label: str | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    suggested_slot: SlotName = "end",
+) -> dict[str, Any]:
+    """Persist an extracted snapshot into career staging (not a season slot yet)."""
+    safe = _safe_id(career_id)
+    if not _meta_path(safe).is_file():
+        raise ValueError(f"Unknown career: {career_id}")
+    if suggested_slot not in SLOTS:
+        raise ValueError(f"Invalid slot: {suggested_slot}")
+
+    staging_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
+    snapshot = {
+        "version": 1,
+        "game_date": meta.get("game_date"),
+        "source": meta.get("source"),
+        "source_name": meta.get("source_name"),
+        "managed_club_uid": meta.get("managed_club_uid"),
+        "managed_club_name": meta.get("managed_club_name"),
+        "player_count": len(players),
+        "players": players,
+    }
+    path = _staging_snapshot_path(safe, staging_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    with gzip.open(path, "wb") as fh:
+        fh.write(raw)
+
+    item = _normalize_staging_item(
+        {
+            "id": staging_id,
+            "source": meta.get("source"),
+            "source_name": meta.get("source_name"),
+            "game_date": meta.get("game_date"),
+            "season_id": season_id,
+            "season_label": season_label,
+            "year_start": year_start,
+            "year_end": year_end,
+            "suggested_slot": suggested_slot,
+            "player_count": len(players),
+            "managed_club_uid": meta.get("managed_club_uid"),
+            "managed_club_name": meta.get("managed_club_name"),
+            "staged_at": _utcnow(),
+        }
+    )
+    if item is None:
+        path.unlink(missing_ok=True)
+        raise ValueError("Failed to create staging item")
+
+    items = list_staging(safe)
+    items.append(item)
+    _write_json(_staging_index_path(safe), {"items": items})
+    return item
+
+
+def load_staging_snapshot(career_id: str, staging_id: str) -> dict[str, Any] | None:
+    path = _staging_snapshot_path(career_id, staging_id)
+    if not path.is_file():
+        return None
+    try:
+        with gzip.open(path, "rb") as fh:
+            return json.loads(fh.read().decode("utf-8"))
+    except (OSError, EOFError, json.JSONDecodeError):
+        return None
+
+
+def delete_staging_item(career_id: str, staging_id: str) -> bool:
+    safe = _safe_id(career_id)
+    sid = _safe_id(staging_id)
+    items = list_staging(safe)
+    kept = [item for item in items if item["id"] != sid]
+    path = _staging_snapshot_path(safe, sid)
+    existed = path.is_file()
+    if existed:
+        path.unlink()
+    if len(kept) != len(items):
+        _write_json(_staging_index_path(safe), {"items": kept})
+        return True
+    return existed
+
+
+def clear_staging(career_id: str) -> int:
+    safe = _safe_id(career_id)
+    items = list_staging(safe)
+    for item in items:
+        path = _staging_snapshot_path(safe, item["id"])
+        if path.is_file():
+            path.unlink()
+    index_path = _staging_index_path(safe)
+    if index_path.is_file() or items:
+        _write_json(index_path, {"items": []})
+    return len(items)
