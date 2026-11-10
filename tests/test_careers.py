@@ -79,6 +79,42 @@ def test_create_list_active_delete(career_root):
     assert careers.get_active()["career_id"] == "england"
 
 
+def test_parse_picked_paths_multiline():
+    import services.fmsave_export as fms
+
+    assert fms._parse_picked_paths("") == []
+    assert fms._parse_picked_paths('/a/one.fm\n/b/two.fm\n') == [
+        "/a/one.fm",
+        "/b/two.fm",
+    ]
+    assert fms._parse_picked_paths('/a/one.fm\x00/a/one.fm\x00/b/two.fm') == [
+        "/a/one.fm",
+        "/b/two.fm",
+    ]
+
+
+def test_batch_csv_imports_mid_and_end(career_root):
+    careers.create_career("Batch Career")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\n"
+    mid = career_import.import_csv_to_career(
+        "batch-career",
+        csv_text,
+        source_name="mid.csv",
+        game_date="2026-12-20",
+    )
+    end = career_import.import_csv_to_career(
+        "batch-career",
+        csv_text,
+        source_name="end.csv",
+        game_date="2027-05-20",
+    )
+    assert mid["ok"] is True and mid["slot"] == "mid"
+    assert end["ok"] is True and end["slot"] == "end"
+    season = careers.get_season("batch-career", "2026-2027")
+    assert season["slots"]["mid"]["source_name"] == "mid.csv"
+    assert season["slots"]["end"]["source_name"] == "end.csv"
+
+
 def test_csv_import_mid_end_replace(career_root):
     careers.create_career("Test Career")
     csv_text = (

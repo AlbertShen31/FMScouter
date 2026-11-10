@@ -12018,6 +12018,7 @@ body[data-theme="light"] .cr-csv-drop {
 
 .cr-status-alert {
     border: 1px solid var(--app-line);
+    white-space: pre-line;
 }
 
 .cr-page .rs-shortlist-busy-host {

@@ -410,20 +410,55 @@ def _dialog_initial_dir(preferred: str | Path | None = None) -> Path:
     return Path.home()
 
 
-def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
-    """Open a native file dialog for a ``.fm`` save. Returns path or None if cancelled."""
+def _parse_picked_paths(raw: str | None) -> list[str]:
+    """Split dialog stdout into existing file paths (newline / NUL separated)."""
+    text = (raw or "").strip()
+    if not text:
+        return []
+    parts = text.replace("\x00", "\n").splitlines()
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        path = str(part or "").strip().strip('"')
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        out.append(path)
+    return out
+
+
+def pick_fm_save_files(
+    initial_dir: str | Path | None = None,
+    *,
+    multiple: bool = True,
+) -> list[str]:
+    """Open a native file dialog for ``.fm`` save(s). Empty list if cancelled."""
     start = _dialog_initial_dir(initial_dir)
     start_s = str(start)
+    prompt = (
+        "Select Football Manager saves"
+        if multiple
+        else "Select Football Manager save"
+    )
 
     if sys.platform == "darwin":
         # AppleScript from a worker thread (Dash threaded=True); avoid tkinter.
         escaped = start_s.replace("\\", "\\\\").replace('"', '\\"')
+        multi_clause = " with multiple selections allowed" if multiple else ""
         script = (
             f'set defaultLoc to POSIX file "{escaped}"\n'
             "try\n"
-            '  set theFile to choose file with prompt '
-            '"Select Football Manager save" default location defaultLoc\n'
-            "  return POSIX path of theFile\n"
+            f'  set theFiles to choose file with prompt "{prompt}" '
+            f"default location defaultLoc{multi_clause}\n"
+            "  set out to \"\"\n"
+            "  if class of theFiles is list then\n"
+            "    repeat with f in theFiles\n"
+            "      set out to out & POSIX path of f & linefeed\n"
+            "    end repeat\n"
+            "  else\n"
+            "    set out to POSIX path of theFiles & linefeed\n"
+            "  end if\n"
+            "  return out\n"
             "on error\n"
             '  return ""\n'
             "end try"
@@ -437,20 +472,22 @@ def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
                 timeout=300,
             )
         except (OSError, subprocess.TimeoutExpired):
-            return None
-        path = (result.stdout or "").strip()
-        return path or None
+            return []
+        return _parse_picked_paths(result.stdout)
 
     if sys.platform == "win32":
         ps_dir = start_s.replace("'", "''")
+        ps_prompt = prompt.replace("'", "''")
+        multi_flag = "$true" if multiple else "$false"
         ps = (
             "Add-Type -AssemblyName System.Windows.Forms; "
             "$d = New-Object System.Windows.Forms.OpenFileDialog; "
             "$d.Filter = 'FM Save (*.fm)|*.fm|All files (*.*)|*.*'; "
             f"$d.InitialDirectory = '{ps_dir}'; "
-            "$d.Title = 'Select Football Manager save'; "
+            f"$d.Title = '{ps_prompt}'; "
+            f"$d.Multiselect = {multi_flag}; "
             "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
-            "{ [Console]::Out.Write($d.FileName) }"
+            "{ [Console]::Out.Write(($d.FileNames -join [Environment]::NewLine)) }"
         )
         try:
             result = subprocess.run(
@@ -467,27 +504,30 @@ def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
                 timeout=300,
             )
         except (OSError, subprocess.TimeoutExpired):
-            return None
-        path = (result.stdout or "").strip()
-        return path or None
+            return []
+        return _parse_picked_paths(result.stdout)
 
     # Linux / other: zenity, then kdialog.
-    for cmd in (
-        [
-            "zenity",
-            "--file-selection",
-            "--title=Select Football Manager save",
-            f"--filename={start_s}/",
-            "--file-filter=FM Save | *.fm",
-            "--file-filter=All files | *",
-        ],
-        [
-            "kdialog",
-            "--getopenfilename",
-            start_s,
-            "*.fm|FM Save",
-        ],
-    ):
+    zenity_cmd = [
+        "zenity",
+        "--file-selection",
+        f"--title={prompt}",
+        f"--filename={start_s}/",
+        "--file-filter=FM Save | *.fm",
+        "--file-filter=All files | *",
+    ]
+    if multiple:
+        zenity_cmd.extend(["--multiple", "--separator=\n"])
+    kdialog_cmd = [
+        "kdialog",
+        "--getopenfilename",
+        start_s,
+        "*.fm|FM Save",
+    ]
+    if multiple:
+        # Newer kdialog builds accept --multiple; ignore if unsupported.
+        kdialog_cmd.insert(1, "--multiple")
+    for cmd in (zenity_cmd, kdialog_cmd):
         try:
             result = subprocess.run(
                 cmd,
@@ -499,10 +539,16 @@ def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
         except (OSError, subprocess.TimeoutExpired):
             continue
         if result.returncode == 0:
-            path = (result.stdout or "").strip()
-            if path:
-                return path
-    return None
+            paths = _parse_picked_paths(result.stdout)
+            if paths:
+                return paths
+    return []
+
+
+def pick_fm_save_file(initial_dir: str | Path | None = None) -> str | None:
+    """Open a native file dialog for one ``.fm`` save. Returns path or None if cancelled."""
+    files = pick_fm_save_files(initial_dir, multiple=False)
+    return files[0] if files else None
 
 
 def _format_money(amount: float | int | None, *, annual: bool = False) -> str:

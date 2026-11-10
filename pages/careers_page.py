@@ -1,6 +1,8 @@
 """Career game containers: import mid/end season snapshots and switch seasons."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from dash import (
     ALL,
     Input,
@@ -27,11 +29,30 @@ import services.fmsave_export as fms
 register_page(__name__, path="/careers", name="Careers")
 
 PAGE_TIP = (
-    "Each Career is one Football Manager game. Import a .fm save (or Moneyball CSV) "
-    "into a mid or end season slot — at most two snapshots per season. Raw saves are "
-    "not kept; only compact player attributes + OVERALL season stats. Switch seasons "
-    "here; playground pages will use the active career/season later."
+    "Each Career is one Football Manager game. Import one or more .fm saves "
+    "(or Moneyball CSVs) into mid/end season slots — at most two snapshots per "
+    "season. Raw saves are not kept; only compact player attributes + OVERALL "
+    "season stats. Switch seasons here; playground pages will use the active "
+    "career/season later."
 )
+
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [v for v in value if v is not None]
+    return [value]
+
+
+def _fm_paths_label(paths: list[str]) -> str:
+    cleaned = [str(p).strip() for p in paths if str(p).strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    names = [Path(p).name for p in cleaned]
+    return f"{len(cleaned)} saves: " + ", ".join(names)
 
 
 def _card_header(title: str, tip: str, help_id: str) -> dbc.CardHeader:
@@ -149,6 +170,7 @@ def layout(**_kwargs):
             dcc.Store(id="cr-rev", data=0),
             dcc.Store(id="cr-active", data=active),
             dcc.Store(id="cr-pending", data=None),
+            dcc.Store(id="cr-fm-paths", data=[]),
             dcc.Store(id="cr-job-tick", data=0),
             dcc.Interval(
                 id="cr-progress-poll",
@@ -255,17 +277,19 @@ def layout(**_kwargs):
                                     [
                                         _card_header(
                                             "2. Import snapshot",
-                                            "Import .fm (preferred) or Moneyball CSV. "
-                                            "Use Preview to fill season label / slot / "
-                                            "game date from the save header, then Import "
-                                            "to extract players. Override fields before "
-                                            "confirming. Occupied slots can be replaced.",
+                                            "Import one or more .fm saves (preferred) or "
+                                            "Moneyball CSVs. Multi-file imports classify "
+                                            "each file from its own game date. Preview "
+                                            "fills season/slot/date for a single file; for "
+                                            "batches it lists each suggestion. Override "
+                                            "fields apply only when importing one file. "
+                                            "Occupied slots can be replaced.",
                                             "cr-import-tip",
                                         ),
                                         dbc.CardBody(
                                             [
                                                 html.Label(
-                                                    "Save file (.fm)",
+                                                    "Save file(s) (.fm)",
                                                     className="rs-field-label",
                                                 ),
                                                 html.Div(
@@ -278,7 +302,7 @@ def layout(**_kwargs):
                                                             className="sx-path-input",
                                                         ),
                                                         dmc.Button(
-                                                            "Choose file…",
+                                                            "Choose files…",
                                                             id="cr-fm-browse",
                                                             n_clicks=0,
                                                             variant="default",
@@ -287,16 +311,16 @@ def layout(**_kwargs):
                                                     className="sx-path-row mb-2",
                                                 ),
                                                 html.Label(
-                                                    "Or Moneyball CSV",
+                                                    "Or Moneyball CSV(s)",
                                                     className="rs-field-label",
                                                 ),
                                                 dcc.Upload(
                                                     id="cr-csv-upload",
                                                     children=html.Div(
-                                                        "Drop CSV here or click to select"
+                                                        "Drop CSV(s) here or click to select"
                                                     ),
                                                     className="cr-csv-drop mb-3",
-                                                    multiple=False,
+                                                    multiple=True,
                                                 ),
                                                 html.Label(
                                                     "Scope (.fm)",
@@ -660,16 +684,38 @@ def cr_set_active_season(n_clicks_list, career_id, rev):
 
 
 @callback(
+    Output("cr-fm-paths", "data"),
     Output("cr-fm-path", "value"),
     Input("cr-fm-browse", "n_clicks"),
+    State("cr-fm-paths", "data"),
     State("cr-fm-path", "value"),
     prevent_initial_call=True,
 )
-def cr_browse_fm(n_clicks, current_path):
+def cr_browse_fm(n_clicks, current_paths, current_path):
     if not n_clicks:
-        return no_update
-    picked = fms.pick_fm_save_file(current_path or fms.default_save_path())
-    return picked or no_update
+        return no_update, no_update
+    seed = ""
+    existing = [str(p).strip() for p in _as_list(current_paths) if str(p).strip()]
+    if existing:
+        seed = existing[0]
+    elif current_path:
+        seed = str(current_path).strip()
+    picked = fms.pick_fm_save_files(seed or fms.default_save_path(), multiple=True)
+    if not picked:
+        return no_update, no_update
+    return picked, _fm_paths_label(picked)
+
+
+@callback(
+    Output("cr-fm-paths", "data", allow_duplicate=True),
+    Output("cr-fm-path", "value", allow_duplicate=True),
+    Input("cr-csv-upload", "contents"),
+    prevent_initial_call=True,
+)
+def cr_clear_fm_on_csv(contents):
+    if not contents:
+        return no_update, no_update
+    return [], ""
 
 
 clientside_callback(
@@ -769,6 +815,7 @@ def cr_poll_progress(_n):
     Input("cr-import", "n_clicks"),
     Input("cr-replace-confirm", "n_clicks"),
     Input("cr-replace-cancel", "n_clicks"),
+    State("cr-fm-paths", "data"),
     State("cr-fm-path", "value"),
     State("cr-csv-upload", "contents"),
     State("cr-csv-upload", "filename"),
@@ -787,6 +834,7 @@ def cr_preview_or_import(
     _import_clicks,
     _replace_confirm,
     _replace_cancel,
+    fm_paths,
     fm_path,
     csv_contents,
     csv_filename,
@@ -815,36 +863,74 @@ def cr_preview_or_import(
             next_tick,
         )
 
-    def _peek():
-        if fm_path and str(fm_path).strip():
-            return career_import.peek_classification(
-                save_path=str(fm_path).strip(),
-                game_date_override=game_date or None,
-            )
-        if csv_contents:
-            text = decode_upload(csv_contents)
-            return career_import.peek_classification(
-                csv_text=text,
-                source_name=csv_filename or "upload.csv",
-                game_date_override=game_date or None,
-            )
-        raise ValueError("Choose a .fm save or drop a Moneyball CSV first.")
+    def _resolve_fm_paths() -> list[str]:
+        paths = [str(p).strip() for p in _as_list(fm_paths) if str(p).strip()]
+        if paths:
+            return paths
+        # Fallback when store is empty but a single real path is shown.
+        single = str(fm_path or "").strip()
+        if not single or " saves: " in single:
+            return []
+        if Path(single).suffix.lower() == ".fm" or Path(single).is_file():
+            return [single]
+        return []
 
-    def _load_extract():
-        if fm_path and str(fm_path).strip():
+    def _csv_items() -> list[tuple[str, str]]:
+        contents_list = _as_list(csv_contents)
+        names_list = _as_list(csv_filename)
+        items: list[tuple[str, str]] = []
+        for idx, contents in enumerate(contents_list):
+            name = (
+                names_list[idx]
+                if idx < len(names_list) and names_list[idx]
+                else f"upload-{idx + 1}.csv"
+            )
+            items.append((contents, str(name)))
+        return items
+
+    def _sources() -> list[dict]:
+        paths = _resolve_fm_paths()
+        if paths:
+            return [{"kind": "fm", "path": path} for path in paths]
+        csv_items = _csv_items()
+        if csv_items:
+            return [
+                {"kind": "csv", "contents": contents, "filename": name}
+                for contents, name in csv_items
+            ]
+        raise ValueError("Choose .fm save(s) or drop Moneyball CSV(s) first.")
+
+    def _peek_one(source: dict, *, date_override: str | None):
+        if source["kind"] == "fm":
+            return career_import.peek_classification(
+                save_path=source["path"],
+                game_date_override=date_override,
+            )
+        text = decode_upload(source["contents"])
+        return career_import.peek_classification(
+            csv_text=text,
+            source_name=source["filename"],
+            game_date_override=date_override,
+        )
+
+    def _extract_one(source: dict, *, date_override: str | None):
+        if source["kind"] == "fm":
             return career_import.preview_import(
-                save_path=str(fm_path).strip(),
+                save_path=source["path"],
                 scope=scope or "all",
-                game_date_override=game_date or None,
+                game_date_override=date_override,
             )
-        if csv_contents:
-            text = decode_upload(csv_contents)
-            return career_import.preview_import(
-                csv_text=text,
-                source_name=csv_filename or "upload.csv",
-                game_date_override=game_date or None,
-            )
-        raise ValueError("Choose a .fm save or drop a Moneyball CSV first.")
+        text = decode_upload(source["contents"])
+        return career_import.preview_import(
+            csv_text=text,
+            source_name=source["filename"],
+            game_date_override=date_override,
+        )
+
+    def _source_label(source: dict) -> str:
+        if source["kind"] == "fm":
+            return Path(source["path"]).name
+        return source.get("filename") or "upload.csv"
 
     def _fail(message: str, *, pending_out=None, modal=False, body=no_update, color="danger"):
         return (
@@ -861,30 +947,62 @@ def cr_preview_or_import(
 
     if triggered == "cr-preview":
         compute_progress.begin("Reading save date…", phase="Opening save…")
-        peek = None
         try:
-            peek = _peek()
+            sources = _sources()
+            single = len(sources) == 1
+            peeks = []
+            for idx, source in enumerate(sources, start=1):
+                compute_progress.update(
+                    phase=f"Reading {idx}/{len(sources)}: {_source_label(source)}",
+                )
+                # Date override only for single-file preview (batch uses each save date).
+                peeks.append(
+                    _peek_one(source, date_override=(game_date or None) if single else None)
+                )
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc), pending_out=None)
         compute_progress.end()
-        classification = peek["classification"]
-        meta = peek["meta"]
-        summary = (
-            f"Preview complete — suggested {classification.get('label')} / "
-            f"{classification.get('slot')} · "
-            f"date={classification.get('game_date') or '—'} · "
-            f"source={meta.get('source')}"
-        )
+
+        if len(peeks) == 1:
+            classification = peeks[0]["classification"]
+            meta = peeks[0]["meta"]
+            summary = (
+                f"Preview complete — suggested {classification.get('label')} / "
+                f"{classification.get('slot')} · "
+                f"date={classification.get('game_date') or '—'} · "
+                f"source={meta.get('source_name') or meta.get('source')}"
+            )
+            return (
+                classification.get("label"),
+                classification.get("slot"),
+                classification.get("game_date") or game_date or "",
+                _status_alert(summary, color="info"),
+                {
+                    "classification": classification,
+                    "source": meta.get("source"),
+                },
+                False,
+                no_update,
+                no_update,
+                next_tick,
+            )
+
+        lines = [f"Preview complete — {len(peeks)} files:"]
+        for source, peek in zip(sources, peeks):
+            classification = peek["classification"]
+            lines.append(
+                f"• {_source_label(source)} → {classification.get('label')} / "
+                f"{classification.get('slot')} · "
+                f"date={classification.get('game_date') or '—'}"
+            )
+        lines.append("Overrides are ignored for multi-file import; each file uses its own date.")
         return (
-            classification.get("label"),
-            classification.get("slot"),
-            classification.get("game_date") or game_date or "",
-            _status_alert(summary, color="info"),
-            {
-                "classification": classification,
-                "source": meta.get("source"),
-            },
+            no_update,
+            no_update,
+            no_update,
+            _status_alert("\n".join(lines), color="info"),
+            {"batch": True, "count": len(peeks)},
             False,
             no_update,
             no_update,
@@ -903,66 +1021,169 @@ def cr_preview_or_import(
             phase="Opening save…",
         )
         try:
-            # Form game_date/season_label/slot come from Preview (or manual edits).
-            extracted = _load_extract()
-            players = extracted["players"]
-            meta = extracted["meta"]
-            classification = extracted["classification"]
-            if season_label:
-                classification = {
-                    **classification,
-                    "label": season_label,
-                }
-            chosen_slot = slot or classification.get("slot") or "end"
-            result = career_import.commit_import(
-                career_id,
-                players=players,
-                meta=meta,
-                season_label=classification.get("label"),
-                season_id=classification.get("id"),
-                year_start=classification.get("year_start"),
-                year_end=classification.get("year_end"),
-                slot=chosen_slot,
-                replace=replace,
-            )
+            sources = _sources()
+            single = len(sources) == 1
+            extracted_rows: list[dict] = []
+            for idx, source in enumerate(sources, start=1):
+                compute_progress.update(
+                    phase=f"Extracting {idx}/{len(sources)}: {_source_label(source)}",
+                )
+                extracted = _extract_one(
+                    source,
+                    date_override=(game_date or None) if single else None,
+                )
+                classification = extracted["classification"]
+                chosen_slot = classification.get("slot") or "end"
+                chosen_label = classification.get("label")
+                if single:
+                    # Form overrides apply only for one-file imports.
+                    if season_label:
+                        chosen_label = season_label
+                    if slot:
+                        chosen_slot = slot
+                extracted_rows.append(
+                    {
+                        "source": source,
+                        "players": extracted["players"],
+                        "meta": extracted["meta"],
+                        "classification": {
+                            **classification,
+                            "label": chosen_label,
+                            "slot": chosen_slot,
+                        },
+                        "slot": chosen_slot,
+                    }
+                )
+
+            conflicts: list[dict] = []
+            if not replace:
+                seen_targets: set[tuple[str, str]] = set()
+                for row in extracted_rows:
+                    classification = row["classification"]
+                    sid = classification.get("id")
+                    chosen_slot = row["slot"]
+                    if not sid:
+                        continue
+                    key = (str(sid), str(chosen_slot))
+                    occupied = careers.slot_occupied(
+                        career_id, sid, chosen_slot
+                    ) or key in seen_targets
+                    if occupied:
+                        conflicts.append(
+                            {
+                                "source": _source_label(row["source"]),
+                                "season_id": sid,
+                                "slot": chosen_slot,
+                            }
+                        )
+                    seen_targets.add(key)
+
+            if conflicts:
+                compute_progress.end()
+                if len(conflicts) == 1 and len(extracted_rows) == 1:
+                    body = (
+                        f"The {conflicts[0]['slot']} slot for season "
+                        f"{conflicts[0]['season_id']} already has a snapshot. Replace it?"
+                    )
+                else:
+                    body_lines = [
+                        f"{len(conflicts)} occupied slot(s) will be replaced:"
+                    ]
+                    body_lines.extend(
+                        f"• {c['source']} → {c['season_id']} / {c['slot']}"
+                        for c in conflicts
+                    )
+                    body = html.Div(
+                        [html.Div(line) for line in body_lines],
+                        className="cr-replace-batch-body",
+                    )
+                return (
+                    no_update,
+                    no_update,
+                    no_update,
+                    _status_alert(
+                        "Slot occupied — confirm replace in the dialog.",
+                        color="warning",
+                    ),
+                    {
+                        "batch": len(extracted_rows) > 1,
+                        "conflicts": conflicts,
+                    },
+                    True,
+                    body,
+                    no_update,
+                    next_tick,
+                )
+
+            results: list[dict] = []
+            for idx, row in enumerate(extracted_rows, start=1):
+                compute_progress.update(
+                    phase=f"Writing {idx}/{len(extracted_rows)}: {_source_label(row['source'])}",
+                )
+                classification = row["classification"]
+                result = career_import.commit_import(
+                    career_id,
+                    players=row["players"],
+                    meta=row["meta"],
+                    season_label=classification.get("label"),
+                    season_id=classification.get("id"),
+                    year_start=classification.get("year_start"),
+                    year_end=classification.get("year_end"),
+                    slot=row["slot"],
+                    replace=replace,
+                    set_active_season=(idx == len(extracted_rows)),
+                )
+                if result.get("needs_replace"):
+                    # Race / unexpected: surface as a hard failure after partial writes.
+                    raise RuntimeError(
+                        f"Slot {result.get('slot')} for {result.get('season_id')} "
+                        "became occupied during import."
+                    )
+                results.append(result)
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc))
         compute_progress.end()
 
-        if result.get("needs_replace"):
-            body = (
-                f"The {result.get('slot')} slot for season {result.get('season_id')} "
-                f"already has a snapshot. Replace it?"
+        if len(results) == 1:
+            result = results[0]
+            meta = extracted_rows[0]["meta"]
+            msg = (
+                f"Import complete — {result.get('player_count', 0):,} players saved to "
+                f"{result.get('season_label')} / {result.get('slot')}"
+                + (" (replaced)." if result.get("replaced") else ".")
             )
             return (
+                result.get("season_label"),
+                result.get("slot"),
+                (meta or {}).get("game_date") or game_date or "",
+                _status_alert(msg, color="success"),
+                None,
+                False,
                 no_update,
-                no_update,
-                no_update,
-                _status_alert(
-                    "Slot occupied — confirm replace in the dialog.",
-                    color="warning",
-                ),
-                {
-                    "classification": classification,
-                    "slot": result.get("slot"),
-                },
-                True,
-                body,
-                no_update,
+                int(rev or 0) + 1,
                 next_tick,
             )
 
-        msg = (
-            f"Import complete — {result.get('player_count', 0):,} players saved to "
-            f"{result.get('season_label')} / {result.get('slot')}"
-            + (" (replaced)." if result.get("replaced") else ".")
-        )
+        total_players = sum(int(r.get("player_count") or 0) for r in results)
+        replaced_n = sum(1 for r in results if r.get("replaced"))
+        lines = [
+            f"Import complete — {len(results)} snapshots, {total_players:,} players total"
+            + (f" ({replaced_n} replaced)" if replaced_n else "")
+            + ":"
+        ]
+        for row, result in zip(extracted_rows, results):
+            lines.append(
+                f"• {_source_label(row['source'])} → {result.get('season_label')} / "
+                f"{result.get('slot')} ({result.get('player_count', 0):,} players)"
+                + (" [replaced]" if result.get("replaced") else "")
+            )
+        last = results[-1]
         return (
-            result.get("season_label"),
-            result.get("slot"),
-            (meta or {}).get("game_date") or game_date or "",
-            _status_alert(msg, color="success"),
+            last.get("season_label"),
+            last.get("slot"),
+            (extracted_rows[-1]["meta"] or {}).get("game_date") or game_date or "",
+            _status_alert("\n".join(lines), color="success"),
             None,
             False,
             no_update,
