@@ -12173,3 +12173,15 @@ body[data-theme="light"] .cr-stage-card {
     position: relative;
     min-height: 12rem;
 }
+
+/* Sit above Bootstrap modal (1050/1055) so Replace shows progress, not a stuck dialog. */
+.cr-page .rs-shortlist-busy.is-on {
+    z-index: 2000;
+}
+
+.cr-page .rs-busy-progress-detail {
+    white-space: normal;
+    max-width: 36rem;
+    text-align: center;
+    line-height: 1.35;
+}

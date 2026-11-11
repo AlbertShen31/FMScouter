@@ -43,3 +43,36 @@ def test_indeterminate_without_total():
         assert props["detail"] == ""
     finally:
         cp.end()
+
+
+def test_multi_file_label_and_blended_bar():
+    cp.begin(phase="Preparing…", file_done=0, file_total=3, context="a.fm")
+    try:
+        cp.update(
+            phase="Building snapshots…",
+            context="a.fm",
+            file_done=0,
+            file_total=3,
+            done=25,
+            total=100,
+        )
+        props = cp.ui_props()
+        assert props["label"] == "File 1 of 3 · a.fm"
+        assert "0/3 files done" in props["detail"]
+        assert "25 / 100 players" in props["detail"]
+        assert props["bar_style"]["width"] == "8.3%"
+
+        cp.update(
+            phase="Building snapshots…",
+            context="b.fm",
+            file_done=1,
+            file_total=3,
+            done=50,
+            total=100,
+        )
+        props = cp.ui_props()
+        assert props["label"] == "File 2 of 3 · b.fm"
+        assert "1/3 files done" in props["detail"]
+        assert props["bar_style"]["width"] == "50.0%"
+    finally:
+        cp.end()

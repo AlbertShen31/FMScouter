@@ -892,6 +892,34 @@ def cr_clear_fm_on_csv(contents):
 
 clientside_callback(
     """
+    function(confirmN, cancelN) {
+        var trig = window.dash_clientside.callback_context.triggered;
+        if (!trig || !trig.length) {
+            return window.dash_clientside.no_update;
+        }
+        var prop = String(trig[0].prop_id || "");
+        if (prop.indexOf("cr-replace-confirm") === -1 && prop.indexOf("cr-replace-cancel") === -1) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("cr-replace-confirm") !== -1 && !confirmN) {
+            return window.dash_clientside.no_update;
+        }
+        if (prop.indexOf("cr-replace-cancel") !== -1 && !cancelN) {
+            return window.dash_clientside.no_update;
+        }
+        // Close immediately so Replace isn't stuck under/over the busy overlay.
+        return false;
+    }
+    """,
+    Output("cr-replace-modal", "is_open", allow_duplicate=True),
+    Input("cr-replace-confirm", "n_clicks"),
+    Input("cr-replace-cancel", "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
+clientside_callback(
+    """
     function(previewN, stageN, replaceN, dropData) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
@@ -899,33 +927,38 @@ clientside_callback(
         }
         var prop = String(trig[0].prop_id || "");
         var labelText = "Working…";
+        var detailText = "";
         if (prop.indexOf("cr-preview") !== -1) {
             if (!previewN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
-            labelText = "Reading save date…";
+            labelText = "Reading save dates…";
+            detailText = "Starting preview…";
         } else if (prop.indexOf("cr-stage") !== -1 && prop.indexOf("cr-stage-drop") === -1) {
             if (!stageN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
-            labelText = "Staging snapshot…";
+            labelText = "Staging files…";
+            detailText = "Preparing extract…";
         } else if (prop.indexOf("cr-stage-drop") !== -1) {
             if (!dropData) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
             labelText = "Assigning to season slot…";
+            detailText = "Writing snapshot…";
         } else if (prop.indexOf("cr-replace-confirm") !== -1) {
             if (!replaceN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
             labelText = "Replacing snapshot…";
+            detailText = "Writing replacement…";
         } else {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var label = document.getElementById("cr-busy-label");
         if (label) { label.textContent = labelText; }
         var detail = document.getElementById("cr-busy-detail");
-        if (detail) { detail.textContent = ""; }
+        if (detail) { detail.textContent = detailText; }
         var track = document.getElementById("cr-busy-track");
         if (track) {
             track.className = "rs-busy-progress is-indeterminate";
@@ -1100,6 +1133,28 @@ def cr_preview_stage_or_assign(
             next_tick,
         )
 
+    def _mark_file(idx: int, total_files: int, name: str, *, phase: str) -> None:
+        compute_progress.update(
+            phase=phase,
+            context=name,
+            message=name,
+            file_done=max(0, idx - 1),
+            file_total=total_files,
+            done=0,
+            total=0,
+        )
+
+    def _finish_file(idx: int, total_files: int, name: str, *, phase: str) -> None:
+        compute_progress.update(
+            phase=phase,
+            context=name,
+            message=name,
+            file_done=idx,
+            file_total=total_files,
+            done=0,
+            total=0,
+        )
+
     def _assign_staging(*, replace: bool, payload: dict):
         staging_id = str(payload.get("staging_id") or "").strip()
         season_id = str(payload.get("season_id") or "").strip()
@@ -1119,9 +1174,21 @@ def cr_preview_stage_or_assign(
         except (TypeError, ValueError):
             year_end_i = None
         season_label = str(payload.get("season_label") or "").strip() or None
+        item = careers.get_staging_item(career_id, staging_id) or {}
+        source_name = str(item.get("source_name") or staging_id)
         compute_progress.begin(
             "Replacing snapshot…" if replace else "Assigning to season slot…",
             phase="Writing snapshot…",
+            context=source_name,
+            file_done=0,
+            file_total=1,
+        )
+        compute_progress.update(
+            phase="Writing snapshot…",
+            context=source_name,
+            message=f"{season_id} / {slot}",
+            done=0,
+            total=max(1, int(item.get("player_count") or 0)),
         )
         try:
             result = career_import.commit_staging_to_slot(
@@ -1139,10 +1206,9 @@ def cr_preview_stage_or_assign(
             return _fail(str(exc))
         compute_progress.end()
         if result.get("needs_replace"):
-            item = careers.get_staging_item(career_id, staging_id) or {}
             body = (
                 f"The {slot} slot for season {season_id} already has a snapshot. "
-                f"Replace it with “{item.get('source_name') or staging_id}”?"
+                f"Replace it with “{source_name}”?"
             )
             return (
                 no_update,
@@ -1164,7 +1230,7 @@ def cr_preview_stage_or_assign(
                 next_tick,
             )
         msg = (
-            f"Assigned {result.get('player_count', 0):,} players to "
+            f"Assigned {result.get('player_count', 0):,} players from {source_name} to "
             f"{result.get('season_label')} / {result.get('slot')}"
             + (" (replaced)." if result.get("replaced") else ".")
         )
@@ -1179,21 +1245,30 @@ def cr_preview_stage_or_assign(
         )
 
     if triggered == "cr-preview":
-        compute_progress.begin("Reading save date…", phase="Opening save…")
         try:
             sources = _sources()
-            single = len(sources) == 1
+        except Exception as exc:  # noqa: BLE001
+            return _fail(str(exc), pending_out=None)
+        total_files = len(sources)
+        compute_progress.begin(
+            "Reading save dates…",
+            phase="Preparing…",
+            file_done=0,
+            file_total=total_files,
+        )
+        try:
+            single = total_files == 1
             peeks = []
             for idx, source in enumerate(sources, start=1):
-                compute_progress.update(
-                    phase=f"Reading {idx}/{len(sources)}: {_source_label(source)}",
-                )
+                name = _source_label(source)
+                _mark_file(idx, total_files, name, phase="Reading save date…")
                 peeks.append(
                     _peek_one(
                         source,
                         date_override=(game_date or None) if single else None,
                     )
                 )
+                _finish_file(idx, total_files, name, phase="Date read")
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc), pending_out=None)
@@ -1243,15 +1318,23 @@ def cr_preview_stage_or_assign(
     if triggered == "cr-stage":
         if not career_id:
             return _fail("Select or create a career first.", color="warning")
-        compute_progress.begin("Staging snapshot…", phase="Opening save…")
         try:
             sources = _sources()
-            single = len(sources) == 1
+        except Exception as exc:  # noqa: BLE001
+            return _fail(str(exc))
+        total_files = len(sources)
+        compute_progress.begin(
+            "Staging files…",
+            phase="Preparing…",
+            file_done=0,
+            file_total=total_files,
+        )
+        try:
+            single = total_files == 1
             staged = []
             for idx, source in enumerate(sources, start=1):
-                compute_progress.update(
-                    phase=f"Staging {idx}/{len(sources)}: {_source_label(source)}",
-                )
+                name = _source_label(source)
+                _mark_file(idx, total_files, name, phase="Extracting players…")
                 if source["kind"] == "fm":
                     result = career_import.stage_import(
                         career_id,
@@ -1267,12 +1350,21 @@ def cr_preview_stage_or_assign(
                         source_name=source["filename"],
                         game_date_override=(game_date or None) if single else None,
                     )
-                staged.append(result["item"])
+                item = result["item"]
+                staged.append(item)
+                _finish_file(
+                    idx,
+                    total_files,
+                    name,
+                    phase=f"Staged ({int(item.get('player_count') or 0):,} players)",
+                )
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc))
         compute_progress.end()
-        lines = [f"Staged {len(staged)} file(s) — drag onto Mid/End slots:"]
+        lines = [
+            f"Staged {len(staged)}/{total_files} file(s) — drag onto Mid/End slots:"
+        ]
         for item in staged:
             lines.append(
                 f"• {item.get('source_name') or item.get('id')} → "

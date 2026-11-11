@@ -15,12 +15,22 @@ _state: dict[str, Any] = {
     "active": False,
     "phase": "",
     "message": "",
+    "context": "",
     "done": 0,
     "total": 0,
+    "file_done": 0,
+    "file_total": 0,
 }
 
 
-def begin(message: str = "", *, phase: str = "") -> None:
+def begin(
+    message: str = "",
+    *,
+    phase: str = "",
+    context: str = "",
+    file_done: int | None = None,
+    file_total: int | None = None,
+) -> None:
     """Start (or nest) a user-visible job."""
     global _depth
     with _lock:
@@ -39,14 +49,27 @@ def begin(message: str = "", *, phase: str = "") -> None:
         if _depth == 1:
             _state["done"] = 0
             _state["total"] = 0
+            _state["context"] = str(context or "").strip()
+            _state["file_done"] = max(0, int(file_done or 0))
+            _state["file_total"] = max(0, int(file_total or 0))
+        else:
+            if context:
+                _state["context"] = str(context).strip()
+            if file_done is not None:
+                _state["file_done"] = max(0, int(file_done))
+            if file_total is not None:
+                _state["file_total"] = max(0, int(file_total))
 
 
 def update(
     *,
     phase: str | None = None,
     message: str | None = None,
+    context: str | None = None,
     done: int | None = None,
     total: int | None = None,
+    file_done: int | None = None,
+    file_total: int | None = None,
 ) -> None:
     """Patch the current progress snapshot (no-op fields stay unchanged)."""
     global _depth
@@ -59,6 +82,8 @@ def update(
             _state["phase"] = str(phase)
         if message is not None:
             _state["message"] = str(message)
+        if context is not None:
+            _state["context"] = str(context)
         if total is not None:
             try:
                 _state["total"] = max(0, int(total))
@@ -67,6 +92,16 @@ def update(
         if done is not None:
             try:
                 _state["done"] = max(0, int(done))
+            except (TypeError, ValueError):
+                pass
+        if file_total is not None:
+            try:
+                _state["file_total"] = max(0, int(file_total))
+            except (TypeError, ValueError):
+                pass
+        if file_done is not None:
+            try:
+                _state["file_done"] = max(0, int(file_done))
             except (TypeError, ValueError):
                 pass
 
@@ -85,8 +120,11 @@ def end() -> None:
             _state["active"] = False
             _state["phase"] = ""
             _state["message"] = ""
+            _state["context"] = ""
             _state["done"] = 0
             _state["total"] = 0
+            _state["file_done"] = 0
+            _state["file_total"] = 0
 
 
 def snapshot() -> dict[str, Any]:
@@ -103,8 +141,11 @@ def reset() -> None:
         _state["active"] = False
         _state["phase"] = ""
         _state["message"] = ""
+        _state["context"] = ""
         _state["done"] = 0
         _state["total"] = 0
+        _state["file_done"] = 0
+        _state["file_total"] = 0
 
 
 def ui_props(snap: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -112,7 +153,7 @@ def ui_props(snap: dict[str, Any] | None = None) -> dict[str, Any]:
     snap = snap if snap is not None else snapshot()
     phase = str(snap.get("phase") or "").strip()
     message = str(snap.get("message") or "").strip()
-    label = phase or message or "Working…"
+    context = str(snap.get("context") or "").strip()
     try:
         done = max(0, int(snap.get("done") or 0))
     except (TypeError, ValueError):
@@ -121,12 +162,44 @@ def ui_props(snap: dict[str, Any] | None = None) -> dict[str, Any]:
         total = max(0, int(snap.get("total") or 0))
     except (TypeError, ValueError):
         total = 0
+    try:
+        file_done = max(0, int(snap.get("file_done") or 0))
+    except (TypeError, ValueError):
+        file_done = 0
+    try:
+        file_total = max(0, int(snap.get("file_total") or 0))
+    except (TypeError, ValueError):
+        file_total = 0
+
+    multi = file_total > 1
+    if multi:
+        current = file_total if file_done >= file_total else min(file_total, file_done + 1)
+        label = f"File {current} of {file_total}"
+        if context:
+            label = f"{label} · {context}"
+    else:
+        label = phase or context or message or "Working…"
+
+    detail_bits: list[str] = []
+    if multi:
+        detail_bits.append(f"{min(file_done, file_total)}/{file_total} files done")
+    if context and context not in label:
+        detail_bits.append(context)
+    if phase and phase not in {label, context}:
+        detail_bits.append(phase)
+    if total > 0:
+        detail_bits.append(f"{done:,} / {total:,} players")
+    if message and message not in {label, phase, context} and message not in detail_bits:
+        detail_bits.append(message)
+    detail = " · ".join(detail_bits)
 
     if total > 0:
-        pct = min(100.0, (100.0 * done) / total)
-        detail = f"{done:,} / {total:,} players"
-        if message and message != phase:
-            detail = f"{detail} · {message}"
+        if multi:
+            base = 100.0 * max(0, file_done) / file_total
+            span = 100.0 / file_total
+            pct = min(100.0, base + span * (done / max(total, 1)))
+        else:
+            pct = min(100.0, (100.0 * done) / total)
         return {
             "label": label,
             "track_class": "rs-busy-progress",
@@ -135,7 +208,16 @@ def ui_props(snap: dict[str, Any] | None = None) -> dict[str, Any]:
             "active": bool(snap.get("active")),
         }
 
-    detail = message if message and message != label else ""
+    if multi:
+        pct = min(100.0, (100.0 * file_done) / file_total)
+        return {
+            "label": label,
+            "track_class": "rs-busy-progress",
+            "bar_style": {"width": f"{pct:.1f}%"},
+            "detail": detail,
+            "active": bool(snap.get("active")),
+        }
+
     return {
         "label": label,
         "track_class": "rs-busy-progress is-indeterminate",
