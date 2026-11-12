@@ -193,23 +193,10 @@ def ui_props(snap: dict[str, Any] | None = None) -> dict[str, Any]:
         detail_bits.append(message)
     detail = " · ".join(detail_bits)
 
+    # Bar tracks only the current file's player progress and resets when the
+    # next file starts (done/total cleared). File index stays in the label.
     if total > 0:
-        if multi:
-            base = 100.0 * max(0, file_done) / file_total
-            span = 100.0 / file_total
-            pct = min(100.0, base + span * (done / max(total, 1)))
-        else:
-            pct = min(100.0, (100.0 * done) / total)
-        return {
-            "label": label,
-            "track_class": "rs-busy-progress",
-            "bar_style": {"width": f"{pct:.1f}%"},
-            "detail": detail,
-            "active": bool(snap.get("active")),
-        }
-
-    if multi:
-        pct = min(100.0, (100.0 * file_done) / file_total)
+        pct = min(100.0, (100.0 * done) / total)
         return {
             "label": label,
             "track_class": "rs-busy-progress",

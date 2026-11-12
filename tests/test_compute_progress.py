@@ -45,7 +45,7 @@ def test_indeterminate_without_total():
         cp.end()
 
 
-def test_multi_file_label_and_blended_bar():
+def test_multi_file_bar_resets_per_file():
     cp.begin(phase="Preparing…", file_done=0, file_total=3, context="a.fm")
     try:
         cp.update(
@@ -60,7 +60,21 @@ def test_multi_file_label_and_blended_bar():
         assert props["label"] == "File 1 of 3 · a.fm"
         assert "0/3 files done" in props["detail"]
         assert "25 / 100 players" in props["detail"]
-        assert props["bar_style"]["width"] == "8.3%"
+        assert props["bar_style"]["width"] == "25.0%"
+
+        # Next file starts: player counters clear → bar resets / indeterminate.
+        cp.update(
+            phase="Extracting players…",
+            context="b.fm",
+            file_done=1,
+            file_total=3,
+            done=0,
+            total=0,
+        )
+        props = cp.ui_props()
+        assert props["label"] == "File 2 of 3 · b.fm"
+        assert "1/3 files done" in props["detail"]
+        assert "is-indeterminate" in props["track_class"]
 
         cp.update(
             phase="Building snapshots…",
@@ -72,7 +86,6 @@ def test_multi_file_label_and_blended_bar():
         )
         props = cp.ui_props()
         assert props["label"] == "File 2 of 3 · b.fm"
-        assert "1/3 files done" in props["detail"]
         assert props["bar_style"]["width"] == "50.0%"
     finally:
         cp.end()
