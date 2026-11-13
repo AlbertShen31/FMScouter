@@ -28,18 +28,42 @@ def test_season_from_game_date_jul_split():
         "label": "2026/27",
         "year_start": 2026,
         "year_end": 2027,
+        "schedule": "summer_spring",
     }
     assert career_import.season_from_game_date(date(2027, 1, 15)) == {
         "id": "2026-2027",
         "label": "2026/27",
         "year_start": 2026,
         "year_end": 2027,
+        "schedule": "summer_spring",
     }
     assert career_import.season_from_game_date(date(2026, 6, 30)) == {
         "id": "2025-2026",
         "label": "2025/26",
         "year_start": 2025,
         "year_end": 2026,
+        "schedule": "summer_spring",
+    }
+
+
+def test_season_from_game_date_winter_fall():
+    assert career_import.season_from_game_date(
+        date(2026, 7, 1), schedule="winter_fall"
+    ) == {
+        "id": "2026-2026",
+        "label": "2026",
+        "year_start": 2026,
+        "year_end": 2026,
+        "schedule": "winter_fall",
+    }
+    assert career_import.season_from_game_date(
+        date(2026, 12, 20), schedule="winter_fall"
+    ) == {
+        "id": "2026-2026",
+        "label": "2026",
+        "year_start": 2026,
+        "year_end": 2026,
+        "schedule": "winter_fall",
     }
 
 
@@ -49,16 +73,32 @@ def test_season_from_game_date_jul_split():
         (date(2026, 12, 15), "mid"),
         (date(2026, 12, 31), "mid"),
         (date(2027, 1, 1), "mid"),
-        (date(2026, 6, 15), "mid"),
-        (date(2026, 7, 30), "mid"),
+        (date(2026, 6, 15), "end"),
+        (date(2026, 7, 30), "end"),
         (date(2026, 7, 31), "end"),
         (date(2026, 5, 1), "end"),
         (date(2026, 11, 1), "end"),
         (None, "end"),
     ],
 )
-def test_suggest_slot_windows(when, slot):
-    assert career_import.suggest_slot(when) == slot
+def test_suggest_slot_summer_spring(when, slot):
+    assert career_import.suggest_slot(when, schedule="summer_spring") == slot
+
+
+@pytest.mark.parametrize(
+    ("when", "slot"),
+    [
+        (date(2026, 6, 15), "mid"),
+        (date(2026, 7, 30), "mid"),
+        (date(2026, 7, 31), "end"),
+        (date(2026, 12, 20), "end"),
+        (date(2027, 1, 1), "end"),
+        (date(2026, 5, 1), "end"),
+        (None, "end"),
+    ],
+)
+def test_suggest_slot_winter_fall(when, slot):
+    assert career_import.suggest_slot(when, schedule="winter_fall") == slot
 
 
 def test_create_list_active_delete(career_root):
@@ -131,14 +171,9 @@ def test_stage_then_assign_to_slot(career_root):
     assert item["player_count"] == 2
     assert len(careers.list_staging("stage-career")) == 1
 
-    blocked = career_import.commit_staging_to_slot(
+    blocked = career_import.auto_assign_staged(
         "stage-career",
         item["id"],
-        season_id="2026-2027",
-        slot="mid",
-        season_label="2026/27",
-        year_start=2026,
-        year_end=2027,
         replace=False,
     )
     # First assign should succeed (empty slot).
@@ -154,31 +189,49 @@ def test_stage_then_assign_to_slot(career_root):
         source_name="winter2.csv",
         game_date_override="2026-12-21",
     )
-    conflict = career_import.commit_staging_to_slot(
+    conflict = career_import.auto_assign_staged(
         "stage-career",
         staged2["item"]["id"],
-        season_id="2026-2027",
-        slot="mid",
-        year_start=2026,
-        year_end=2027,
         replace=False,
     )
     assert conflict["ok"] is False
     assert conflict["needs_replace"] is True
     assert len(careers.list_staging("stage-career")) == 1
 
-    replaced = career_import.commit_staging_to_slot(
+    replaced = career_import.auto_assign_staged(
         "stage-career",
         staged2["item"]["id"],
-        season_id="2026-2027",
-        slot="mid",
-        year_start=2026,
-        year_end=2027,
         replace=True,
     )
     assert replaced["ok"] is True
     assert replaced["replaced"] is True
     assert careers.list_staging("stage-career") == []
+
+
+def test_winter_fall_schedule_mid_and_end(career_root):
+    careers.create_career("Calendar Career")
+    careers.set_season_schedule("calendar-career", "winter_fall")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\n"
+    mid = career_import.import_csv_to_career(
+        "calendar-career",
+        csv_text,
+        source_name="mid.csv",
+        game_date="2026-07-01",
+    )
+    end = career_import.import_csv_to_career(
+        "calendar-career",
+        csv_text,
+        source_name="end.csv",
+        game_date="2026-11-15",
+    )
+    assert mid["ok"] is True and mid["slot"] == "mid"
+    assert mid["season_id"] == "2026-2026"
+    assert end["ok"] is True and end["slot"] == "end"
+    assert end["season_id"] == "2026-2026"
+    season = careers.get_season("calendar-career", "2026-2026")
+    assert season["label"] == "2026"
+    assert season["slots"]["mid"]["source_name"] == "mid.csv"
+    assert season["slots"]["end"]["source_name"] == "end.csv"
 
 
 def test_csv_import_mid_end_replace(career_root):

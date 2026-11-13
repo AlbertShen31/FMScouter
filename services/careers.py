@@ -92,6 +92,19 @@ def _ensure_root() -> None:
     CAREERS_PACKS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _normalize_season_schedule(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "summer_spring": "summer_spring",
+        "summer_to_spring": "summer_spring",
+        "summer": "summer_spring",
+        "winter_fall": "winter_fall",
+        "winter_to_fall": "winter_fall",
+        "winter": "winter_fall",
+    }
+    return aliases.get(text, "summer_spring")
+
+
 def _normalize_meta(raw: Any, *, career_id: str) -> dict[str, Any]:
     payload = raw if isinstance(raw, dict) else {}
     name = str(payload.get("name") or career_id or "Career").strip() or "Career"
@@ -101,6 +114,7 @@ def _normalize_meta(raw: Any, *, career_id: str) -> dict[str, Any]:
         "created_at": str(payload.get("created_at") or "").strip(),
         "updated_at": str(payload.get("updated_at") or "").strip(),
         "show_hidden_attrs": bool(payload.get("show_hidden_attrs", False)),
+        "season_schedule": _normalize_season_schedule(payload.get("season_schedule")),
         "managed_club_uid": payload.get("managed_club_uid"),
         "managed_club_name": (
             str(payload.get("managed_club_name") or "").strip() or None
@@ -215,6 +229,7 @@ def create_career(name: str, *, notes: str = "") -> dict[str, Any]:
         "created_at": now,
         "updated_at": now,
         "show_hidden_attrs": False,
+        "season_schedule": "summer_spring",
         "managed_club_uid": None,
         "managed_club_name": None,
         "notes": str(notes or "").strip(),
@@ -248,6 +263,22 @@ def set_show_hidden_attrs(career_id: str, enabled: bool) -> dict[str, Any]:
     if not _meta_path(safe).is_file():
         raise ValueError(f"Unknown career: {career_id}")
     meta["show_hidden_attrs"] = bool(enabled)
+    meta["updated_at"] = _utcnow()
+    _write_json(_meta_path(safe), meta)
+    return meta
+
+
+def get_season_schedule(career_id: str) -> str:
+    meta = get_career(career_id)
+    return _normalize_season_schedule(meta.get("season_schedule"))
+
+
+def set_season_schedule(career_id: str, schedule: str) -> dict[str, Any]:
+    safe = _safe_id(career_id)
+    meta = get_career(safe)
+    if not _meta_path(safe).is_file():
+        raise ValueError(f"Unknown career: {career_id}")
+    meta["season_schedule"] = _normalize_season_schedule(schedule)
     meta["updated_at"] = _utcnow()
     _write_json(_meta_path(safe), meta)
     return meta

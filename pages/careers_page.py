@@ -29,10 +29,11 @@ import services.fmsave_export as fms
 register_page(__name__, path="/careers", name="Careers")
 
 PAGE_TIP = (
-    "Each Career is one Football Manager game. Stage .fm saves or Moneyball CSVs, "
-    "then drag each into a mid/end season slot — at most two snapshots per season. "
-    "Raw saves are not kept; only compact player attributes + OVERALL season stats. "
-    "Switch seasons here; playground pages will use the active career/season later."
+    "Each Career is one Football Manager game. Stage .fm saves or Moneyball CSVs; "
+    "each file auto-assigns to a mid or end slot from its save date — at most two "
+    "snapshots per season. Pick Summer→Spring or Winter→Fall so season years and "
+    "mid/end windows match the calendar. Raw saves are not kept; only compact "
+    "player attributes + OVERALL season stats."
 )
 
 
@@ -231,7 +232,7 @@ def _staging_panel(career_id: str | None) -> html.Div:
         )
     elif not items:
         body = html.P(
-            "Staging is empty. Choose saves or CSVs above, then click Stage.",
+            "Staging is empty. Stage files above to extract and auto-assign Mid/End.",
             className="text-muted mb-0",
         )
     else:
@@ -317,7 +318,8 @@ def _staging_panel(career_id: str | None) -> html.Div:
                         disabled=not items,
                     ),
                     html.Span(
-                        "Drag a card onto a Mid or End slot below.",
+                        "Leftovers stay here when a slot is occupied — drag to replace, "
+                        "or confirm in the dialog.",
                         className="cr-stage-hint text-muted",
                     ),
                 ],
@@ -332,12 +334,17 @@ def _career_shell(active: dict | None = None) -> tuple:
     active = active or careers.get_active()
     career_id = active.get("career_id")
     options = careers.career_options()
-    meta = careers.get_career(career_id) if career_id else {"show_hidden_attrs": False}
+    meta = (
+        careers.get_career(career_id)
+        if career_id
+        else {"show_hidden_attrs": False, "season_schedule": "summer_spring"}
+    )
     staging_items = careers.list_staging(career_id) if career_id else []
     return (
         options,
         career_id,
         bool(meta.get("show_hidden_attrs")),
+        meta.get("season_schedule") or "summer_spring",
         active,
         _staging_panel(career_id),
         _seasons_table(career_id, active.get("season_id"), staging_items),
@@ -367,9 +374,9 @@ def layout(**_kwargs):
             html.H4("Careers", className="mb-2"),
             html.P(
                 "Separate from Uploads and formation Profiles. One career per FM game. "
-                "Stage extracts players into a holding area (can take a while), then drag "
-                "each file onto a Mid/End season slot. A progress overlay covers this page "
-                "while Stage / assign runs.",
+                "Stage extracts players and auto-assigns each file to Mid/End from the "
+                "save date (two snapshots per season). A progress overlay covers this "
+                "page while Stage / assign runs.",
                 className="text-muted mb-3",
             ),
             html.Div(
@@ -427,6 +434,31 @@ def layout(**_kwargs):
                                                     ),
                                                     className="mb-2",
                                                 ),
+                                                html.Label(
+                                                    "Season schedule",
+                                                    className="rs-field-label",
+                                                ),
+                                                dmc.SegmentedControl(
+                                                    id="cr-season-schedule",
+                                                    data=[
+                                                        {
+                                                            "label": "Summer → Spring",
+                                                            "value": "summer_spring",
+                                                        },
+                                                        {
+                                                            "label": "Winter → Fall",
+                                                            "value": "winter_fall",
+                                                        },
+                                                    ],
+                                                    value=(
+                                                        (meta or {}).get(
+                                                            "season_schedule"
+                                                        )
+                                                        or "summer_spring"
+                                                    ),
+                                                    fullWidth=True,
+                                                    className="mb-3",
+                                                ),
                                                 html.Div(
                                                     [
                                                         dmc.Button(
@@ -465,10 +497,9 @@ def layout(**_kwargs):
                                             "2. Stage files",
                                             "Choose one or more .fm saves (preferred) or "
                                             "Moneyball CSVs, then Stage to extract players "
-                                            "into the holding area. Each file keeps its own "
-                                            "suggested season/slot from the save date. "
-                                            "Game date override applies only when staging a "
-                                            "single file (needed for CSVs).",
+                                            "and auto-assign each to Mid/End from the save "
+                                            "date using this career’s season schedule. "
+                                            "Occupied slots prompt before replace.",
                                             "cr-import-tip",
                                         ),
                                         dbc.CardBody(
@@ -507,46 +538,24 @@ def layout(**_kwargs):
                                                     className="cr-csv-drop mb-3",
                                                     multiple=True,
                                                 ),
-                                                dbc.Row(
-                                                    [
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Scope (.fm)",
-                                                                    className="rs-field-label",
-                                                                ),
-                                                                dmc.SegmentedControl(
-                                                                    id="cr-scope",
-                                                                    data=[
-                                                                        {
-                                                                            "label": "All players",
-                                                                            "value": "all",
-                                                                        },
-                                                                        {
-                                                                            "label": "Managed squad",
-                                                                            "value": "squad",
-                                                                        },
-                                                                    ],
-                                                                    value="all",
-                                                                ),
-                                                            ],
-                                                            md=6,
-                                                        ),
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Game date (CSV / override)",
-                                                                    className="rs-field-label",
-                                                                ),
-                                                                dmc.TextInput(
-                                                                    id="cr-game-date",
-                                                                    placeholder="YYYY-MM-DD",
-                                                                ),
-                                                            ],
-                                                            md=6,
-                                                        ),
+                                                html.Label(
+                                                    "Scope (.fm)",
+                                                    className="rs-field-label",
+                                                ),
+                                                dmc.SegmentedControl(
+                                                    id="cr-scope",
+                                                    data=[
+                                                        {
+                                                            "label": "All players",
+                                                            "value": "all",
+                                                        },
+                                                        {
+                                                            "label": "Managed squad",
+                                                            "value": "squad",
+                                                        },
                                                     ],
-                                                    className="mb-3 g-2",
+                                                    value="all",
+                                                    className="mb-3",
                                                 ),
                                                 html.Div(
                                                     [
@@ -579,9 +588,10 @@ def layout(**_kwargs):
                         [
                             _card_header(
                                 "3. Staging",
-                                "Extracted snapshots wait here until you drag them onto "
-                                "a Mid or End season slot. Suggested season rows appear "
-                                "below automatically for new seasons.",
+                                "Usually empty after Stage — files auto-assign to Mid/End. "
+                                "Items remain here only when the target slot is occupied "
+                                "(confirm replace) or assign failed. You can still drag "
+                                "onto a slot manually.",
                                 "cr-staging-tip",
                             ),
                             dbc.CardBody(
@@ -597,8 +607,8 @@ def layout(**_kwargs):
                         [
                             _card_header(
                                 "4. Seasons",
-                                "Drop staged files onto Mid/End slots. Occupied slots "
-                                "ask before replace. Switch the active season for this "
+                                "Each season holds at most Mid + End. Occupied slots ask "
+                                "before replace. Switch the active season for this "
                                 "career — playground pages will read from it later.",
                                 "cr-seasons-tip",
                             ),
@@ -706,6 +716,7 @@ def layout(**_kwargs):
     Output("cr-career-select", "data"),
     Output("cr-career-select", "value"),
     Output("cr-show-hidden", "checked"),
+    Output("cr-season-schedule", "value"),
     Output("cr-active", "data"),
     Output("cr-staging-body", "children"),
     Output("cr-seasons-body", "children"),
@@ -795,6 +806,28 @@ def cr_toggle_hidden(show_hidden, career_id):
         "Hidden attributes "
         + ("enabled" if show_hidden else "disabled")
         + " for this career.",
+        className="text-muted",
+    )
+
+
+@callback(
+    Output("cr-career-status", "children", allow_duplicate=True),
+    Input("cr-season-schedule", "value"),
+    State("cr-career-select", "value"),
+    prevent_initial_call=True,
+)
+def cr_toggle_schedule(schedule, career_id):
+    if not career_id:
+        return html.Span("Select a career first.", className="text-warning")
+    meta = careers.set_season_schedule(career_id, schedule or "summer_spring")
+    kind = meta.get("season_schedule") or "summer_spring"
+    label = (
+        "Summer → Spring"
+        if kind == "summer_spring"
+        else "Winter → Fall"
+    )
+    return html.Span(
+        f"Season schedule set to {label}. New Stage/Preview uses this calendar.",
         className="text-muted",
     )
 
@@ -1013,7 +1046,6 @@ def cr_poll_progress(_n):
 
 
 @callback(
-    Output("cr-game-date", "value"),
     Output("cr-import-status", "children"),
     Output("cr-pending", "data"),
     Output("cr-replace-modal", "is_open"),
@@ -1030,7 +1062,7 @@ def cr_poll_progress(_n):
     State("cr-csv-upload", "contents"),
     State("cr-csv-upload", "filename"),
     State("cr-scope", "value"),
-    State("cr-game-date", "value"),
+    State("cr-season-schedule", "value"),
     State("cr-career-select", "value"),
     State("cr-pending", "data"),
     State("cr-rev", "data"),
@@ -1048,7 +1080,7 @@ def cr_preview_stage_or_assign(
     csv_contents,
     csv_filename,
     scope,
-    game_date,
+    season_schedule,
     career_id,
     pending,
     rev,
@@ -1056,10 +1088,13 @@ def cr_preview_stage_or_assign(
 ):
     triggered = ctx.triggered_id
     next_tick = int(job_tick or 0) + 1
+    schedule = career_import.normalize_schedule(
+        season_schedule
+        or (careers.get_season_schedule(career_id) if career_id else None)
+    )
 
     if triggered == "cr-replace-cancel":
         return (
-            no_update,
             _status_alert("Assign cancelled.", color="secondary"),
             None,
             False,
@@ -1104,17 +1139,17 @@ def cr_preview_stage_or_assign(
             ]
         raise ValueError("Choose .fm save(s) or drop Moneyball CSV(s) first.")
 
-    def _peek_one(source: dict, *, date_override: str | None):
+    def _peek_one(source: dict):
         if source["kind"] == "fm":
             return career_import.peek_classification(
                 save_path=source["path"],
-                game_date_override=date_override,
+                schedule=schedule,
             )
         text = decode_upload(source["contents"])
         return career_import.peek_classification(
             csv_text=text,
             source_name=source["filename"],
-            game_date_override=date_override,
+            schedule=schedule,
         )
 
     def _source_label(source: dict) -> str:
@@ -1124,7 +1159,6 @@ def cr_preview_stage_or_assign(
 
     def _fail(message: str, *, pending_out=None, modal=False, body=no_update, color="danger"):
         return (
-            no_update,
             _status_alert(str(message), color=color),
             pending if pending_out is None else pending_out,
             modal,
@@ -1154,6 +1188,16 @@ def cr_preview_stage_or_assign(
             done=0,
             total=0,
         )
+
+    def _pending_payload(item: dict, *, slot: str | None = None) -> dict:
+        return {
+            "staging_id": item.get("id") or item.get("staging_id"),
+            "season_id": item.get("season_id"),
+            "slot": slot or item.get("suggested_slot") or item.get("slot"),
+            "season_label": item.get("season_label"),
+            "year_start": item.get("year_start"),
+            "year_end": item.get("year_end"),
+        }
 
     def _assign_staging(*, replace: bool, payload: dict):
         staging_id = str(payload.get("staging_id") or "").strip()
@@ -1211,7 +1255,6 @@ def cr_preview_stage_or_assign(
                 f"Replace it with “{source_name}”?"
             )
             return (
-                no_update,
                 _status_alert(
                     "Slot occupied — confirm replace in the dialog.",
                     color="warning",
@@ -1235,7 +1278,6 @@ def cr_preview_stage_or_assign(
             + (" (replaced)." if result.get("replaced") else ".")
         )
         return (
-            no_update,
             _status_alert(msg, color="success"),
             None,
             False,
@@ -1257,17 +1299,11 @@ def cr_preview_stage_or_assign(
             file_total=total_files,
         )
         try:
-            single = total_files == 1
             peeks = []
             for idx, source in enumerate(sources, start=1):
                 name = _source_label(source)
                 _mark_file(idx, total_files, name, phase="Reading save date…")
-                peeks.append(
-                    _peek_one(
-                        source,
-                        date_override=(game_date or None) if single else None,
-                    )
-                )
+                peeks.append(_peek_one(source))
                 _finish_file(idx, total_files, name, phase="Date read")
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
@@ -1284,7 +1320,6 @@ def cr_preview_stage_or_assign(
                 f"source={meta.get('source_name') or meta.get('source')}"
             )
             return (
-                classification.get("game_date") or game_date or "",
                 _status_alert(summary, color="info"),
                 {
                     "classification": classification,
@@ -1304,9 +1339,8 @@ def cr_preview_stage_or_assign(
                 f"{classification.get('slot')} · "
                 f"date={classification.get('game_date') or '—'}"
             )
-        lines.append("Stage to extract, then drag each into a Mid/End slot.")
+        lines.append("Stage to extract and auto-assign each to Mid/End.")
         return (
-            no_update,
             _status_alert("\n".join(lines), color="info"),
             {"batch": True, "count": len(peeks)},
             False,
@@ -1330,8 +1364,8 @@ def cr_preview_stage_or_assign(
             file_total=total_files,
         )
         try:
-            single = total_files == 1
-            staged = []
+            assigned: list[dict] = []
+            conflicts: list[dict] = []
             for idx, source in enumerate(sources, start=1):
                 name = _source_label(source)
                 _mark_file(idx, total_files, name, phase="Extracting players…")
@@ -1340,7 +1374,7 @@ def cr_preview_stage_or_assign(
                         career_id,
                         save_path=source["path"],
                         scope=scope or "all",
-                        game_date_override=(game_date or None) if single else None,
+                        schedule=schedule,
                     )
                 else:
                     text = decode_upload(source["contents"])
@@ -1348,32 +1382,89 @@ def cr_preview_stage_or_assign(
                         career_id,
                         csv_text=text,
                         source_name=source["filename"],
-                        game_date_override=(game_date or None) if single else None,
+                        schedule=schedule,
                     )
                 item = result["item"]
-                staged.append(item)
                 _finish_file(
                     idx,
                     total_files,
                     name,
-                    phase=f"Staged ({int(item.get('player_count') or 0):,} players)",
+                    phase=(
+                        f"Assigning "
+                        f"{item.get('season_label') or item.get('season_id')} / "
+                        f"{item.get('suggested_slot')}"
+                    ),
                 )
+                compute_progress.update(
+                    phase="Writing snapshot…",
+                    context=name,
+                    message=(
+                        f"{item.get('season_label') or item.get('season_id')} / "
+                        f"{item.get('suggested_slot')}"
+                    ),
+                    done=0,
+                    total=max(1, int(item.get("player_count") or 0)),
+                )
+                assign = career_import.auto_assign_staged(
+                    career_id,
+                    item["id"],
+                    replace=False,
+                )
+                if assign.get("needs_replace"):
+                    conflicts.append(item)
+                elif assign.get("ok"):
+                    assigned.append(assign)
+                else:
+                    conflicts.append(item)
         except Exception as exc:  # noqa: BLE001
             compute_progress.end()
             return _fail(str(exc))
         compute_progress.end()
-        lines = [
-            f"Staged {len(staged)}/{total_files} file(s) — drag onto Mid/End slots:"
-        ]
-        for item in staged:
+
+        total_done = len(assigned) + len(conflicts)
+        if conflicts:
+            lines = [
+                f"Processed {total_done}/{total_files} file(s) — "
+                f"auto-assigned {len(assigned)}, "
+                f"{len(conflicts)} left in staging (slot occupied):"
+            ]
+        else:
+            lines = [
+                f"Auto-assigned {len(assigned)}/{total_files} file(s):"
+            ]
+        for result in assigned:
+            lines.append(
+                f"• {result.get('snapshot_meta', {}).get('source_name') or 'file'} → "
+                f"{result.get('season_label')} / {result.get('slot')} "
+                f"({int(result.get('player_count') or 0):,} players)"
+            )
+        for item in conflicts:
             lines.append(
                 f"• {item.get('source_name') or item.get('id')} → "
                 f"{item.get('season_label') or item.get('season_id')} / "
                 f"{item.get('suggested_slot')} "
-                f"({int(item.get('player_count') or 0):,} players)"
+                f"({int(item.get('player_count') or 0):,} players) — slot occupied"
             )
+
+        if conflicts:
+            first = conflicts[0]
+            source_name = str(first.get("source_name") or first.get("id") or "file")
+            slot = str(first.get("suggested_slot") or "end")
+            season_id = str(first.get("season_id") or "")
+            body = (
+                f"The {slot} slot for season {season_id} already has a snapshot. "
+                f"Replace it with “{source_name}”?"
+            )
+            return (
+                _status_alert("\n".join(lines), color="warning"),
+                _pending_payload(first),
+                True,
+                body,
+                int(rev or 0) + 1,
+                next_tick,
+            )
+
         return (
-            (staged[0].get("game_date") or game_date or "") if len(staged) == 1 else no_update,
             _status_alert("\n".join(lines), color="success"),
             None,
             False,
@@ -1390,7 +1481,6 @@ def cr_preview_stage_or_assign(
                 no_update,
                 no_update,
                 no_update,
-                no_update,
                 next_tick,
             )
         return _assign_staging(replace=False, payload=drop_data)
@@ -1401,7 +1491,6 @@ def cr_preview_stage_or_assign(
         return _assign_staging(replace=True, payload=pending)
 
     return (
-        no_update,
         no_update,
         no_update,
         no_update,

@@ -12,6 +12,9 @@ import services.careers as careers
 import services.fmsave_export as fms
 
 SlotName = Literal["mid", "end"]
+ScheduleKind = Literal["summer_spring", "winter_fall"]
+SCHEDULES: tuple[ScheduleKind, ...] = ("summer_spring", "winter_fall")
+DEFAULT_SCHEDULE: ScheduleKind = "summer_spring"
 
 HIDDEN_ATTR_FIELD_TO_LABEL: dict[str, str] = {
     "consistency": "Consistency",
@@ -80,11 +83,41 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
-def season_from_game_date(game_date: date | None) -> dict[str, Any]:
-    """Auto season bounds/label from save date (Jul+ starts new season year)."""
+def normalize_schedule(value: Any) -> ScheduleKind:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "summer_spring": "summer_spring",
+        "summer_to_spring": "summer_spring",
+        "summer": "summer_spring",
+        "winter_fall": "winter_fall",
+        "winter_to_fall": "winter_fall",
+        "winter": "winter_fall",
+    }
+    return aliases.get(text, DEFAULT_SCHEDULE)  # type: ignore[return-value]
+
+
+def season_from_game_date(
+    game_date: date | None,
+    *,
+    schedule: ScheduleKind | str | None = None,
+) -> dict[str, Any]:
+    """Auto season bounds/label from save date for the active schedule.
+
+    summer_spring: Jul+ starts ``YYYY/(YY+1)`` (e.g. 2026/27).
+    winter_fall: calendar year ``YYYY``.
+    """
+    kind = normalize_schedule(schedule)
     if game_date is None:
-        today = date.today()
-        game_date = today
+        game_date = date.today()
+    if kind == "winter_fall":
+        year = game_date.year
+        return {
+            "id": f"{year}-{year}",
+            "label": str(year),
+            "year_start": year,
+            "year_end": year,
+            "schedule": kind,
+        }
     if game_date.month >= 7:
         year_start = game_date.year
         year_end = game_date.year + 1
@@ -98,32 +131,47 @@ def season_from_game_date(game_date: date | None) -> dict[str, Any]:
         "label": label,
         "year_start": year_start,
         "year_end": year_end,
+        "schedule": kind,
     }
 
 
-def suggest_slot(game_date: date | None) -> SlotName:
-    """Mid windows: ~15 Dec–1 Jan or ~15 Jun–30 Jul; otherwise End."""
+def suggest_slot(
+    game_date: date | None,
+    *,
+    schedule: ScheduleKind | str | None = None,
+) -> SlotName:
+    """Mid window depends on schedule; otherwise End.
+
+    summer_spring mid: ~15 Dec–1 Jan (winter break).
+    winter_fall mid: ~15 Jun–30 Jul (summer midpoint).
+    """
     if game_date is None:
         return "end"
+    kind = normalize_schedule(schedule)
     month, day = game_date.month, game_date.day
-    # Winter mid-season (northern winter leagues / calendar break).
+    if kind == "winter_fall":
+        if month == 6 and day >= 15:
+            return "mid"
+        if month == 7 and day <= 30:
+            return "mid"
+        return "end"
     if month == 12 and day >= 15:
         return "mid"
     if month == 1 and day <= 1:
         return "mid"
-    # Summer mid-season (winter-to-winter leagues mid point around Jul 30).
-    if month == 6 and day >= 15:
-        return "mid"
-    if month == 7 and day <= 30:
-        return "mid"
     return "end"
 
 
-def classify_import(game_date: date | None) -> dict[str, Any]:
-    season = season_from_game_date(game_date)
+def classify_import(
+    game_date: date | None,
+    *,
+    schedule: ScheduleKind | str | None = None,
+) -> dict[str, Any]:
+    kind = normalize_schedule(schedule)
+    season = season_from_game_date(game_date, schedule=kind)
     return {
         **season,
-        "slot": suggest_slot(game_date),
+        "slot": suggest_slot(game_date, schedule=kind),
         "game_date": game_date.isoformat() if game_date else None,
     }
 
@@ -393,7 +441,7 @@ def extract_players_from_fm(
         "managed_club_name": managed_club_name,
         "player_count": len(players),
         "scope": scope_key,
-        "classification": classify_import(game_date),
+        "classification": classify_import(game_date, schedule=DEFAULT_SCHEDULE),
     }
     return players, meta
 
@@ -403,6 +451,7 @@ def extract_players_from_csv(
     *,
     source_name: str = "upload.csv",
     game_date: date | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     import services.compute_progress as compute_progress
 
@@ -441,7 +490,7 @@ def extract_players_from_csv(
         "managed_club_uid": None,
         "managed_club_name": None,
         "player_count": len(players),
-        "classification": classify_import(game_date),
+        "classification": classify_import(game_date, schedule=schedule),
     }
     return players, meta
 
@@ -452,15 +501,18 @@ def peek_classification(
     csv_text: str | None = None,
     source_name: str = "",
     game_date_override: str | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
     """Return season/slot/date classification without extracting players.
 
     For .fm saves this only opens the save header (``info.game_date``).
-    For CSV, classification comes from the date override (CSV has no save date).
+    For CSV, classification uses ``game_date_override`` when provided (CSV has
+    no save date); otherwise today's date is used.
     """
+    kind = normalize_schedule(schedule)
     override = _parse_date(game_date_override)
     if override is not None:
-        classification = classify_import(override)
+        classification = classify_import(override, schedule=kind)
         source = "fmsave" if save_path else ("csv" if csv_text is not None else "override")
         return {
             "classification": classification,
@@ -486,7 +538,7 @@ def peek_classification(
             warnings.simplefilter("ignore")
             with fmsave.open(path, competition_names=competition_names) as career_save:
                 game_date = career_save.info.game_date
-        classification = classify_import(game_date)
+        classification = classify_import(game_date, schedule=kind)
         return {
             "classification": classification,
             "meta": {
@@ -499,7 +551,7 @@ def peek_classification(
     if csv_text is not None:
         if not str(csv_text).strip():
             raise ValueError("CSV is empty")
-        classification = classify_import(None)
+        classification = classify_import(None, schedule=kind)
         return {
             "classification": classification,
             "meta": {
@@ -519,8 +571,10 @@ def preview_import(
     source_name: str = "",
     scope: str = "all",
     game_date_override: str | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
     """Extract players and return classification without writing (Import path)."""
+    kind = normalize_schedule(schedule)
     override = _parse_date(game_date_override)
     if save_path:
         players, meta = extract_players_from_fm(save_path, scope=scope)
@@ -529,12 +583,13 @@ def preview_import(
             csv_text,
             source_name=source_name or "upload.csv",
             game_date=override,
+            schedule=kind,
         )
     else:
         raise ValueError("Provide a save path or CSV text")
 
     game_date = override or _parse_date(meta.get("game_date"))
-    classification = classify_import(game_date)
+    classification = classify_import(game_date, schedule=kind)
     if override is not None:
         meta["game_date"] = override.isoformat()
     meta["classification"] = classification
@@ -650,11 +705,18 @@ def import_save_to_career(
     slot: SlotName | None = None,
     replace: bool = False,
     game_date_override: str | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
+    kind = (
+        normalize_schedule(schedule)
+        if schedule is not None
+        else careers.get_season_schedule(career_id)
+    )
     preview = preview_import(
         save_path=save_path,
         scope=scope,
         game_date_override=game_date_override,
+        schedule=kind,
     )
     classification = preview["classification"]
     return commit_import(
@@ -679,11 +741,18 @@ def import_csv_to_career(
     slot: SlotName | None = None,
     replace: bool = False,
     game_date: str | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
+    kind = (
+        normalize_schedule(schedule)
+        if schedule is not None
+        else careers.get_season_schedule(career_id)
+    )
     preview = preview_import(
         csv_text=csv_text,
         source_name=source_name,
         game_date_override=game_date,
+        schedule=kind,
     )
     classification = preview["classification"]
     return commit_import(
@@ -735,20 +804,57 @@ def stage_import(
     source_name: str = "",
     scope: str = "all",
     game_date_override: str | None = None,
+    schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
     """Extract players and park them in staging (does not write a season slot)."""
+    kind = (
+        normalize_schedule(schedule)
+        if schedule is not None
+        else careers.get_season_schedule(career_id)
+    )
     preview = preview_import(
         save_path=save_path,
         csv_text=csv_text,
         source_name=source_name,
         scope=scope,
         game_date_override=game_date_override,
+        schedule=kind,
     )
     return stage_extracted(
         career_id,
         players=preview["players"],
         meta=preview["meta"],
         classification=preview["classification"],
+    )
+
+
+def auto_assign_staged(
+    career_id: str,
+    staging_id: str,
+    *,
+    replace: bool = False,
+    set_active_season: bool = True,
+) -> dict[str, Any]:
+    """Commit a staged item into its suggested season mid/end slot."""
+    item = careers.get_staging_item(career_id, staging_id)
+    if item is None:
+        raise ValueError(f"Unknown staging item: {staging_id}")
+    season_id = str(item.get("season_id") or "").strip()
+    slot = str(item.get("suggested_slot") or "end").strip().lower()
+    if slot not in careers.SLOTS:
+        slot = "end"
+    if not season_id:
+        raise ValueError(f"Staging item {staging_id} has no suggested season")
+    return commit_staging_to_slot(
+        career_id,
+        staging_id,
+        season_id=season_id,
+        slot=slot,  # type: ignore[arg-type]
+        season_label=item.get("season_label"),
+        year_start=item.get("year_start"),
+        year_end=item.get("year_end"),
+        replace=replace,
+        set_active_season=set_active_season,
     )
 
 
