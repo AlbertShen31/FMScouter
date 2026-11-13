@@ -12179,7 +12179,8 @@ body[data-theme="light"] .cr-stage-card {
     z-index: 2000;
 }
 
-.cr-page .rs-busy-progress-detail {
+.cr-page .rs-busy-progress-detail,
+.sx-page .rs-busy-progress-detail {
     white-space: normal;
     max-width: 36rem;
     text-align: center;

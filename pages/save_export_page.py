@@ -1,6 +1,8 @@
 """Export Moneyball CSV from an FM26 / FM27 save via fmsave."""
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 
 from dash import Input, Output, State, callback, clientside_callback, dcc, html, no_update, register_page
@@ -16,14 +18,43 @@ import services.fmsave_export as fms
 register_page(__name__, path="/save-export", name="Save export")
 
 PAGE_TIP = (
-    "Read an FM26 or FM27 .fm save with fmsave (0.9.3+) and write a Moneyball-shaped CSV "
+    "Read FM26 or FM27 .fm save(s) with fmsave (0.9.3+) and write Moneyball-shaped CSV(s) "
     "(attributes + OVERALL season stats + contract finance). Injury columns stay blank. "
     "FM27 field meanings stay unconfirmed in fmsave; Pressures columns are empty on FM27. "
-    "Choosing a save preloads players so filter changes show a live export count. Generate "
-    "reuses those players and only reopens the save for season stats / divisions. The CSV "
-    "always goes to Uploads (precompute continues in the background); optionally download a "
-    "CSV as well."
+    "Choosing save(s) preloads the first for live filter counts; Generate exports every "
+    "selected save with the same scope/filters. CSVs always go to Uploads (precompute "
+    "continues in the background); optionally download a CSV (or a zip for multiple)."
 )
+
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [v for v in value if v is not None]
+    return [value]
+
+
+def _fm_paths_label(paths: list[str]) -> str:
+    cleaned = [str(p).strip() for p in paths if str(p).strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    names = [Path(p).name for p in cleaned]
+    return f"{len(cleaned)} saves: " + ", ".join(names)
+
+
+def _resolve_save_paths(paths, path_label: str | None = None) -> list[str]:
+    cleaned = [str(p).strip() for p in _as_list(paths) if str(p).strip()]
+    if cleaned:
+        return cleaned
+    single = str(path_label or "").strip()
+    if not single or " saves: " in single:
+        return []
+    if Path(single).suffix.lower() == ".fm" or Path(single).is_file():
+        return [single]
+    return []
 
 _SCOPE_OPTIONS = [
     {"label": "Managed squad", "value": "squad"},
@@ -78,16 +109,17 @@ def layout(**_kwargs):
             dcc.Download(id="sx-download"),
             dcc.Store(id="sx-rev", data=0),
             dcc.Store(id="sx-pick-rev", data=0),
+            dcc.Store(id="sx-paths", data=[]),
             dcc.Store(id="sx-preload", data=None),
             dcc.Interval(
                 id="sx-progress-poll",
-                interval=1500,
+                interval=800,
                 n_intervals=0,
                 disabled=True,
             ),
             html.H4("Save export", className="mb-2"),
             html.P(
-                "Generate a Moneyball-compatible CSV from an FM26 or FM27 save for Role "
+                "Generate Moneyball-compatible CSV(s) from FM26 or FM27 save(s) for Role "
                 "scores, Player stats, and Squad finance. Requires fmsave 0.9.3+.",
                 className="text-muted mb-3",
             ),
@@ -98,7 +130,10 @@ def layout(**_kwargs):
                             _card_header("1. Save & scope", PAGE_TIP, "sx-tip"),
                             dbc.CardBody(
                                 [
-                                    html.Label("Save file (.fm)", className="rs-field-label"),
+                                    html.Label(
+                                        "Save file(s) (.fm)",
+                                        className="rs-field-label",
+                                    ),
                                     html.Div(
                                         [
                                             dmc.TextInput(
@@ -109,7 +144,7 @@ def layout(**_kwargs):
                                                 className="sx-path-input",
                                             ),
                                             dmc.Button(
-                                                "Choose file…",
+                                                "Choose files…",
                                                 id="sx-browse",
                                                 n_clicks=0,
                                                 variant="default",
@@ -138,7 +173,8 @@ def layout(**_kwargs):
                                                         className="sx-filters-title",
                                                     ),
                                                     html.Span(
-                                                        "Apply to Managed squad or All players",
+                                                        "Apply to every selected save "
+                                                        "(Managed squad or All players)",
                                                         className="sx-filters-subtitle",
                                                     ),
                                                 ],
@@ -272,12 +308,12 @@ def layout(**_kwargs):
                                     html.Div(
                                         id="sx-match-count",
                                         className="sx-match-count mb-3",
-                                        children="Select a save to preload players and preview export size.",
+                                        children="Select save(s) to preload players and preview export size.",
                                     ),
                                     html.Hr(className="my-3"),
                                     dmc.Checkbox(
                                         id="sx-download-csv",
-                                        label="Also download CSV",
+                                        label="Also download CSV / zip",
                                         checked=False,
                                         className="mb-3",
                                     ),
@@ -288,10 +324,10 @@ def layout(**_kwargs):
                                         disabled=True,
                                     ),
                                     html.P(
-                                        "Always adds to Uploads (scoring continues in the "
-                                        "background). Preload runs when you pick a save; "
-                                        "export reuses those players and still reads season "
-                                        "stats afterward.",
+                                        "Always adds each CSV to Uploads (scoring continues "
+                                        "in the background). Preload uses the first selected "
+                                        "save for filter counts; Generate exports every "
+                                        "selected save with the same filters.",
                                         className="text-muted small mt-2 mb-0",
                                     ),
                                 ]
@@ -315,7 +351,7 @@ def layout(**_kwargs):
             ),
         ],
         fluid=True,
-        className="py-3",
+        className="py-3 sx-page",
     )
 
 
@@ -374,14 +410,19 @@ def _preload_status_children(meta: dict) -> list:
     return children
 
 
-def _match_count_children(result: dict | None, *, preload: dict | None = None):
+def _match_count_children(
+    result: dict | None,
+    *,
+    preload: dict | None = None,
+    path_count: int = 1,
+):
     if not preload or not preload.get("ok"):
         if preload and preload.get("error"):
             return html.Span(
                 str(preload.get("error")),
                 className="sx-match-count-error",
             )
-        return "Select a save to preload players and preview export size."
+        return "Select save(s) to preload players and preview export size."
     if not result:
         return "Adjust scope or filters to preview export size."
     if not result.get("ok"):
@@ -405,7 +446,29 @@ def _match_count_children(result: dict | None, *, preload: dict | None = None):
             f"Export will process {matched:,} players "
             f"({scope_label}; {save_total:,} in save)."
         )
+    if path_count > 1:
+        first_name = Path(str(preload.get("save_path") or "")).name or "first save"
+        text = (
+            f"{text} Preview is for {first_name}; Generate exports all "
+            f"{path_count} saves with the same filters."
+        )
     return html.Span(text, className="sx-match-count-value")
+
+
+def _batch_status_children(results: list[dict], *, uploads_notes: list[str]) -> list:
+    lines = [f"Exported {len(results)} save(s):"]
+    children: list = [html.P(lines[0], className="mb-2")]
+    for meta, note in zip(results, uploads_notes):
+        name = meta.get("source_name") or meta.get("filename") or "export.csv"
+        summary = (
+            f"{name}: {meta.get('row_count', 0):,} players · "
+            f"{meta.get('elapsed_ms', 0)} ms · scope={meta.get('scope')}"
+            + (" · filters on" if meta.get("filters_active") else "")
+        )
+        children.append(html.P(summary, className="mb-1"))
+        if note:
+            children.append(html.P(note, className="text-muted small mb-2"))
+    return children
 
 
 def _status_children(meta: dict, *, uploads_note: str = "") -> list:
@@ -453,7 +516,7 @@ def _status_children(meta: dict, *, uploads_note: str = "") -> list:
 
 clientside_callback(
     """
-    function(n, path, pickRev) {
+    function(n, paths, pickRev) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -461,21 +524,32 @@ clientside_callback(
         var prop = String(trig[0].prop_id || "");
         var fromGenerate = prop.indexOf("sx-generate") !== -1;
         var fromPick = prop.indexOf("sx-pick-rev") !== -1;
+        var pathCount = Array.isArray(paths) ? paths.length : 0;
         if (fromGenerate && !n) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        if (!fromGenerate && !fromPick && !path) {
+        if (!fromGenerate && !fromPick) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
-        if (fromPick && !path) {
+        if (fromPick && pathCount < 1) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
         var label = document.getElementById("sx-busy-label");
         if (label) {
-            label.textContent = fromGenerate ? "Reading save…" : "Preloading save…";
+            if (fromGenerate) {
+                label.textContent = pathCount > 1
+                    ? ("Exporting " + pathCount + " saves…")
+                    : "Reading save…";
+            } else {
+                label.textContent = "Preloading save…";
+            }
         }
         var detail = document.getElementById("sx-busy-detail");
-        if (detail) { detail.textContent = ""; }
+        if (detail) {
+            detail.textContent = (fromGenerate && pathCount > 1)
+                ? ("0/" + pathCount + " files done")
+                : "";
+        }
         var track = document.getElementById("sx-busy-track");
         if (track) {
             track.className = "rs-busy-progress is-indeterminate";
@@ -486,7 +560,7 @@ clientside_callback(
     Output("sx-busy", "className"),
     Output("sx-progress-poll", "disabled"),
     Input("sx-generate", "n_clicks"),
-    Input("sx-path", "value"),
+    Input("sx-paths", "data"),
     Input("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
@@ -532,51 +606,71 @@ def sx_poll_progress(_n):
 @callback(
     Output("sx-generate", "disabled"),
     Input("sx-preload", "data"),
-    Input("sx-path", "value"),
+    Input("sx-paths", "data"),
 )
-def sx_generate_enabled(preload, path):
-    if not (path or "").strip():
+def sx_generate_enabled(preload, paths):
+    resolved_paths = _resolve_save_paths(paths)
+    if not resolved_paths:
         return True
     if not isinstance(preload, dict) or not preload.get("ok"):
         return True
     try:
-        resolved = str(Path(path).expanduser().resolve())
+        first = str(Path(resolved_paths[0]).expanduser().resolve())
     except OSError:
         return True
-    return str(preload.get("save_path") or "") != resolved
+    return str(preload.get("save_path") or "") != first
 
 
 @callback(
+    Output("sx-paths", "data"),
     Output("sx-path", "value"),
     Output("sx-pick-rev", "data"),
     Input("sx-browse", "n_clicks"),
+    State("sx-paths", "data"),
     State("sx-path", "value"),
     State("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
-def sx_browse(n_clicks, current_path, pick_rev):
+def sx_browse(n_clicks, current_paths, current_path, pick_rev):
     if not n_clicks:
-        return no_update, no_update
-    picked = fms.pick_fm_save_file(current_path or fms.default_save_path())
+        return no_update, no_update, no_update
+    seed = ""
+    existing = _resolve_save_paths(current_paths, current_path)
+    if existing:
+        seed = existing[0]
+    elif current_path:
+        seed = str(current_path).strip()
+    picked = fms.pick_fm_save_files(seed or fms.default_save_path(), multiple=True)
     if not picked:
-        return no_update, no_update
-    # Always bump pick-rev so re-choosing the same .fm retriggers preload
-    # (Dash skips Output updates when sx-path value is unchanged).
-    return picked, int(pick_rev or 0) + 1
+        return no_update, no_update, no_update
+    # Always bump pick-rev so re-choosing the same set retriggers preload.
+    return picked, _fm_paths_label(picked), int(pick_rev or 0) + 1
 
 
 @callback(
     Output("sx-preload", "data"),
     Output("sx-status", "children"),
-    Input("sx-path", "value"),
+    Input("sx-paths", "data"),
     Input("sx-pick-rev", "data"),
     prevent_initial_call=True,
 )
-def sx_preload_save(path, _pick_rev):
-    save_path = (path or "").strip()
-    if not save_path:
+def sx_preload_save(paths, _pick_rev):
+    resolved = _resolve_save_paths(paths)
+    if not resolved:
         return None, "Ready."
-    compute_progress.begin("Preloading save…", phase="Opening save…")
+
+    # Filter preview / generate reuse need the first save in the single-slot
+    # preload cache. Multi-file progress belongs on Generate (exports every path).
+    save_path = resolved[0]
+    name = Path(save_path).name
+    total_files = len(resolved)
+    compute_progress.begin(
+        "Preloading save…",
+        phase="Opening save…",
+        context=name,
+        file_done=0,
+        file_total=1,
+    )
     try:
         try:
             meta = fms.preload_save_players(save_path)
@@ -593,7 +687,16 @@ def sx_preload_save(path, _pick_rev):
         except Exception as exc:  # noqa: BLE001
             err = {"ok": False, "error": str(exc), "save_path": save_path}
             return err, html.P(str(exc), className="text-danger mb-0")
-        return meta, _preload_status_children(meta)
+        status = _preload_status_children(meta)
+        if total_files > 1:
+            status = list(status) + [
+                html.P(
+                    f"{total_files} saves selected — match count preview uses "
+                    f"{name}; Generate exports all with the same filters.",
+                    className="text-muted small mb-0 mt-2",
+                )
+            ]
+        return meta, status
     finally:
         compute_progress.end()
 
@@ -601,6 +704,7 @@ def sx_preload_save(path, _pick_rev):
 @callback(
     Output("sx-match-count", "children"),
     Input("sx-preload", "data"),
+    Input("sx-paths", "data"),
     Input("sx-scope", "value"),
     Input("sx-age-min", "value"),
     Input("sx-age-max", "value"),
@@ -613,6 +717,7 @@ def sx_preload_save(path, _pick_rev):
 )
 def sx_match_count(
     preload,
+    paths,
     scope,
     age_min,
     age_max,
@@ -623,8 +728,13 @@ def sx_match_count(
     player_nations,
     pos_groups,
 ):
+    path_count = len(_resolve_save_paths(paths))
     if not isinstance(preload, dict) or not preload.get("ok"):
-        return _match_count_children(None, preload=preload if isinstance(preload, dict) else None)
+        return _match_count_children(
+            None,
+            preload=preload if isinstance(preload, dict) else None,
+            path_count=max(1, path_count),
+        )
     save_path = preload.get("save_path") or ""
     filters = _filters_payload(
         age_min,
@@ -646,7 +756,11 @@ def sx_match_count(
         return "Save preload expired — choose the save again."
     except Exception as exc:  # noqa: BLE001
         return html.Span(str(exc), className="sx-match-count-error")
-    return _match_count_children(result, preload=preload)
+    return _match_count_children(
+        result,
+        preload=preload,
+        path_count=max(1, path_count),
+    )
 
 
 @callback(
@@ -654,6 +768,7 @@ def sx_match_count(
     Output("sx-status", "children", allow_duplicate=True),
     Output("sx-rev", "data"),
     Input("sx-generate", "n_clicks"),
+    State("sx-paths", "data"),
     State("sx-path", "value"),
     State("sx-scope", "value"),
     State("sx-age-min", "value"),
@@ -670,7 +785,8 @@ def sx_match_count(
 )
 def sx_generate(
     n_clicks,
-    path,
+    paths,
+    path_label,
     scope,
     age_min,
     age_max,
@@ -686,11 +802,11 @@ def sx_generate(
     if not n_clicks:
         return no_update, no_update, no_update
     next_rev = int(rev or 0) + 1
-    save_path = (path or "").strip()
-    if not save_path:
+    resolved = _resolve_save_paths(paths, path_label)
+    if not resolved:
         return (
             no_update,
-            html.P("Choose a .fm save file first.", className="text-danger mb-0"),
+            html.P("Choose .fm save file(s) first.", className="text-danger mb-0"),
             next_rev,
         )
     scope_key = scope if scope in {"squad", "all"} else "squad"
@@ -704,67 +820,125 @@ def sx_generate(
         player_nations,
         pos_groups,
     )
-    compute_progress.begin("Reading save…", phase="Reading save…")
+    total_files = len(resolved)
+    compute_progress.begin(
+        "Exporting saves…" if total_files > 1 else "Reading save…",
+        phase="Preparing…",
+        file_done=0,
+        file_total=total_files,
+    )
     try:
-        try:
-            csv_text, meta = fms.export_moneyball_csv(
-                save_path,
-                scope=scope_key,
-                filters=filters,
-            )
-        except ImportError as exc:
-            return (
-                no_update,
-                html.P(
-                    f"fmsave is not installed (needs Python 3.12+): {exc}. "
-                    'Run: pip install "fmsave[pandas]"',
-                    className="text-danger mb-0",
-                ),
-                next_rev,
-            )
-        except Exception as exc:  # noqa: BLE001 — surface any fmsave / IO error
-            return (
-                no_update,
-                html.P(str(exc), className="text-danger mb-0"),
-                next_rev,
-            )
-
-        uploads_note = ""
-        try:
+        results: list[dict] = []
+        uploads_notes: list[str] = []
+        csv_by_name: list[tuple[str, str]] = []
+        for idx, save_path in enumerate(resolved, start=1):
+            name = Path(save_path).name
             compute_progress.update(
-                phase="Adding to Uploads…",
-                message="Saving…",
+                phase="Opening save…",
+                context=name,
+                message=name,
+                file_done=max(0, idx - 1),
+                file_total=total_files,
                 done=0,
                 total=0,
             )
-            entry = lib.save_upload(
-                meta.get("filename") or "fmsave_export.csv",
-                csv_text,
-                export_source=lib.EXPORT_SOURCE_FMSAVE,
-                eligibility=meta.get("eligibility"),
-                player_count=meta.get("row_count"),
-                precompute="async",
+            try:
+                csv_text, meta = fms.export_moneyball_csv(
+                    save_path,
+                    scope=scope_key,
+                    filters=filters,
+                )
+            except ImportError as exc:
+                return (
+                    no_update,
+                    html.P(
+                        f"fmsave is not installed (needs Python 3.12+): {exc}. "
+                        'Run: pip install "fmsave[pandas]"',
+                        className="text-danger mb-0",
+                    ),
+                    next_rev,
+                )
+            except Exception as exc:  # noqa: BLE001 — surface any fmsave / IO error
+                return (
+                    no_update,
+                    html.P(
+                        f"{name}: {exc}",
+                        className="text-danger mb-0",
+                    ),
+                    next_rev,
+                )
+
+            meta = {
+                **meta,
+                "source_name": name,
+            }
+            filename = meta.get("filename") or f"fmsave_export_{idx}.csv"
+            # Keep zip member names unique when scopes collide.
+            if any(existing == filename for existing, _ in csv_by_name):
+                stem = Path(filename).stem
+                filename = f"{stem}_{idx}.csv"
+            csv_by_name.append((filename, csv_text))
+
+            uploads_note = ""
+            try:
+                compute_progress.update(
+                    phase="Adding to Uploads…",
+                    context=name,
+                    message=filename,
+                    file_done=max(0, idx - 1),
+                    file_total=total_files,
+                    done=0,
+                    total=0,
+                )
+                entry = lib.save_upload(
+                    filename,
+                    csv_text,
+                    export_source=lib.EXPORT_SOURCE_FMSAVE,
+                    eligibility=meta.get("eligibility"),
+                    player_count=meta.get("row_count"),
+                    precompute="async",
+                )
+                pages = ", ".join(entry.get("pages") or []) or "none"
+                uploads_note = (
+                    f"Saved to Uploads as “{entry.get('display_name')}” "
+                    f"(id={entry.get('id')}; pages: {pages}). "
+                    "Precompute running in the background."
+                )
+            except Exception as exc:  # noqa: BLE001
+                uploads_note = f"Export built, but Uploads save failed: {exc}"
+
+            results.append(meta)
+            uploads_notes.append(uploads_note)
+            compute_progress.update(
+                phase=f"Exported ({int(meta.get('row_count') or 0):,} players)",
+                context=name,
+                message=name,
+                file_done=idx,
+                file_total=total_files,
+                done=0,
+                total=0,
             )
-            pages = ", ".join(entry.get("pages") or []) or "none"
-            uploads_note = (
-                f"Saved to Uploads as “{entry.get('display_name')}” "
-                f"(id={entry.get('id')}; pages: {pages}). "
-                "Precompute running in the background."
-            )
-        except Exception as exc:  # noqa: BLE001
-            uploads_note = f"Export built, but Uploads save failed: {exc}"
 
         download = no_update
-        if download_csv:
-            download = dict(
-                content=csv_text,
-                filename=meta.get("filename") or "fmsave_export.csv",
-                type="text/csv",
-            )
-        return (
-            download,
-            _status_children(meta, uploads_note=uploads_note),
-            next_rev,
-        )
+        if download_csv and csv_by_name:
+            if len(csv_by_name) == 1:
+                filename, csv_text = csv_by_name[0]
+                download = dict(
+                    content=csv_text,
+                    filename=filename,
+                    type="text/csv",
+                )
+            else:
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                    for filename, csv_text in csv_by_name:
+                        zf.writestr(filename, csv_text)
+                download = dcc.send_bytes(buf.getvalue(), "fmsave_exports.zip")
+
+        if len(results) == 1:
+            status = _status_children(results[0], uploads_note=uploads_notes[0])
+        else:
+            status = _batch_status_children(results, uploads_notes=uploads_notes)
+        return download, status, next_rev
     finally:
         compute_progress.end()
