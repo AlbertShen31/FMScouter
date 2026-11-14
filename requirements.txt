@@ -13,6 +13,6 @@ deap==1.4.4
 pypdf==6.19.0
 python-dotenv==1.2.4
 nest-asyncio==1.6.0
-pillow==12.3.0
+pillow==13.0.0
 requests==2.34.2
 fmsave[pandas]>=0.9.3
