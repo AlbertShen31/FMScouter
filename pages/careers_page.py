@@ -811,24 +811,42 @@ def cr_toggle_hidden(show_hidden, career_id):
 
 
 @callback(
+    Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
     Input("cr-season-schedule", "value"),
     State("cr-career-select", "value"),
+    State("cr-rev", "data"),
     prevent_initial_call=True,
 )
-def cr_toggle_schedule(schedule, career_id):
+def cr_toggle_schedule(schedule, career_id, rev):
     if not career_id:
-        return html.Span("Select a career first.", className="text-warning")
-    meta = careers.set_season_schedule(career_id, schedule or "summer_spring")
-    kind = meta.get("season_schedule") or "summer_spring"
+        return no_update, html.Span("Select a career first.", className="text-warning")
+    try:
+        result = career_import.apply_season_schedule(
+            career_id, schedule or "summer_spring"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return no_update, html.Span(str(exc), className="text-danger")
+    kind = result.get("schedule") or "summer_spring"
     label = (
         "Summer → Spring"
         if kind == "summer_spring"
         else "Winter → Fall"
     )
-    return html.Span(
-        f"Season schedule set to {label}. New Stage/Preview uses this calendar.",
-        className="text-muted",
+    if not result.get("changed"):
+        return no_update, no_update
+    moved = int(result.get("moved") or 0)
+    conflicts = int(result.get("conflict_staged") or 0)
+    seasons = int(result.get("season_count") or 0)
+    detail = f"Remapped {moved} snapshot(s) into {seasons} season(s)"
+    if conflicts:
+        detail += f"; {conflicts} conflict(s) left in staging"
+    return (
+        int(rev or 0) + 1,
+        html.Span(
+            f"Season schedule set to {label}. {detail}.",
+            className="text-muted",
+        ),
     )
 
 

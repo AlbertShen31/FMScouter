@@ -588,6 +588,43 @@ def get_staging_item(career_id: str, staging_id: str) -> dict[str, Any] | None:
     return None
 
 
+def update_staging_classification(
+    career_id: str,
+    staging_id: str,
+    *,
+    season_id: str | None = None,
+    season_label: str | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    suggested_slot: SlotName | str | None = None,
+) -> dict[str, Any] | None:
+    """Update season/slot suggestion fields on a staged item (snapshot unchanged)."""
+    safe = _safe_id(career_id)
+    sid = _safe_id(staging_id)
+    items = list_staging(safe)
+    found = None
+    for item in items:
+        if item["id"] != sid:
+            continue
+        if season_id is not None:
+            item["season_id"] = _safe_id(str(season_id)) or None
+        if season_label is not None:
+            item["season_label"] = str(season_label).strip() or None
+        if year_start is not None:
+            item["year_start"] = int(year_start) or None
+        if year_end is not None:
+            item["year_end"] = int(year_end) or None
+        if suggested_slot is not None:
+            slot = str(suggested_slot).strip().lower()
+            item["suggested_slot"] = slot if slot in SLOTS else "end"
+        found = item
+        break
+    if found is None:
+        return None
+    _write_json(_staging_index_path(safe), {"items": items})
+    return found
+
+
 def add_staging_item(
     career_id: str,
     *,

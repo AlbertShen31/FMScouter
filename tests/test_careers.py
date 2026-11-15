@@ -50,7 +50,7 @@ def test_season_from_game_date_winter_fall():
     assert career_import.season_from_game_date(
         date(2026, 7, 1), schedule="winter_fall"
     ) == {
-        "id": "2026-2026",
+        "id": "2026",
         "label": "2026",
         "year_start": 2026,
         "year_end": 2026,
@@ -59,7 +59,7 @@ def test_season_from_game_date_winter_fall():
     assert career_import.season_from_game_date(
         date(2026, 12, 20), schedule="winter_fall"
     ) == {
-        "id": "2026-2026",
+        "id": "2026",
         "label": "2026",
         "year_start": 2026,
         "year_end": 2026,
@@ -225,13 +225,87 @@ def test_winter_fall_schedule_mid_and_end(career_root):
         game_date="2026-11-15",
     )
     assert mid["ok"] is True and mid["slot"] == "mid"
-    assert mid["season_id"] == "2026-2026"
+    assert mid["season_id"] == "2026"
     assert end["ok"] is True and end["slot"] == "end"
-    assert end["season_id"] == "2026-2026"
-    season = careers.get_season("calendar-career", "2026-2026")
+    assert end["season_id"] == "2026"
+    season = careers.get_season("calendar-career", "2026")
     assert season["label"] == "2026"
     assert season["slots"]["mid"]["source_name"] == "mid.csv"
     assert season["slots"]["end"]["source_name"] == "end.csv"
+
+
+def test_toggle_schedule_remaps_existing_snapshots(career_root):
+    careers.create_career("Remap Career")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\n"
+    # Summer→Spring: Dec mid + May end → 2026/27 mid+end
+    career_import.import_csv_to_career(
+        "remap-career",
+        csv_text,
+        source_name="winter-mid.csv",
+        game_date="2026-12-20",
+    )
+    career_import.import_csv_to_career(
+        "remap-career",
+        csv_text,
+        source_name="spring-end.csv",
+        game_date="2027-05-20",
+    )
+    assert careers.get_season("remap-career", "2026-2027") is not None
+
+    result = career_import.apply_season_schedule("remap-career", "winter_fall")
+    assert result["changed"] is True
+    assert result["moved"] == 2
+    assert careers.get_season("remap-career", "2026-2027") is None
+    season_2026 = careers.get_season("remap-career", "2026")
+    season_2027 = careers.get_season("remap-career", "2027")
+    assert season_2026 is not None
+    assert season_2026["label"] == "2026"
+    assert season_2026["slots"]["mid"] is None
+    assert season_2026["slots"]["end"]["source_name"] == "winter-mid.csv"
+    assert season_2027 is not None
+    assert season_2027["slots"]["end"]["source_name"] == "spring-end.csv"
+
+    # Back to Summer→Spring restores split year + mid window for Dec.
+    back = career_import.apply_season_schedule("remap-career", "summer_spring")
+    assert back["changed"] is True
+    assert back["moved"] == 2
+    season = careers.get_season("remap-career", "2026-2027")
+    assert season is not None
+    assert season["label"] == "2026/27"
+    assert season["slots"]["mid"]["source_name"] == "winter-mid.csv"
+    assert season["slots"]["end"]["source_name"] == "spring-end.csv"
+    assert careers.list_staging("remap-career") == []
+
+
+def test_toggle_schedule_conflict_stages_loser(career_root):
+    careers.create_career("Conflict Career")
+    careers.set_season_schedule("conflict-career", "winter_fall")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\n"
+    career_import.import_csv_to_career(
+        "conflict-career",
+        csv_text,
+        source_name="july-mid.csv",
+        game_date="2026-07-01",
+    )
+    career_import.import_csv_to_career(
+        "conflict-career",
+        csv_text,
+        source_name="nov-end.csv",
+        game_date="2026-11-15",
+    )
+    # Both fall into 2026/27 end under Summer→Spring.
+    result = career_import.apply_season_schedule("conflict-career", "summer_spring")
+    assert result["changed"] is True
+    assert result["moved"] == 1
+    assert result["conflict_staged"] == 1
+    season = careers.get_season("conflict-career", "2026-2027")
+    assert season["slots"]["end"]["source_name"] == "nov-end.csv"
+    assert season["slots"]["mid"] is None
+    staging = careers.list_staging("conflict-career")
+    assert len(staging) == 1
+    assert staging[0]["source_name"] == "july-mid.csv"
+    assert staging[0]["season_id"] == "2026-2027"
+    assert staging[0]["suggested_slot"] == "end"
 
 
 def test_csv_import_mid_end_replace(career_root):

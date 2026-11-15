@@ -112,7 +112,7 @@ def season_from_game_date(
     if kind == "winter_fall":
         year = game_date.year
         return {
-            "id": f"{year}-{year}",
+            "id": str(year),
             "label": str(year),
             "year_start": year,
             "year_end": year,
@@ -856,6 +856,197 @@ def auto_assign_staged(
         replace=replace,
         set_active_season=set_active_season,
     )
+
+
+def _snapshot_sort_key(entry: dict[str, Any]) -> tuple:
+    game_date = _parse_date(entry.get("game_date"))
+    imported = str(entry.get("imported_at") or "")
+    return (game_date or date.min, imported)
+
+
+def reclassify_career_snapshots(
+    career_id: str,
+    *,
+    schedule: ScheduleKind | str | None = None,
+) -> dict[str, Any]:
+    """Rebuild season mid/end slots from each snapshot's game date + schedule.
+
+    When two snapshots map to the same season/slot, keep the later game date
+    (then later imported_at) and move the other into staging.
+    Staging suggestions are updated to match the new calendar.
+    """
+    kind = (
+        normalize_schedule(schedule)
+        if schedule is not None
+        else careers.get_season_schedule(career_id)
+    )
+    collected: list[dict[str, Any]] = []
+    old_seasons = careers.list_seasons(career_id)
+    for season in old_seasons:
+        for slot in careers.SLOTS:
+            meta = (season.get("slots") or {}).get(slot)
+            if not meta:
+                continue
+            snapshot = careers.load_snapshot(career_id, season["id"], slot)
+            if not snapshot:
+                continue
+            game_date = _parse_date(
+                snapshot.get("game_date") or meta.get("game_date")
+            )
+            classification = classify_import(game_date, schedule=kind)
+            collected.append(
+                {
+                    "snapshot": snapshot,
+                    "meta": meta,
+                    "game_date": game_date.isoformat() if game_date else None,
+                    "imported_at": meta.get("imported_at"),
+                    "classification": classification,
+                    "old_season_id": season["id"],
+                    "old_slot": slot,
+                }
+            )
+
+    winners: dict[tuple[str, str], dict[str, Any]] = {}
+    staged_conflicts: list[dict[str, Any]] = []
+    for entry in collected:
+        classed = entry["classification"]
+        key = (str(classed["id"]), str(classed["slot"]))
+        existing = winners.get(key)
+        if existing is None:
+            winners[key] = entry
+            continue
+        if _snapshot_sort_key(entry) >= _snapshot_sort_key(existing):
+            staged_conflicts.append(existing)
+            winners[key] = entry
+        else:
+            staged_conflicts.append(entry)
+
+    active = careers.get_active()
+    prefer_active = (
+        active.get("season_id") if active.get("career_id") == career_id else None
+    )
+
+    for season in list(old_seasons):
+        careers.delete_season(career_id, season["id"])
+
+    moved = 0
+    for entry in winners.values():
+        classed = entry["classification"]
+        snapshot = dict(entry["snapshot"])
+        meta = dict(entry["meta"] or {})
+        game_date = classed.get("game_date") or entry.get("game_date")
+        if game_date:
+            snapshot["game_date"] = game_date
+            meta["game_date"] = game_date
+        careers.upsert_season(
+            career_id,
+            season_id=classed["id"],
+            label=classed["label"],
+            year_start=int(classed["year_start"]),
+            year_end=int(classed["year_end"]),
+        )
+        careers.write_snapshot(
+            career_id,
+            classed["id"],
+            classed["slot"],
+            snapshot,
+            meta=meta,
+        )
+        moved += 1
+
+    conflict_staged = 0
+    for entry in staged_conflicts:
+        classed = entry["classification"]
+        snapshot = entry["snapshot"]
+        meta = dict(entry["meta"] or {})
+        game_date = classed.get("game_date") or entry.get("game_date")
+        if game_date:
+            meta["game_date"] = game_date
+        careers.add_staging_item(
+            career_id,
+            players=list(snapshot.get("players") or []),
+            meta={
+                "source": snapshot.get("source") or meta.get("source"),
+                "source_name": snapshot.get("source_name") or meta.get("source_name"),
+                "game_date": game_date,
+                "managed_club_uid": snapshot.get("managed_club_uid")
+                or meta.get("managed_club_uid"),
+                "managed_club_name": snapshot.get("managed_club_name")
+                or meta.get("managed_club_name"),
+            },
+            season_id=classed.get("id"),
+            season_label=classed.get("label"),
+            year_start=classed.get("year_start"),
+            year_end=classed.get("year_end"),
+            suggested_slot=classed.get("slot") or "end",
+        )
+        conflict_staged += 1
+
+    staging_updated = 0
+    for item in careers.list_staging(career_id):
+        # Skip items we just staged from conflicts — already classified.
+        # Reclassify every staging item by its game date.
+        game_date = _parse_date(item.get("game_date"))
+        if game_date is None:
+            snap = careers.load_staging_snapshot(career_id, item["id"])
+            game_date = _parse_date((snap or {}).get("game_date"))
+        classed = classify_import(game_date, schedule=kind)
+        updated = careers.update_staging_classification(
+            career_id,
+            item["id"],
+            season_id=classed.get("id"),
+            season_label=classed.get("label"),
+            year_start=classed.get("year_start"),
+            year_end=classed.get("year_end"),
+            suggested_slot=classed.get("slot") or "end",
+        )
+        if updated:
+            staging_updated += 1
+
+    seasons = careers.list_seasons(career_id)
+    next_season = None
+    if prefer_active and any(s["id"] == prefer_active for s in seasons):
+        next_season = prefer_active
+    elif prefer_active:
+        for entry in winners.values():
+            if entry.get("old_season_id") == prefer_active:
+                next_season = str(entry["classification"]["id"])
+                break
+    if next_season is None and seasons:
+        next_season = seasons[-1]["id"]
+    careers.set_active(career_id=career_id, season_id=next_season)
+
+    return {
+        "schedule": kind,
+        "moved": moved,
+        "conflict_staged": conflict_staged,
+        "staging_updated": staging_updated,
+        "season_count": len(seasons),
+        "season_ids": [s["id"] for s in seasons],
+    }
+
+
+def apply_season_schedule(
+    career_id: str,
+    schedule: ScheduleKind | str | None,
+) -> dict[str, Any]:
+    """Persist schedule and remapping existing snapshots/staging when it changes."""
+    kind = normalize_schedule(schedule)
+    previous = careers.get_season_schedule(career_id)
+    meta = careers.set_season_schedule(career_id, kind)
+    if previous == kind:
+        return {
+            "changed": False,
+            "meta": meta,
+            "schedule": kind,
+            "moved": 0,
+            "conflict_staged": 0,
+            "staging_updated": 0,
+            "season_count": len(careers.list_seasons(career_id)),
+            "season_ids": [s["id"] for s in careers.list_seasons(career_id)],
+        }
+    stats = reclassify_career_snapshots(career_id, schedule=kind)
+    return {"changed": True, "meta": meta, **stats}
 
 
 def commit_staging_to_slot(
