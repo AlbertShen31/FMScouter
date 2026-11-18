@@ -108,6 +108,8 @@ def _slot_drop_target(season: dict, slot: str, meta: dict | None) -> html.Div:
 def _merge_seasons_with_staging(
     seasons: list[dict],
     staging_items: list[dict],
+    *,
+    schedule: str | None = None,
 ) -> list[dict]:
     by_id: dict[str, dict] = {}
     for season in seasons:
@@ -133,6 +135,14 @@ def _merge_seasons_with_staging(
         elif by_id[sid].get("suggested_slot") is None:
             by_id[sid]["suggested_slot"] = item.get("suggested_slot")
     out = list(by_id.values())
+    if schedule:
+        out = [
+            s
+            for s in out
+            if career_import.season_matches_schedule(
+                s.get("year_start"), s.get("year_end"), schedule
+            )
+        ]
     out.sort(key=lambda s: (s.get("year_start") or 0, s.get("label") or ""))
     return out
 
@@ -144,9 +154,11 @@ def _seasons_table(
 ) -> html.Div:
     if not career_id:
         return html.P("Create or select a career first.", className="text-muted mb-0")
+    schedule = careers.get_season_schedule(career_id)
     seasons = _merge_seasons_with_staging(
         careers.list_seasons(career_id),
         staging_items if staging_items is not None else careers.list_staging(career_id),
+        schedule=schedule,
     )
     if not seasons:
         return html.P(

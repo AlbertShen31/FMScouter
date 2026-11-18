@@ -206,6 +206,49 @@ def _summer_season(
     }
 
 
+def _parse_year_bounds(
+    year_start: int | None,
+    year_end: int | None,
+) -> tuple[int, int]:
+    try:
+        ys = int(year_start) if year_start not in (None, "") else 0
+    except (TypeError, ValueError):
+        ys = 0
+    try:
+        ye = int(year_end) if year_end not in (None, "") else 0
+    except (TypeError, ValueError):
+        ye = 0
+    return ys, ye
+
+
+def infer_schedule_from_bounds(
+    year_start: int | None,
+    year_end: int | None,
+) -> ScheduleKind | None:
+    """Split years ⇒ summer_spring; single calendar year ⇒ winter_fall."""
+    ys, ye = _parse_year_bounds(year_start, year_end)
+    if not ys and not ye:
+        return None
+    if ys and ye and ys != ye:
+        return "summer_spring"
+    return "winter_fall"
+
+
+def season_matches_schedule(
+    year_start: int | None,
+    year_end: int | None,
+    schedule: ScheduleKind | str | None,
+) -> bool:
+    """True when season bounds match the schedule's year type."""
+    kind = normalize_schedule(schedule)
+    ys, ye = _parse_year_bounds(year_start, year_end)
+    if not ys and not ye:
+        return False
+    if kind == "winter_fall":
+        return ys == ye
+    return bool(ys and ye and ys != ye)
+
+
 def remap_season_slot(
     *,
     year_start: int | None,
@@ -219,37 +262,31 @@ def remap_season_slot(
 
     Summer ``YYYY/(YY+1)`` mid → Winter ``YYYY`` end;
     Summer ``YYYY/(YY+1)`` end → Winter ``YY+1`` mid.
-    Inverse for Winter → Summer. Falls back to game-date classification when
-    season bounds are missing.
+    Inverse for Winter → Summer. Season year shape overrides ``from_schedule``
+    so leftover opposite-type seasons convert correctly. Falls back to
+    game-date classification when season bounds are missing.
     """
     to_kind = normalize_schedule(to_schedule)
-    from_kind = normalize_schedule(from_schedule)
+    ys, ye = _parse_year_bounds(year_start, year_end)
+    # Prefer bounds shape over the career's previous schedule so leftover
+    # opposite-type seasons (full vs split) convert instead of lingering.
+    inferred = infer_schedule_from_bounds(ys, ye)
+    from_kind = inferred or normalize_schedule(from_schedule)
     slot_name: SlotName = "mid" if str(slot or "").strip().lower() == "mid" else "end"
-    try:
-        ys = int(year_start) if year_start not in (None, "") else 0
-        ye = int(year_end) if year_end not in (None, "") else 0
-    except (TypeError, ValueError):
-        ys, ye = 0, 0
-
-    if from_kind == to_kind:
-        if to_kind == "winter_fall" and (ys or ye):
-            year = ys or ye
-            return _winter_season(year, slot=slot_name, game_date=game_date)
-        if to_kind == "summer_spring" and ys and ye:
-            return _summer_season(ys, ye, slot=slot_name, game_date=game_date)
-        return classify_import(game_date, schedule=to_kind)
 
     if not ys and not ye:
         return classify_import(game_date, schedule=to_kind)
 
+    if from_kind == to_kind:
+        if to_kind == "winter_fall":
+            return _winter_season(ys or ye, slot=slot_name, game_date=game_date)
+        return _summer_season(ys, ye, slot=slot_name, game_date=game_date)
+
     if from_kind == "summer_spring" and to_kind == "winter_fall":
         # 2025/26 mid → 2025 end; 2025/26 end → 2026 mid
-        if ys and ye and ys != ye:
-            if slot_name == "mid":
-                return _winter_season(ys, slot="end", game_date=game_date)
-            return _winter_season(ye, slot="mid", game_date=game_date)
-        year = ys or ye
-        return _winter_season(year, slot=slot_name, game_date=game_date)
+        if slot_name == "mid":
+            return _winter_season(ys, slot="end", game_date=game_date)
+        return _winter_season(ye or (ys + 1), slot="mid", game_date=game_date)
 
     # winter_fall → summer_spring: mid Y → end (Y-1)/Y; end Y → mid Y/(Y+1)
     year = ys or ye
@@ -1030,6 +1067,14 @@ def reclassify_career_snapshots(
     moved = 0
     for entry in winners.values():
         classed = entry["classification"]
+        if not season_matches_schedule(
+            classed.get("year_start"), classed.get("year_end"), kind
+        ):
+            # Force target year type if remap somehow kept the opposite shape.
+            classed = classify_import(
+                _parse_date(entry.get("game_date")), schedule=kind
+            )
+            entry["classification"] = classed
         snapshot = dict(entry["snapshot"])
         meta = dict(entry["meta"] or {})
         game_date = classed.get("game_date") or entry.get("game_date")
@@ -1051,6 +1096,13 @@ def reclassify_career_snapshots(
             meta=meta,
         )
         moved += 1
+
+    # Drop any leftover seasons whose year type does not match the new schedule.
+    for season in list(careers.list_seasons(career_id)):
+        if not season_matches_schedule(
+            season.get("year_start"), season.get("year_end"), kind
+        ):
+            careers.delete_season(career_id, season["id"])
 
     preexisting_staging_ids = {item["id"] for item in careers.list_staging(career_id)}
 
@@ -1099,6 +1151,10 @@ def reclassify_career_snapshots(
             to_schedule=kind,
             game_date=game_date,
         )
+        if not season_matches_schedule(
+            classed.get("year_start"), classed.get("year_end"), kind
+        ):
+            classed = classify_import(game_date, schedule=kind)
         updated = careers.update_staging_classification(
             career_id,
             item["id"],

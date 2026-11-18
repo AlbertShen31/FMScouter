@@ -367,6 +367,55 @@ def test_toggle_winter_to_summer_splits_across_seasons(career_root):
     assert careers.list_staging("conflict-career") == []
 
 
+def test_toggle_removes_opposite_year_types(career_root):
+    careers.create_career("Mixed Years")
+    csv_text = "Player;Unique ID;Age\nAda;1;24\n"
+    career_import.import_csv_to_career(
+        "mixed-years",
+        csv_text,
+        source_name="split-mid.csv",
+        game_date="2025-12-20",
+    )
+    # Stuck leftover full-year row while career is still on split schedule.
+    careers.upsert_season(
+        "mixed-years",
+        season_id="2025",
+        label="2025",
+        year_start=2025,
+        year_end=2025,
+    )
+    assert careers.get_season("mixed-years", "2025-2026") is not None
+    assert careers.get_season("mixed-years", "2025") is not None
+
+    to_winter = career_import.apply_season_schedule("mixed-years", "winter_fall")
+    assert to_winter["changed"] is True
+    winter_seasons = careers.list_seasons("mixed-years")
+    assert winter_seasons
+    assert all(s["year_start"] == s["year_end"] for s in winter_seasons)
+    assert careers.get_season("mixed-years", "2025-2026") is None
+    assert careers.get_season("mixed-years", "2025") is not None
+    assert careers.get_season("mixed-years", "2025")["slots"]["end"]["source_name"] == (
+        "split-mid.csv"
+    )
+
+    # Stuck leftover split-year row while on full-year schedule.
+    careers.upsert_season(
+        "mixed-years",
+        season_id="2026-2027",
+        label="2026/27",
+        year_start=2026,
+        year_end=2027,
+    )
+    to_summer = career_import.apply_season_schedule("mixed-years", "summer_spring")
+    assert to_summer["changed"] is True
+    summer_seasons = careers.list_seasons("mixed-years")
+    assert summer_seasons
+    assert all(s["year_start"] != s["year_end"] for s in summer_seasons)
+    assert careers.get_season("mixed-years", "2025") is None
+    assert careers.get_season("mixed-years", "2026") is None
+    assert careers.get_season("mixed-years", "2025-2026") is not None
+
+
 def test_csv_import_mid_end_replace(career_root):
     careers.create_career("Test Career")
     csv_text = (
