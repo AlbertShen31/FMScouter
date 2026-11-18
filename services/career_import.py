@@ -176,6 +176,88 @@ def classify_import(
     }
 
 
+def _winter_season(year: int, *, slot: SlotName, game_date: date | None = None) -> dict[str, Any]:
+    return {
+        "id": str(year),
+        "label": str(year),
+        "year_start": year,
+        "year_end": year,
+        "slot": slot,
+        "schedule": "winter_fall",
+        "game_date": game_date.isoformat() if game_date else None,
+    }
+
+
+def _summer_season(
+    year_start: int,
+    year_end: int,
+    *,
+    slot: SlotName,
+    game_date: date | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": f"{year_start}-{year_end}",
+        "label": f"{year_start}/{str(year_end)[-2:]}",
+        "year_start": year_start,
+        "year_end": year_end,
+        "slot": slot,
+        "schedule": "summer_spring",
+        "game_date": game_date.isoformat() if game_date else None,
+    }
+
+
+def remap_season_slot(
+    *,
+    year_start: int | None,
+    year_end: int | None,
+    slot: SlotName | str | None,
+    from_schedule: ScheduleKind | str | None,
+    to_schedule: ScheduleKind | str | None,
+    game_date: date | None = None,
+) -> dict[str, Any]:
+    """Map a season mid/end slot across Summer→Spring ↔ Winter→Fall calendars.
+
+    Summer ``YYYY/(YY+1)`` mid → Winter ``YYYY`` end;
+    Summer ``YYYY/(YY+1)`` end → Winter ``YY+1`` mid.
+    Inverse for Winter → Summer. Falls back to game-date classification when
+    season bounds are missing.
+    """
+    to_kind = normalize_schedule(to_schedule)
+    from_kind = normalize_schedule(from_schedule)
+    slot_name: SlotName = "mid" if str(slot or "").strip().lower() == "mid" else "end"
+    try:
+        ys = int(year_start) if year_start not in (None, "") else 0
+        ye = int(year_end) if year_end not in (None, "") else 0
+    except (TypeError, ValueError):
+        ys, ye = 0, 0
+
+    if from_kind == to_kind:
+        if to_kind == "winter_fall" and (ys or ye):
+            year = ys or ye
+            return _winter_season(year, slot=slot_name, game_date=game_date)
+        if to_kind == "summer_spring" and ys and ye:
+            return _summer_season(ys, ye, slot=slot_name, game_date=game_date)
+        return classify_import(game_date, schedule=to_kind)
+
+    if not ys and not ye:
+        return classify_import(game_date, schedule=to_kind)
+
+    if from_kind == "summer_spring" and to_kind == "winter_fall":
+        # 2025/26 mid → 2025 end; 2025/26 end → 2026 mid
+        if ys and ye and ys != ye:
+            if slot_name == "mid":
+                return _winter_season(ys, slot="end", game_date=game_date)
+            return _winter_season(ye, slot="mid", game_date=game_date)
+        year = ys or ye
+        return _winter_season(year, slot=slot_name, game_date=game_date)
+
+    # winter_fall → summer_spring: mid Y → end (Y-1)/Y; end Y → mid Y/(Y+1)
+    year = ys or ye
+    if slot_name == "mid":
+        return _summer_season(year - 1, year, slot="end", game_date=game_date)
+    return _summer_season(year, year + 1, slot="mid", game_date=game_date)
+
+
 def _coerce_number(value: Any) -> int | float | None:
     if value is None or value == "":
         return None
@@ -868,8 +950,12 @@ def reclassify_career_snapshots(
     career_id: str,
     *,
     schedule: ScheduleKind | str | None = None,
+    from_schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
-    """Rebuild season mid/end slots from each snapshot's game date + schedule.
+    """Rebuild season mid/end slots when switching Summer↔Winter calendars.
+
+    Uses season year bounds + slot (not raw game-date windows): e.g. Summer
+    2025/26 mid → Winter 2025 end, Summer 2025/26 end → Winter 2026 mid.
 
     When two snapshots map to the same season/slot, keep the later game date
     (then later imported_at) and move the other into staging.
@@ -879,6 +965,11 @@ def reclassify_career_snapshots(
         normalize_schedule(schedule)
         if schedule is not None
         else careers.get_season_schedule(career_id)
+    )
+    prev_kind = (
+        normalize_schedule(from_schedule)
+        if from_schedule is not None
+        else kind
     )
     collected: list[dict[str, Any]] = []
     old_seasons = careers.list_seasons(career_id)
@@ -893,7 +984,14 @@ def reclassify_career_snapshots(
             game_date = _parse_date(
                 snapshot.get("game_date") or meta.get("game_date")
             )
-            classification = classify_import(game_date, schedule=kind)
+            classification = remap_season_slot(
+                year_start=season.get("year_start"),
+                year_end=season.get("year_end"),
+                slot=slot,
+                from_schedule=prev_kind,
+                to_schedule=kind,
+                game_date=game_date,
+            )
             collected.append(
                 {
                     "snapshot": snapshot,
@@ -954,6 +1052,8 @@ def reclassify_career_snapshots(
         )
         moved += 1
 
+    preexisting_staging_ids = {item["id"] for item in careers.list_staging(career_id)}
+
     conflict_staged = 0
     for entry in staged_conflicts:
         classed = entry["classification"]
@@ -984,13 +1084,21 @@ def reclassify_career_snapshots(
 
     staging_updated = 0
     for item in careers.list_staging(career_id):
-        # Skip items we just staged from conflicts — already classified.
-        # Reclassify every staging item by its game date.
+        # Conflict items already carry the new schedule — only remap prior staging.
+        if item["id"] not in preexisting_staging_ids:
+            continue
         game_date = _parse_date(item.get("game_date"))
         if game_date is None:
             snap = careers.load_staging_snapshot(career_id, item["id"])
             game_date = _parse_date((snap or {}).get("game_date"))
-        classed = classify_import(game_date, schedule=kind)
+        classed = remap_season_slot(
+            year_start=item.get("year_start"),
+            year_end=item.get("year_end"),
+            slot=item.get("suggested_slot"),
+            from_schedule=prev_kind,
+            to_schedule=kind,
+            game_date=game_date,
+        )
         updated = careers.update_staging_classification(
             career_id,
             item["id"],
@@ -1045,7 +1153,9 @@ def apply_season_schedule(
             "season_count": len(careers.list_seasons(career_id)),
             "season_ids": [s["id"] for s in careers.list_seasons(career_id)],
         }
-    stats = reclassify_career_snapshots(career_id, schedule=kind)
+    stats = reclassify_career_snapshots(
+        career_id, schedule=kind, from_schedule=previous
+    )
     return {"changed": True, "meta": meta, **stats}
 
 
