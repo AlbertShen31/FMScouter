@@ -356,7 +356,6 @@ def _career_shell(active: dict | None = None) -> tuple:
         options,
         career_id,
         bool(meta.get("show_hidden_attrs")),
-        meta.get("season_schedule") or "summer_spring",
         active,
         _staging_panel(career_id),
         _seasons_table(career_id, active.get("season_id"), staging_items),
@@ -728,13 +727,15 @@ def layout(**_kwargs):
     Output("cr-career-select", "data"),
     Output("cr-career-select", "value"),
     Output("cr-show-hidden", "checked"),
-    Output("cr-season-schedule", "value"),
     Output("cr-active", "data"),
     Output("cr-staging-body", "children"),
     Output("cr-seasons-body", "children"),
     Input("cr-rev", "data"),
 )
 def cr_refresh_shell(rev):
+    # Intentionally does not write ``cr-season-schedule``: that control owns its
+    # value so toggling it can bump ``cr-rev`` and force a seasons refresh
+    # without a schedule↔rev dependency cycle.
     return _career_shell()
 
 
@@ -742,6 +743,7 @@ def cr_refresh_shell(rev):
     Output("cr-rev", "data"),
     Output("cr-career-status", "children"),
     Output("cr-create-name", "value"),
+    Output("cr-season-schedule", "value"),
     Input("cr-create", "n_clicks"),
     State("cr-create-name", "value"),
     State("cr-rev", "data"),
@@ -749,7 +751,7 @@ def cr_refresh_shell(rev):
 )
 def cr_create_career(n_clicks, name, rev):
     if not n_clicks:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     try:
         meta = careers.create_career(name or "")
         careers.set_active(career_id=meta["id"], season_id=None)
@@ -757,9 +759,15 @@ def cr_create_career(n_clicks, name, rev):
             int(rev or 0) + 1,
             html.Span(f"Created “{meta['name']}”.", className="text-success"),
             "",
+            meta.get("season_schedule") or "summer_spring",
         )
     except Exception as exc:  # noqa: BLE001
-        return no_update, html.Span(str(exc), className="text-danger"), no_update
+        return (
+            no_update,
+            html.Span(str(exc), className="text-danger"),
+            no_update,
+            no_update,
+        )
 
 
 @callback(
@@ -782,6 +790,7 @@ def cr_delete_career(n_clicks, career_id, rev):
 @callback(
     Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
+    Output("cr-season-schedule", "value", allow_duplicate=True),
     Input("cr-career-select", "value"),
     State("cr-active", "data"),
     State("cr-rev", "data"),
@@ -789,11 +798,13 @@ def cr_delete_career(n_clicks, career_id, rev):
 )
 def cr_select_career(career_id, active_data, rev):
     if not career_id:
-        return no_update, no_update
+        return no_update, no_update, no_update
+    schedule = careers.get_season_schedule(career_id)
     current = careers.get_active()
     if current.get("career_id") == career_id:
         # Avoid rev loops when shell refresh rewrites the same select value.
-        return no_update, no_update
+        # Still sync the schedule control to this career.
+        return no_update, no_update, schedule
     seasons = careers.list_seasons(career_id)
     prefer = (active_data or {}).get("season_id")
     if prefer and any(s["id"] == prefer for s in seasons):
@@ -801,7 +812,7 @@ def cr_select_career(career_id, active_data, rev):
     else:
         season_id = seasons[-1]["id"] if seasons else None
         careers.set_active(career_id=career_id, season_id=season_id)
-    return int(rev or 0) + 1, ""
+    return int(rev or 0) + 1, "", schedule
 
 
 @callback(
@@ -823,25 +834,26 @@ def cr_toggle_hidden(show_hidden, career_id):
 
 
 @callback(
-    Output("cr-seasons-body", "children", allow_duplicate=True),
-    Output("cr-staging-body", "children", allow_duplicate=True),
-    Output("cr-active", "data", allow_duplicate=True),
+    Output("cr-rev", "data", allow_duplicate=True),
+    Output("cr-job-tick", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
     Input("cr-season-schedule", "value"),
     State("cr-career-select", "value"),
+    State("cr-rev", "data"),
+    State("cr-job-tick", "data"),
     prevent_initial_call=True,
 )
-def cr_toggle_schedule(schedule, career_id):
-    """Remap snapshots and refresh seasons/staging in-place.
+def cr_toggle_schedule(schedule, career_id, rev, job_tick):
+    """Remap snapshots for the new calendar, then bump rev to refresh seasons.
 
-    Do not bump ``cr-rev`` here: shell refresh also writes ``cr-season-schedule``,
-    and rev↔schedule would form a Dash dependency cycle that skips the seasons UI.
+    Busy overlay is turned on clientside when the schedule control changes and
+    cleared here via ``cr-job-tick``.
     """
+    next_tick = int(job_tick or 0) + 1
     if not career_id:
         return (
             no_update,
-            no_update,
-            no_update,
+            next_tick,
             html.Span("Select a career first.", className="text-warning"),
         )
     try:
@@ -849,10 +861,10 @@ def cr_toggle_schedule(schedule, career_id):
             career_id, schedule or "summer_spring"
         )
     except Exception as exc:  # noqa: BLE001
-        return no_update, no_update, no_update, html.Span(str(exc), className="text-danger")
+        return no_update, next_tick, html.Span(str(exc), className="text-danger")
     if not result.get("changed"):
-        # Shell refresh rewrote the same schedule value — ignore.
-        return no_update, no_update, no_update, no_update
+        # Career select / create synced the same schedule value — clear busy only.
+        return no_update, next_tick, no_update
     kind = result.get("schedule") or "summer_spring"
     label = (
         "Summer → Spring"
@@ -865,12 +877,9 @@ def cr_toggle_schedule(schedule, career_id):
     detail = f"Remapped {moved} snapshot(s) into {season_count} season(s)"
     if conflicts:
         detail += f"; {conflicts} conflict(s) left in staging"
-    active = careers.get_active()
-    staging_items = careers.list_staging(career_id)
     return (
-        _seasons_table(career_id, active.get("season_id"), staging_items),
-        _staging_panel(career_id),
-        active,
+        int(rev or 0) + 1,
+        next_tick,
         html.Span(
             f"Season schedule set to {label}. {detail}.",
             className="text-muted",
@@ -999,7 +1008,7 @@ clientside_callback(
 
 clientside_callback(
     """
-    function(previewN, stageN, replaceN, dropData) {
+    function(previewN, stageN, replaceN, dropData, schedule) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -1031,6 +1040,12 @@ clientside_callback(
             }
             labelText = "Replacing snapshot…";
             detailText = "Writing replacement…";
+        } else if (prop.indexOf("cr-season-schedule") !== -1) {
+            if (!schedule) {
+                return [window.dash_clientside.no_update, window.dash_clientside.no_update];
+            }
+            labelText = "Remapping seasons…";
+            detailText = "Updating mid/end slots for the new calendar…";
         } else {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
@@ -1051,6 +1066,7 @@ clientside_callback(
     Input("cr-stage", "n_clicks"),
     Input("cr-replace-confirm", "n_clicks"),
     Input("cr-stage-drop", "data"),
+    Input("cr-season-schedule", "value"),
     prevent_initial_call=True,
 )
 
