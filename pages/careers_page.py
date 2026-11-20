@@ -1284,17 +1284,17 @@ def cr_preview_stage_or_assign(
         source_name = str(item.get("source_name") or staging_id)
         compute_progress.begin(
             "Replacing snapshot…" if replace else "Assigning to season slot…",
-            phase="Writing snapshot…",
+            phase="Assigning slot…",
             context=source_name,
             file_done=0,
             file_total=1,
         )
         compute_progress.update(
-            phase="Writing snapshot…",
+            phase="Assigning slot…",
             context=source_name,
             message=f"{season_id} / {slot}",
             done=0,
-            total=max(1, int(item.get("player_count") or 0)),
+            total=0,
         )
         try:
             result = career_import.commit_staging_to_slot(

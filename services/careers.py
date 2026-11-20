@@ -414,6 +414,103 @@ def slot_occupied(career_id: str, season_id: str, slot: SlotName) -> bool:
     return season["slots"].get(slot) is not None
 
 
+def move_file(src: str | Path, dest: str | Path) -> Path:
+    """Move a file into place, replacing any existing destination."""
+    src_path = Path(src)
+    dest_path = Path(dest)
+    if not src_path.is_file():
+        raise FileNotFoundError(f"Snapshot file missing: {src_path}")
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if src_path.resolve() == dest_path.resolve():
+        return dest_path
+    if dest_path.exists():
+        dest_path.unlink()
+    shutil.move(str(src_path), str(dest_path))
+    return dest_path
+
+
+def career_root(career_id: str) -> Path:
+    return _career_dir(career_id)
+
+
+def _set_slot_meta(
+    career_id: str,
+    season_id: str,
+    slot: SlotName,
+    meta: dict[str, Any],
+) -> dict[str, Any]:
+    safe = _safe_id(career_id)
+    sid = _safe_id(season_id)
+    snap_meta = _normalize_snapshot_meta(meta) or {
+        "imported_at": _utcnow(),
+        "source": "unknown",
+        "source_name": "",
+        "game_date": None,
+        "player_count": 0,
+        "managed_club_uid": None,
+        "managed_club_name": None,
+    }
+    seasons = list_seasons(safe)
+    found = False
+    for item in seasons:
+        if item["id"] == sid:
+            item["slots"][slot] = snap_meta
+            found = True
+            break
+    if not found:
+        raise ValueError(f"Unknown season: {season_id}")
+    _write_seasons(safe, seasons)
+    update_managed_club(
+        safe,
+        managed_club_uid=snap_meta.get("managed_club_uid"),
+        managed_club_name=snap_meta.get("managed_club_name"),
+    )
+    return snap_meta
+
+
+def place_snapshot_file(
+    career_id: str,
+    season_id: str,
+    slot: SlotName,
+    source_path: str | Path,
+    *,
+    meta: dict[str, Any],
+) -> dict[str, Any]:
+    """Move an existing gzip snapshot into a season slot (no re-serialize)."""
+    if slot not in SLOTS:
+        raise ValueError(f"Invalid slot: {slot}")
+    safe = _safe_id(career_id)
+    sid = _safe_id(season_id)
+    if not _meta_path(safe).is_file():
+        raise ValueError(f"Unknown career: {career_id}")
+    if get_season(safe, sid) is None:
+        raise ValueError(f"Unknown season: {season_id}")
+    dest = _snapshot_path(safe, sid, slot)
+    move_file(Path(source_path), dest)
+    return _set_slot_meta(safe, sid, slot, meta)
+
+
+def snapshot_file_path(career_id: str, season_id: str, slot: SlotName) -> Path:
+    if slot not in SLOTS:
+        raise ValueError(f"Invalid slot: {slot}")
+    return _snapshot_path(career_id, season_id, slot)
+
+
+def reset_season_slots(career_id: str) -> None:
+    """Clear seasons.json and delete season snapshot dirs (meta/staging kept)."""
+    safe = _safe_id(career_id)
+    if not _meta_path(safe).is_file():
+        raise ValueError(f"Unknown career: {career_id}")
+    seasons_root = _career_dir(safe) / "seasons"
+    if seasons_root.exists():
+        shutil.rmtree(seasons_root)
+    seasons_root.mkdir(parents=True, exist_ok=True)
+    _write_seasons(safe, [])
+    active = get_active()
+    if active.get("career_id") == safe:
+        set_active(career_id=safe, season_id=None)
+
+
 def write_snapshot(
     career_id: str,
     season_id: str,
@@ -441,27 +538,20 @@ def write_snapshot(
     with gzip.open(path, "wb") as fh:
         fh.write(raw)
 
-    snap_meta = _normalize_snapshot_meta(meta) or {
-        "imported_at": _utcnow(),
-        "source": "unknown",
-        "source_name": "",
-        "game_date": None,
-        "player_count": int(payload.get("player_count") or len(payload.get("players") or [])),
-        "managed_club_uid": None,
-        "managed_club_name": None,
+    snap_meta = {
+        "imported_at": (meta or {}).get("imported_at") or _utcnow(),
+        "source": (meta or {}).get("source") or "unknown",
+        "source_name": (meta or {}).get("source_name") or "",
+        "game_date": (meta or {}).get("game_date"),
+        "player_count": int(
+            (meta or {}).get("player_count")
+            or payload.get("player_count")
+            or len(payload.get("players") or [])
+        ),
+        "managed_club_uid": (meta or {}).get("managed_club_uid"),
+        "managed_club_name": (meta or {}).get("managed_club_name"),
     }
-    seasons = list_seasons(safe)
-    for item in seasons:
-        if item["id"] == sid:
-            item["slots"][slot] = snap_meta
-            break
-    _write_seasons(safe, seasons)
-    update_managed_club(
-        safe,
-        managed_club_uid=snap_meta.get("managed_club_uid"),
-        managed_club_name=snap_meta.get("managed_club_name"),
-    )
-    return snap_meta
+    return _set_slot_meta(safe, sid, slot, snap_meta)
 
 
 def load_snapshot(
@@ -601,7 +691,7 @@ def update_staging_classification(
     """Update season/slot suggestion fields on a staged item (snapshot unchanged)."""
     safe = _safe_id(career_id)
     sid = _safe_id(staging_id)
-    items = list_staging(safe)
+    items = _read_staging_index(safe)
     found = None
     for item in items:
         if item["id"] != sid:
@@ -681,7 +771,7 @@ def add_staging_item(
         path.unlink(missing_ok=True)
         raise ValueError("Failed to create staging item")
 
-    items = list_staging(safe)
+    items = _read_staging_index(safe)
     items.append(item)
     _write_json(_staging_index_path(safe), {"items": items})
     return item
@@ -698,19 +788,146 @@ def load_staging_snapshot(career_id: str, staging_id: str) -> dict[str, Any] | N
         return None
 
 
+def staging_snapshot_path(career_id: str, staging_id: str) -> Path:
+    return _staging_snapshot_path(career_id, staging_id)
+
+
+def _read_staging_index(career_id: str) -> list[dict[str, Any]]:
+    """Raw staging index entries (does not require snapshot files to exist)."""
+    safe = _safe_id(career_id)
+    raw = _read_json(_staging_index_path(safe), {"items": []})
+    items_raw = raw.get("items") if isinstance(raw, dict) else []
+    out: list[dict[str, Any]] = []
+    if not isinstance(items_raw, list):
+        return out
+    for item in items_raw:
+        normalized = _normalize_staging_item(item)
+        if normalized:
+            out.append(normalized)
+    return out
+
+
+def _pop_staging_index(
+    career_id: str, staging_id: str
+) -> dict[str, Any] | None:
+    """Remove a staging index entry without deleting its snapshot file."""
+    safe = _safe_id(career_id)
+    sid = _safe_id(staging_id)
+    items = _read_staging_index(safe)
+    kept: list[dict[str, Any]] = []
+    found: dict[str, Any] | None = None
+    for item in items:
+        if item["id"] == sid:
+            found = item
+            continue
+        kept.append(item)
+    if found is None:
+        return None
+    _write_json(_staging_index_path(safe), {"items": kept})
+    return found
+
+
+def place_staging_into_slot(
+    career_id: str,
+    staging_id: str,
+    *,
+    season_id: str,
+    slot: SlotName,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Move a staged gzip into a season slot and drop the staging index entry."""
+    if slot not in SLOTS:
+        raise ValueError(f"Invalid slot: {slot}")
+    safe = _safe_id(career_id)
+    item = get_staging_item(safe, staging_id)
+    if item is None:
+        raise ValueError(f"Unknown staging item: {staging_id}")
+    src = _staging_snapshot_path(safe, item["id"])
+    if not src.is_file():
+        raise ValueError(f"Staging snapshot missing: {staging_id}")
+    sid = _safe_id(season_id)
+    if get_season(safe, sid) is None:
+        raise ValueError(f"Unknown season: {season_id}")
+    snap_meta = meta or {
+        "imported_at": item.get("staged_at") or _utcnow(),
+        "source": item.get("source"),
+        "source_name": item.get("source_name"),
+        "game_date": item.get("game_date"),
+        "player_count": item.get("player_count") or 0,
+        "managed_club_uid": item.get("managed_club_uid"),
+        "managed_club_name": item.get("managed_club_name"),
+    }
+    written = place_snapshot_file(safe, sid, slot, src, meta=snap_meta)
+    _pop_staging_index(safe, item["id"])
+    return written
+
+
+def add_staging_from_file(
+    career_id: str,
+    source_path: str | Path,
+    *,
+    source: str | None = None,
+    source_name: str | None = None,
+    game_date: str | None = None,
+    season_id: str | None = None,
+    season_label: str | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    suggested_slot: SlotName = "end",
+    player_count: int = 0,
+    managed_club_uid: Any = None,
+    managed_club_name: str | None = None,
+) -> dict[str, Any]:
+    """Move an existing gzip into staging and register it (no re-serialize)."""
+    safe = _safe_id(career_id)
+    if not _meta_path(safe).is_file():
+        raise ValueError(f"Unknown career: {career_id}")
+    if suggested_slot not in SLOTS:
+        raise ValueError(f"Invalid slot: {suggested_slot}")
+    src = Path(source_path)
+    if not src.is_file():
+        raise FileNotFoundError(f"Snapshot file missing: {src}")
+
+    staging_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
+    dest = _staging_snapshot_path(safe, staging_id)
+    move_file(src, dest)
+
+    item = _normalize_staging_item(
+        {
+            "id": staging_id,
+            "source": source,
+            "source_name": source_name,
+            "game_date": game_date,
+            "season_id": season_id,
+            "season_label": season_label,
+            "year_start": year_start,
+            "year_end": year_end,
+            "suggested_slot": suggested_slot,
+            "player_count": player_count,
+            "managed_club_uid": managed_club_uid,
+            "managed_club_name": managed_club_name,
+            "staged_at": _utcnow(),
+        }
+    )
+    if item is None:
+        dest.unlink(missing_ok=True)
+        raise ValueError("Failed to create staging item")
+
+    items = _read_staging_index(safe)
+    items.append(item)
+    _write_json(_staging_index_path(safe), {"items": items})
+    return item
+
+
 def delete_staging_item(career_id: str, staging_id: str) -> bool:
     safe = _safe_id(career_id)
     sid = _safe_id(staging_id)
-    items = list_staging(safe)
-    kept = [item for item in items if item["id"] != sid]
+    popped = _pop_staging_index(safe, sid)
     path = _staging_snapshot_path(safe, sid)
     existed = path.is_file()
     if existed:
         path.unlink()
-    if len(kept) != len(items):
-        _write_json(_staging_index_path(safe), {"items": kept})
-        return True
-    return existed
+    return popped is not None or existed
 
 
 def clear_staging(career_id: str) -> int:
