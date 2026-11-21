@@ -47,6 +47,8 @@ def test_project_role_rows_keeps_identity_and_roles():
             "Name": "Ada",
             "Unique ID": "1",
             "Club": "City",
+            "Height": "6'1",
+            "Inf": "Yes",
             "BPD": 14.2,
             "BPD eligible": True,
             "noise": "drop-me",
@@ -60,17 +62,19 @@ def test_project_role_rows_keeps_identity_and_roles():
         "Name": "Ada",
         "Unique ID": "1",
         "Club": "City",
+        "Height": "6'1",
+        "Inf": "Yes",
         "BPD": 14.2,
         "BPD eligible": True,
         "Salary": "$100K",
     }
     assert projected[1] == {"Name": "Ben", "VOL": 10}
     with_extra = cache.project_role_rows(
-        [{"Name": "Ada", "Inf": "Inj Prone"}],
+        [{"Name": "Ada", "Style": "Expansive"}],
         role_labels=[],
-        extra_keys={"Inf"},
+        extra_keys={"Style"},
     )
-    assert with_extra == [{"Name": "Ada", "Inf": "Inj Prone"}]
+    assert with_extra == [{"Name": "Ada", "Style": "Expansive"}]
 
 
 def test_clear_markdown(monkeypatch):
