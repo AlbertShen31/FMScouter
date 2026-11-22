@@ -18,7 +18,7 @@ import services.fmsave_export as fms
 register_page(__name__, path="/save-export", name="Save export")
 
 PAGE_TIP = (
-    "Read FM26 or FM27 .fm save(s) with fmsave (0.9.3+) and write Moneyball-shaped CSV(s) "
+    "Read FM26 or FM27 .fm save(s) with fmsave (0.14.3+) and write Moneyball-shaped CSV(s) "
     "(attributes + OVERALL season stats + contract finance). Injury columns stay blank. "
     "FM27 field meanings stay unconfirmed in fmsave; Pressures columns are empty on FM27. "
     "Choosing save(s) preloads the first for live filter counts; Generate exports every "
@@ -120,7 +120,7 @@ def layout(**_kwargs):
             html.H4("Save export", className="mb-2"),
             html.P(
                 "Generate Moneyball-compatible CSV(s) from FM26 or FM27 save(s) for Role "
-                "scores, Player stats, and Squad finance. Requires fmsave 0.9.3+.",
+                "scores, Player stats, and Squad finance. Requires fmsave 0.14.3+.",
                 className="text-muted mb-3",
             ),
             html.Div(
