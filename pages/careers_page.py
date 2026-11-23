@@ -835,25 +835,17 @@ def cr_toggle_hidden(show_hidden, career_id):
 
 @callback(
     Output("cr-rev", "data", allow_duplicate=True),
-    Output("cr-job-tick", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
     Input("cr-season-schedule", "value"),
     State("cr-career-select", "value"),
     State("cr-rev", "data"),
-    State("cr-job-tick", "data"),
     prevent_initial_call=True,
 )
-def cr_toggle_schedule(schedule, career_id, rev, job_tick):
-    """Remap snapshots for the new calendar, then bump rev to refresh seasons.
-
-    Busy overlay is turned on clientside when the schedule control changes and
-    cleared here via ``cr-job-tick``.
-    """
-    next_tick = int(job_tick or 0) + 1
+def cr_toggle_schedule(schedule, career_id, rev):
+    """Rewrite season labels/slot indexes for the new calendar (no file I/O)."""
     if not career_id:
         return (
             no_update,
-            next_tick,
             html.Span("Select a career first.", className="text-warning"),
         )
     try:
@@ -861,10 +853,10 @@ def cr_toggle_schedule(schedule, career_id, rev, job_tick):
             career_id, schedule or "summer_spring"
         )
     except Exception as exc:  # noqa: BLE001
-        return no_update, next_tick, html.Span(str(exc), className="text-danger")
+        return no_update, html.Span(str(exc), className="text-danger")
     if not result.get("changed"):
-        # Career select / create synced the same schedule value — clear busy only.
-        return no_update, next_tick, no_update
+        # Career select / create synced the same schedule value — no remap.
+        return no_update, no_update
     kind = result.get("schedule") or "summer_spring"
     label = (
         "Summer → Spring"
@@ -879,7 +871,6 @@ def cr_toggle_schedule(schedule, career_id, rev, job_tick):
         detail += f"; {conflicts} conflict(s) left in staging"
     return (
         int(rev or 0) + 1,
-        next_tick,
         html.Span(
             f"Season schedule set to {label}. {detail}.",
             className="text-muted",
@@ -1008,7 +999,7 @@ clientside_callback(
 
 clientside_callback(
     """
-    function(previewN, stageN, replaceN, dropData, schedule) {
+    function(previewN, stageN, replaceN, dropData) {
         var trig = window.dash_clientside.callback_context.triggered;
         if (!trig || !trig.length) {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
@@ -1033,19 +1024,13 @@ clientside_callback(
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
             labelText = "Assigning to season slot…";
-            detailText = "Writing snapshot…";
+            detailText = "Updating slot index…";
         } else if (prop.indexOf("cr-replace-confirm") !== -1) {
             if (!replaceN) {
                 return [window.dash_clientside.no_update, window.dash_clientside.no_update];
             }
             labelText = "Replacing snapshot…";
-            detailText = "Writing replacement…";
-        } else if (prop.indexOf("cr-season-schedule") !== -1) {
-            if (!schedule) {
-                return [window.dash_clientside.no_update, window.dash_clientside.no_update];
-            }
-            labelText = "Remapping seasons…";
-            detailText = "Updating mid/end slots for the new calendar…";
+            detailText = "Updating slot index…";
         } else {
             return [window.dash_clientside.no_update, window.dash_clientside.no_update];
         }
@@ -1066,7 +1051,6 @@ clientside_callback(
     Input("cr-stage", "n_clicks"),
     Input("cr-replace-confirm", "n_clicks"),
     Input("cr-stage-drop", "data"),
-    Input("cr-season-schedule", "value"),
     prevent_initial_call=True,
 )
 

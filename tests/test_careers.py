@@ -307,7 +307,11 @@ def test_toggle_schedule_remaps_existing_snapshots(career_root):
         source_name="spring-end.csv",
         game_date="2027-05-20",
     )
-    assert careers.get_season("remap-career", "2026-2027") is not None
+    before = careers.get_season("remap-career", "2026-2027")
+    assert before is not None
+    mid_fid = before["slots"]["mid"]["file_id"]
+    end_fid = before["slots"]["end"]["file_id"]
+    assert mid_fid and end_fid
 
     result = career_import.apply_season_schedule("remap-career", "winter_fall")
     assert result["changed"] is True
@@ -318,11 +322,13 @@ def test_toggle_schedule_remaps_existing_snapshots(career_root):
     assert season_2026 is not None
     assert season_2026["label"] == "2026"
     assert season_2026["slots"]["mid"] is None
-    # Mid 2026/27 → end 2026
+    # Mid 2026/27 → end 2026 (same file_id, index-only remap)
     assert season_2026["slots"]["end"]["source_name"] == "winter-mid.csv"
+    assert season_2026["slots"]["end"]["file_id"] == mid_fid
     assert season_2027 is not None
     # End 2026/27 → mid 2027
     assert season_2027["slots"]["mid"]["source_name"] == "spring-end.csv"
+    assert season_2027["slots"]["mid"]["file_id"] == end_fid
     assert season_2027["slots"]["end"] is None
 
     # Back to Summer→Spring restores split year + mid/end slots.
@@ -333,7 +339,9 @@ def test_toggle_schedule_remaps_existing_snapshots(career_root):
     assert season is not None
     assert season["label"] == "2026/27"
     assert season["slots"]["mid"]["source_name"] == "winter-mid.csv"
+    assert season["slots"]["mid"]["file_id"] == mid_fid
     assert season["slots"]["end"]["source_name"] == "spring-end.csv"
+    assert season["slots"]["end"]["file_id"] == end_fid
     assert careers.list_staging("remap-career") == []
 
 

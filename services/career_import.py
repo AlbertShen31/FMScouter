@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import csv
 import io
-import shutil
-import uuid
 import warnings
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -991,16 +989,15 @@ def reclassify_career_snapshots(
     schedule: ScheduleKind | str | None = None,
     from_schedule: ScheduleKind | str | None = None,
 ) -> dict[str, Any]:
-    """Remap season mid/end slots when switching Summer↔Winter calendars.
+    """Remap season labels/slot indexes when switching Summer↔Winter calendars.
 
-    Moves existing gzip snapshot files and updates season/slot meta only —
-    player payloads are never re-serialized. Uses season year bounds + slot
+    Snapshot gzip files stay put (stable ``file_id`` refs). This only rewrites
+    ``seasons.json`` / staging index suggestions. Uses season year bounds + slot
     (not raw game-date windows): e.g. Summer 2025/26 mid → Winter 2025 end,
     Summer 2025/26 end → Winter 2026 mid.
 
     When two snapshots map to the same season/slot, keep the later game date
-    (then later imported_at) and move the other into staging.
-    Staging suggestions are updated to match the new calendar.
+    (then later imported_at) and leave the other in staging by file_id.
     """
     kind = (
         normalize_schedule(schedule)
@@ -1019,10 +1016,12 @@ def reclassify_career_snapshots(
             meta = (season.get("slots") or {}).get(slot)
             if not meta:
                 continue
-            src = careers.snapshot_file_path(career_id, season["id"], slot)
-            if not src.is_file():
+            ensured = careers.ensure_slot_file_id(
+                career_id, season["id"], slot, meta
+            )
+            if not ensured or not ensured.get("file_id"):
                 continue
-            game_date = _parse_date(meta.get("game_date"))
+            game_date = _parse_date(ensured.get("game_date"))
             classification = remap_season_slot(
                 year_start=season.get("year_start"),
                 year_end=season.get("year_end"),
@@ -1033,10 +1032,10 @@ def reclassify_career_snapshots(
             )
             collected.append(
                 {
-                    "path": src,
-                    "meta": meta,
+                    "file_id": ensured["file_id"],
+                    "meta": ensured,
                     "game_date": game_date.isoformat() if game_date else None,
-                    "imported_at": meta.get("imported_at"),
+                    "imported_at": ensured.get("imported_at"),
                     "classification": classification,
                     "old_season_id": season["id"],
                     "old_slot": slot,
@@ -1063,114 +1062,104 @@ def reclassify_career_snapshots(
         active.get("season_id") if active.get("career_id") == career_id else None
     )
 
-    # Park every snapshot under a temp dir so season/slot renames cannot clash.
-    temp_root = careers.career_root(career_id) / "_remap_tmp" / uuid.uuid4().hex
-    temp_root.mkdir(parents=True, exist_ok=True)
+    new_seasons: dict[str, dict[str, Any]] = {}
     moved = 0
+    for entry in winners.values():
+        classed = entry["classification"]
+        if not season_matches_schedule(
+            classed.get("year_start"), classed.get("year_end"), kind
+        ):
+            classed = classify_import(
+                _parse_date(entry.get("game_date")), schedule=kind
+            )
+            entry["classification"] = classed
+        sid = str(classed["id"])
+        season = new_seasons.get(sid)
+        if season is None:
+            season = {
+                "id": sid,
+                "label": classed["label"],
+                "year_start": int(classed["year_start"]),
+                "year_end": int(classed["year_end"]),
+                "slots": {"mid": None, "end": None},
+            }
+            new_seasons[sid] = season
+        else:
+            season["label"] = classed["label"]
+            season["year_start"] = int(classed["year_start"])
+            season["year_end"] = int(classed["year_end"])
+        meta = dict(entry["meta"] or {})
+        game_date = classed.get("game_date") or entry.get("game_date")
+        if game_date:
+            meta["game_date"] = game_date
+        meta["file_id"] = entry["file_id"]
+        season["slots"][str(classed["slot"])] = meta
+        moved += 1
+
+    # Keep only seasons that match the target calendar year shape.
+    seasons_payload = [
+        season
+        for season in new_seasons.values()
+        if season_matches_schedule(
+            season.get("year_start"), season.get("year_end"), kind
+        )
+    ]
+    careers.replace_seasons(career_id, seasons_payload)
+
+    preexisting_staging_ids = {item["id"] for item in careers.list_staging(career_id)}
+
     conflict_staged = 0
+    for entry in staged_conflicts:
+        classed = entry["classification"]
+        meta = dict(entry["meta"] or {})
+        game_date = classed.get("game_date") or entry.get("game_date")
+        if game_date:
+            meta["game_date"] = game_date
+        careers.add_staging_ref(
+            career_id,
+            file_id=str(entry["file_id"]),
+            source=meta.get("source"),
+            source_name=meta.get("source_name"),
+            game_date=game_date,
+            season_id=classed.get("id"),
+            season_label=classed.get("label"),
+            year_start=classed.get("year_start"),
+            year_end=classed.get("year_end"),
+            suggested_slot=classed.get("slot") or "end",
+            player_count=int(meta.get("player_count") or 0),
+            managed_club_uid=meta.get("managed_club_uid"),
+            managed_club_name=meta.get("managed_club_name"),
+        )
+        conflict_staged += 1
+
     staging_updated = 0
-    try:
-        for index, entry in enumerate(collected):
-            parked = temp_root / f"{index}.json.gz"
-            careers.move_file(entry["path"], parked)
-            entry["temp_path"] = parked
-
-        careers.reset_season_slots(career_id)
-
-        for entry in winners.values():
-            classed = entry["classification"]
-            if not season_matches_schedule(
-                classed.get("year_start"), classed.get("year_end"), kind
-            ):
-                # Force target year type if remap somehow kept the opposite shape.
-                classed = classify_import(
-                    _parse_date(entry.get("game_date")), schedule=kind
-                )
-                entry["classification"] = classed
-            meta = dict(entry["meta"] or {})
-            game_date = classed.get("game_date") or entry.get("game_date")
-            if game_date:
-                meta["game_date"] = game_date
-            careers.upsert_season(
-                career_id,
-                season_id=classed["id"],
-                label=classed["label"],
-                year_start=int(classed["year_start"]),
-                year_end=int(classed["year_end"]),
-            )
-            careers.place_snapshot_file(
-                career_id,
-                classed["id"],
-                classed["slot"],
-                entry["temp_path"],
-                meta=meta,
-            )
-            moved += 1
-
-        # Drop any leftover seasons whose year type does not match the new schedule.
-        for season in list(careers.list_seasons(career_id)):
-            if not season_matches_schedule(
-                season.get("year_start"), season.get("year_end"), kind
-            ):
-                careers.delete_season(career_id, season["id"])
-
-        preexisting_staging_ids = {
-            item["id"] for item in careers.list_staging(career_id)
-        }
-
-        for entry in staged_conflicts:
-            classed = entry["classification"]
-            meta = dict(entry["meta"] or {})
-            game_date = classed.get("game_date") or entry.get("game_date")
-            if game_date:
-                meta["game_date"] = game_date
-            careers.add_staging_from_file(
-                career_id,
-                entry["temp_path"],
-                source=meta.get("source"),
-                source_name=meta.get("source_name"),
-                game_date=game_date,
-                season_id=classed.get("id"),
-                season_label=classed.get("label"),
-                year_start=classed.get("year_start"),
-                year_end=classed.get("year_end"),
-                suggested_slot=classed.get("slot") or "end",
-                player_count=int(meta.get("player_count") or 0),
-                managed_club_uid=meta.get("managed_club_uid"),
-                managed_club_name=meta.get("managed_club_name"),
-            )
-            conflict_staged += 1
-
-        for item in careers.list_staging(career_id):
-            # Conflict items already carry the new schedule — only remap prior staging.
-            if item["id"] not in preexisting_staging_ids:
-                continue
-            game_date = _parse_date(item.get("game_date"))
-            classed = remap_season_slot(
-                year_start=item.get("year_start"),
-                year_end=item.get("year_end"),
-                slot=item.get("suggested_slot"),
-                from_schedule=prev_kind,
-                to_schedule=kind,
-                game_date=game_date,
-            )
-            if not season_matches_schedule(
-                classed.get("year_start"), classed.get("year_end"), kind
-            ):
-                classed = classify_import(game_date, schedule=kind)
-            updated = careers.update_staging_classification(
-                career_id,
-                item["id"],
-                season_id=classed.get("id"),
-                season_label=classed.get("label"),
-                year_start=classed.get("year_start"),
-                year_end=classed.get("year_end"),
-                suggested_slot=classed.get("slot") or "end",
-            )
-            if updated:
-                staging_updated += 1
-    finally:
-        shutil.rmtree(temp_root, ignore_errors=True)
+    for item in careers.list_staging(career_id):
+        if item["id"] not in preexisting_staging_ids:
+            continue
+        game_date = _parse_date(item.get("game_date"))
+        classed = remap_season_slot(
+            year_start=item.get("year_start"),
+            year_end=item.get("year_end"),
+            slot=item.get("suggested_slot"),
+            from_schedule=prev_kind,
+            to_schedule=kind,
+            game_date=game_date,
+        )
+        if not season_matches_schedule(
+            classed.get("year_start"), classed.get("year_end"), kind
+        ):
+            classed = classify_import(game_date, schedule=kind)
+        updated = careers.update_staging_classification(
+            career_id,
+            item["id"],
+            season_id=classed.get("id"),
+            season_label=classed.get("label"),
+            year_start=classed.get("year_start"),
+            year_end=classed.get("year_end"),
+            suggested_slot=classed.get("slot") or "end",
+        )
+        if updated:
+            staging_updated += 1
 
     seasons = careers.list_seasons(career_id)
     next_season = None
