@@ -62,6 +62,12 @@ app = dash.Dash(
     ],
 )
 
+# Import after Dash() so navbar active-profile @callbacks bind to this app.
+from components.active_profile import (  # noqa: E402
+    initial_active_profile_store,
+    navbar_active_profile_control,
+)
+
 app.layout = dmc.MantineProvider(
     id="mantine-provider",
     forceColorScheme="dark",
@@ -91,6 +97,7 @@ app.layout = dmc.MantineProvider(
         ),
         dcc.Store(id="sf-club", data={}, storage_type="session"),
         dcc.Store(id="st-persist", data={}, storage_type="session"),
+        dcc.Store(id="active-profile", data=initial_active_profile_store()),
         html.Div(id="ui-settings-css"),
         dbc.Navbar(
             dbc.Container(
@@ -189,6 +196,7 @@ app.layout = dmc.MantineProvider(
                                 toggle_class_name="app-nav-toggle",
                                 class_name="app-nav-dropdown",
                             ),
+                            dbc.NavItem(navbar_active_profile_control()),
                             dbc.NavItem(
                                 dmc.Button(
                                     "Light mode",

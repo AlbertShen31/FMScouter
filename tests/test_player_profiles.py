@@ -59,6 +59,9 @@ def test_identity_helpers_prefer_unique_id():
 
 def test_create_list_switch_and_delete_libraries(tmp_path, monkeypatch):
     _isolate_profiles(monkeypatch, tmp_path)
+    pp.ensure_dirs()
+    assert pp.active_library_id() == ""
+    assert pp.select_value_for_active() == pp.NONE_LIBRARY_VALUE
     with pytest.raises(ValueError, match="profile name"):
         pp.create_library("", "4-3-3")
     with pytest.raises(ValueError, match="formation"):
@@ -71,8 +74,13 @@ def test_create_list_switch_and_delete_libraries(tmp_path, monkeypatch):
     assert pp.active_library_id() == first["id"]
     pp.set_active_library(second["id"])
     assert pp.active_library_id() == second["id"]
+    pp.set_active_library(None)
+    assert pp.active_library_id() == ""
+    assert pp.list_role_profiles() == []
     labels = [item["label"] for item in pp.library_options()]
     assert any("Home" in label and "Dracula" in label for label in labels)
+    select_labels = [item["label"] for item in pp.library_select_options()]
+    assert select_labels[0] == "No profile"
     assert pp.delete_library(first["id"]) is True
     with pytest.raises(ValueError, match="only"):
         pp.delete_library(second["id"])

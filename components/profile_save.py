@@ -14,7 +14,7 @@ from scoring.stats_scorer import player_key as stats_player_key
 
 def profile_save_panel(*, prefix: str, section_number: int) -> dbc.Card:
     options = profiles.library_options()
-    active = profiles.active_library_id() or (options[0]["value"] if options else None)
+    active = profiles.active_library_id() or None
     return dbc.Card(
         [
             dbc.CardHeader(
@@ -245,7 +245,7 @@ def register_role_profile_save_callbacks(
         elif active in values:
             value = active
         else:
-            value = options[0]["value"] if options else None
+            value = None
         data_out = options if options != (current_data or []) else no_update
         value_out = value if value != current else no_update
         return data_out, value_out

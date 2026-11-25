@@ -203,6 +203,43 @@ body[data-theme="light"] .app-navbar .dropdown-menu {
     height: auto;
 }
 
+.app-navbar .app-nav-profile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 4px;
+    padding-left: 12px;
+    border-left: 1px solid var(--app-line);
+}
+
+.app-navbar .app-nav-profile-label {
+    color: var(--app-muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.app-navbar .app-nav-profile-select {
+    min-width: 160px;
+}
+
+.app-navbar .app-nav-profile-select .mantine-Select-input {
+    background: var(--app-input);
+    color: var(--app-text);
+    border-color: var(--app-line);
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 30px;
+}
+
+.app-navbar .app-nav-profile-select .mantine-Select-input:focus {
+    border-color: var(--app-accent);
+}
+
+.app-navbar .app-nav-profile-select .mantine-Select-section {
+    color: var(--app-muted);
+}
+
 /* Mantine dark mode: match app cool-slate palette (default Mantine grays read brownish). */
 :root[data-mantine-color-scheme="dark"] {
     --mantine-color-body: var(--app-bg);

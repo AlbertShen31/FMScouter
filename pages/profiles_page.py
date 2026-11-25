@@ -4991,7 +4991,7 @@ def _depth_undo_items(items, *, limit: int | None = None) -> list[dict]:
 
 
 def _load_depth_undo(*, library_id=None, settings=None) -> list[dict]:
-    lid = str(library_id or profiles.active_library_id() or "").strip()
+    lid = profiles.normalize_library_id(library_id) or profiles.active_library_id()
     if not lid:
         return []
     limit = _depth_undo_limit(settings)
@@ -5001,7 +5001,7 @@ def _load_depth_undo(*, library_id=None, settings=None) -> list[dict]:
 def _save_depth_undo(items, *, library_id=None, settings=None) -> list[dict]:
     limit = _depth_undo_limit(settings)
     trimmed = _depth_undo_items(items, limit=limit)
-    lid = str(library_id or profiles.active_library_id() or "").strip()
+    lid = profiles.normalize_library_id(library_id) or profiles.active_library_id()
     if lid:
         profiles.write_depth_undo(trimmed, library_id=lid)
     return trimmed
@@ -5193,11 +5193,14 @@ def layout(**_kwargs):
                                             ),
                                             dmc.Select(
                                                 id="pf-library-select",
-                                                data=profiles.library_options(),
-                                                value=profiles.active_library_id() or None,
+                                                data=profiles.library_select_options(
+                                                    include_none=True
+                                                ),
+                                                value=profiles.select_value_for_active(),
                                                 clearable=False,
                                                 searchable=True,
-                                                placeholder="Select a profile",
+                                                allowDeselect=False,
+                                                placeholder="No profile",
                                                 size="sm",
                                             ),
                                         ],
@@ -5919,6 +5922,7 @@ def toggle_library_restore(backup_filename):
     Output("pf-formation-select", "value", allow_duplicate=True),
     Output("pf-formation", "data", allow_duplicate=True),
     Output("pf-focus-role", "data", allow_duplicate=True),
+    Output("active-profile", "data", allow_duplicate=True),
     Input("pf-library-create", "n_clicks"),
     State("pf-library-name", "value"),
     State("pf-library-formation", "value"),
@@ -5927,7 +5931,7 @@ def toggle_library_restore(backup_filename):
 )
 def create_profile_library(n_clicks, name, formation_id, rev):
     if not n_clicks:
-        return (no_update,) * 9
+        return (no_update,) * 10
     try:
         meta = profiles.create_library(str(name or ""), str(formation_id or ""))
     except Exception as exc:
@@ -5941,8 +5945,9 @@ def create_profile_library(n_clicks, name, formation_id, rev):
             no_update,
             no_update,
             no_update,
+            no_update,
         )
-    options = profiles.library_options()
+    options = profiles.library_select_options(include_none=True)
     fid = str(meta.get("formation_id") or "")
     if fid and fm.exists(fid):
         fm.load(fid, persist=True)
@@ -5963,6 +5968,7 @@ def create_profile_library(n_clicks, name, formation_id, rev):
         fid or no_update,
         fid or no_update,
         [],
+        meta["id"],
     )
 
 
@@ -5975,6 +5981,7 @@ def create_profile_library(n_clicks, name, formation_id, rev):
     Output("pf-formation-select", "value", allow_duplicate=True),
     Output("pf-formation", "data", allow_duplicate=True),
     Output("pf-focus-role", "data", allow_duplicate=True),
+    Output("active-profile", "data", allow_duplicate=True),
     Input("pf-library-delete", "n_clicks"),
     State("pf-library-select", "value"),
     State("pf-rev", "data"),
@@ -5982,14 +5989,28 @@ def create_profile_library(n_clicks, name, formation_id, rev):
 )
 def delete_profile_library(n_clicks, library_id, rev):
     if not n_clicks:
-        return (no_update,) * 8
+        return (no_update,) * 9
+    lid = profiles.normalize_library_id(library_id)
+    if not lid:
+        return (
+            no_update,
+            no_update,
+            html.Div("Select a profile to delete.", className="text-danger small"),
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+            no_update,
+        )
     try:
-        deleted = profiles.delete_library(str(library_id or ""))
+        deleted = profiles.delete_library(lid)
     except Exception as exc:
         return (
             no_update,
             no_update,
             html.Div(str(exc), className="text-danger small"),
+            no_update,
             no_update,
             no_update,
             no_update,
@@ -6006,8 +6027,9 @@ def delete_profile_library(n_clicks, library_id, rev):
             no_update,
             no_update,
             no_update,
+            no_update,
         )
-    options = profiles.library_options()
+    options = profiles.library_select_options(include_none=True)
     active = profiles.active_library_id()
     meta = profiles.get_library(active) or {}
     fid = str(meta.get("formation_id") or "")
@@ -6022,13 +6044,14 @@ def delete_profile_library(n_clicks, library_id, rev):
     )
     return (
         options,
-        active,
+        profiles.select_value_for_active(),
         msg,
         len(profiles.list_library_ids()) <= 1,
         int(rev or 0) + 1,
         fid or no_update,
         fid or no_update,
         [],
+        active or None,
     )
 
 
@@ -6043,8 +6066,15 @@ def delete_profile_library(n_clicks, library_id, rev):
 def backup_profile_library(n_clicks, library_id):
     if not n_clicks:
         return no_update, no_update, no_update
+    lid = profiles.normalize_library_id(library_id)
+    if not lid:
+        return (
+            no_update,
+            no_update,
+            html.Div("Select a profile to back up.", className="text-danger small"),
+        )
     try:
-        result = profiles.backup_library(str(library_id or "") or None)
+        result = profiles.backup_library(lid)
     except Exception as exc:
         return (
             no_update,
@@ -6076,6 +6106,7 @@ def backup_profile_library(n_clicks, library_id):
     Output("pf-formation-select", "value", allow_duplicate=True),
     Output("pf-formation", "data", allow_duplicate=True),
     Output("pf-focus-role", "data", allow_duplicate=True),
+    Output("active-profile", "data", allow_duplicate=True),
     Input("pf-library-restore", "n_clicks"),
     State("pf-library-backup-select", "value"),
     State("pf-rev", "data"),
@@ -6083,7 +6114,7 @@ def backup_profile_library(n_clicks, library_id):
 )
 def restore_profile_library(n_clicks, backup_filename, rev):
     if not n_clicks:
-        return (no_update,) * 8
+        return (no_update,) * 9
     try:
         meta = profiles.restore_library_backup(str(backup_filename or ""))
     except Exception as exc:
@@ -6096,8 +6127,9 @@ def restore_profile_library(n_clicks, backup_filename, rev):
             no_update,
             no_update,
             no_update,
+            no_update,
         )
-    options = profiles.library_options()
+    options = profiles.library_select_options(include_none=True)
     fid = str(meta.get("formation_id") or "")
     if fid and fm.exists(fid):
         fm.load(fid, persist=True)
@@ -6117,6 +6149,7 @@ def restore_profile_library(n_clicks, backup_filename, rev):
         fid or no_update,
         fid or no_update,
         [],
+        meta["id"],
     )
 
 
@@ -6126,17 +6159,21 @@ def restore_profile_library(n_clicks, backup_filename, rev):
     Output("pf-formation", "data", allow_duplicate=True),
     Output("pf-focus-role", "data", allow_duplicate=True),
     Output("pf-library-status", "children", allow_duplicate=True),
+    Output("active-profile", "data", allow_duplicate=True),
     Input("pf-library-select", "value"),
     State("pf-rev", "data"),
+    State("active-profile", "data"),
     prevent_initial_call=True,
 )
-def switch_profile_library(library_id, rev):
-    lid = str(library_id or "").strip()
-    if not lid:
-        return no_update, no_update, no_update, no_update, no_update
+def switch_profile_library(library_id, rev, current_store):
+    lid = profiles.normalize_library_id(library_id)
+    current = profiles.active_library_id()
+    store_next = lid or None
+    if lid == current and (current_store or None) == store_next:
+        return no_update, no_update, no_update, no_update, no_update, no_update
     try:
-        if lid != profiles.active_library_id():
-            profiles.set_active_library(lid)
+        if lid != current:
+            profiles.set_active_library(lid if lid else None)
     except Exception as exc:
         return (
             no_update,
@@ -6144,12 +6181,22 @@ def switch_profile_library(library_id, rev):
             no_update,
             no_update,
             html.Div(str(exc), className="text-danger small"),
+            no_update,
         )
+    if lid == current:
+        return no_update, no_update, no_update, no_update, no_update, store_next
     meta = profiles.get_library(lid) or {}
-    fid = str(meta.get("formation_id") or "")
+    fid = str(meta.get("formation_id") or "").strip()
     if fid and fm.exists(fid):
         fm.load(fid, persist=True)
-    return int(rev or 0) + 1, fid or no_update, fid or no_update, [], no_update
+    return (
+        int(rev or 0) + 1,
+        fid or no_update,
+        fid or no_update,
+        [],
+        no_update,
+        store_next,
+    )
 
 
 @callback(

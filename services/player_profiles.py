@@ -2,9 +2,10 @@
 
 Each library lives under ``data/profiles/packs/<id>/`` with ``meta.json``,
 ``index.json``, ``slot_depth.json``, ``depth_undo.json``, and ``export_staging.json``.
-``active.json`` points at the current library. Timestamped backups of a whole
-library live under ``data/profiles/backups/``. Legacy flat ``index.json`` /
-``slot_depth.json`` are migrated once into a Default library.
+``active.json`` points at the current library (``{"id": null}`` means none —
+the app default). Timestamped backups of a whole library live under
+``data/profiles/backups/``. Legacy flat ``index.json`` / ``slot_depth.json``
+are migrated once into a Default library.
 """
 from __future__ import annotations
 
@@ -36,6 +37,10 @@ SAVED_FROM_LABELS = {
     "role_scores": "Role scores",
     "stats": "Player stats",
 }
+
+# Select / UI sentinel for “no active profile” (persisted as ``{"id": null}``).
+NONE_LIBRARY_VALUE = "__none__"
+NONE_LIBRARY_OPTION = {"label": "No profile", "value": NONE_LIBRARY_VALUE}
 
 # Legacy flat path (pre multi-library); kept for migration only.
 _LEGACY_SLOT_DEPTH_PATH = PROFILES_DIR / "slot_depth.json"
@@ -187,51 +192,21 @@ def _migrate_legacy_if_needed() -> None:
         },
     )
     if not PROFILES_ACTIVE_PATH.is_file():
-        _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
+        # Legacy packs keep their data; app-wide active stays unset by default.
+        _write_json(PROFILES_ACTIVE_PATH, {"id": None})
 
 
 def ensure_dirs() -> None:
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     PROFILES_PACKS_DIR.mkdir(parents=True, exist_ok=True)
     _migrate_legacy_if_needed()
-    ids = list_library_ids()
-    if not ids:
-        _bootstrap_default_library()
-        ids = list_library_ids()
-    active = str(_read_json(PROFILES_ACTIVE_PATH, {}).get("id") or "").strip()
-    if ids and (not active or not _library_dir(active).is_dir()):
-        _write_json(PROFILES_ACTIVE_PATH, {"id": ids[0]})
-
-
-def _bootstrap_default_library() -> None:
-    """Create an empty Default library without going through create_library."""
-    dest = _library_dir("default")
-    if dest.exists():
+    if not PROFILES_ACTIVE_PATH.is_file():
+        _write_json(PROFILES_ACTIVE_PATH, {"id": None})
         return
-    formation_id = ""
-    try:
-        import services.formations as fm
-
-        formation_id = fm.active_id() or ""
-    except Exception:
-        formation_id = ""
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    dest.mkdir(parents=True, exist_ok=True)
-    _write_json(
-        dest / "meta.json",
-        {
-            "id": "default",
-            "name": "Default",
-            "formation_id": formation_id,
-            "created_at": now,
-            "updated_at": now,
-        },
-    )
-    _write_json(dest / "index.json", [])
-    _write_json(dest / "slot_depth.json", {})
-    _write_json(dest / "depth_undo.json", [])
-    _write_json(dest / "export_staging.json", {"pending": []})
-    _write_json(PROFILES_ACTIVE_PATH, {"id": "default"})
+    active = str(_read_json(PROFILES_ACTIVE_PATH, {}).get("id") or "").strip()
+    # Stale pointer → clear to none (do not auto-pick a library).
+    if active and not _library_dir(active).is_dir():
+        _write_json(PROFILES_ACTIVE_PATH, {"id": None})
 
 
 def list_library_ids() -> list[str]:
@@ -242,6 +217,14 @@ def list_library_ids() -> list[str]:
         for path in PROFILES_PACKS_DIR.iterdir()
         if path.is_dir() and (path / "meta.json").is_file()
     )
+
+
+def normalize_library_id(library_id: str | None) -> str:
+    """Map UI / store values to a real library id, or ``\"\"`` for none."""
+    lid = str(library_id or "").strip()
+    if not lid or lid in (NONE_LIBRARY_VALUE, "none", "null", "undefined"):
+        return ""
+    return lid
 
 
 def _formation_display_name(formation_id: str) -> str:
@@ -279,27 +262,44 @@ def library_options() -> list[dict[str, str]]:
     return options
 
 
+def library_select_options(*, include_none: bool = True) -> list[dict[str, str]]:
+    """Dropdown options for the global / Profiles active-profile selectors."""
+    options = library_options()
+    if include_none:
+        return [dict(NONE_LIBRARY_OPTION), *options]
+    return options
+
+
+def select_value_for_active() -> str:
+    """UI value for the active library selector (``NONE_LIBRARY_VALUE`` when unset)."""
+    active = active_library_id()
+    return active if active else NONE_LIBRARY_VALUE
+
+
 def active_library_id() -> str:
     ensure_dirs()
     raw = _read_json(PROFILES_ACTIVE_PATH, {})
     library_id = str((raw or {}).get("id") or "").strip()
     if library_id and _library_dir(library_id).is_dir():
         return library_id
-    ids = list_library_ids()
-    return ids[0] if ids else ""
+    return ""
 
 
-def set_active_library(library_id: str) -> str:
+def set_active_library(library_id: str | None) -> str:
+    """Set the app-wide active profile library, or clear with None / none sentinel."""
     ensure_dirs()
-    lid = str(library_id or "").strip()
-    if not lid or not _library_dir(lid).is_dir():
+    lid = normalize_library_id(library_id)
+    if not lid:
+        _write_json(PROFILES_ACTIVE_PATH, {"id": None})
+        return ""
+    if not _library_dir(lid).is_dir():
         raise ValueError("Profile library not found.")
     _write_json(PROFILES_ACTIVE_PATH, {"id": lid})
     return lid
 
 
 def _resolve_library_id(library_id: str | None = None) -> str:
-    lid = str(library_id or "").strip()
+    lid = normalize_library_id(library_id)
     if lid:
         if not _library_dir(lid).is_dir():
             raise ValueError(f"Profile library not found: {lid}")
@@ -312,6 +312,9 @@ def _resolve_library_id(library_id: str | None = None) -> str:
 
 def get_library(library_id: str | None = None) -> dict[str, Any] | None:
     ensure_dirs()
+    # Explicit none / missing active → no library (do not fall through to resolve).
+    if library_id is not None and not normalize_library_id(library_id):
+        return None
     try:
         lid = _resolve_library_id(library_id)
     except ValueError:
@@ -366,7 +369,7 @@ def create_library(
     _write_json(dest / "slot_depth.json", {})
     _write_json(dest / "depth_undo.json", [])
     _write_json(dest / "export_staging.json", {"pending": []})
-    if activate or not PROFILES_ACTIVE_PATH.is_file():
+    if activate:
         set_active_library(lid)
     return _normalize_meta(meta, library_id=lid)
 
@@ -583,7 +586,7 @@ def restore_library_backup(
             continue
         payload = pack_files.get(filename_key, _default_pack_payload(filename_key))
         _write_json(dest / filename_key, payload)
-    if activate or not PROFILES_ACTIVE_PATH.is_file():
+    if activate:
         set_active_library(lid)
     return meta
 
@@ -675,7 +678,9 @@ def stage_role_export(
 
 def pending_staged_export_count(library_id: str | None = None) -> int:
     """How many Role-scores exports are waiting for Refresh exports."""
-    lid = _resolve_library_id(library_id)
+    lid = normalize_library_id(library_id) or active_library_id()
+    if not lid:
+        return 0
     pending = _read_export_staging(lid)
     if not pending:
         return 0
@@ -2622,6 +2627,8 @@ def replace_profiles_from_saved_file(
 
 
 def list_profiles() -> list[dict[str, Any]]:
+    if not active_library_id():
+        return []
     entries = _read_index()
     entries.sort(key=lambda item: item.get("saved_at") or "", reverse=True)
     return entries
