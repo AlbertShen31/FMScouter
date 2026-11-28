@@ -114,10 +114,11 @@ Acceptance examples (do not regress without an explicit rule change):
 
 ## Profiles & formations
 
-- Multiple **profile libraries** under `data/profiles/packs/<id>/`. Active id in `data/profiles/active.json` (`{"id": null}` = no active profile — the default). Navbar + Profiles page share the selector; `dcc.Store` id `active-profile` is the in-app mirror for other pages.
+- Multiple **profile libraries** under `data/profiles/packs/<id>/`. Active id in `data/profiles/active.json` (`{"id": null}` = no active profile — the default on Profiles).
 - Creating a library requires **name + formation_id**.
 - Role-scores save flow: user chooses target library (`components/profile_save.py`).
-- Library dropdown labels: profile **display name** + formation **display name** from formation packs — **not** the slug id (e.g. `5-1-4-0 Dracula`, not `5-1-4-0-dracula`). Include an explicit **No profile** option in global/Profiles selectors.
+- Library dropdown labels: profile **display name** + formation **display name** from formation packs — **not** the slug id (e.g. `5-1-4-0 Dracula`, not `5-1-4-0-dracula`). Profiles page includes an explicit **No profile** option.
+- **Active career** (app-wide): navbar Career control + Careers page share selection. Persisted in `data/careers/active.json` (`career_id` / `season_id`; both null = no career — default). In-app mirror: `dcc.Store` id `active-career`.
 - Depth chart: First XI = depth rank #1 per slot; Second XI = #2. Formation slots drive squad depth; remember last formation per library meta.
 - Same player in multiple active XI slots → conflict styling (red). Slot order follows formation config.
 - Auto-rank: sorts players still on that slot by role score, then OVR on ties. Slot removals stay off until Recently removed restore or a newer Role-scores export (re-export reinstates immediately; brand-new exports still use Refresh exports).

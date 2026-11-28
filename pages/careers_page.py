@@ -345,7 +345,7 @@ def _staging_panel(career_id: str | None) -> html.Div:
 def _career_shell(active: dict | None = None) -> tuple:
     active = active or careers.get_active()
     career_id = active.get("career_id")
-    options = careers.career_options()
+    options = careers.career_select_options(include_none=True)
     meta = (
         careers.get_career(career_id)
         if career_id
@@ -354,7 +354,7 @@ def _career_shell(active: dict | None = None) -> tuple:
     staging_items = careers.list_staging(career_id) if career_id else []
     return (
         options,
-        career_id,
+        careers.select_value_for_active(career_id),
         bool(meta.get("show_hidden_attrs")),
         active,
         _staging_panel(career_id),
@@ -366,7 +366,7 @@ def layout(**_kwargs):
     active = careers.get_active()
     career_id = active.get("career_id")
     season_id = active.get("season_id")
-    options = careers.career_options()
+    options = careers.career_select_options(include_none=True)
     meta = careers.get_career(career_id) if career_id else None
     return dbc.Container(
         [
@@ -407,9 +407,13 @@ def layout(**_kwargs):
                                                 dmc.Select(
                                                     id="cr-career-select",
                                                     data=options,
-                                                    value=career_id,
-                                                    placeholder="Select a career",
+                                                    value=careers.select_value_for_active(
+                                                        career_id
+                                                    ),
+                                                    placeholder="No career",
                                                     clearable=False,
+                                                    allowDeselect=False,
+                                                    searchable=True,
                                                     className="mb-3",
                                                 ),
                                                 html.Label(
@@ -744,6 +748,9 @@ def cr_refresh_shell(rev):
     Output("cr-career-status", "children"),
     Output("cr-create-name", "value"),
     Output("cr-season-schedule", "value"),
+    Output("active-career", "data", allow_duplicate=True),
+    Output("nav-active-career", "data", allow_duplicate=True),
+    Output("nav-active-career", "value", allow_duplicate=True),
     Input("cr-create", "n_clicks"),
     State("cr-create-name", "value"),
     State("cr-rev", "data"),
@@ -751,15 +758,19 @@ def cr_refresh_shell(rev):
 )
 def cr_create_career(n_clicks, name, rev):
     if not n_clicks:
-        return no_update, no_update, no_update, no_update
+        return (no_update,) * 7
     try:
         meta = careers.create_career(name or "")
-        careers.set_active(career_id=meta["id"], season_id=None)
+        active = careers.set_active(career_id=meta["id"], season_id=None)
+        options = careers.career_select_options(include_none=True)
         return (
             int(rev or 0) + 1,
             html.Span(f"Created “{meta['name']}”.", className="text-success"),
             "",
             meta.get("season_schedule") or "summer_spring",
+            active,
+            options,
+            meta["id"],
         )
     except Exception as exc:  # noqa: BLE001
         return (
@@ -767,12 +778,18 @@ def cr_create_career(n_clicks, name, rev):
             html.Span(str(exc), className="text-danger"),
             no_update,
             no_update,
+            no_update,
+            no_update,
+            no_update,
         )
 
 
 @callback(
     Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
+    Output("active-career", "data", allow_duplicate=True),
+    Output("nav-active-career", "data", allow_duplicate=True),
+    Output("nav-active-career", "value", allow_duplicate=True),
     Input("cr-delete", "n_clicks"),
     State("cr-career-select", "value"),
     State("cr-rev", "data"),
@@ -780,39 +797,66 @@ def cr_create_career(n_clicks, name, rev):
 )
 def cr_delete_career(n_clicks, career_id, rev):
     if not n_clicks:
-        return no_update, no_update
-    if not career_id:
-        return no_update, html.Span("No career selected.", className="text-warning")
-    careers.delete_career(career_id)
-    return int(rev or 0) + 1, html.Span("Career deleted.", className="text-muted")
+        return (no_update,) * 5
+    cid = careers.normalize_career_id(career_id)
+    if not cid:
+        return (
+            no_update,
+            html.Span("No career selected.", className="text-warning"),
+            no_update,
+            no_update,
+            no_update,
+        )
+    careers.delete_career(cid)
+    active = careers.get_active()
+    options = careers.career_select_options(include_none=True)
+    return (
+        int(rev or 0) + 1,
+        html.Span("Career deleted.", className="text-muted"),
+        active,
+        options,
+        careers.select_value_for_active(active.get("career_id")),
+    )
 
 
 @callback(
     Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-career-status", "children", allow_duplicate=True),
     Output("cr-season-schedule", "value", allow_duplicate=True),
+    Output("active-career", "data", allow_duplicate=True),
     Input("cr-career-select", "value"),
     State("cr-active", "data"),
     State("cr-rev", "data"),
+    State("active-career", "data"),
     prevent_initial_call=True,
 )
-def cr_select_career(career_id, active_data, rev):
-    if not career_id:
-        return no_update, no_update, no_update
-    schedule = careers.get_season_schedule(career_id)
+def cr_select_career(career_id, active_data, rev, current_store):
+    cid = careers.normalize_career_id(career_id)
     current = careers.get_active()
-    if current.get("career_id") == career_id:
+    current_id = current.get("career_id") or None
+    store_next = {"career_id": cid or None, "season_id": None}
+    if not cid:
+        if not current_id and (current_store or {}).get("career_id") in (None, ""):
+            return no_update, no_update, no_update, no_update
+        careers.set_active(career_id=None, season_id=None)
+        return int(rev or 0) + 1, "", no_update, store_next
+    schedule = careers.get_season_schedule(cid)
+    if current_id == cid:
         # Avoid rev loops when shell refresh rewrites the same select value.
         # Still sync the schedule control to this career.
-        return no_update, no_update, schedule
-    seasons = careers.list_seasons(career_id)
+        store_next = {
+            "career_id": cid,
+            "season_id": current.get("season_id"),
+        }
+        return no_update, no_update, schedule, store_next
+    seasons = careers.list_seasons(cid)
     prefer = (active_data or {}).get("season_id")
     if prefer and any(s["id"] == prefer for s in seasons):
-        careers.set_active(career_id=career_id, season_id=prefer)
+        active = careers.set_active(career_id=cid, season_id=prefer)
     else:
         season_id = seasons[-1]["id"] if seasons else None
-        careers.set_active(career_id=career_id, season_id=season_id)
-    return int(rev or 0) + 1, "", schedule
+        active = careers.set_active(career_id=cid, season_id=season_id)
+    return int(rev or 0) + 1, "", schedule, active
 
 
 @callback(
@@ -822,9 +866,10 @@ def cr_select_career(career_id, active_data, rev):
     prevent_initial_call=True,
 )
 def cr_toggle_hidden(show_hidden, career_id):
-    if not career_id:
+    cid = careers.normalize_career_id(career_id)
+    if not cid:
         return html.Span("Select a career first.", className="text-warning")
-    careers.set_show_hidden_attrs(career_id, bool(show_hidden))
+    careers.set_show_hidden_attrs(cid, bool(show_hidden))
     return html.Span(
         "Hidden attributes "
         + ("enabled" if show_hidden else "disabled")
@@ -843,14 +888,15 @@ def cr_toggle_hidden(show_hidden, career_id):
 )
 def cr_toggle_schedule(schedule, career_id, rev):
     """Rewrite season labels/slot indexes for the new calendar (no file I/O)."""
-    if not career_id:
+    cid = careers.normalize_career_id(career_id)
+    if not cid:
         return (
             no_update,
             html.Span("Select a career first.", className="text-warning"),
         )
     try:
         result = career_import.apply_season_schedule(
-            career_id, schedule or "summer_spring"
+            cid, schedule or "summer_spring"
         )
     except Exception as exc:  # noqa: BLE001
         return no_update, html.Span(str(exc), className="text-danger")
@@ -891,13 +937,14 @@ def cr_toggle_schedule(schedule, career_id, rev):
 def cr_rename_season(n_clicks, career_id, active_data, label, rev):
     if not n_clicks:
         return no_update, no_update
+    cid = careers.normalize_career_id(career_id)
     season_id = (active_data or {}).get("season_id")
-    if not career_id or not season_id:
+    if not cid or not season_id:
         return no_update, html.Span(
             "Select an active season first.", className="text-warning"
         )
     try:
-        season = careers.rename_season(career_id, season_id, label or "")
+        season = careers.rename_season(cid, season_id, label or "")
     except Exception as exc:  # noqa: BLE001
         return no_update, html.Span(str(exc), className="text-danger")
     return (
@@ -911,6 +958,7 @@ def cr_rename_season(n_clicks, career_id, active_data, label, rev):
 @callback(
     Output("cr-rev", "data", allow_duplicate=True),
     Output("cr-season-status", "children", allow_duplicate=True),
+    Output("active-career", "data", allow_duplicate=True),
     Input({"type": "cr-set-season", "index": ALL}, "n_clicks"),
     State("cr-career-select", "value"),
     State("cr-rev", "data"),
@@ -918,19 +966,22 @@ def cr_rename_season(n_clicks, career_id, active_data, label, rev):
 )
 def cr_set_active_season(n_clicks_list, career_id, rev):
     if not any(n_clicks_list or []):
-        return no_update, no_update
+        return no_update, no_update, no_update
     triggered = ctx.triggered_id
-    if not isinstance(triggered, dict) or not career_id:
-        return no_update, no_update
+    cid = careers.normalize_career_id(career_id)
+    if not isinstance(triggered, dict) or not cid:
+        return no_update, no_update, no_update
     sid = triggered.get("index")
     if not sid:
-        return no_update, no_update
+        return no_update, no_update, no_update
     try:
-        careers.set_active(career_id=career_id, season_id=sid)
+        active = careers.set_active(career_id=cid, season_id=sid)
     except Exception as exc:  # noqa: BLE001
-        return no_update, html.Span(str(exc), className="text-danger")
-    return int(rev or 0) + 1, html.Span(
-        f"Active season → {sid}", className="text-success"
+        return no_update, html.Span(str(exc), className="text-danger"), no_update
+    return (
+        int(rev or 0) + 1,
+        html.Span(f"Active season → {sid}", className="text-success"),
+        active,
     )
 
 
@@ -1134,6 +1185,7 @@ def cr_preview_stage_or_assign(
 ):
     triggered = ctx.triggered_id
     next_tick = int(job_tick or 0) + 1
+    career_id = careers.normalize_career_id(career_id) or None
     schedule = career_import.normalize_schedule(
         season_schedule
         or (careers.get_season_schedule(career_id) if career_id else None)
@@ -1558,12 +1610,13 @@ def cr_stage_remove(n_clicks_list, career_id, rev):
     if not any(n_clicks_list or []):
         return no_update, no_update
     triggered = ctx.triggered_id
-    if not isinstance(triggered, dict) or not career_id:
+    cid = careers.normalize_career_id(career_id)
+    if not isinstance(triggered, dict) or not cid:
         return no_update, no_update
     staging_id = triggered.get("index")
     if not staging_id:
         return no_update, no_update
-    if careers.delete_staging_item(career_id, staging_id):
+    if careers.delete_staging_item(cid, staging_id):
         return (
             int(rev or 0) + 1,
             _status_alert(f"Removed staged file {staging_id}.", color="secondary"),
@@ -1582,9 +1635,10 @@ def cr_stage_remove(n_clicks_list, career_id, rev):
 def cr_stage_clear(n_clicks, career_id, rev):
     if not n_clicks:
         return no_update, no_update
-    if not career_id:
+    cid = careers.normalize_career_id(career_id)
+    if not cid:
         return no_update, _status_alert("Select a career first.", color="warning")
-    cleared = careers.clear_staging(career_id)
+    cleared = careers.clear_staging(cid)
     return (
         int(rev or 0) + 1,
         _status_alert(f"Cleared {cleared} staged file(s).", color="secondary"),
@@ -1613,21 +1667,22 @@ def cr_rename_career(
     rev,
 ):
     triggered = ctx.triggered_id
+    cid = careers.normalize_career_id(career_id)
     if triggered == "cr-rename-open":
-        if not career_id:
+        if not cid:
             return (
                 False,
                 "",
                 no_update,
                 html.Span("Select a career first.", className="text-warning"),
             )
-        meta = careers.get_career(career_id)
+        meta = careers.get_career(cid)
         return True, meta.get("name") or "", no_update, no_update
     if triggered == "cr-rename-cancel":
         return False, no_update, no_update, no_update
     if triggered == "cr-rename-save":
         try:
-            meta = careers.rename_career(career_id, new_name or "")
+            meta = careers.rename_career(cid, new_name or "")
         except Exception as exc:  # noqa: BLE001
             return True, no_update, no_update, html.Span(
                 str(exc), className="text-danger"

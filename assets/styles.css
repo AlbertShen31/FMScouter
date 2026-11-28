@@ -203,7 +203,7 @@ body[data-theme="light"] .app-navbar .dropdown-menu {
     height: auto;
 }
 
-.app-navbar .app-nav-profile {
+.app-navbar .app-nav-career {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -212,18 +212,18 @@ body[data-theme="light"] .app-navbar .dropdown-menu {
     border-left: 1px solid var(--app-line);
 }
 
-.app-navbar .app-nav-profile-label {
+.app-navbar .app-nav-career-label {
     color: var(--app-muted);
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
 }
 
-.app-navbar .app-nav-profile-select {
+.app-navbar .app-nav-career-select {
     min-width: 160px;
 }
 
-.app-navbar .app-nav-profile-select .mantine-Select-input {
+.app-navbar .app-nav-career-select .mantine-Select-input {
     background: var(--app-input);
     color: var(--app-text);
     border-color: var(--app-line);
@@ -232,11 +232,11 @@ body[data-theme="light"] .app-navbar .dropdown-menu {
     min-height: 30px;
 }
 
-.app-navbar .app-nav-profile-select .mantine-Select-input:focus {
+.app-navbar .app-nav-career-select .mantine-Select-input:focus {
     border-color: var(--app-accent);
 }
 
-.app-navbar .app-nav-profile-select .mantine-Select-section {
+.app-navbar .app-nav-career-select .mantine-Select-section {
     color: var(--app-muted);
 }
 

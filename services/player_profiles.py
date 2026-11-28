@@ -263,7 +263,7 @@ def library_options() -> list[dict[str, str]]:
 
 
 def library_select_options(*, include_none: bool = True) -> list[dict[str, str]]:
-    """Dropdown options for the global / Profiles active-profile selectors."""
+    """Dropdown options for the Profiles active-library selector."""
     options = library_options()
     if include_none:
         return [dict(NONE_LIBRARY_OPTION), *options]

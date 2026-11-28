@@ -163,6 +163,8 @@ def test_create_list_active_delete(career_root):
     assert meta["id"] == "romania-save"
     assert meta["show_hidden_attrs"] is False
     assert careers.get_active()["career_id"] == "romania-save"
+    assert careers.select_value_for_active() == "romania-save"
+    assert careers.career_select_options()[0]["label"] == "No career"
 
     careers.set_show_hidden_attrs("romania-save", True)
     assert careers.get_career("romania-save")["show_hidden_attrs"] is True
@@ -172,6 +174,10 @@ def test_create_list_active_delete(career_root):
 
     careers.create_career("England")
     assert len(careers.list_careers()) == 2
+    careers.set_active(career_id=None, season_id=None)
+    assert careers.get_active()["career_id"] is None
+    assert careers.select_value_for_active() == careers.NONE_CAREER_VALUE
+    careers.set_active(career_id="england", season_id=None)
     assert careers.delete_career("romania-save") is True
     assert careers.get_active()["career_id"] == "england"
 

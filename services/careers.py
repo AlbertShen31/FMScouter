@@ -25,6 +25,10 @@ from config.paths import CAREERS_ACTIVE_PATH, CAREERS_DIR, CAREERS_PACKS_DIR
 SlotName = Literal["mid", "end"]
 SLOTS: tuple[SlotName, ...] = ("mid", "end")
 
+# Select / UI sentinel for “no active career” (persisted as ``career_id: null``).
+NONE_CAREER_VALUE = "__none__"
+NONE_CAREER_OPTION = {"label": "No career", "value": NONE_CAREER_VALUE}
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -777,6 +781,30 @@ def career_options() -> list[dict[str, str]]:
         {"label": career["name"], "value": career["id"]}
         for career in list_careers()
     ]
+
+
+def normalize_career_id(career_id: str | None) -> str:
+    """Map UI / store values to a real career id, or ``\"\"`` for none."""
+    cid = str(career_id or "").strip()
+    if not cid or cid in (NONE_CAREER_VALUE, "none", "null", "undefined"):
+        return ""
+    return _safe_id(cid)
+
+
+def career_select_options(*, include_none: bool = True) -> list[dict[str, str]]:
+    """Dropdown options for the global / Careers active-career selectors."""
+    options = career_options()
+    if include_none:
+        return [dict(NONE_CAREER_OPTION), *options]
+    return options
+
+
+def select_value_for_active(career_id: str | None = None) -> str:
+    """UI value for the active career selector (``NONE_CAREER_VALUE`` when unset)."""
+    if career_id is None:
+        career_id = get_active().get("career_id")
+    cid = normalize_career_id(career_id)
+    return cid if cid else NONE_CAREER_VALUE
 
 
 def season_options(career_id: str) -> list[dict[str, str]]:
